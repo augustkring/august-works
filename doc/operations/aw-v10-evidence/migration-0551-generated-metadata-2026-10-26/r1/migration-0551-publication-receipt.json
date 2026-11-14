@@ -1,0 +1,21 @@
+{
+  "generatedWith": "drizzle-kit 0.31.10 generate --custom --name native_runtime_erasure_receipt_merge",
+  "generationRoot": "/workspace/v10-preparation/conversation-migration-generation-vq_kc6eq",
+  "journalPrefixExact": true,
+  "previousSnapshotIdExact": true,
+  "schemaUnchanged": true,
+  "files": [
+    {
+      "path": "packages/db/src/migrations/0551_native_runtime_erasure_receipt_merge.sql",
+      "sha256": "e7f2e758c83ae1cae75fd506537c0064e77cdc3c87d34900ecf65394207beac4"
+    },
+    {
+      "path": "packages/db/src/migrations/meta/0551_snapshot.json",
+      "sha256": "b535ffdc77d1806e0a3c9f4622ba6f2967102b91d01ec401d0150b222d502e5c"
+    },
+    {
+      "path": "packages/db/src/migrations/meta/_journal.json",
+      "sha256": "fb5bf1fa27ad88bf563d6c1bc0cb335e3f5cc6cbebcb485a040eedc87edcf663"
+    }
+  ]
+}

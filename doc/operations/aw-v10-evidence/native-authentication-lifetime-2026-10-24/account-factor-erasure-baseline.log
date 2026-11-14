@@ -1,0 +1,46 @@
+(!) Your Vite config uses features that are unsupported by `configLoader: 'native'`, which is planned to become the default in a future major version of Vite:
+  - `__dirname` (vitest.config.ts:7:25). Use `import.meta.dirname` instead
+Set `VITE_CONFIG_NATIVE_IGNORE_WARNING=true` to suppress this warning.
+
+ RUN  v4.1.11 /workspace/blentera-v10
+
+ ❯ |@paperclipai/server| src/__tests__/v6-account-deletion.integration.test.ts (10 tests | 1 failed | 9 skipped) 20631ms
+     × erases native authenticators when offboarding retains a scrubbed user row 7537ms
+
+⎯⎯⎯⎯⎯⎯⎯ Failed Tests 1 ⎯⎯⎯⎯⎯⎯⎯
+
+ FAIL  |@paperclipai/server| src/__tests__/v6-account-deletion.integration.test.ts > V6 personal account offboarding > erases native authenticators when offboarding retains a scrubbed user row
+AssertionError: expected [ { …(7) } ] to deeply equal []
+
+- Expected
++ Received
+
+- []
++ [
++   {
++     "backupCodes": "fixture-encrypted-recovery",
++     "failedVerificationCount": 0,
++     "id": "95e5e19d-d061-4b58-9ae0-d0fef41d61aa",
++     "lockedUntil": null,
++     "secret": "fixture-encrypted-totp",
++     "userId": "native-authenticator-erasure",
++     "verified": true,
++   },
++ ]
+
+ ❯ src/__tests__/v6-account-deletion.integration.test.ts:796:91
+    794|         .rejects.toMatchObject({ cause: { code: "23514" } });
+    795|       await accountDeletionService(db, effects).request(id, input("nat…
+    796|       expect(await db.select().from(authTwoFactors).where(eq(authTwoFa…
+       |                                                                                           ^
+    797|       expect(await db.select().from(authPasskeys).where(eq(authPasskey…
+    798|       const [retained] = await db.select().from(authUsers).where(eq(au…
+
+⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯[1/1]⎯
+
+
+ Test Files  1 failed (1)
+      Tests  1 failed | 9 skipped (10)
+   Start at  00:09:46
+   Duration  82.34s (transform 24.07s, setup 278ms, import 60.49s, tests 20.63s, environment 0ms)
+

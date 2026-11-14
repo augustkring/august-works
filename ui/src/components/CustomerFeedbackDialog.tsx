@@ -76,7 +76,10 @@ function FeedbackForm({
     [goal, setGoal] = useState(""),
     [blocksWork, setBlocksWork] = useState(false),
     [omitName, setOmitName] = useState(false),
-    [includeDiagnostics, setIncludeDiagnostics] = useState(false);
+    [includeDiagnostics, setIncludeDiagnostics] = useState(false),
+    [includeExperienceMeasure, setIncludeExperienceMeasure] = useState(false),
+    [satisfaction, setSatisfaction] = useState<NonNullable<CreateCustomerFeedback["experienceMeasure"]>["satisfaction"] | "">(""),
+    [effort, setEffort] = useState<NonNullable<CreateCustomerFeedback["experienceMeasure"]>["effort"] | "">("");
   const [context, setContext] = useState<
     CreateCustomerFeedback["context"] | null
   >(null);
@@ -169,6 +172,7 @@ function FeedbackForm({
   function clearUnsentDraft() {
     setCategory("BUG"); setBody(""); setGoal(""); setBlocksWork(false);
     setOmitName(false); setIncludeDiagnostics(false);
+    setIncludeExperienceMeasure(false); setSatisfaction(""); setEffort("");
     attempted.current = null; imageAttempt.current = null;
     hadUnknownAcceptance.current = false; selectedImages.change([]);
   }
@@ -350,6 +354,10 @@ function FeedbackForm({
                     omitName,
                     context,
                     includeDiagnostics,
+                    experienceMeasure: {
+                      offered: true,
+                      ...(includeExperienceMeasure && satisfaction && effort ? { consent: "granted" as const, satisfaction, effort } : {}),
+                    },
                     ...(includeDiagnostics
                       ? {
                           diagnostics: {
@@ -447,6 +455,31 @@ function FeedbackForm({
               >
                 {t("feedback.diagnosticsEmpty")}
               </p>
+              <section className="space-y-3 rounded-md border border-border p-3" aria-labelledby="feedback-experience-measure-title">
+                <h3 id="feedback-experience-measure-title" className="font-medium">{t("feedback.experienceMeasure.title")}</h3>
+                <label className="flex min-h-11 items-center gap-3">
+                  <input type="checkbox" disabled={inputsLocked} checked={includeExperienceMeasure}
+                    onChange={event => edit(() => { setIncludeExperienceMeasure(event.target.checked); if (!event.target.checked) { setSatisfaction(""); setEffort(""); } })} />
+                  {t("feedback.experienceMeasure.consent")}
+                </label>
+                <p className="text-sm text-muted-foreground">{t("feedback.experienceMeasure.disclosure")}</p>
+                {includeExperienceMeasure && <>
+                  <label className="block space-y-2"><span>{t("feedback.experienceMeasure.satisfaction")}</span>
+                    <select required disabled={inputsLocked} className="min-h-11 w-full rounded-md border border-input bg-background px-3" value={satisfaction}
+                      onChange={event => edit(() => setSatisfaction(event.target.value as typeof satisfaction))}>
+                      <option value="">{t("feedback.experienceMeasure.choose")}</option>
+                      {(["very_dissatisfied", "dissatisfied", "neither", "satisfied", "very_satisfied"] as const).map(value => <option key={value} value={value}>{t(`feedback.experienceMeasure.satisfactionOptions.${value}`)}</option>)}
+                    </select>
+                  </label>
+                  <label className="block space-y-2"><span>{t("feedback.experienceMeasure.effort")}</span>
+                    <select required disabled={inputsLocked} className="min-h-11 w-full rounded-md border border-input bg-background px-3" value={effort}
+                      onChange={event => edit(() => setEffort(event.target.value as typeof effort))}>
+                      <option value="">{t("feedback.experienceMeasure.choose")}</option>
+                      {(["very_difficult", "difficult", "neither", "easy", "very_easy"] as const).map(value => <option key={value} value={value}>{t(`feedback.experienceMeasure.effortOptions.${value}`)}</option>)}
+                    </select>
+                  </label>
+                </>}
+              </section>
               <label className="flex min-h-11 items-center gap-3">
                 <input
                   type="checkbox"
@@ -516,7 +549,7 @@ function FeedbackForm({
                 <Button
                   type="submit"
                   className="ml-auto min-h-11"
-                  disabled={send.isPending || requestLookup.isFetching || !body.trim()}
+                  disabled={send.isPending || requestLookup.isFetching || !body.trim() || (includeExperienceMeasure && (!satisfaction || !effort))}
                 >
                   {t(send.isPending ? "feedback.sending" : "feedback.send")}
                 </Button>

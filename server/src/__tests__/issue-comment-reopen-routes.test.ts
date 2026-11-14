@@ -22,6 +22,18 @@ const mockAccessService = vi.hoisted(() => ({
   decide: vi.fn(),
   hasPermission: vi.fn(),
 }));
+const mockCurrentTaskSourceRead = vi.hoisted(() => vi.fn(async () => true));
+const mockAnalyticalSourceRead = vi.hoisted(() => vi.fn(async () => undefined));
+
+// These route units model public Task fixtures and mocked domain effects.
+// Native source ACL/provenance is covered by the PostgreSQL integration suites.
+vi.mock("../services/authorization.js", async () => ({
+  ...await vi.importActual<typeof import("../services/authorization.js")>("../services/authorization.js"),
+  canActorReadIssuePrivacy: mockCurrentTaskSourceRead,
+}));
+vi.mock("../services/analytical-context-authority.js", () => ({
+  assertAnalyticalContextPayloadAccess: mockAnalyticalSourceRead,
+}));
 
 const mockHeartbeatService = vi.hoisted(() => ({
   wakeup: vi.fn(async () => undefined),
@@ -151,6 +163,9 @@ vi.mock("../services/instance-settings.js", () => ({
 
 vi.mock("../services/issues.js", () => ({
   issueService: () => mockIssueService,
+  // This file has no real session-bound conversation owner fixture. Its default
+  // board actor is local_implicit, which cannot own the unsealed-shell exception.
+  isCurrentUnsealedConversationShell: vi.fn(async () => false),
 }));
 
 vi.mock("../services/routines.js", () => ({
@@ -215,6 +230,11 @@ vi.mock("../services/cross-issue-influence-limit.js", () => ({
   crossIssueInfluenceRunContextError: mockCrossIssueInfluenceRunContextError,
 }));
 
+const [{ issueRoutes }, { errorHandler }] = await Promise.all([
+  import("../routes/issues.js"),
+  import("../middleware/index.js"),
+]);
+
 function createApp() {
   const app = express();
   app.use(express.json());
@@ -225,10 +245,6 @@ async function installActor(
   app: express.Express,
   actor?: Record<string, unknown>,
 ) {
-  const [{ issueRoutes }, { errorHandler }] = await Promise.all([
-    import("../routes/issues.js"),
-    import("../middleware/index.js"),
-  ]);
   app.use((req, _res, next) => {
     (req as any).actor = actor ?? {
       type: "board",
@@ -320,6 +336,8 @@ async function waitForWakeup(assertion: () => void) {
 describe.sequential("issue comment reopen routes", () => {
   beforeEach(() => {
     vi.clearAllMocks();
+    mockCurrentTaskSourceRead.mockReset().mockResolvedValue(true);
+    mockAnalyticalSourceRead.mockReset().mockResolvedValue(undefined);
     mockIssueService.getById.mockReset();
     mockIssueService.getByIdForUpdate.mockReset();
     mockIssueService.assertCheckoutOwner.mockReset();
@@ -746,7 +764,7 @@ describe.sequential("issue comment reopen routes", () => {
       .post("/api/issues/11111111-1111-4111-8111-111111111111/comments")
       .send({ body: "hello" });
 
-    expect(res.status).toBe(201);
+    expect(res.status, JSON.stringify(res.body)).toBe(201);
     expect(mockIssueService.update).toHaveBeenCalledWith(
       "11111111-1111-4111-8111-111111111111",
       { status: "todo" },
@@ -821,7 +839,7 @@ describe.sequential("issue comment reopen routes", () => {
     });
     mockAccessService.decide.mockImplementation(
       async (input: { action?: string }) => {
-        const allowed = input.action === "issue:comment";
+        const allowed = input.action === "issue:comment" || input.action === "issue:read";
         return {
           allowed,
           action: input.action,
@@ -869,7 +887,7 @@ describe.sequential("issue comment reopen routes", () => {
       });
       mockAccessService.decide.mockImplementation(
         async (input: { action?: string }) => {
-          const allowed = input.action === "issue:comment";
+          const allowed = input.action === "issue:comment" || input.action === "issue:read";
           return {
             allowed,
             action: input.action,
@@ -1266,10 +1284,10 @@ describe.sequential("issue comment reopen routes", () => {
 
   it("skips the assignee wakeup when the issue is concurrently cancelled while the comment is being written", async () => {
     const app = await installActor(createApp());
-    // First call is the route's pre-insert fetch; second is the wake-decision
-    // re-fetch. A stale wake decision would use the first (open, assigned)
-    // snapshot instead of the second (cancelled) one.
+    // The public-source admission and pre-insert reads see the open Task.
+    // The post-insert wake decision must observe the subsequent cancellation.
     mockIssueService.getById
+      .mockResolvedValueOnce(makeIssue("in_progress"))
       .mockResolvedValueOnce(makeIssue("in_progress"))
       .mockResolvedValueOnce(makeIssue("cancelled"));
     mockIssueService.addComment.mockResolvedValue({
@@ -1294,6 +1312,7 @@ describe.sequential("issue comment reopen routes", () => {
     const app = await installActor(createApp());
     const reassignedAgentId = "44444444-4444-4444-8444-444444444444";
     mockIssueService.getById
+      .mockResolvedValueOnce(makeIssue("in_progress"))
       .mockResolvedValueOnce(makeIssue("in_progress"))
       .mockResolvedValueOnce({
         ...makeIssue("in_progress"),
@@ -1330,6 +1349,7 @@ describe.sequential("issue comment reopen routes", () => {
     // the persisted comment (a 5xx would invite a retry that duplicates it) and
     // fall back to the in-hand snapshot so a legitimate wake isn't dropped.
     mockIssueService.getById
+      .mockResolvedValueOnce(makeIssue("in_progress"))
       .mockResolvedValueOnce(makeIssue("in_progress"))
       .mockRejectedValueOnce(new Error("transient read failure"));
     mockIssueService.addComment.mockResolvedValue({
@@ -2938,6 +2958,18 @@ describe.sequential("issue comment reopen routes", () => {
     );
   });
 
+  it("withholds a comment mutation when the current Task source reader refuses it", async () => {
+    mockIssueService.getById.mockResolvedValue(makeIssue("in_progress"));
+    mockCurrentTaskSourceRead.mockResolvedValue(false);
+    const response = await request(await installActor(createApp()))
+      .post("/api/issues/11111111-1111-4111-8111-111111111111/comments")
+      .send({ body: "A comment requiring current source access" });
+    expect(response.status).toBe(404);
+    expect(mockIssueService.addComment).not.toHaveBeenCalled();
+    expect(mockIssueService.update).not.toHaveBeenCalled();
+    expect(mockHeartbeatService.wakeup).not.toHaveBeenCalled();
+  });
+
   it("auto-approves a reviewer comment with the APPROVED review marker", async () => {
     const reviewerAgentId = "33333333-3333-4333-8333-333333333333";
     const policy = await normalizePolicy({
@@ -3018,6 +3050,10 @@ describe.sequential("issue comment reopen routes", () => {
         status: "done",
         actorAgentId: reviewerAgentId,
         actorUserId: null,
+        privacyActor: expect.objectContaining({
+          type: "agent", source: "agent_key", agentId: reviewerAgentId,
+          runId: "run-review-1",
+        }),
         executionState: expect.objectContaining({
           status: "completed",
           lastDecisionId: expect.any(String),
@@ -3027,6 +3063,7 @@ describe.sequential("issue comment reopen routes", () => {
       mockTx,
       undefined,
       expect.any(Array),
+      {},
     );
   });
 
@@ -3119,6 +3156,7 @@ describe.sequential("issue comment reopen routes", () => {
       mockTx,
       undefined,
       expect.any(Array),
+      {},
     );
   });
 
@@ -3345,7 +3383,9 @@ describe.sequential("issue comment reopen routes", () => {
       .send({ body: reviewBody });
 
     expect(res.status).toBe(201);
-    expect(mockDb.transaction).not.toHaveBeenCalled();
+    // Current conversation admission may use a read-only transaction. The
+    // non-participant must never persist an execution-stage decision.
+    expect(mockTxInsert).not.toHaveBeenCalled();
     expect(mockIssueService.update).not.toHaveBeenCalled();
     expect(mockHeartbeatService.wakeup).not.toHaveBeenCalledWith(
       expect.any(String),
@@ -3776,6 +3816,7 @@ describe.sequential("issue comment reopen routes", () => {
         mockTx,
         undefined,
         expect.any(Array),
+        {},
       );
       expect(mockLogActivity).toHaveBeenCalledWith(
         expect.anything(),
@@ -4064,13 +4105,13 @@ describe.sequential("issue comment reopen routes", () => {
         lastDecisionOutcome: null,
       },
     };
-    mockIssueService.getById.mockResolvedValue(issue);
+    let currentIssue = issue;
+    mockIssueService.getById.mockImplementation(async () => currentIssue);
     mockIssueService.update.mockImplementation(
-      async (_id: string, patch: Record<string, unknown>) => ({
-        ...issue,
-        ...patch,
-        updatedAt: new Date(),
-      }),
+      async (_id: string, patch: Record<string, unknown>) => {
+        currentIssue = { ...currentIssue, ...patch, updatedAt: new Date() } as typeof issue;
+        return currentIssue;
+      },
     );
 
     const res = await request(
@@ -4088,6 +4129,47 @@ describe.sequential("issue comment reopen routes", () => {
       });
 
     expect(res.status).toBe(200);
+    expect(res.body).toMatchObject({
+      status: "in_progress",
+      assigneeAgentId: "22222222-2222-4222-8222-222222222222",
+      executionState: expect.objectContaining({
+        status: "changes_requested",
+        currentStageId: policy.stages[0].id,
+        currentStageType: "review",
+        lastDecisionOutcome: "changes_requested",
+      }),
+    });
+    // This mock-backed route test asserts the transaction write contract; it
+    // does not claim a PostgreSQL-persisted receipt. The Native integration
+    // suite separately exercises the actual review owner lifecycle.
+    expect(mockIssueService.update).toHaveBeenCalledWith(
+      "11111111-1111-4111-8111-111111111111",
+      expect.objectContaining({
+        status: "in_progress",
+        assigneeAgentId: "22222222-2222-4222-8222-222222222222",
+        executionState: expect.objectContaining({
+          status: "changes_requested",
+          currentStageId: policy.stages[0].id,
+          currentStageType: "review",
+          lastDecisionOutcome: "changes_requested",
+        }),
+      }),
+      mockTx,
+    );
+    expect(mockTxInsertValues).toHaveBeenCalledWith(
+      expect.objectContaining({
+        companyId: "company-1",
+        issueId: "11111111-1111-4111-8111-111111111111",
+        stageId: policy.stages[0].id,
+        stageType: "review",
+        actorAgentId: "33333333-3333-4333-8333-333333333333",
+        actorUserId: null,
+        outcome: "changes_requested",
+        body: "Needs another pass",
+        createdByRunId: "run-2",
+      }),
+    );
+    expect(mockTxInsertValues).toHaveBeenCalledTimes(1);
     await waitForWakeup(() =>
       expect(mockHeartbeatService.wakeup).toHaveBeenCalledWith(
         "22222222-2222-4222-8222-222222222222",
@@ -4100,6 +4182,64 @@ describe.sequential("issue comment reopen routes", () => {
               stageType: "review",
               lastDecisionOutcome: "changes_requested",
               allowedActions: ["address_changes", "resubmit"],
+            }),
+          }),
+        }),
+      ),
+    );
+
+    // Re-submit through the same route as the returned executor. This verifies
+    // the policy moves the task back to the same reviewer stage; it asserts a
+    // control-plane transition only and makes no claim that a model ran.
+    const resubmit = await request(
+      await installActor(createApp(), {
+        type: "agent",
+        agentId: "22222222-2222-4222-8222-222222222222",
+        companyId: "company-1",
+        runId: "run-3",
+      }),
+    )
+      .patch("/api/issues/11111111-1111-4111-8111-111111111111")
+      .send({ status: "done", comment: "Fixed the edge cases" });
+
+    expect(resubmit.status).toBe(200);
+    expect(resubmit.body).toMatchObject({
+      status: "in_review",
+      assigneeAgentId: "33333333-3333-4333-8333-333333333333",
+      executionState: expect.objectContaining({
+        status: "pending",
+        currentStageId: policy.stages[0].id,
+        currentStageType: "review",
+      }),
+    });
+    const resubmitPatch = mockIssueService.update.mock.calls[1]?.[1];
+    expect(resubmitPatch).toEqual(
+      expect.objectContaining({
+        status: "in_review",
+        assigneeAgentId: "33333333-3333-4333-8333-333333333333",
+        executionState: expect.objectContaining({
+          status: "pending",
+          currentStageId: policy.stages[0].id,
+          currentStageType: "review",
+          currentParticipant: {
+            type: "agent",
+            agentId: "33333333-3333-4333-8333-333333333333",
+            userId: null,
+          },
+        }),
+      }),
+    );
+    await waitForWakeup(() =>
+      expect(mockHeartbeatService.wakeup).toHaveBeenCalledWith(
+        "33333333-3333-4333-8333-333333333333",
+        expect.objectContaining({
+          reason: "execution_review_requested",
+          payload: expect.objectContaining({
+            issueId: "11111111-1111-4111-8111-111111111111",
+            executionStage: expect.objectContaining({
+              wakeRole: "reviewer",
+              stageType: "review",
+              allowedActions: ["approve", "request_changes"],
             }),
           }),
         }),

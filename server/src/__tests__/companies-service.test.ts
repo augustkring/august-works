@@ -1,6 +1,6 @@
 import { randomUUID } from "node:crypto";
 import { afterAll, afterEach, beforeAll, beforeEach, describe, expect, it, vi } from "vitest";
-import { and, eq } from "drizzle-orm";
+import { and, eq, inArray } from "drizzle-orm";
 import {
   activityLog,
   agentConfigRevisions,
@@ -12,6 +12,7 @@ import {
   companySkillVersions,
   companySkills,
   companyMemberships,
+  companyDeletionOperations,
   createDb,
   heartbeatRunEvents,
   heartbeatRuns,
@@ -34,6 +35,7 @@ vi.mock("../services/cloud-lifecycle-sync.js", () => ({
 }));
 
 import { companyService } from "../services/companies.js";
+import { saasOffboardingService } from "../services/saas/offboarding.js";
 import { deriveIssuePrefixBase } from "../services/issue-prefix.js";
 import { readBuiltInAgentMarker } from "../services/built-in-agent-metadata.js";
 import { builtInAgentService, reconcileBuiltInAgentsOnStartup } from "../services/built-in-agents.js";
@@ -62,6 +64,7 @@ describeEmbeddedPostgres("companyService", () => {
     await db.delete(builtInManagedResources);
     await db.delete(companySkills);
     await db.delete(companySkillVersions);
+    await db.delete(companyDeletionOperations);
     await db.delete(heartbeatRunEvents);
     await db.delete(heartbeatRuns);
     await db.delete(agentWakeupRequests);
@@ -93,6 +96,20 @@ describeEmbeddedPostgres("companyService", () => {
 
     const rows = await db.select({ issuePrefix: companies.issuePrefix }).from(companies);
     expect(rows.map((row) => row.issuePrefix).sort()).toEqual(["ARO", "AROA"]);
+  });
+
+  it("persists company language and timezone defaults through the canonical company update service", async () => {
+    const created = await companyService(db).create({ name: "Locale Defaults" });
+    expect(created).toMatchObject({ locale: "en", timezone: "UTC" });
+
+    const updated = await companyService(db).update(created.id, {
+      locale: "da",
+      timezone: "Europe/Copenhagen",
+    });
+    expect(updated).toMatchObject({ locale: "da", timezone: "Europe/Copenhagen" });
+
+    const reread = await companyService(db).getById(created.id);
+    expect(reread).toMatchObject({ locale: "da", timezone: "Europe/Copenhagen" });
   });
 
   it("does not auto-provision bundled built-in agents for a freshly created company", async () => {
@@ -816,6 +833,92 @@ describeEmbeddedPostgres("companyService", () => {
       ));
     expect(archiveActivity).toHaveLength(1);
     expect(archiveActivity[0]).toMatchObject({ details: { agentsPaused: 1, runsCancelled: 0 } });
+  });
+
+  it("company deletion runs the canonical cascade for an already archived company and stale revoke workers cannot reopen the stage", async () => {
+    const companyId = randomUUID();
+    const ownerId = randomUUID();
+    const queuedAgentId = randomUUID();
+    const runningAgentId = randomUUID();
+    const queuedRunId = randomUUID();
+    const runningRunId = randomUUID();
+    const queuedRunWakeupId = randomUUID();
+    const queuedWakeupId = randomUUID();
+    const claimedWakeupId = randomUUID();
+
+    await db.insert(companies).values({
+      id: companyId,
+      name: "Offboarding Archive Cascade Fixture",
+      issuePrefix: `T${companyId.replace(/-/g, "").slice(0, 6).toUpperCase()}`,
+      requireBoardApprovalForNewAgents: false,
+    });
+    await db.insert(companyMemberships).values({
+      companyId,
+      principalType: "user",
+      principalId: ownerId,
+      membershipRole: "owner",
+      status: "active",
+    });
+    await db.insert(agents).values([
+      { id: queuedAgentId, companyId, name: "Queued offboarding agent", role: "engineer", status: "idle",
+        adapterType: "codex_local", adapterConfig: {}, runtimeConfig: {}, permissions: {} },
+      { id: runningAgentId, companyId, name: "Running offboarding agent", role: "engineer", status: "running",
+        adapterType: "codex_local", adapterConfig: {}, runtimeConfig: {}, permissions: {} },
+    ]);
+    await db.insert(agentWakeupRequests).values([
+      { id: queuedRunWakeupId, companyId, agentId: queuedAgentId, source: "timer", status: "claimed" },
+      { id: queuedWakeupId, companyId, agentId: queuedAgentId, source: "automation", status: "queued" },
+      { id: claimedWakeupId, companyId, agentId: runningAgentId, source: "timer", status: "claimed" },
+    ]);
+    await db.insert(heartbeatRuns).values([
+      { id: queuedRunId, companyId, agentId: queuedAgentId, invocationSource: "timer", status: "queued",
+        wakeupRequestId: queuedRunWakeupId },
+      { id: runningRunId, companyId, agentId: runningAgentId, invocationSource: "timer", status: "running" },
+    ]);
+
+    const offboarding = saasOffboardingService(db, {} as never, {} as never,
+      { targets: () => ({ fixture: true }) } as never);
+    const requested = await offboarding.request(companyId, ownerId, {
+      confirmation: "Offboarding Archive Cascade Fixture",
+      acknowledgeExport: true,
+      idempotencyKey: randomUUID(),
+    });
+    expect(requested.stage).toBe("revoke");
+    expect((await db.select({ status: companies.status }).from(companies).where(eq(companies.id, companyId)))[0]?.status)
+      .toBe("archived");
+
+    expect(await offboarding.processOne(new Date(Date.now() + 1_000))).toBe(true);
+    const runs = await db.select({ id: heartbeatRuns.id, status: heartbeatRuns.status }).from(heartbeatRuns)
+      .where(and(eq(heartbeatRuns.companyId, companyId), inArray(heartbeatRuns.id, [queuedRunId, runningRunId])));
+    expect(new Map(runs.map((run) => [run.id, run.status]))).toEqual(new Map([
+      [queuedRunId, "cancelled"],
+      [runningRunId, "cancelled"],
+    ]));
+    const wakeups = await db.select({ id: agentWakeupRequests.id, status: agentWakeupRequests.status })
+      .from(agentWakeupRequests).where(and(eq(agentWakeupRequests.companyId, companyId),
+        inArray(agentWakeupRequests.id, [queuedRunWakeupId, queuedWakeupId, claimedWakeupId])));
+    expect(new Map(wakeups.map((wakeup) => [wakeup.id, wakeup.status]))).toEqual(new Map([
+      [queuedRunWakeupId, "cancelled"],
+      [queuedWakeupId, "cancelled"],
+      [claimedWakeupId, "cancelled"],
+    ]));
+    const [advanced] = await db.select().from(companyDeletionOperations)
+      .where(eq(companyDeletionOperations.id, requested.id));
+    expect(advanced).toMatchObject({ stage: "runtimes", status: "processing" });
+
+    // Simulate a worker that had previously read the revoke operation. Its
+    // canonical archive call rechecks the current operation stage under lock;
+    // it must not replay the cascade or move the operation back to runtimes.
+    await companyService(db).archive(companyId, { actorType: "user", actorId: ownerId, agentId: null, runId: null }, {
+      offboardingOperationId: requested.id,
+      now: new Date(Date.now() + 5_000),
+    });
+    const [afterStaleWorker] = await db.select().from(companyDeletionOperations)
+      .where(eq(companyDeletionOperations.id, requested.id));
+    expect(afterStaleWorker).toMatchObject({ stage: "runtimes", status: "processing" });
+    const archivedEvents = await db.select({ id: activityLog.id }).from(activityLog)
+      .where(and(eq(activityLog.companyId, companyId), eq(activityLog.action, "company.archived")));
+    expect(archivedEvents).toHaveLength(1);
   });
 
   it("rings the Cloud lifecycle doorbell exactly on archived-boundary transitions", async () => {

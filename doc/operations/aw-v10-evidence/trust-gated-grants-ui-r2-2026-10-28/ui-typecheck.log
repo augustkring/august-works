@@ -1,0 +1,7 @@
+
+> @paperclipai/ui@0.3.1 typecheck /workspace/blentera-v10/ui
+> tsc -b
+
+src/components/TrustGatedEvidence.tsx(185,56): error TS2339: Property 'grantReceiptId' does not exist on type '{ state: "grant_required"; } | { state: "granted"; grantReceiptId: string; expiresAt: string; } | { state: "nda_binding_unconfigured"; registryEntryId: string; documentRevisionId: string; version: string; requiredBindingOwner: "canonical_nda_agreement"; receiptReference: null; }'.
+  Property 'grantReceiptId' does not exist on type '{ state: "grant_required"; }'.
+ ELIFECYCLE  Command failed with exit code 1.

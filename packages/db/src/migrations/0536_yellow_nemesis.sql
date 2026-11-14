@@ -1,0 +1,6 @@
+DROP INDEX "issue_privacy_sources_source_uq";--> statement-breakpoint
+ALTER TABLE "issue_privacy_sources" ADD COLUMN "context_manifest_id" uuid;--> statement-breakpoint
+ALTER TABLE "issue_privacy_sources" ADD CONSTRAINT "issue_privacy_sources_context_manifest_fk" FOREIGN KEY ("company_id","context_manifest_id") REFERENCES "public"."context_manifests"("company_id","id") ON DELETE cascade ON UPDATE no action;--> statement-breakpoint
+CREATE INDEX "issue_privacy_sources_context_source_idx" ON "issue_privacy_sources" USING btree ("company_id","context_manifest_id","source_id");--> statement-breakpoint
+ALTER TABLE "issue_privacy_sources" ADD CONSTRAINT "issue_privacy_sources_source_uq" UNIQUE NULLS NOT DISTINCT("company_id","issue_id","source_kind","source_id","context_manifest_id");--> statement-breakpoint
+ALTER TABLE "issue_privacy_sources" ADD CONSTRAINT "issue_privacy_sources_context_manifest_kind_check" CHECK ("issue_privacy_sources"."context_manifest_id" is null or "issue_privacy_sources"."source_kind" = 'issue');

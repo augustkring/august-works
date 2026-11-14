@@ -1,0 +1,25 @@
+{
+  "record": "security-eval-cleanup-repair-v1",
+  "priorCi": {
+    "runId": 40844781809,
+    "jobId": 123349632931,
+    "sourceHead": "d57131452",
+    "testFilesPassed": 27,
+    "testsPassed": 894,
+    "result": "Assertions passed; wrapper failed afterwards on readonly test-directory cleanup EACCES",
+    "privateLogZipSha256": "e69ecbc7403dc0166de618913b737f7f725d14a058f3a3abfa08c1b1c68261b4"
+  },
+  "change": "Use existing removeRuntimeStorageTree owner for cleanup; Node>=24.11 native TypeScript import adds no dependency.",
+  "manualVerification": {
+    "result": "passed",
+    "checks": [
+      "Native Node imports the existing TypeScript cleanup owner",
+      "Owner-readonly nested directories are removed",
+      "Outside symlink target content and mode are preserved",
+      "Security wrapper JavaScript syntax is valid"
+    ],
+    "sourceFileSha256": "442acd4a4e49a8fa742e6484a7ba97f01b5cc20bdab6c5df0d08a86ba73552ec",
+    "cleanupOwnerSha256": "10b0edf52c9d1ffe0e35b0efab8fd525c4928e8a7828e3c3b4af1786d79ea3da"
+  },
+  "limits": "The894 assertions are from the recorded prior CI head, not a rerun on this wrapper change; final unchanged-head CI remains required."
+}

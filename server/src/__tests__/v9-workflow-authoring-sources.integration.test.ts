@@ -16,12 +16,14 @@ import { issueService } from "../services/issues.js";
 import { workflowAuthoringToolsService } from "../services/workflows/workflow-authoring-tools.js";
 import { workflowService } from "../services/workflows/workflow-service.js";
 import { workflowExecutorService } from "../services/workflows/workflow-executor.js";
+import { accessService } from "../services/access.js";
 import { lockMemoryPrivacy, purgeDerivedWorkflowMemory } from "../services/memory/memory-privacy.js";
 import { lockAnalyticalCompany } from "../services/analytical-privacy.js";
 import { workflowCustomerDraftFlow } from "../services/workflows/workflow-customer-draft-flow.js";
 import { capabilityResolverService } from "../services/capability-resolver.js";
 import { automationArtifactService } from "../services/automation-artifacts/automation-artifact-service.js";
 import { assertLearningAssetCurrent } from "../services/learning/learning-assets.js";
+import { seedNativePasskeySession } from "./helpers/native-authentication-fixtures.js";
 
 describe.sequential("Original workflow private authoring copy owner", () => {
   let database: Awaited<ReturnType<typeof startEmbeddedPostgresTestDatabase>>, db: ReturnType<typeof createDb>;
@@ -33,6 +35,9 @@ describe.sequential("Original workflow private authoring copy owner", () => {
   afterAll(async () => { await database?.cleanup(); }, 30_000);
   beforeEach(async () => {
     f = await seedV5Presences(db);
+    // Workflow source reads require a current accountable Human session. The
+    // generic V5 company fixture intentionally has no authenticated session.
+    f.actor = { ...f.actor, sessionId: await seedNativePasskeySession(db, f.userId) };
     await db.insert(companyMemberships).values({ companyId: f.home, principalType: "agent", principalId: f.presence.id, status: "active" }).onConflictDoNothing();
     await instanceSettingsService(db).updateExperimental({ enableWorkflowsV1: true, enableWorkflowBuilderV1: true, enableAiWorkflowAuthoring: true, enableAgentChat: true });
     await db.insert(principalPermissionGrants).values(["workflows:read", "workflows:edit", "workflows:publish", "workflows:run"].flatMap(permissionKey => [
@@ -44,7 +49,7 @@ describe.sequential("Original workflow private authoring copy owner", () => {
     [origin] = await db.insert(heartbeatRuns).values({ companyId: f.home, agentId: f.presence.id, responsibleUserId: f.userId,
       status: "running", contextSnapshot: { issueId: source.id, conversationSessionGeneration: 0 } }).returning();
   });
-  const human = () => ({ principal: { type: "user" as const, userId: f.userId } });
+  const human = () => ({ principal: { type: "user" as const, userId: f.userId }, authorizationActor: f.actor });
   async function authored() {
     return (await workflowAuthoringToolsService(db).create({ companyId: f.home, agentId: f.presence.id, runId: origin.id },
       { name: "PRIVATE workflow", description: "PRIVATE described intent", idempotencyKey: randomUUID() })).workflow;
@@ -240,6 +245,152 @@ describe.sequential("Original workflow private authoring copy owner", () => {
       triggerPayload: { value: "PRIVATE restored parent" }, authoringSourceWorkflowIds: [] });
     expect((await db.select().from(workflowRuns).where(eq(workflowRuns.id, completed.run.id)))[0].triggerPayload).toEqual({});
     await expect(engine.getRun(f.home, completed.run.id, f.actor)).rejects.toMatchObject({ status: 403 });
+  });
+  it.each(["manual", "manual_covered", "manual_revoked", "task_covered", "task_revoked", "manual_expires"] as const)(
+    "leaves a recovered successful private child wait intact without its original current reader: %s", async mode => {
+    const owner = workflowService(db), childDraft = await authored();
+    const childChanged = await owner.updateDraft(f.home, childDraft.id, { expectedRevisionId: childDraft.draftRevisionId!, graph: {
+      version: 1, nodes: [
+        { id: "start", type: "core.manual_trigger", name: "Start", position: { x: 0, y: 0 }, config: {} },
+        { id: "hold", type: "core.wait", name: "Hold for recovery", position: { x: 0, y: 1 }, config: { durationSeconds: 30 } },
+        { id: "value", type: "core.transform", name: "Prepare value", position: { x: 0, y: 2 }, config: { mapping: { value: "PRIVATE recovered child result" } } },
+      ], edges: [{ id: "one", source: "start", target: "hold" }, { id: "two", source: "hold", target: "value" }], variables: [], settings: {},
+    } }, human());
+    const child = await owner.publish(f.home, childDraft.id, { expectedDraftRevisionId: childChanged.draftRevisionId!, expectedPublishedRevisionId: null }, human());
+    const parent = await parentWorkflow(child), engine = workflowExecutorService(db);
+    const requestKey = randomUUID();
+    const task = mode.startsWith("task") ? await issueService(db).create(f.home, {
+      title: "Literal Human workflow invocation", createdByUserId: f.userId, responsibleUserId: f.userId,
+    }, db, undefined, { manualInputActor: f.actor }) : null;
+    let coverageId: string | null = null;
+    let coverageActor = f.actor;
+    if (mode !== "manual") {
+      const principalId = randomUUID(), now = new Date();
+      await db.insert(authUsers).values({ id: principalId, name: "Coverage principal", email: `${principalId}@test.invalid`,
+        emailVerified: true, createdAt: now, updatedAt: now });
+      await db.insert(companyMemberships).values({ companyId: f.home, principalType: "user", principalId,
+        membershipRole: "owner", status: "active" });
+      await db.insert(principalPermissionGrants).values({ companyId: f.home, principalType: "user", principalId, permissionKey: "workflows:run" });
+      coverageActor = { type: "board", source: "session", userId: principalId,
+        sessionId: await seedNativePasskeySession(db, principalId), companyIds: [f.home] };
+      coverageId = (await accessService(db).createWorkflowCoverage(f.home, { requestId: randomUUID(), delegateeUserId: f.userId,
+        workflowId: parent.id, workflowRevisionId: parent.publishedRevisionId!, scopeType: task ? "task" : "manual", taskId: task?.id ?? null,
+        startsAt: new Date(now.getTime() - 1_000), expiresAt: new Date(now.getTime() + (mode === "manual_expires" ? 18_000 : 300_000)), reason: "Current temporary Human coverage" }, coverageActor)).coverage.id;
+    }
+    const replay = () => task
+      ? engine.startTaskRun(f.home, task.id, parent.id, { input: {} }, human(), requestKey, coverageId)
+      : engine.startManualRun(f.home, parent.id, { input: {} }, human(), requestKey, coverageId);
+    const waiting = await replay();
+    expect(waiting.run.status).toBe("waiting");
+    const childRunId = waiting.waits.find(wait => wait.kind === "subworkflow")!.referenceId!;
+    // Arrange the persisted checkpoint after child completion and before the
+    // parent consumed it. The paused child has not created its final step yet.
+    const completedAt = new Date();
+    await db.update(workflowWaits).set({ status: "resolved", resolvedAt: completedAt })
+      .where(and(eq(workflowWaits.workflowRunId, childRunId), eq(workflowWaits.status, "active")));
+    await db.update(workflowStepRuns).set({ status: "succeeded", finishedAt: completedAt })
+      .where(and(eq(workflowStepRuns.workflowRunId, childRunId), eq(workflowStepRuns.nodeId, "hold")));
+    await db.insert(workflowStepRuns).values({ companyId: f.home, workflowRunId: childRunId, nodeId: "value",
+      status: "succeeded", outputJson: { value: "PRIVATE recovered child result" }, startedAt: completedAt, finishedAt: completedAt });
+    await db.update(workflowRuns).set({ status: "succeeded", finishedAt: completedAt }).where(eq(workflowRuns.id, childRunId));
+
+    const recovered = await workflowExecutorService(db).recoverExpiredRuns(20, new Date());
+    expect(recovered).toMatchObject({ recovered: 0, deferred: 1, failedRunIds: [] });
+    const current = await engine.getRun(f.home, waiting.run.id, f.actor);
+    expect(current?.run.status).toBe("waiting");
+    expect(current?.waits.find(wait => wait.kind === "subworkflow")?.status).toBe("active");
+    expect(current?.steps.find(step => step.nodeId === "child")).toMatchObject({ status: "waiting", outputJson: null });
+
+    if (mode === "manual_expires") {
+      // Begin the real contention near expiry, keeping its duration below the
+      // existing 8s Source statement budget. Never widen that product budget.
+      let nearExpiry = false;
+      const approachDeadline = Date.now() + 20_000;
+      while (Date.now() < approachDeadline) {
+        const [window] = await db.execute<{ live: boolean; near: boolean }>(sql`select expires_at>clock_timestamp() as live,
+          expires_at<=clock_timestamp()+interval '4 seconds' as near from human_workflow_coverages where id=${coverageId}::uuid`);
+        expect(window?.live).toBe(true);
+        if (window.near) { nearExpiry = true; break; }
+        await new Promise(resolve => setTimeout(resolve, 50));
+      }
+      expect(nearExpiry).toBe(true);
+      let release!: () => void, locked!: () => void;
+      const released = new Promise<void>(resolve => { release = resolve; });
+      const lockReady = new Promise<void>(resolve => { locked = resolve; });
+      const holder = db.transaction(async tx => {
+        await tx.execute(sql`select id from workflow_runs where company_id=${f.home}::uuid and id=${waiting.run.id}::uuid for update`);
+        locked(); await released;
+      });
+      await lockReady;
+      const continuation = replay().then(result => ({ result, error: null }), error => ({ result: null, error }));
+      try {
+        let blocked = false;
+        const deadline = Date.now() + 12_000;
+        while (Date.now() < deadline) {
+          const [waiter] = await db.execute<{ blocked: boolean }>(sql`select exists(select 1 from pg_stat_activity
+            where datname=current_database() and pid<>pg_backend_pid() and wait_event_type='Lock'
+              and query ilike '%workflow_runs%' and query ilike '%for update%') as blocked`);
+          if (waiter?.blocked) { blocked = true; break; }
+          await new Promise(resolve => setTimeout(resolve, 25));
+        }
+        expect(blocked).toBe(true);
+        // The actual early authorization holds the original coverage row while
+        // the resolver waits for parent ownership. No mocked claim or DB clock.
+        await expect(db.transaction(tx => tx.execute(sql`select id from human_workflow_coverages
+          where id=${coverageId}::uuid for update nowait`))).rejects.toMatchObject({ cause: { code: "55P03" } });
+        const [before] = await db.execute<{ live: boolean }>(sql`select expires_at>clock_timestamp() as live
+          from human_workflow_coverages where id=${coverageId}::uuid`);
+        expect(before?.live).toBe(true);
+        let expired = false;
+        const expiryDeadline = Date.now() + 20_000;
+        while (Date.now() < expiryDeadline) {
+          const [clock] = await db.execute<{ expired: boolean }>(sql`select expires_at<=clock_timestamp() as expired
+            from human_workflow_coverages where id=${coverageId}::uuid`);
+          if (clock?.expired) { expired = true; break; }
+          await new Promise(resolve => setTimeout(resolve, 50));
+        }
+        expect(expired).toBe(true);
+      } finally { release(); await holder; }
+      const outcome = await continuation;
+      expect(outcome.error).toMatchObject({ status: 403, details: { code: "workflow_coverage_unavailable" } });
+      const retained = await engine.getRun(f.home, waiting.run.id, f.actor);
+      expect(retained?.run.status).toBe("waiting");
+      expect(retained?.waits.find(wait => wait.kind === "subworkflow")?.status).toBe("active");
+      expect(retained?.steps.find(step => step.nodeId === "child")).toMatchObject({ status: "waiting", outputJson: null });
+      expect(await db.select().from(workflowRuns).where(eq(workflowRuns.parentWorkflowRunId, waiting.run.id))).toHaveLength(1);
+      // Invariants above observe the retained wait. Dispose of this case through
+      // the original Human cancellation owner so the global recovery sweep in
+      // the next independent company does not count this intentionally held run.
+      expect((await engine.cancelRun(f.home, waiting.run.id, { reason: "Explicit fixture cleanup after retained-wait assertions" }, human())).run.status)
+        .toBe("cancelled");
+      return;
+    }
+    if (mode.endsWith("revoked")) {
+      await accessService(db).revokeWorkflowCoverage(f.home, coverageId!, coverageActor);
+      await expect(replay()).rejects.toMatchObject({ status: 403, details: { code: "workflow_coverage_unavailable" } });
+      const retained = await engine.getRun(f.home, waiting.run.id, f.actor);
+      expect(retained?.run.status).toBe("waiting");
+      expect(retained?.waits.find(wait => wait.kind === "subworkflow")?.status).toBe("active");
+      expect(retained?.steps.find(step => step.nodeId === "child")).toMatchObject({ status: "waiting", outputJson: null });
+      expect(await db.select().from(workflowRuns).where(eq(workflowRuns.parentWorkflowRunId, waiting.run.id))).toHaveLength(1);
+      // Invariants above observe the retained wait. Dispose of this case through
+      // the original Human cancellation owner so the global recovery sweep in
+      // the next independent company does not count this intentionally held run.
+      expect((await engine.cancelRun(f.home, waiting.run.id, { reason: "Explicit fixture cleanup after retained-wait assertions" }, human())).run.status)
+        .toBe("cancelled");
+      return;
+    }
+    // Replaying the same owner request is the current-authority continuation
+    // path. It consumes the wait once, with live original coverage if present.
+    const resumed = await replay();
+    expect(resumed.run.status).toBe("succeeded");
+    expect(resumed.steps.find(step => step.nodeId === "child")?.outputJson).toMatchObject({
+      childRunId, result: { value: "PRIVATE recovered child result" },
+    });
+    expect(resumed.waits.find(wait => wait.kind === "subworkflow")?.status).toBe("resolved");
+    const repeated = await replay();
+    expect(repeated.run.id).toBe(waiting.run.id);
+    expect(await db.select().from(workflowRuns).where(eq(workflowRuns.parentWorkflowRunId, waiting.run.id))).toHaveLength(1);
   });
   it("retains the public parent's private child Source in Original Optimizer traces and review reads after child-run removal", async () => {
     const child = await privateValueWorkflow(), parent = await parentWorkflow(child);

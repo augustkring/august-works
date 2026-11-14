@@ -3,14 +3,17 @@ import { readFile } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import path from "node:path";
 import { expect, test, type APIResponse } from "@playwright/test";
+import { registerEnglishAccountLocaleIsolation } from "./account-locale-isolation";
 import { createDb, closeRegisteredClients, issues, businessScenarioRuns } from "../../packages/db/src/index.ts";
 import { eq } from "../../packages/db/node_modules/drizzle-orm/index.js";
 import { businessMetricService } from "../../server/src/services/business-metrics/service.ts";
 import { businessScenarioService } from "../../server/src/services/business-scenarios/service.ts";
 import { aiGovernanceService } from "../../server/src/services/ai-governance/governance-service.ts";
+import { analyticalPrincipalId } from "../../server/src/services/analytical-reader.ts";
 import { analyticalPurpose, metricDefinition } from "../../server/src/__tests__/helpers/business-metric-fixture.ts";
 import { scenarioDefinition } from "../../server/src/__tests__/helpers/business-scenario-fixture.ts";
 const axePath = createRequire(import.meta.url).resolve("axe-core/axe.min.js");
+registerEnglishAccountLocaleIsolation(test);
 async function json(response: APIResponse) { expect(response.ok(), `${response.status()}: ${await response.text()}`).toBe(true); return response.json(); }
 
 // Actual Native metric/scenario/publication/result owners and Source refusal;
@@ -24,7 +27,10 @@ test("Insights reads conditional scenario comparisons and loses private results 
   expect(path.resolve(config.database.embeddedPostgresDataDir)).toBe(path.join(path.dirname(configPath), "db"));
   const pid = await readFile(path.join(config.database.embeddedPostgresDataDir, "postmaster.pid"), "utf8");
   const databaseUrl = `postgres://paperclip:paperclip@127.0.0.1:${pid.split("\n")[3]}/paperclip`, db = createDb(databaseUrl);
-  const actor = { type: "board" as const, source: "local_implicit" as const };
+  const session = await json(await request.get("/api/auth/get-session"));
+  const actor = { type: "board" as const, source: "session" as const, userId: session.user.id,
+    sessionId: session.session.id, companyIds: [company.id] };
+  const ownerUserId = analyticalPrincipalId(actor);
   let writes = 0;
   page.on("request", req => { if (req.method() !== "GET" && /\/business-(metrics|scenarios)/.test(req.url())) writes++; });
   try {
@@ -34,13 +40,17 @@ test("Insights reads conditional scenario comparisons and loses private results 
     const policy = await aiGovernanceService(db).obligation(actor, company.id, purpose);
     const [issue] = await db.insert(issues).values({ companyId: company.id, status: "done", title: "PRIVATE scenario Source prose", createdAt: new Date("2026-01-01T12:00:00Z") }).returning();
     const metrics = businessMetricService(db);
-    const measured = await metrics.create(company.id, actor, { key: "completed_objects", definition: { ...metricDefinition(policy.id), valueType: "count", unit: "objects", calculation: { kind: "native_count", population: { entity: "issue", statuses: ["done"], projectId: null } } } });
+    const metric = metricDefinition(policy.id); metric.ownerUserId = ownerUserId;
+    const measured = await metrics.create(company.id, actor, { key: "completed_objects", definition: { ...metric, valueType: "count", unit: "objects", calculation: { kind: "native_count", population: { entity: "issue", statuses: ["done"], projectId: null } } } });
     await metrics.publish(company.id, actor, measured.metric.id, { expectedRevision: 1, versionId: measured.version.id });
     const observation = await metrics.query(company.id, actor, { metricId: measured.metric.id, versionId: measured.version.id, from: "2026-01-01T00:00:00Z", until: "2026-01-02T00:00:00Z", dimensions: [], maxRows: 5000 });
     const owner = businessScenarioService(db);
-    const created = await owner.create(company.id, actor, { key: "conditional_capacity", definition: scenarioDefinition(policy.id, {
+    const scenario = scenarioDefinition(policy.id, {
       kind: "metric_observation", key: "objects", metricId: measured.metric.id, metricVersionId: measured.version.id, observationId: observation.id, unit: { issue: 1 },
-    }) });
+    });
+    scenario.ownerUserId = ownerUserId;
+    for (const assumption of scenario.assumptions) assumption.ownerUserId = ownerUserId;
+    const created = await owner.create(company.id, actor, { key: "conditional_capacity", definition: scenario });
     const published = await owner.publish(company.id, actor, created.scenario.id, { expectedRevision: 1, versionId: created.version.id, rationale: "Synthetic human review of this conditional model and source pins" });
     const run = await owner.run(company.id, actor, published.id, { expectedRevision: published.revision, versionId: created.version.id, seed: null });
     expect(run.result.cases.map(value => value.outputs[0].nominal)).toEqual([2, 3]);

@@ -4,10 +4,10 @@ import { assembleFreshNativeGovernedContext } from "./context-runtime.js";
 import type { ContextAssemblyResult } from "./context-engine.js";
 describe("Fresh Native context respects the authored source boundary", () => {
   it("keeps the task-only boundary when Foundation is globally enabled", async () => {
-    const assemble = vi.fn(async () => ({ markdown: "Current task input" }) as ContextAssemblyResult);
+    const assemble = vi.fn(async () => ({ markdown: "Current task input", packet: { manifest: null } }) as ContextAssemblyResult);
     const value = await assembleFreshNativeGovernedContext({} as Db, { enabled: true, foundationEnabled: true, sourceScope: "task_only",
       companyId: "company", agentId: "agent", runId: "run", issueId: "task", responsibleUserId: "owner", issueTitle: "Current work" }, { assemble });
-    expect(value).toBe("Current task input");
+    expect(value).toEqual({ markdown: "Current task input", manifest: null });
     expect(assemble).toHaveBeenCalledWith(expect.objectContaining({ sourceScope: "task_only", enforceResponsibleUserIntersection: true, issueId: "task", responsibleUserId: "owner" }));
   });
   it("does not acquire context when the owner is disabled", async () => {

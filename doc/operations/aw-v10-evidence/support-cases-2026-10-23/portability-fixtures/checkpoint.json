@@ -1,0 +1,30 @@
+{
+  "checkpoint": "Two original source-free skill export fixtures under current native authority",
+  "recordedAt": "2026-10-23",
+  "result": "2 passed,94 filtered in36.78s; exit0. Existing native database/current Board owner/company fixture, with every original serialization assertion preserved.",
+  "sources": "portability-skill-native-fixtures.sources",
+  "run": "portability-skill-native-fixtures.log",
+  "exit": "portability-skill-native-fixtures.exit",
+  "interruption": "First command was interrupted by environment restart before any result or exit could be observed; its partial log is retained and not counted.",
+  "limits": [
+    "Initial two-skill run is a prior source checkpoint; exact test source gzip retained.",
+    "Follow-up full file still fails44 tests plus one original unhandled error. No full portability or V10 acceptance follows."
+  ],
+  "followUp": {
+    "result": "Full original96-test file:52 passed,44 failed,1 unhandled original error in28.98s,exit1. All18 migrated source-free fixtures pass; remaining expectations stay unresolved.",
+    "run": "portability-source-free-native-batch.log",
+    "exit": "portability-source-free-native-batch.exit",
+    "sources": "portability-source-free-native-batch.sources",
+    "changes": "Current native DB/company/Board membership at export boundary; actual permission-grant rows replace a fake query. Service/domain serialization fixtures remain controlled. Original assertions and import target modes preserved; no authorization mock or bypass.",
+    "limits": "No full-suite pass. Original eight publication/import conflicts and remaining36 export fixtures are still unresolved; downstream assertions in those fixtures remain unqualified. Server tsconfig excludes this test file; the final product compiler checkpoint precedes test-only batch edits."
+  },
+  "finalFollowUp": {
+    "result": "Full original96-test file:63 passed,33 failed,zero unhandled errors in48.63s,exit1. All29 migrated fixtures now pass.",
+    "run": "portability-live-sources-reviewed.log",
+    "exit": "portability-live-sources-reviewed.exit",
+    "sources": "portability-live-sources-reviewed.sources",
+    "scope": "Eight further source-free agent/package fixtures plus three Project/Task format fixtures use actual new UUID source rows. Fresh open Board-created Project fixtures receive the existing original Board-create provenance stamp and empty roots; this does not qualify historical rows or payload snapshots. Native DB/company/current Human membership are real; domain format projections remain controlled, not an actual HTTP/native create pipeline qualification.",
+    "retainedFailures": "Intermediate38/38/37/35 failure runs retain root/agent fixture mistakes: one-shot company lookup reverted to old target, remaining old ID assertions, and missing ownership/source fields in controlled Project projections. Original assertions remain, with fixture identities rebound. No product authorization bypass.",
+    "remaining": "33 original failures remain unresolved; source-bearing export/import and routine/publication contracts need actual owners and further evidence. No full portability/V10/PR pass."
+  }
+}

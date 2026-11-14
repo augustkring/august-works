@@ -1,0 +1,62 @@
+{
+  "scope": "Original Task/ancestor selected sources and first native Task+plan bootstrap persistence; no provider transport",
+  "sources": {
+    "server/src/services/heartbeat.ts": "1c599d28a37ccfe9a2070a9958cf36c42434437ece814fbf4dc8fe83d235f261",
+    "server/src/services/issues.ts": "d433686366127dff776b3f38bc8e5f61c890aa40528b5df8b4ff495b7882e1aa",
+    "server/src/__tests__/issues-service.test.ts": "334b1e29211c0d859873d8b8909493838ef80e0f089b6cc2ead5fd11c2629314",
+    "server/src/__tests__/heartbeat-process-recovery.test.ts": "977dac0997b681692719d5c407fd595fba061ff4e1598a449cdd803532e0c891"
+  },
+  "selectedSources": {
+    "checkpoint": "up03-task-ancestor-source-receipt.json",
+    "baselineActualExit": 1,
+    "baselineFailed": 3,
+    "currentActualExit": 0,
+    "currentPassed": 3,
+    "filtered": 135,
+    "durationSeconds": 83.45
+  },
+  "actualBootstrapCommit": {
+    "actualExit": 0,
+    "passed": 1,
+    "filtered": 305,
+    "durationSeconds": 88.24,
+    "log": "up03-task-bootstrap-commit.log",
+    "all3PinsUnchanged": true,
+    "asserted": "Actual native first input/profile contains then-selected Task/plan descriptors before dispatch. Actual Task title and plan revision later change; entire persisted profile/input remains equal. Original cancellation occurs before any provider factory call."
+  },
+  "serverCompiler": {
+    "actualExit": 0,
+    "log": "up03-task-bootstrap-server-types.log",
+    "all4PinsUnchanged": true
+  },
+  "sourceArchives": {
+    "up03-task-ancestor-source-red-heartbeat.ts": {
+      "artifact": "up03-task-ancestor-source-red-heartbeat.txt.gz",
+      "uncompressedSha256": "1c599d28a37ccfe9a2070a9958cf36c42434437ece814fbf4dc8fe83d235f261"
+    },
+    "up03-task-ancestor-source-red-test.ts": {
+      "artifact": "up03-task-ancestor-source-red-test.txt.gz",
+      "uncompressedSha256": "334b1e29211c0d859873d8b8909493838ef80e0f089b6cc2ead5fd11c2629314"
+    },
+    "up03-task-ancestor-source-red-issues.ts": {
+      "artifact": "up03-task-ancestor-source-red-issues.txt.gz",
+      "uncompressedSha256": "9ffd7f43acea318b3667e6498da175df54a7fb5b6580296a19b0284bd65977f7"
+    },
+    "up03-task-bootstrap-red-heartbeat.txt": {
+      "artifact": "up03-task-bootstrap-red-heartbeat.txt.gz",
+      "uncompressedSha256": "47229847ea194f0884918f857259c8b7f1fa4c52765345a2d00e11fad65ce6e2"
+    },
+    "up03-task-bootstrap-current-heartbeat.ts": {
+      "artifact": "up03-task-bootstrap-current-heartbeat.txt.gz",
+      "uncompressedSha256": "cd542419219fb42e1df15e99437a63c15a1ade5d8de3365a0e48ed1b4b0bf459"
+    }
+  },
+  "limits": [
+    "Selected known snapshots are structural source-free DB fixtures; ordinary bootstrap fixture preserves NULL source history.",
+    "Task source hashes its selected original scalar/body projection, ancestor hashes its selected scalar projection; transformed final provider bytes require separate actual dispatch binding.",
+    "Original Task helper was moved to module export with explicit Db argument; all original callers preserved. Actual checkout reselect replaces current local capture.",
+    "Review/workflow overrides exclude ordinary ancestor Markdown; base Task remains because structured native title still uses it. Recovery preserves original stored capture/missing history by existing first-input fence; restart execution itself not covered by this bootstrap case.",
+    "No complete Run receipt or protocol writer enabled; remaining wake/instruction/tool/session families, current source authorization, effect copying, canonical graph and original Memory copy/temporal regressions remain open.",
+    "Internal Run profile currently reaches public HTTP DTOs; projection followup audited separately, no all-surface privacy release claim."
+  ]
+}

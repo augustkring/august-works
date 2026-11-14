@@ -644,7 +644,7 @@ function Setup({
                   ·{" "}
                   {runnerProvider === "codex"
                     ? "Native app server runner"
-                    : "Paperclip Runner"}
+                    : getAdapterDisplay("paperclip_runner").label}
                 </span>
               )}
             </div>

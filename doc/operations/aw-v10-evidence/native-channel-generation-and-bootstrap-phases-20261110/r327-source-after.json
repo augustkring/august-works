@@ -1,0 +1,15 @@
+{
+  "files": {
+    "package.json": "631b595ef1b57251c2d6f8218ad1a367705072b3d2ec14a6f2010fc9abb9b6f7",
+    "pnpm-lock.yaml": "b70210ed554c63d425e34e4c075f0984309f74f0836d82d85f714b1c4deeb5b2",
+    "server/package.json": "08b8faa2b2b9c69530928aa0b283cf9e53e70e27a692a8cb9fdbee6dec3fb0f4",
+    "server/src/__tests__/durable-chat-wakeup.test.ts": "2ec17e3dd3b5e8bde84e4165f184f18d82f82ce480098109c5ecbfe2b60dcf65",
+    "server/src/__tests__/heartbeat-dependency-draft-controller.integration.test.ts": "a8da296de88a570fa26016602effe52b3a7c0bcc2b1a16fda010a0994e800aeb",
+    "server/src/__tests__/helpers/managed-native-conversation-sandbox-host.ts": "c210ca5c1f8648f6da31861ff8c620096c0218af2c130d950212bd7b43719c6c",
+    "server/src/services/chat-channels.ts": "52fc828496ac817d006106d57827e6caf2b58827cdbb8685c19709583be16dee",
+    "server/src/services/heartbeat.ts": "f1ee786d07235b0126bdd932758f416a09892ac3f737b9afa40090229e0da8bd",
+    "server/src/services/issue-assignment-wakeup.ts": "e76a16e492cb0ea46ddd657c8c72fde8a43b5a1434fdf20a896dc74b94a3b65e",
+    "server/tsconfig.json": "41b38f5d62b35e02f2b15c294baf39d196a8e6af125bd4a4d7b5e30d9334d150"
+  },
+  "allPinsUnchanged": true
+}

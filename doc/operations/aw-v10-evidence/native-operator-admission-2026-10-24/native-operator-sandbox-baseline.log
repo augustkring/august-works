@@ -1,0 +1,111 @@
+(!) Your Vite config uses features that are unsupported by `configLoader: 'native'`, which is planned to become the default in a future major version of Vite:
+  - `__dirname` (vitest.config.ts:7:25). Use `import.meta.dirname` instead
+Set `VITE_CONFIG_NATIVE_IGNORE_WARNING=true` to suppress this warning.
+
+ RUN  v4.1.11 /workspace/blentera-v10
+
+ ❯ |@paperclipai/server| src/__tests__/v7-sandbox.integration.test.ts (15 tests | 1 failed | 14 skipped) 7446ms
+     × refuses configured operator writes with only a session label 70ms
+
+⎯⎯⎯⎯⎯⎯⎯ Failed Tests 1 ⎯⎯⎯⎯⎯⎯⎯
+
+ FAIL  |@paperclipai/server| src/__tests__/v7-sandbox.integration.test.ts > V7 sandbox company scope, immutable evidence and rollback fences > refuses configured operator writes with only a session label
+AssertionError: promise resolved "{ …(17) }" instead of rejecting
+
+- Expected
++ Received
+
+- Error {
+-   "message": "rejected promise",
++ {
++   "backend": "existing_cell_container",
++   "boundaryPolicy": {
++     "broadAutonomy": false,
++     "credentials": {
++       "bindings": [],
++       "mode": "none",
++     },
++     "filesystem": {
++       "deniedPaths": [
++         "/run/secrets",
++       ],
++       "readPaths": [
++         "/work",
++       ],
++       "writePaths": [
++         "/work/output",
++       ],
++     },
++     "network": {
++       "defaultDeny": true,
++       "denyPrivateAndMetadata": true,
++       "destinations": [
++         {
++           "hostname": "api.example.com",
++           "methods": [
++             "GET",
++           ],
++           "pathPrefixes": [
++             "/v1",
++           ],
++           "port": 443,
++         },
++       ],
++     },
++     "process": {
++       "allowedBinaries": [
++         "/usr/bin/node",
++       ],
++       "allowedSyscalls": [
++         "read",
++         "write",
++       ],
++       "capabilities": [],
++       "noNewPrivileges": true,
++       "uid": 1000,
++     },
++     "profile": "development",
++     "requiredControls": [],
++     "resources": {
++       "cpuMillis": 1000,
++       "diskBytes": 1073741824,
++       "memoryBytes": 268435456,
++       "pidsLimit": 64,
++       "wallClockSeconds": 600,
++     },
++     "riskClass": "C2",
++     "schemaVersion": 1,
++   },
++   "boundaryPolicyHash": "3bf8a85b6a83ec957287c6351171d44fdd8339e212e0a140414ab430611957ac",
++   "capabilitySnapshot": null,
++   "capabilitySnapshotHash": null,
++   "cellGeneration": "1",
++   "companyId": "df476726-41a1-4721-a8ff-a354fa8089b7",
++   "createdAt": 2026-10-24T04:59:56.728Z,
++   "createdByUserId": "user-ce1dfe5b-9f3f-4742-bc08-e9d1206a3a8c",
++   "id": "562af0d4-ea13-419c-a40b-c749eacbbdc1",
++   "profile": "development",
++   "qualificationRunId": null,
++   "runtimeCellId": "66f65241-6cb9-4e19-ab46-d41f94fa985b",
++   "sandboxRef": null,
++   "status": "requested",
++   "updatedAt": 2026-10-24T04:59:56.728Z,
++   "version": 1,
+  }
+
+ ❯ src/__tests__/v7-sandbox.integration.test.ts:23:66
+     21|     await expect(service.create(f.actor, f.home, { runtimeCellId: cell…
+     22|       expectedCellGeneration: cell.generation.toString(), backend: "ex…
+     23|       profile: "development", boundaryPolicy: policyFixture() })).reje…
+       |                                                                  ^
+     24|     expect(await db.select().from(runtimeSandboxBindings).where(eq(run…
+     25|   });
+
+⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯[1/1]⎯
+
+
+ Test Files  1 failed (1)
+      Tests  1 failed | 14 skipped (15)
+   Start at  04:59:18
+   Duration  38.08s (transform 20.30s, setup 555ms, import 29.62s, tests 7.45s, environment 0ms)
+

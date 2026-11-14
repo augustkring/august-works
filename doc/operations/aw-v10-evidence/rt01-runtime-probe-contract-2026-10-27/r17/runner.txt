@@ -1,0 +1,3 @@
+timeout_seconds=300
+test_file=src/__tests__/v7-sandbox-host-bridge.integration.test.ts
+test_pattern=admits a qualified native Task through the HTTP route

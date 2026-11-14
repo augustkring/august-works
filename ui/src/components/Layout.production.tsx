@@ -36,11 +36,13 @@ import { ToastViewport } from "./ToastViewport";
 import { MobileBottomNav } from "./MobileBottomNav";
 import { WorktreeBanner } from "./WorktreeBanner";
 import { DevRestartBanner } from "./DevRestartBanner";
+import { ServiceHealth } from "./ServiceHealth";
 import { StandaloneBrowserControls } from "./StandaloneBrowserControls";
 import { RouteErrorBoundary } from "./RouteErrorBoundary";
 import { SidebarShell } from "./SidebarShell.production";
 import { SecondarySidebar } from "./SecondarySidebar.production";
 import { SidebarAccountMenu } from "./SidebarAccountMenu.production";
+import { ExperienceUtilities } from "./ExperienceUtilities";
 import { useDialogActions } from "../context/DialogContext";
 import { GeneralSettingsProvider } from "../context/GeneralSettingsContext";
 import { usePanel } from "../context/PanelContext";
@@ -656,6 +658,7 @@ export function Layout() {
         </a>
         <WorktreeBanner />
         <DevRestartBanner devServer={health?.devServer} />
+        <ServiceHealth compact />
         <div
           className={cn(
             "min-h-0 flex-1",
@@ -719,6 +722,7 @@ export function Layout() {
                   "sticky top-0 z-20 bg-background/95 backdrop-blur supports-[backdrop-filter]:bg-background/85",
               )}
             >
+              <ExperienceUtilities safetyRecovery />
               <StandaloneBrowserControls mobile={isMobile} />
               <BreadcrumbBar />
               {isMobile && isCompanySettingsRoute ? (

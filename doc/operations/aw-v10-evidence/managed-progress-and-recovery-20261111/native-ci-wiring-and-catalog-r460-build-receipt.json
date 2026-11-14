@@ -1,0 +1,45 @@
+{
+  "cacheAdvice": [
+    {
+      "elapsedSeconds": 3.8981150749896187,
+      "filesAdvised": 620134,
+      "memoryAfter": 6085877760,
+      "contentChanged": false
+    }
+  ],
+  "steps": [
+    {
+      "command": [
+        "node",
+        "--test",
+        "scripts/__tests__/run-vitest-stable-shard.test.mjs",
+        "scripts/__tests__/e2e-shard.test.mjs",
+        "scripts/fixtures/native-model-socket-observer.test.mjs"
+      ],
+      "exit": 0,
+      "seconds": 24.4070239480061,
+      "peakGroupRssBytes": 149557248,
+      "stopped": null
+    },
+    {
+      "command": [
+        "node",
+        "node_modules/vitest/vitest.mjs",
+        "run",
+        "--config",
+        "/workspace/blentera-v10/packages/paperclip-runner/vitest.config.ts",
+        "--root",
+        "packages/paperclip-runner",
+        "--maxWorkers=1",
+        "src/catalog/semantic-action-catalog.test.ts",
+        "src/catalog/reconciliation.test.ts"
+      ],
+      "exit": 0,
+      "seconds": 1.108565804985119,
+      "peakGroupRssBytes": 261840896,
+      "stopped": null
+    }
+  ],
+  "memoryBefore": "low 0\nhigh 0\nmax 0\noom 0\noom_kill 0\noom_group_kill 0\n",
+  "memoryAfter": "low 0\nhigh 0\nmax 0\noom 0\noom_kill 0\noom_group_kill 0\n"
+}

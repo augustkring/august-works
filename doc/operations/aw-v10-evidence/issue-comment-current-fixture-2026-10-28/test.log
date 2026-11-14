@@ -1,0 +1,133 @@
+
+ RUN  v4.1.11 /workspace/v10-dep-qualification/server
+
+ ✓ src/__tests__/issue-comment-reopen-routes.test.ts > issue comment reopen routes > treats reopen=true as a no-op when the issue is already open 65ms
+ ✓ src/__tests__/issue-comment-reopen-routes.test.ts > issue comment reopen routes > binds explicit attachments in the same transaction as a PATCH comment reassignment 11ms
+ ✓ src/__tests__/issue-comment-reopen-routes.test.ts > issue comment reopen routes > rejects attachment IDs without a PATCH comment before updating or waking 8ms
+ ✓ src/__tests__/issue-comment-reopen-routes.test.ts > issue comment reopen routes > does not dispatch a wake or fallback comment when transactional attachment binding fails 8ms
+ ✓ src/__tests__/issue-comment-reopen-routes.test.ts > issue comment reopen routes > implicitly reopens closed issues via the PATCH comment path when reassigning to an agent 7ms
+ ✓ src/__tests__/issue-comment-reopen-routes.test.ts > issue comment reopen routes > resolves assignee shortnames before updating an issue 16ms
+ ✓ src/__tests__/issue-comment-reopen-routes.test.ts > issue comment reopen routes > rejects ambiguous assignee shortnames 12ms
+ ✓ src/__tests__/issue-comment-reopen-routes.test.ts > issue comment reopen routes > rejects missing assignee shortnames 6ms
+ ✓ src/__tests__/issue-comment-reopen-routes.test.ts > issue comment reopen routes > reopens closed issues via the PATCH comment path 8ms
+ ✓ src/__tests__/issue-comment-reopen-routes.test.ts > issue comment reopen routes > implicitly reopens closed issues via POST comments when an agent is assigned 8ms
+ ✓ src/__tests__/issue-comment-reopen-routes.test.ts > issue comment reopen routes > allows default-open non-assignee POST comments on closed issues without reopening 5ms
+ ✓ src/__tests__/issue-comment-reopen-routes.test.ts > issue comment reopen routes > allows mention-granted non-assignee agent POST comments on closed issues without reopening 5ms
+ ✓ src/__tests__/issue-comment-reopen-routes.test.ts > issue comment reopen routes > denies mention-granted non-assignee agent POST comments on closed issues with resume intent 5ms
+ ✓ src/__tests__/issue-comment-reopen-routes.test.ts > issue comment reopen routes > denies mention-granted non-assignee agent POST comments on closed issues with reopen intent 5ms
+ ✓ src/__tests__/issue-comment-reopen-routes.test.ts > issue comment reopen routes > does not reopen via POST comment+reopen when the assignee agent is the actor on a done issue 5ms
+ ✓ src/__tests__/issue-comment-reopen-routes.test.ts > issue comment reopen routes > does not reopen via POST comment+reopen when the assignee agent is the actor on a cancelled issue 5ms
+ ✓ src/__tests__/issue-comment-reopen-routes.test.ts > issue comment reopen routes > does not reopen via PATCH comment+reopen when the assignee agent is the actor on a done issue 5ms
+ ✓ src/__tests__/issue-comment-reopen-routes.test.ts > issue comment reopen routes > still reopens a done issue via PATCH when a different agent reassigns to self with reopen=true 5ms
+ ✓ src/__tests__/issue-comment-reopen-routes.test.ts > issue comment reopen routes > moves assigned blocked issues back to todo via POST comments 5ms
+ ✓ src/__tests__/issue-comment-reopen-routes.test.ts > issue comment reopen routes > moves in-progress issues with a scheduled retry back to todo via POST human comments 4ms
+[12:02:49] [31mERROR[39m: [36mfailed to cancel scheduled retry superseded by issue comment[39m [90m{"issueId":"11111111-1111-4111-8111-111111111111","runId":"retry-run-1"}[39m
+    err: {
+      "type": "Error",
+      "location": {
+        "line": 1244,
+        "column": 7
+      }
+    }
+[12:02:49] [33mWARN[39m: [36mfailed to re-fetch issue for comment wake decision; falling back to in-hand snapshot[39m [90m{"issueId":"11111111-1111-4111-8111-111111111111"}[39m
+    err: {
+      "type": "Error",
+      "location": {
+        "line": 1354,
+        "column": 30
+      }
+    }
+ ✓ src/__tests__/issue-comment-reopen-routes.test.ts > issue comment reopen routes > does not move scheduled-retry issues to todo when POST comment retry cancellation fails 12ms
+ ✓ src/__tests__/issue-comment-reopen-routes.test.ts > issue comment reopen routes > keeps ordinary in-progress POST human comments in progress when no scheduled retry exists 6ms
+ ✓ src/__tests__/issue-comment-reopen-routes.test.ts > issue comment reopen routes > skips the assignee wakeup when the issue is concurrently cancelled while the comment is being written 39ms
+ ✓ src/__tests__/issue-comment-reopen-routes.test.ts > issue comment reopen routes > wakes the freshly reassigned agent, not the pre-insert snapshot's assignee, when the issue is concurrently reassigned 5ms
+ ✓ src/__tests__/issue-comment-reopen-routes.test.ts > issue comment reopen routes > keeps the comment write successful and falls back to the in-hand snapshot when the wake re-fetch fails 4ms
+ ✓ src/__tests__/issue-comment-reopen-routes.test.ts > issue comment reopen routes > passes validated comment presentation fields to trusted board comment writes 6ms
+ ✓ src/__tests__/issue-comment-reopen-routes.test.ts > issue comment reopen routes > rejects structured comment presentation fields from agent-authenticated writes 3ms
+ ✓ src/__tests__/issue-comment-reopen-routes.test.ts > issue comment reopen routes > derives compact presentation for comments from source-scoped recovery runs 4ms
+ ✓ src/__tests__/issue-comment-reopen-routes.test.ts > issue comment reopen routes > leaves normal agent comments without derived presentation 3ms
+ ✓ src/__tests__/issue-comment-reopen-routes.test.ts > issue comment reopen routes > keeps successful-run missing-state recovery comments fully visible 3ms
+ ✓ src/__tests__/issue-comment-reopen-routes.test.ts > issue comment reopen routes > rejects invalid comment metadata before writing a comment 4ms
+ ✓ src/__tests__/issue-comment-reopen-routes.test.ts > issue comment reopen routes > does not move dependency-blocked issues to todo via POST comments 3ms
+ ✓ src/__tests__/issue-comment-reopen-routes.test.ts > issue comment reopen routes > does not implicitly reopen a blocked issue via PATCH when the same request wires blockers 4ms
+ ✓ src/__tests__/issue-comment-reopen-routes.test.ts > issue comment reopen routes > still implicitly reopens a blocked issue via PATCH when the same request clears blockers 3ms
+ ✓ src/__tests__/issue-comment-reopen-routes.test.ts > issue comment reopen routes > does not implicitly reopen closed issues via POST comments when no agent is assigned 3ms
+[12:02:49] [31mERROR[39m: [36mfailed to cancel scheduled retry superseded by issue comment[39m [90m{"issueId":"11111111-1111-4111-8111-111111111111","runId":"retry-run-1"}[39m
+    err: {
+      "type": "Error",
+      "location": {
+        "line": 1982,
+        "column": 7
+      }
+    }
+ ✓ src/__tests__/issue-comment-reopen-routes.test.ts > issue comment reopen routes > does not implicitly reopen done issues via POST comments when the comment runId matches the issue's checkout run 4ms
+ ✓ src/__tests__/issue-comment-reopen-routes.test.ts > issue comment reopen routes > does not implicitly reopen done issues via POST comments when the comment runId matches the issue's execution run 3ms
+ ✓ src/__tests__/issue-comment-reopen-routes.test.ts > issue comment reopen routes > still implicitly reopens done issues via POST comments when the comment runId differs from the issue's owning run 3ms
+ ✓ src/__tests__/issue-comment-reopen-routes.test.ts > issue comment reopen routes > does not implicitly reopen done issues via the PATCH comment path when actor runId matches the issue's checkout run 3ms
+ ✓ src/__tests__/issue-comment-reopen-routes.test.ts > issue comment reopen routes > moves assigned blocked issues back to todo via the PATCH comment path 3ms
+ ✓ src/__tests__/issue-comment-reopen-routes.test.ts > issue comment reopen routes > moves in-progress issues with a scheduled retry back to todo via the PATCH comment path 4ms
+ ✓ src/__tests__/issue-comment-reopen-routes.test.ts > issue comment reopen routes > does not move scheduled-retry issues to todo when PATCH comment retry cancellation fails 4ms
+ ✓ src/__tests__/issue-comment-reopen-routes.test.ts > issue comment reopen routes > allows default-open non-assignee PATCH comments on closed issues without reopening 4ms
+ ✓ src/__tests__/issue-comment-reopen-routes.test.ts > issue comment reopen routes > does not move dependency-blocked issues to todo via the PATCH comment path 4ms
+ ✓ src/__tests__/issue-comment-reopen-routes.test.ts > issue comment reopen routes > wakes the assignee when an assigned blocked issue moves back to todo 6ms
+ ✓ src/__tests__/issue-comment-reopen-routes.test.ts > issue comment reopen routes > wakes the assignee when a board user moves an assigned review back to todo 11ms
+ ✓ src/__tests__/issue-comment-reopen-routes.test.ts > issue comment reopen routes > does not wake the assignee when the assignee agent moves its own review back to todo 4ms
+ ✓ src/__tests__/issue-comment-reopen-routes.test.ts > issue comment reopen routes > does not enqueue a resume wake when an unassigned review moves back to todo 4ms
+ ✓ src/__tests__/issue-comment-reopen-routes.test.ts > issue comment reopen routes > keeps the existing backlog to todo assignee wake 3ms
+ ✓ src/__tests__/issue-comment-reopen-routes.test.ts > issue comment reopen routes > wakes the assignee when an assigned done issue moves back to todo 3ms
+ ✓ src/__tests__/issue-comment-reopen-routes.test.ts > issue comment reopen routes > explicit same-agent resume works through the PATCH comment path 4ms
+ ✓ src/__tests__/issue-comment-reopen-routes.test.ts > issue comment reopen routes > keeps generic same-agent comments on closed issues inert 3ms
+ ✓ src/__tests__/issue-comment-reopen-routes.test.ts > issue comment reopen routes > explicit same-agent resume comments reopen closed issues and mark the wake payload 4ms
+ ✓ src/__tests__/issue-comment-reopen-routes.test.ts > issue comment reopen routes > honors explicit agent resume intent from a default-open peer as an agent-class wake 4ms
+ ✓ src/__tests__/issue-comment-reopen-routes.test.ts > issue comment reopen routes > bounds a cross-agent reply loop: peer comments wake and assignee self-replies do not 14ms
+ ✓ src/__tests__/issue-comment-reopen-routes.test.ts > issue comment reopen routes > fails closed when a run exceeds the cross-issue comment cap 5ms
+ ✓ src/__tests__/issue-comment-reopen-routes.test.ts > issue comment reopen routes > fails closed when a run exceeds the cross-issue update cap 4ms
+ ✓ src/__tests__/issue-comment-reopen-routes.test.ts > issue comment reopen routes > counts a cross-issue hide PATCH before mutation 4ms
+ ✓ src/__tests__/issue-comment-reopen-routes.test.ts > issue comment reopen routes > counts a cross-issue unhide PATCH before mutation 3ms
+ ✓ src/__tests__/issue-comment-reopen-routes.test.ts > issue comment reopen routes > counts bundled cross-issue PATCH updates and comments separately before mutation 3ms
+ ✓ src/__tests__/issue-comment-reopen-routes.test.ts > issue comment reopen routes > counts a comment-only cross-issue PATCH once 4ms
+ ✓ src/__tests__/issue-comment-reopen-routes.test.ts > issue comment reopen routes > rejects cross-issue comment writes without a run header 4ms
+ ✓ src/__tests__/issue-comment-reopen-routes.test.ts > issue comment reopen routes > rejects cross-issue update writes without a run header 3ms
+ ✓ src/__tests__/issue-comment-reopen-routes.test.ts > issue comment reopen routes > rejects comment and PATCH writes with a invalid run 6ms
+ ✓ src/__tests__/issue-comment-reopen-routes.test.ts > issue comment reopen routes > rejects comment and PATCH writes with a wrong agent run 15ms
+ ✓ src/__tests__/issue-comment-reopen-routes.test.ts > issue comment reopen routes > rejects comment and PATCH writes with a wrong company run 7ms
+ ✓ src/__tests__/issue-comment-reopen-routes.test.ts > issue comment reopen routes > rejects explicit resume intent under an active pause hold 4ms
+ ✓ src/__tests__/issue-comment-reopen-routes.test.ts > issue comment reopen routes > honors explicit resume intent on cancelled issues 4ms
+ ✓ src/__tests__/issue-comment-reopen-routes.test.ts > issue comment reopen routes > interrupts an active run before a combined comment update 4ms
+ ✓ src/__tests__/issue-comment-reopen-routes.test.ts > issue comment reopen routes > cancels an active run when an issue is marked cancelled 4ms
+ ✓ src/__tests__/issue-comment-reopen-routes.test.ts > issue comment reopen routes > does not cancel active runs when an issue is marked done 3ms
+ ✓ src/__tests__/issue-comment-reopen-routes.test.ts > issue comment reopen routes > writes decision ids into executionState and inserts the decision inside the transaction 8ms
+ ✓ src/__tests__/issue-comment-reopen-routes.test.ts > issue comment reopen routes > withholds a comment mutation when the current Task source reader refuses it 3ms
+ ✓ src/__tests__/issue-comment-reopen-routes.test.ts > issue comment reopen routes > auto-approves a reviewer comment with the APPROVED review marker 5ms
+ ✓ src/__tests__/issue-comment-reopen-routes.test.ts > issue comment reopen routes > auto-approves a reviewer comment with structured review metadata 5ms
+ ✓ src/__tests__/issue-comment-reopen-routes.test.ts > issue comment reopen routes > auto-approves a reviewer comment and wakes dependents when the final blocker resolves 5ms
+ ✓ src/__tests__/issue-comment-reopen-routes.test.ts > issue comment reopen routes > does not wake the returnAssignee with issue_commented when auto-approval reassigns the issue 5ms
+ ✓ src/__tests__/issue-comment-reopen-routes.test.ts > issue comment reopen routes > does not auto-approve APPROVED comments from a non-review participant 5ms
+ ✓ src/__tests__/issue-comment-reopen-routes.test.ts > issue comment reopen routes > does not auto-approve when actor kind disagrees with the participant kind 4ms
+ ✓ src/__tests__/issue-comment-reopen-routes.test.ts > issue comment reopen routes > does not auto-approve structured metadata separated by a blank line 4ms
+ ✓ src/__tests__/issue-comment-reopen-routes.test.ts > issue comment reopen routes > does not auto-approve reviewer comments without an approval marker 4ms
+ ✓ src/__tests__/issue-comment-reopen-routes.test.ts > issue comment reopen routes > does not auto-approve approval comments outside the in_review status 3ms
+ ✓ src/__tests__/issue-comment-reopen-routes.test.ts > issue comment reopen routes > does not auto-approve negated approval phrasings ('uppercase negation') > rejects the auto-approval transition and keeps the comment as a regular comment 3ms
+ ✓ src/__tests__/issue-comment-reopen-routes.test.ts > issue comment reopen routes > does not auto-approve negated approval phrasings ('uppercase negation with trailing peri…') > rejects the auto-approval transition and keeps the comment as a regular comment 3ms
+ ✓ src/__tests__/issue-comment-reopen-routes.test.ts > issue comment reopen routes > does not auto-approve negated approval phrasings ('mixed-case negation') > rejects the auto-approval transition and keeps the comment as a regular comment 3ms
+ ✓ src/__tests__/issue-comment-reopen-routes.test.ts > issue comment reopen routes > does not auto-approve negated approval phrasings ('do-not phrasing') > rejects the auto-approval transition and keeps the comment as a regular comment 10ms
+ ✓ src/__tests__/issue-comment-reopen-routes.test.ts > issue comment reopen routes > does not auto-approve negated approval phrasings ('present-progressive negation') > rejects the auto-approval transition and keeps the comment as a regular comment 4ms
+ ✓ src/__tests__/issue-comment-reopen-routes.test.ts > issue comment reopen routes > does not auto-approve negated approval phrasings ('structured rejection') > rejects the auto-approval transition and keeps the comment as a regular comment 4ms
+ ✓ src/__tests__/issue-comment-reopen-routes.test.ts > issue comment reopen routes > does not auto-approve negated approval phrasings ('structured changes_requested') > rejects the auto-approval transition and keeps the comment as a regular comment 4ms
+ ✓ src/__tests__/issue-comment-reopen-routes.test.ts > issue comment reopen routes > does not auto-approve negated approval phrasings ('disjoint structured metadata across p…') > rejects the auto-approval transition and keeps the comment as a regular comment 4ms
+ ✓ src/__tests__/issue-comment-reopen-routes.test.ts > issue comment reopen routes > does not auto-approve negated approval phrasings ('disjoint structured metadata with sum…') > rejects the auto-approval transition and keeps the comment as a regular comment 4ms
+ ✓ src/__tests__/issue-comment-reopen-routes.test.ts > issue comment reopen routes > auto-approves positive approval phrasings ('uppercase approval') > triggers the auto-approval transition 4ms
+ ✓ src/__tests__/issue-comment-reopen-routes.test.ts > issue comment reopen routes > auto-approves positive approval phrasings ('trailing punctuation') > triggers the auto-approval transition 4ms
+ ✓ src/__tests__/issue-comment-reopen-routes.test.ts > issue comment reopen routes > auto-approves positive approval phrasings ('ticketed approval') > triggers the auto-approval transition 4ms
+ ✓ src/__tests__/issue-comment-reopen-routes.test.ts > issue comment reopen routes > auto-approves positive approval phrasings ('lowercase approval') > triggers the auto-approval transition 4ms
+ ✓ src/__tests__/issue-comment-reopen-routes.test.ts > issue comment reopen routes > auto-approves positive approval phrasings ('approval with body context') > triggers the auto-approval transition 4ms
+ ✓ src/__tests__/issue-comment-reopen-routes.test.ts > issue comment reopen routes > rolls back the comment when the auto-approval status transition fails 4ms
+ ✓ src/__tests__/issue-comment-reopen-routes.test.ts > issue comment reopen routes > rolls back the auto-approval comment when the issue is concurrently deleted 4ms
+ ✓ src/__tests__/issue-comment-reopen-routes.test.ts > issue comment reopen routes > coerces executor handoff patches into workflow-controlled review wakes 5ms
+ ✓ src/__tests__/issue-comment-reopen-routes.test.ts > issue comment reopen routes > wakes the return assignee with execution_changes_requested 4ms
+
+ Test Files  1 passed (1)
+      Tests  100 passed (100)
+   Start at  12:02:34
+   Duration  14.91s (transform 11.76s, setup 74ms, import 14.12s, tests 606ms, environment 0ms)
+

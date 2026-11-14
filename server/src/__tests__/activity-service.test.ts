@@ -8,10 +8,12 @@ import {
   createDb,
   documentRevisions,
   documents,
+  heartbeatRunEvents,
   heartbeatRuns,
   issueComments,
   issueDocuments,
   issues,
+  toolInvocations,
 } from "@paperclipai/db";
 import { ISSUE_CONTINUATION_SUMMARY_DOCUMENT_KEY } from "@paperclipai/shared";
 import {
@@ -61,6 +63,8 @@ describeEmbeddedPostgres("activity service", () => {
 
   afterEach(async () => {
     await db.delete(activityLog);
+    await db.delete(heartbeatRunEvents);
+    await db.delete(toolInvocations);
     await db.delete(issueComments);
     await db.delete(issueDocuments);
     await db.delete(documentRevisions);
@@ -103,6 +107,56 @@ describeEmbeddedPostgres("activity service", () => {
     const nextMode = workMode === "planning" ? "standard" : "planning";
     await service.update(task.id, { workMode: nextMode });
     expect((await service.getById(task.id))?.workMode).toBe(nextMode);
+  });
+
+  it("backfill ignores Native protocol and runtime/audit rows but counts an exact dispatched receipt", async () => {
+    // Component-DB rows exercise activity-service backfill predicates only; this
+    // fixture does not claim Native scheduler admission or managed SDK execution.
+    const companyId = randomUUID();
+    const agentId = randomUUID();
+    const issueId = randomUUID();
+    const protocolOnlyRunId = randomUUID();
+    const receiptRunId = randomUUID();
+    const startedAt = new Date("2026-11-11T12:00:00.000Z");
+    const completedAt = new Date("2026-11-11T12:00:05.000Z");
+
+    await db.insert(companies).values({ id: companyId, name: "Liveness evidence fixture",
+      issuePrefix: `L${companyId.slice(0, 6)}` });
+    await db.insert(agents).values({ id: agentId, companyId, name: "Reader", role: "engineer",
+      status: "idle", adapterType: "codex_local", adapterConfig: {}, runtimeConfig: {} });
+    await db.insert(issues).values({ id: issueId, companyId, title: "Inspect the repository",
+      description: "Inspect, then make the requested change.", status: "in_progress", priority: "medium",
+      assigneeAgentId: agentId });
+    await db.insert(heartbeatRuns).values([protocolOnlyRunId, receiptRunId].map(id => ({
+      id, companyId, agentId, invocationSource: "assignment", status: "succeeded",
+      startedAt, finishedAt: completedAt, contextSnapshot: { issueId },
+      resultJson: { summary: "I will inspect the repository next and implement the requested change." },
+      livenessState: null, livenessReason: null,
+    })));
+    await db.insert(heartbeatRunEvents).values([
+      { companyId, runId: protocolOnlyRunId, agentId, seq: 1, eventType: "session.started", createdAt: startedAt },
+      { companyId, runId: protocolOnlyRunId, agentId, seq: 2, eventType: "turn.completed", createdAt: completedAt },
+      { companyId, runId: protocolOnlyRunId, agentId, seq: 3, eventType: "run.result.proposed", createdAt: completedAt },
+    ]);
+    await db.insert(activityLog).values([
+      { companyId, actorType: "system", actorId: "runtime", agentId, runId: protocolOnlyRunId,
+        issueId, action: "environment.lease_acquired", entityType: "issue", entityId: issueId, createdAt: startedAt },
+      { companyId, actorType: "agent", actorId: agentId, agentId, runId: protocolOnlyRunId,
+        issueId, action: "tool_gateway.call_allowed", entityType: "issue", entityId: issueId, createdAt: completedAt },
+      { companyId, actorType: "agent", actorId: agentId, agentId, runId: protocolOnlyRunId,
+        issueId, action: "tool_gateway.call_denied", entityType: "issue", entityId: issueId, createdAt: completedAt },
+    ]);
+    await db.insert(toolInvocations).values({ companyId, issueId, runId: receiptRunId, agentId,
+      toolName: "mcp__repository__read_file", status: "succeeded", startedAt, completedAt });
+
+    const service = activityService(db);
+    const { run: protocolOnly } = await waitForIssueRun(service, companyId, issueId,
+      run => run.runId === protocolOnlyRunId && run.livenessState === "plan_only");
+    expect(protocolOnly).toMatchObject({ livenessState: "plan_only", lastUsefulActionAt: null });
+    const { run: withReceipt } = await waitForIssueRun(service, companyId, issueId,
+      run => run.runId === receiptRunId && run.livenessState === "advanced");
+    expect(withReceipt).toMatchObject({ livenessState: "advanced", lastUsefulActionAt: completedAt });
+    expect(withReceipt.livenessReason).toContain("tool/action event(s)");
   });
 
   it("limits company activity lists", async () => {

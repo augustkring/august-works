@@ -1,0 +1,3 @@
+# Actual conversation financial frame R34
+
+Fresh snapshot and syntax preflights passed; the single selected real-frame case executed and exited 1 (1 failed, 30 skipped). The actual settlement, canonical operation setup, missing-`companyPurgeOperationId` denial, and restoration through the original scheduler all ran without failing; final canonical purge still leaves the runtime-asset row queued with the exact current run and operation ID. This confirms the missing-field guard is working but does not resolve the post-purge requeue. SQL owner tracing found migration 0430's heartbeat update/delete trigger requeues the run-level job when source purge clears the old runner profile, after the pre-purge worker succeeded. This attempt is not financial/offboarding acceptance.

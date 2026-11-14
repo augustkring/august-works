@@ -1,0 +1,4 @@
+ ✓ src/services/native-runtime/native-opencode-managed-project-create.integration.test.ts > managed OpenCode private Project creation > creates a private Project with a local workspace, then consumes that exact result on the next provider request 26568ms
+ Test Files  1 passed (1)
+      Tests  1 passed (1)
+   Duration  46.89s (transform 11.23s, setup 73ms, import 15.76s, tests 30.95s, environment 0ms)

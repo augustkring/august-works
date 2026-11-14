@@ -7,6 +7,56 @@ import {
 } from "../services/heartbeat.js";
 
 describe("buildPaperclipTaskMarkdown", () => {
+  it("does not invent a markdown source for ordinary answered questions rendered only in the wake", () => {
+    const base = { issue: { id: "task", identifier: null, title: "Draft", description: "Prepare an internal draft.", workMode: "standard" },
+      taskPlan: { documentId: "plan-document", revisionId: "plan-revision", revisionNumber: 1, body: "Follow the bounded plan." },
+      wakeComment: { id: "comment", body: "Continue with the current request." } };
+    const answered = { kind: "ask_user_questions", status: "answered" };
+    for (const includeDescription of [true, false]) {
+      const baselineReferences: Array<{ kind: string; id: string }> = [];
+      const baseline = buildPaperclipTaskMarkdown({ ...base, includeDescription },
+        { onRenderedSource: reference => { baselineReferences.push(reference); } });
+      const actualReferences: Array<{ kind: string; id: string }> = [];
+      const actual = buildPaperclipTaskMarkdown({ ...base, includeDescription, interaction: answered },
+        { onRenderedSource: reference => { actualReferences.push(reference); } });
+      expect(actual).toBe(baseline);
+      expect(actualReferences).toEqual(baselineReferences);
+      expect(actualReferences).toEqual([{ kind: "task", id: "task" }, { kind: "document_revision", id: "plan-revision" },
+        { kind: "comment", id: "comment" }]);
+    }
+    for (const extra of [
+      { interaction: { kind: "ask_user_questions", status: "pending" } },
+      { interaction: { kind: "request_confirmation", status: "accepted" } },
+      { interaction: answered, planReview: { status: "rejected", reason: "Revise the plan." }, externalChatProvider: "slack" },
+      { interaction: answered, acceptedPlanContinuation: true },
+    ]) {
+      const references: Array<{ kind: string; id: string }> = [];
+      buildPaperclipTaskMarkdown({ ...base, ...extra }, { onRenderedSource: reference => { references.push(reference); } });
+      expect(references).toContainEqual({ kind: "unknown", id: "task" });
+    }
+  });
+  it("binds external chat guidance to the provider wake source and keeps withdrawal ownership separate", () => {
+    const base = { issue: { id: "task", identifier: null, title: "Draft", description: null, workMode: "standard" } };
+    const references: Array<{ kind: string; id: string }> = [];
+    buildPaperclipTaskMarkdown({ ...base, externalChatProvider: "slack" },
+      { onRenderedSource: reference => { references.push(reference); } });
+    expect(references).toContainEqual({ kind: "task", id: "task" });
+    expect(references).toContainEqual({ kind: "external_chat_context", id: "task", provider: "slack" });
+    expect(references).not.toContainEqual({ kind: "unknown", id: "task" });
+
+    const withdrawalReferences: Array<{ kind: string; id: string }> = [];
+    buildPaperclipTaskMarkdown({ ...base, externalChatProvider: "slack",
+      interaction: { id: "interaction", kind: "ask_user_questions", status: "cancelled" } },
+    { onRenderedSource: reference => { withdrawalReferences.push(reference); } });
+    expect(withdrawalReferences).toContainEqual({ kind: "external_chat_context", id: "task", provider: "slack" });
+    expect(withdrawalReferences).toContainEqual(expect.objectContaining({ kind: "task_wake_interaction_state", id: "interaction" }));
+    expect(withdrawalReferences).not.toContainEqual({ kind: "unknown", id: "task" });
+
+    const unboundReferences: Array<{ kind: string; id: string }> = [];
+    buildPaperclipTaskMarkdown({ issue: null, wakeComment: { id: "comment", body: "Continue" }, externalChatProvider: "slack" },
+      { onRenderedSource: reference => { unboundReferences.push(reference); } });
+    expect(unboundReferences).toContainEqual({ kind: "unknown", id: "unbound-task-markdown-source" });
+  });
   it.each(["standard", "planning", "ask"])("selects directives only from explicit %s mode, even when a plan is requested", (workMode) => {
     for (const prose of [
       { title: "Prepare rollout steps", description: "Describe the steps." },
@@ -59,9 +109,11 @@ describe("buildPaperclipTaskMarkdown", () => {
       interaction: { kind: "request_confirmation", status: "accepted" },
       acceptedPlan: { documentId: "plan-document", revisionId: "approved-revision", revisionNumber: 2 },
     });
-    expect(prompt).toContain("Perform that handoff now");
-    expect(prompt).toContain("ordinary assigned execution tasks");
-    expect(prompt).toContain("initialPlan before execution starts");
+    expect(prompt).toContain("Accepted chat plan directive:");
+    expect(prompt).toContain("ordinary assigned Tasks in Backlog");
+    expect(prompt).toContain("the relevant approved plan in each initialPlan");
+    expect(prompt).toContain("Do not move them to To do or start execution");
+    expect(prompt).toContain("save and start its bounded plan");
     expect(prompt).toContain("revision 2 approved-revision");
     expect(prompt).not.toContain("Implement the accepted plan on this issue");
   });
@@ -73,7 +125,7 @@ describe("buildPaperclipTaskMarkdown", () => {
       ...(kind === "unbound-confirmation" ? {} : { acceptedPlan: { documentId: "plan-document", revisionId: "approved-revision", revisionNumber: 2 } }),
       ...(kind === "new-comment" ? { wakeComment: { id: "later-comment", body: "Please revise it again first." } } : {}),
     });
-    expect(prompt).not.toContain("Perform that handoff now");
+    expect(prompt).not.toContain("Accepted chat plan directive:");
   });
 
   it("surfaces every coalesced wake comment in provider order", () => {

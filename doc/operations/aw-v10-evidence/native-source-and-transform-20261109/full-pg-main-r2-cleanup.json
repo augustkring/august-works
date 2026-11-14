@@ -1,0 +1,9 @@
+{
+  "remainingOwnedPostgresProcesses": [],
+  "normalTestProcessExit": 0,
+  "postRunKillsPerformed": false,
+  "tempRoot": "/var/tmp/mpg-n008viu9",
+  "emptyOuterTempRootRemoved": true,
+  "canonicalLockAvailableAfterRun": true,
+  "observedUtc": "2026-11-09T14:33:04.552273+00:00"
+}

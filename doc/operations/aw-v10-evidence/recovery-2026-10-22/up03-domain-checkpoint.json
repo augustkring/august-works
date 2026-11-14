@@ -1,0 +1,124 @@
+{
+  "status": "in_progress_not_full_UP03_qualification",
+  "recordedAt": "2026-10-22T21:07:45.511137+00:00",
+  "selectedUpstreamCommits": [
+    "b67db12d90c1bd191f99975e35cc5c84137858e4",
+    "3a726e676fe47f4725d03037e823d7f057760708",
+    "b31558064093564fb937cf046596d1d497f5be27"
+  ],
+  "sourcePins": [
+    {
+      "path": "server/src/routes/issues.ts",
+      "sha256": "33df3186e22ef128493328a21f751f37a2a4ea6ac39aa17e87df68e1b043d318"
+    },
+    {
+      "path": "server/src/routes/projects.ts",
+      "sha256": "fe96ba873304760e79d63cdd34c82007c5964b5988ae7b50f830977e82147faf"
+    },
+    {
+      "path": "server/src/services/issues.ts",
+      "sha256": "af61ab03addeab3c0a86099ee76484e2948bb62598c67218d96014be11c8ba44"
+    },
+    {
+      "path": "server/src/services/projects.ts",
+      "sha256": "2a886ca5f880f1a33ce26873b46ddb5beed2ef999fa8afc1aaa2b88e6868c381"
+    },
+    {
+      "path": "server/src/services/company-search.ts",
+      "sha256": "eb90e237e04336cd610d79c1b881a0f1115cfbd8c0d32ce068cc8b312f3173c9"
+    },
+    {
+      "path": "server/src/services/company-search-extract.ts",
+      "sha256": "75086d85e0871ec6570c6e2b7e888016f72d3c4c39f712eb862fbff2f3bb155b"
+    },
+    {
+      "path": "server/src/services/task-search.ts",
+      "sha256": "1a2624ec337b814229188d87ff3d4cb55ca74dcda3b072147b1c5661fac4ffd5"
+    },
+    {
+      "path": "server/src/services/import-write-types.ts",
+      "sha256": "ae5d00500d6cd7f21723c1207d1e9bafd242c17dac735b3cee4c567f10e6b385"
+    },
+    {
+      "path": "server/src/__tests__/issues-service.test.ts",
+      "sha256": "1cd527bdae6b31de457d8b9f75351255082171756097c30c19ebf7b3cc717536"
+    },
+    {
+      "path": "server/src/__tests__/company-search-service.test.ts",
+      "sha256": "aae6a07f5faf638a636d9b8470f25a79758ce3b1d50fd2e792e871c1165aee2a"
+    },
+    {
+      "path": "server/src/__tests__/company-search-extract-service.test.ts",
+      "sha256": "88115cb18ff18e12b74fc7f27bf93270c70dc66e12f3d6a426a9a593e01c4e0e"
+    },
+    {
+      "path": "server/src/__tests__/issue-list-assignee-filter-routes.test.ts",
+      "sha256": "54d325048127071728cf27030a8ea77daba980fdd3a9c2a8d0377d8e805f43c7"
+    },
+    {
+      "path": "server/src/__tests__/chat-project-tools.test.ts",
+      "sha256": "4cac95a05a782594bf66814be7bf3158bbbe22b7c49811d6829800b5959c9a80"
+    }
+  ],
+  "scope": "Seven product owners at indices 0..6 remained unchanged across all three domain-service captures. Test fixture account timestamps and exact backend-PID wait observation were corrected between captures. Other source dependencies are not claimed immutable by these seven pins.",
+  "commands": {
+    "environment": "source /workspace/v10-preparation/env.sh",
+    "initialTypecheck": "NODE_OPTIONS=--max-old-space-size=6144 CARGO_NET_OFFLINE=true GOMEMLIMIT=2GiB GOMAXPROCS=2 pnpm --filter @paperclipai/server typecheck",
+    "domainSelected": "NODE_OPTIONS=--max-old-space-size=2048 GOMEMLIMIT=2GiB GOMAXPROCS=2 node node_modules/vitest/vitest.mjs run server/src/__tests__/issues-service.test.ts --maxWorkers=1 -t 'issueService retained private source authority'"
+  },
+  "actualResults": [
+    {
+      "log": "up03-domain-initial-typecheck.log.txt",
+      "exit": 1,
+      "verdict": "Normal Runner/SDK prerequisites passed; actual server typecheck failed with 9 integration errors: cached response typing (4), expected portability missing fields (1), descendant execute ID typing (1), missing forbidden import references (3). Own identified errors were subsequently corrected, but no current typecheck pass is claimed.",
+      "sha256": "db54e1924ebe0085edbcf773a4df7ee5d9da6c74daf45d3a4752b00a212d0fb7"
+    },
+    {
+      "log": "up03-domain-first-service.log.txt",
+      "exit": 1,
+      "passed": 0,
+      "failed": 3,
+      "skipped": 127,
+      "durationSeconds": 122.35,
+      "verdict": "All selected cases stopped at new fixture account created_at NOT NULL; migration/setup succeeded, no behavior verdict.",
+      "sha256": "34ec487b4a3f37149ae5c7f55d56e47b016a24ee852ad2474aff6c14c8338936"
+    },
+    {
+      "log": "up03-domain-service-green-attempt-2.log.txt",
+      "exit": 1,
+      "passed": 2,
+      "failed": 1,
+      "skipped": 127,
+      "durationSeconds": 62.38,
+      "verdict": "Source retention and private idempotency cases passed; race did not observe its waiter before withdrawal. Cleanup released the row, causing a pending rejects matcher warning/unhandled assertion; no membership-withdrawal verdict.",
+      "sha256": "b65e17eaab8a1fd9737b15e3ad1f86a4fc9fa73d291b2467bdea3a9563779e9a"
+    },
+    {
+      "log": "up03-domain-service-green-attempt-3.log.txt",
+      "exit": 0,
+      "passed": 3,
+      "failed": 0,
+      "skipped": 127,
+      "durationSeconds": 71.45,
+      "verdict": "All three selected real PostgreSQL cases passed with exact holder backend PID wait observation and settled pending update result.",
+      "sha256": "bee613bac6636cf28d25e8496df0b427669b4cf293a2cf84507bd0c940d036d9"
+    }
+  ],
+  "qualifiedCasesOnly": [
+    "Detaching a private derived task retains the original private parent source. Assignment remains an independent stored reason and cannot replace source access; granting/revoking source access changes current readability.",
+    "A creator lacking current private task access cannot replay another creator's existing idempotency receipt.",
+    "After PostgreSQL reports an update blocked behind the held issue row, membership suspension causes the late update to reject and leaves the original title unchanged."
+  ],
+  "temporaryAdmission": "Original issue/project HTTP owners refuse new private writes/sharing while the broader derivative/source graph remains unqualified. Original task create/update transaction receives server-owned closed admission metadata to recheck inherited privacy after waits. No operator or request-body override exists. Domain/raw PostgreSQL fixtures remain available for qualification.",
+  "pending": [
+    "Required import-write-types fields are present, but original company-portability caller still needs privacy provenance integration; current normal server typecheck has not passed.",
+    "Search/extract predicate regressions, warm-cache revocation and HTTP temporary refusal fixtures are added but not executed by this checkpoint.",
+    "No full baseline issue/project route or service suite, UI qualification, final HTTP private feature release, or full V10 proof is claimed.",
+    "Fresh cached descendant counts and complete optional blocker aggregate privacy remain under review; current top-level cache filter alone does not qualify these aggregates.",
+    "Current canonical company/action admission and affirmative membership/account row pins through domain effects remain to integrate and test after real waits.",
+    "Original company-portability export/import/shared format/callers need current actor source proof and preserved immutable provenance; missing legacy proof or unsupported source release must fail closed.",
+    "A owns upcoming retained sourceProjectIds and native conversation source restrictions in canonical graph/schema; no schema edits by this domain owner.",
+    "Private source publication requires actual current source-owner authority plus durable audited publication evidence; ordinary move/detach/sharing does not release retained roots.",
+    "The newly added but never-executed private HTTP full-sharing acceptance case was removed before checkpoint because temporary refusal and successful private sharing cannot both be active contracts. Existing baseline tests are unchanged. Atomic sharing/revocation, replay, independent explicit/assignment/project/owner reasons and failure rollback still need full-release runtime acceptance."
+  ]
+}

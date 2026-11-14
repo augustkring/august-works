@@ -1,0 +1,56 @@
+{
+  "status": "in_progress",
+  "sourceCommit": "3f16821eb65db73b220aefe979c35b3018b7e91a",
+  "sourceCommitMeaning": "Archive checkout identity; scoped runs may predate it. Only separately recorded unchanged-source gates establish final tested source identity.",
+  "meaning": "Checkpoint Help source review passes for committed PR head 3f16821; Help structure and targeted node tests pass. Source owners still changing source files; not a final head claim. The old v5-recovery path named in task is absent; used sibling v10-preparation helper.",
+  "logs": [
+    {
+      "name": "help-review-checkpoint",
+      "exitCode": 0,
+      "exitSidecar": "help-review-checkpoint.log.exit",
+      "rawSha256": "ac0787026fb4c44bd1faf1371aeaed94da6ccbe367fecd522ff607001684d6fb",
+      "sanitizedSha256": "ac0787026fb4c44bd1faf1371aeaed94da6ccbe367fecd522ff607001684d6fb",
+      "archiveSha256": "8a030e8595aa69a6a60e3ad4c956604c1f7e36ef057e94ac81ad276b9bc50dba",
+      "redactions": {
+        "ansi": 0,
+        "bearer": 0,
+        "jwt": 0,
+        "credential_field": 0,
+        "url_credential": 0
+      },
+      "summary": []
+    },
+    {
+      "name": "help-structure-checkpoint",
+      "exitCode": 0,
+      "exitSidecar": "help-structure-checkpoint.log.exit",
+      "rawSha256": "d655ad8dc672bd8936203fd57f1a82c0fe16d7e158f5d803803c8a376a066ff8",
+      "sanitizedSha256": "d655ad8dc672bd8936203fd57f1a82c0fe16d7e158f5d803803c8a376a066ff8",
+      "archiveSha256": "cdea5ac5c86ed12abe598526103c5abf5d8948d2fa7e6ae82d48729fc212c414",
+      "redactions": {
+        "ansi": 0,
+        "bearer": 0,
+        "jwt": 0,
+        "credential_field": 0,
+        "url_credential": 0
+      },
+      "summary": []
+    },
+    {
+      "name": "help-tests-checkpoint",
+      "exitCode": 0,
+      "exitSidecar": "help-tests-checkpoint.log.exit",
+      "rawSha256": "197302191ed01372ded9a24edeca7869799ec4c379ab2a34e624bda4d65f1605",
+      "sanitizedSha256": "197302191ed01372ded9a24edeca7869799ec4c379ab2a34e624bda4d65f1605",
+      "archiveSha256": "67ce68fc020410257138cd6027de05e7eb0dfcda29672456a40d9033332dde65",
+      "redactions": {
+        "ansi": 0,
+        "bearer": 0,
+        "jwt": 0,
+        "credential_field": 0,
+        "url_credential": 0
+      },
+      "summary": []
+    }
+  ]
+}

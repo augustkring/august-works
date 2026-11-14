@@ -1,0 +1,3 @@
+timeout_seconds=240
+test_file=src/services/native-runtime/create-skill.integration.test.ts
+test_pattern=.

@@ -1,0 +1,58 @@
+{
+  "scope": "Top-level public HeartbeatRun HTTP serialization only; no source-permission or producer qualification claim.",
+  "files": [
+    "server/src/routes/agents.ts",
+    "server/src/__tests__/agent-live-run-routes.test.ts",
+    "server/src/__tests__/native-payload-public-response.integration.test.ts"
+  ],
+  "behavior": "Omit whole runnerProfileJson and nativeInputSourceProtocolVersion only at wakeup, invoke, detail, cancel; preserve nested user resultJson metadata and internal stored profile.",
+  "baseline": {
+    "session": 93198,
+    "actual_exit": 1,
+    "durable_exit": "up03-run-public-dto-red.exit",
+    "log": "up03-run-public-dto-red.log",
+    "source_pins": "up03-run-public-dto-red-before.sha256",
+    "all_three_pins_verified_after_actual_exit": true,
+    "result": "Three genuine exposure failures: actual PostgreSQL+HTTP detail, mock invoke, mock cancel. Mock wakeup timed out at existing30000ms; not four genuine REDs.",
+    "duration_seconds": 70.87
+  },
+  "initial_current": {
+    "session": 53368,
+    "actual_exit": 1,
+    "durable_exit": "up03-run-public-dto-green.exit",
+    "log": "up03-run-public-dto-green.log",
+    "source_pins": "up03-run-public-dto-green-before.sha256",
+    "all_three_pins_verified_after_actual_exit": true,
+    "result": "3PASS(detail/invoke/cancel),1wakeuptimeout30000ms,87skip",
+    "duration_seconds": 73.59
+  },
+  "isolated_wakeup": {
+    "session": 35782,
+    "actual_exit": 1,
+    "durable_exit": "up03-run-public-dto-wakeup-solo.exit",
+    "log": "up03-run-public-dto-wakeup-solo.log",
+    "all_three_initial_current_pins_verified_after_actual_exit": true,
+    "result": "Same30000msfirstdynamicimporttimeout;85skip",
+    "duration_seconds": 35.11
+  },
+  "fixture_correction": "Move original mocked route dependency import into beforeAll fixture setup with existing EMBEDDED_POSTGRES_TEST_TIMEOUT_MS. HTTPcase deadline remains30000ms; no assertions or production guard weakened. Add id:string to publicRun structural type constraint; no cast.",
+  "limits": [
+    "Mock HTTP wake/invoke/cancel qualify serialization only, not real authorization/producer behavior.",
+    "Detail is real embedded PostgreSQL/full migration and actual agentRoutes HTTP fixture; authenticated actor is test middleware, not credential qualification.",
+    "Protocol1+source-free profile are structural fixtures only, no native input receipt, source completeness, provider or transport proof.",
+    "Only three owned source files pinned; no unchanged whole dependency graph claim.",
+    "No whole route/test portfolio or full compiler verdict from these filtered runs."
+  ],
+  "final_current": {
+    "session": 43110,
+    "actual_exit": 0,
+    "durable_exit": "up03-run-public-dto-final.exit",
+    "log": "up03-run-public-dto-final.log",
+    "source_pins": "up03-run-public-dto-final-before.sha256",
+    "after_pins": "up03-run-public-dto-final-after.sha256",
+    "all_three_pins_verified_after_actual_exit": true,
+    "result": "4PASS(1realPGHTTPdetail,3mockHTTPwake/invoke/cancel),87skip",
+    "command": "source /workspace/v10-preparation/env.sh; GOMEMLIMIT=1GiB GOMAXPROCS=2 node --max-old-space-size=2048 node_modules/vitest/vitest.mjs run server/src/__tests__/native-payload-public-response.integration.test.ts server/src/__tests__/agent-live-run-routes.test.ts --maxWorkers=1 -t 'internal Run'",
+    "duration_seconds": 94.85
+  }
+}

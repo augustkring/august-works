@@ -1,0 +1,58 @@
+(!) Your Vite config uses features that are unsupported by `configLoader: 'native'`, which is planned to become the default in a future major version of Vite:
+  - `__dirname` (vitest.config.ts:7:25). Use `import.meta.dirname` instead
+Set `VITE_CONFIG_NATIVE_IGNORE_WARNING=true` to suppress this warning.
+
+ RUN  v4.1.11 /workspace/blentera-v10
+
+ ❯ |@paperclipai/server| src/__tests__/v6-saas-auth.integration.test.ts (4 tests | 1 failed) 13796ms
+     × verifies email without automatic sign in and uses secure host-only session cookies 956ms
+
+⎯⎯⎯⎯⎯⎯⎯ Failed Tests 1 ⎯⎯⎯⎯⎯⎯⎯
+
+ FAIL  |@paperclipai/server| src/__tests__/v6-saas-auth.integration.test.ts > V6 verified account and native password recovery > verifies email without automatic sign in and uses secure host-only session cookies
+AssertionError: expected Error: Failed query: update "user" set lo… { …(2) } to match object { code: '23514' }
+(14 matching properties omitted from actual)
+
+- Expected
++ Received
+
+- {
++ DrizzleQueryError {
++   "message": "Failed query: update \"user\" set locale = 'fr' where id = $1
++ params: pvA6GsVpJhFU0VUzETTbCpCegv9pd4Od",
++   "cause": PostgresError {
++     "message": "new row for relation \"user\" violates check constraint \"user_locale_check\"",
++     "name": "PostgresError",
++     "severity_local": "ERROR",
++     "severity": "ERROR",
+      "code": "23514",
++     "detail": "Failing row contains (pvA6GsVpJhFU0VUzETTbCpCegv9pd4Od, Founder, auth-fixture@example.test, t, null, 2026-10-23 14:13:14.862+00, 2026-10-23 14:13:16.143+00, f, fr).",
++     "schema_name": "public",
++     "table_name": "user",
++     "constraint_name": "user_locale_check",
++     "file": "execMain.c",
++     "line": "2077",
++     "routine": "ExecConstraints",
++   },
++   "query": "update \"user\" set locale = 'fr' where id = $1",
++   "params": [
++     "pvA6GsVpJhFU0VUzETTbCpCegv9pd4Od",
++   ],
+  }
+
+ ❯ src/__tests__/v6-saas-auth.integration.test.ts:223:96
+    221|         .set("Cookie", cookie).send({ locale: "da" });
+    222|       expect(nativeWrite.status).toBe(400);
+    223|       await expect(db.execute(sql`update ${authUsers} set locale = 'fr…
+       |                                                                                                ^
+    224|         .rejects.toMatchObject({ code: "23514" });
+    225|       const [persisted] = await db.select({ locale: authUsers.locale, …
+
+⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯[1/1]⎯
+
+
+ Test Files  1 failed | 2 passed (3)
+      Tests  1 failed | 19 passed (20)
+   Start at  14:10:58
+   Duration  149.29s (transform 51.05s, setup 1.28s, import 111.45s, tests 34.15s, environment 1ms)
+

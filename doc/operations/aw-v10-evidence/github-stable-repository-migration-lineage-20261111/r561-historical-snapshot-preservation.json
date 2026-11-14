@@ -1,0 +1,52 @@
+[
+  {
+    "path": "packages/db/src/migrations/meta/0562_snapshot.json",
+    "sha256": "f872252c7cf2da4e556055cb9497f1370e7a7c3a0f50d5d251b891078c241b21",
+    "reason": "preserve unchanged historical snapshots pruned by the stock generator; retain the new officially generated SQL/journal/snapshot"
+  },
+  {
+    "path": "packages/db/src/migrations/meta/0563_snapshot.json",
+    "sha256": "2cda86e5db45b3f55304bcbfbb9afd3bd6cdb405b138de8ef0d3039c86567e71",
+    "reason": "preserve unchanged historical snapshots pruned by the stock generator; retain the new officially generated SQL/journal/snapshot"
+  },
+  {
+    "path": "packages/db/src/migrations/meta/0564_snapshot.json",
+    "sha256": "4fe9e81c7ad48a5b9ab4729b7327215774f42f2ffe27b0205427fe48eef02224",
+    "reason": "preserve unchanged historical snapshots pruned by the stock generator; retain the new officially generated SQL/journal/snapshot"
+  },
+  {
+    "path": "packages/db/src/migrations/meta/0565_snapshot.json",
+    "sha256": "c28d535a3ab777a13f82cabd90ad05e0261de899a0391819fc32d7a6f121795e",
+    "reason": "preserve unchanged historical snapshots pruned by the stock generator; retain the new officially generated SQL/journal/snapshot"
+  },
+  {
+    "path": "packages/db/src/migrations/meta/0566_snapshot.json",
+    "sha256": "3e8c20042016b196fc5d117ea1d1aa4c3b2c29c1b024d995b9dd77679b35240d",
+    "reason": "preserve unchanged historical snapshots pruned by the stock generator; retain the new officially generated SQL/journal/snapshot"
+  },
+  {
+    "path": "packages/db/src/migrations/meta/0569_snapshot.json",
+    "sha256": "c022b788e243ab3447a51f102dd5487288388f0c21cc3edf30799cc9847f46ef",
+    "reason": "preserve unchanged historical snapshots pruned by the stock generator; retain the new officially generated SQL/journal/snapshot"
+  },
+  {
+    "path": "packages/db/src/migrations/meta/0570_snapshot.json",
+    "sha256": "f1e804cdd513451c50746492c6d8580b75bde84f252f410518ee163be7fcff08",
+    "reason": "preserve unchanged historical snapshots pruned by the stock generator; retain the new officially generated SQL/journal/snapshot"
+  },
+  {
+    "path": "packages/db/src/migrations/meta/0571_snapshot.json",
+    "sha256": "eab87d45fec09a93f74c5bae414486477b6d5372238d7f4ae24cd666870ad6da",
+    "reason": "preserve unchanged historical snapshots pruned by the stock generator; retain the new officially generated SQL/journal/snapshot"
+  },
+  {
+    "path": "packages/db/src/migrations/meta/0572_snapshot.json",
+    "sha256": "141e1cbdc82c0707cfbdbff18bc957d4992bd5c2ef28aaae0cad07699712fae8",
+    "reason": "preserve unchanged historical snapshots pruned by the stock generator; retain the new officially generated SQL/journal/snapshot"
+  },
+  {
+    "path": "packages/db/src/migrations/meta/0573_snapshot.json",
+    "sha256": "8e1b043c9f01d46dd7c36263192e8ac06d3a124524657ca3d5478546cb92b975",
+    "reason": "preserve unchanged historical snapshots pruned by the stock generator; retain the new officially generated SQL/journal/snapshot"
+  }
+]

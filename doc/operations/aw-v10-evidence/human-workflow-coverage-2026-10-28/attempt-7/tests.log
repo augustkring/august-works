@@ -1,0 +1,349 @@
+(!) Your Vite config uses features that are unsupported by `configLoader: 'native'`, which is planned to become the default in a future major version of Vite:
+  - `__dirname` (vitest.config.ts:7:25). Use `import.meta.dirname` instead
+Set `VITE_CONFIG_NATIVE_IGNORE_WARNING=true` to suppress this warning.
+
+ RUN  v4.1.11 /workspace/blentera-v10
+
+ ❯ |@paperclipai/ui| src/pages/CompanyAccess.test.tsx (30 tests | 1 failed) 1756ms
+     × removes a member with an issue reassignment target 79ms
+ ❯ |@paperclipai/server| src/__tests__/v6-account-deletion.integration.test.ts (11 tests | 9 failed) 6933ms
+     × binds HTTP deletion to the authenticated account and rejects stale identity, body targets and local implicit actors 160ms
+     × serializes concurrent owner departures and retains one real owner 130ms
+     × requires closed billing and no live subscription even if the billing status claims closed 284ms
+     × fences access immediately and retries private credential removal without claiming completion or altering coworkers 133ms
+     × erases local support content with deletion markers before completing personal account erasure 121ms
+     × keeps held support ownership as a scrubbed principal and leaves account erasure pending 102ms
+     × retains an authored local event when its other support case has uncertain sibling delivery 108ms
+     × accepts the full supported Unicode password for irreversible account confirmation 170ms
+     × erases native authenticators when offboarding retains a scrubbed user row 99ms
+ ❯ |@paperclipai/server| src/__tests__/access-service.test.ts (30 tests | 1 failed) 6861ms
+     × routes exact published-workflow coverage without copying rights and withdraws it on member suspension 245ms
+
+⎯⎯⎯⎯⎯⎯ Failed Tests 11 ⎯⎯⎯⎯⎯⎯⎯
+
+ FAIL  |@paperclipai/ui| src/pages/CompanyAccess.test.tsx > CompanyAccess > removes a member with an issue reassignment target
+AssertionError: expected <select …(1)>…(2)</select>
+…(4) to have a length of 2 but got 5
+
+- Expected
++ Received
+
+- 2
++ 5
+
+ ❯ src/pages/CompanyAccess.test.tsx:424:33
+    422|
+    423|     const reassignmentSelects = document.body.querySelectorAll("select…
+    424|     expect(reassignmentSelects).toHaveLength(2);
+       |                                 ^
+    425|     await act(async () => {
+    426|       reassignmentSelects[0]!.value = "user:user-2";
+
+⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯[1/11]⎯
+
+ FAIL  |@paperclipai/server| src/__tests__/access-service.test.ts > access service > routes exact published-workflow coverage without copying rights and withdraws it on member suspension
+AssertionError: expected null to be an instance of Date
+ ❯ src/__tests__/access-service.test.ts:165:38
+    163|     const [roleWithdrawn] = await db.select().from(humanWorkflowCovera…
+    164|       .where(eq(humanWorkflowCoverages.id, secondCoverage.coverage.id)…
+    165|     expect(roleWithdrawn?.revokedAt).toBeInstanceOf(Date);
+       |                                      ^
+    166|
+    167|     await access.updateMember(company.id, delegatee.id, { status: "sus…
+
+⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯[2/11]⎯
+
+ FAIL  |@paperclipai/server| src/__tests__/v6-account-deletion.integration.test.ts > V6 personal account offboarding > binds HTTP deletion to the authenticated account and rejects stale identity, body targets and local implicit actors
+AssertionError: expected 500 to be 202 // Object.is equality
+
+- Expected
++ Received
+
+- 202
++ 500
+
+ ❯ src/__tests__/v6-account-deletion.integration.test.ts:271:31
+    269|         .post("/api/saas/account/deletion?expectedUserId=http-user")
+    270|         .send(body);
+    271|       expect(accepted.status).toBe(202);
+       |                               ^
+    272|       expect(accepted.body.status).toBe("requested");
+    273|       expect(
+
+⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯[3/11]⎯
+
+ FAIL  |@paperclipai/server| src/__tests__/v6-account-deletion.integration.test.ts > V6 personal account offboarding > serializes concurrent owner departures and retains one real owner
+AssertionError: expected [] to have a length of 1 but got +0
+
+- Expected
++ Received
+
+- 1
++ 0
+
+ ❯ src/__tests__/v6-account-deletion.integration.test.ts:320:9
+    318|       expect(
+    319|         results.filter((result) => result.status === "fulfilled"),
+    320|       ).toHaveLength(1);
+       |         ^
+    321|       expect(
+    322|         results.filter((result) => result.status === "rejected"),
+
+⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯[4/11]⎯
+
+ FAIL  |@paperclipai/server| src/__tests__/v6-account-deletion.integration.test.ts > V6 personal account offboarding > requires closed billing and no live subscription even if the billing status claims closed
+Error: Failed query: update "human_workflow_coverages"
+    set revoked_at=coalesce(revoked_at,$1),
+        revoked_by_user_id=case when revoked_at is null then null else revoked_by_user_id end,
+        reason='Revoked during account deletion'
+    where principal_user_id=$2 or delegatee_user_id=$3
+params: Wed Oct 28 2026 16:23:09 GMT+0000 (Coordinated Universal Time),payer-owner,payer-owner
+ ❯ PostgresJsPreparedQuery.queryWithCache ../../v10-dep-qualification/node_modules/.pnpm/drizzle-orm@0.45.2_@opentelemetry+api@1.9.1_kysely@0.29.5_pg@8.18.0_postgres@3.4.9_patch_hash_uil4xuf7icnddjurbgy2qn5oo4/node_modules/src/pg-core/session.ts:73:10
+ ❯ eraseAccountAccess src/services/saas/account-deletion.ts:284:3
+    282|   // immutable receipt row for audit, but erase its user-authored reas…
+    283|   // a support or legal hold keeps the account row pending physical de…
+    284|   await tx.execute(sql`update ${humanWorkflowCoverages}
+       |   ^
+    285|     set revoked_at=coalesce(revoked_at,${now}),
+    286|         revoked_by_user_id=case when revoked_at is null then null else…
+ ❯ src/services/saas/account-deletion.ts:134:7
+ ❯ ../packages/db/src/work-signals.ts:38:22
+ ❯ scope ../../v10-dep-qualification/node_modules/.pnpm/postgres@3.4.9_patch_hash=sryle6qd5qfmnxvoebal4gashi/node_modules/postgres/src/index.js:279:18
+ ❯ sql.begin ../../v10-dep-qualification/node_modules/.pnpm/postgres@3.4.9_patch_hash=sryle6qd5qfmnxvoebal4gashi/node_modules/postgres/src/index.js:257:14
+ ❯ PostgresJsDatabase.connection.transaction ../packages/db/src/work-signals.ts:35:22
+ ❯ src/__tests__/v6-account-deletion.integration.test.ts:366:7
+
+Caused by: TypeError: The "string" argument must be of type string or an instance of Buffer or ArrayBuffer. Received an instance of Date
+ ❯ reset.str ../../v10-dep-qualification/node_modules/.pnpm/postgres@3.4.9_patch_hash=sryle6qd5qfmnxvoebal4gashi/node_modules/postgres/src/bytes.js:22:27
+ ❯ ../../v10-dep-qualification/node_modules/.pnpm/postgres@3.4.9_patch_hash=sryle6qd5qfmnxvoebal4gashi/node_modules/postgres/src/connection.js:968:16
+ ❯ Bind ../../v10-dep-qualification/node_modules/.pnpm/postgres@3.4.9_patch_hash=sryle6qd5qfmnxvoebal4gashi/node_modules/postgres/src/connection.js:958:16
+ ❯ prepared ../../v10-dep-qualification/node_modules/.pnpm/postgres@3.4.9_patch_hash=sryle6qd5qfmnxvoebal4gashi/node_modules/postgres/src/connection.js:209:7
+ ❯ ParameterDescription ../../v10-dep-qualification/node_modules/.pnpm/postgres@3.4.9_patch_hash=sryle6qd5qfmnxvoebal4gashi/node_modules/postgres/src/connection.js:637:58
+ ❯ handle ../../v10-dep-qualification/node_modules/.pnpm/postgres@3.4.9_patch_hash=sryle6qd5qfmnxvoebal4gashi/node_modules/postgres/src/connection.js:493:6
+ ❯ Socket.data ../../v10-dep-qualification/node_modules/.pnpm/postgres@3.4.9_patch_hash=sryle6qd5qfmnxvoebal4gashi/node_modules/postgres/src/connection.js:324:9
+
+⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯
+Serialized Error: { code: 'ERR_INVALID_ARG_TYPE', query: 'update "human_workflow_coverages"\n    set revoked_at=coalesce(revoked_at,$1),\n        revoked_by_user_id=case when revoked_at is null then null else revoked_by_user_id end,\n        reason=\'Revoked during account deletion\'\n    where principal_user_id=$2 or delegatee_user_id=$3', parameters: [ '2026-10-28T16:23:09.968Z', 'payer-owner', 'payer-owner' ], args: [ '2026-10-28T16:23:09.968Z', 'payer-owner', 'payer-owner' ], types: [ 1184, 25, 25 ] }
+⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯[5/11]⎯
+
+ FAIL  |@paperclipai/server| src/__tests__/v6-account-deletion.integration.test.ts > V6 personal account offboarding > fences access immediately and retries private credential removal without claiming completion or altering coworkers
+Error: Failed query: update "human_workflow_coverages"
+    set revoked_at=coalesce(revoked_at,$1),
+        revoked_by_user_id=case when revoked_at is null then null else revoked_by_user_id end,
+        reason='Revoked during account deletion'
+    where principal_user_id=$2 or delegatee_user_id=$3
+params: Wed Oct 28 2026 16:23:10 GMT+0000 (Coordinated Universal Time),member-delete,member-delete
+ ❯ PostgresJsPreparedQuery.queryWithCache ../../v10-dep-qualification/node_modules/.pnpm/drizzle-orm@0.45.2_@opentelemetry+api@1.9.1_kysely@0.29.5_pg@8.18.0_postgres@3.4.9_patch_hash_uil4xuf7icnddjurbgy2qn5oo4/node_modules/src/pg-core/session.ts:73:10
+ ❯ eraseAccountAccess src/services/saas/account-deletion.ts:284:3
+    282|   // immutable receipt row for audit, but erase its user-authored reas…
+    283|   // a support or legal hold keeps the account row pending physical de…
+    284|   await tx.execute(sql`update ${humanWorkflowCoverages}
+       |   ^
+    285|     set revoked_at=coalesce(revoked_at,${now}),
+    286|         revoked_by_user_id=case when revoked_at is null then null else…
+ ❯ src/services/saas/account-deletion.ts:134:7
+ ❯ ../packages/db/src/work-signals.ts:38:22
+ ❯ scope ../../v10-dep-qualification/node_modules/.pnpm/postgres@3.4.9_patch_hash=sryle6qd5qfmnxvoebal4gashi/node_modules/postgres/src/index.js:279:18
+ ❯ sql.begin ../../v10-dep-qualification/node_modules/.pnpm/postgres@3.4.9_patch_hash=sryle6qd5qfmnxvoebal4gashi/node_modules/postgres/src/index.js:257:14
+ ❯ PostgresJsDatabase.connection.transaction ../packages/db/src/work-signals.ts:35:22
+ ❯ src/__tests__/v6-account-deletion.integration.test.ts:465:24
+
+Caused by: TypeError: The "string" argument must be of type string or an instance of Buffer or ArrayBuffer. Received an instance of Date
+ ❯ reset.str ../../v10-dep-qualification/node_modules/.pnpm/postgres@3.4.9_patch_hash=sryle6qd5qfmnxvoebal4gashi/node_modules/postgres/src/bytes.js:22:27
+ ❯ ../../v10-dep-qualification/node_modules/.pnpm/postgres@3.4.9_patch_hash=sryle6qd5qfmnxvoebal4gashi/node_modules/postgres/src/connection.js:968:16
+ ❯ Bind ../../v10-dep-qualification/node_modules/.pnpm/postgres@3.4.9_patch_hash=sryle6qd5qfmnxvoebal4gashi/node_modules/postgres/src/connection.js:958:16
+ ❯ prepared ../../v10-dep-qualification/node_modules/.pnpm/postgres@3.4.9_patch_hash=sryle6qd5qfmnxvoebal4gashi/node_modules/postgres/src/connection.js:209:7
+ ❯ ParameterDescription ../../v10-dep-qualification/node_modules/.pnpm/postgres@3.4.9_patch_hash=sryle6qd5qfmnxvoebal4gashi/node_modules/postgres/src/connection.js:637:58
+ ❯ handle ../../v10-dep-qualification/node_modules/.pnpm/postgres@3.4.9_patch_hash=sryle6qd5qfmnxvoebal4gashi/node_modules/postgres/src/connection.js:493:6
+ ❯ Socket.data ../../v10-dep-qualification/node_modules/.pnpm/postgres@3.4.9_patch_hash=sryle6qd5qfmnxvoebal4gashi/node_modules/postgres/src/connection.js:324:9
+
+⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯
+Serialized Error: { code: 'ERR_INVALID_ARG_TYPE', query: 'update "human_workflow_coverages"\n    set revoked_at=coalesce(revoked_at,$1),\n        revoked_by_user_id=case when revoked_at is null then null else revoked_by_user_id end,\n        reason=\'Revoked during account deletion\'\n    where principal_user_id=$2 or delegatee_user_id=$3', parameters: [ '2026-10-28T16:23:10.065Z', 'member-delete', 'member-delete' ], args: [ '2026-10-28T16:23:10.065Z', 'member-delete', 'member-delete' ], types: [ 1184, 25, 25 ] }
+⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯[6/11]⎯
+
+ FAIL  |@paperclipai/server| src/__tests__/v6-account-deletion.integration.test.ts > V6 personal account offboarding > erases local support content with deletion markers before completing personal account erasure
+Error: Failed query: update "human_workflow_coverages"
+    set revoked_at=coalesce(revoked_at,$1),
+        revoked_by_user_id=case when revoked_at is null then null else revoked_by_user_id end,
+        reason='Revoked during account deletion'
+    where principal_user_id=$2 or delegatee_user_id=$3
+params: Wed Oct 28 2026 16:23:10 GMT+0000 (Coordinated Universal Time),support-local-delete,support-local-delete
+ ❯ PostgresJsPreparedQuery.queryWithCache ../../v10-dep-qualification/node_modules/.pnpm/drizzle-orm@0.45.2_@opentelemetry+api@1.9.1_kysely@0.29.5_pg@8.18.0_postgres@3.4.9_patch_hash_uil4xuf7icnddjurbgy2qn5oo4/node_modules/src/pg-core/session.ts:73:10
+ ❯ eraseAccountAccess src/services/saas/account-deletion.ts:284:3
+    282|   // immutable receipt row for audit, but erase its user-authored reas…
+    283|   // a support or legal hold keeps the account row pending physical de…
+    284|   await tx.execute(sql`update ${humanWorkflowCoverages}
+       |   ^
+    285|     set revoked_at=coalesce(revoked_at,${now}),
+    286|         revoked_by_user_id=case when revoked_at is null then null else…
+ ❯ src/services/saas/account-deletion.ts:134:7
+ ❯ ../packages/db/src/work-signals.ts:38:22
+ ❯ scope ../../v10-dep-qualification/node_modules/.pnpm/postgres@3.4.9_patch_hash=sryle6qd5qfmnxvoebal4gashi/node_modules/postgres/src/index.js:279:18
+ ❯ sql.begin ../../v10-dep-qualification/node_modules/.pnpm/postgres@3.4.9_patch_hash=sryle6qd5qfmnxvoebal4gashi/node_modules/postgres/src/index.js:257:14
+ ❯ PostgresJsDatabase.connection.transaction ../packages/db/src/work-signals.ts:35:22
+ ❯ src/__tests__/v6-account-deletion.integration.test.ts:608:24
+
+Caused by: TypeError: The "string" argument must be of type string or an instance of Buffer or ArrayBuffer. Received an instance of Date
+ ❯ reset.str ../../v10-dep-qualification/node_modules/.pnpm/postgres@3.4.9_patch_hash=sryle6qd5qfmnxvoebal4gashi/node_modules/postgres/src/bytes.js:22:27
+ ❯ ../../v10-dep-qualification/node_modules/.pnpm/postgres@3.4.9_patch_hash=sryle6qd5qfmnxvoebal4gashi/node_modules/postgres/src/connection.js:968:16
+ ❯ Bind ../../v10-dep-qualification/node_modules/.pnpm/postgres@3.4.9_patch_hash=sryle6qd5qfmnxvoebal4gashi/node_modules/postgres/src/connection.js:958:16
+ ❯ prepared ../../v10-dep-qualification/node_modules/.pnpm/postgres@3.4.9_patch_hash=sryle6qd5qfmnxvoebal4gashi/node_modules/postgres/src/connection.js:209:7
+ ❯ ParameterDescription ../../v10-dep-qualification/node_modules/.pnpm/postgres@3.4.9_patch_hash=sryle6qd5qfmnxvoebal4gashi/node_modules/postgres/src/connection.js:637:58
+ ❯ handle ../../v10-dep-qualification/node_modules/.pnpm/postgres@3.4.9_patch_hash=sryle6qd5qfmnxvoebal4gashi/node_modules/postgres/src/connection.js:493:6
+ ❯ Socket.data ../../v10-dep-qualification/node_modules/.pnpm/postgres@3.4.9_patch_hash=sryle6qd5qfmnxvoebal4gashi/node_modules/postgres/src/connection.js:324:9
+
+⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯
+Serialized Error: { code: 'ERR_INVALID_ARG_TYPE', query: 'update "human_workflow_coverages"\n    set revoked_at=coalesce(revoked_at,$1),\n        revoked_by_user_id=case when revoked_at is null then null else revoked_by_user_id end,\n        reason=\'Revoked during account deletion\'\n    where principal_user_id=$2 or delegatee_user_id=$3', parameters: [ '2026-10-28T16:23:10.208Z', 'support-local-delete', 'support-local-delete' ], args: [ '2026-10-28T16:23:10.208Z', 'support-local-delete', 'support-local-delete' ], types: [ 1184, 25, 25 ] }
+⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯[7/11]⎯
+
+ FAIL  |@paperclipai/server| src/__tests__/v6-account-deletion.integration.test.ts > V6 personal account offboarding > keeps held support ownership as a scrubbed principal and leaves account erasure pending
+Error: Failed query: update "human_workflow_coverages"
+    set revoked_at=coalesce(revoked_at,$1),
+        revoked_by_user_id=case when revoked_at is null then null else revoked_by_user_id end,
+        reason='Revoked during account deletion'
+    where principal_user_id=$2 or delegatee_user_id=$3
+params: Wed Oct 28 2026 16:23:10 GMT+0000 (Coordinated Universal Time),support-held-delete,support-held-delete
+ ❯ PostgresJsPreparedQuery.queryWithCache ../../v10-dep-qualification/node_modules/.pnpm/drizzle-orm@0.45.2_@opentelemetry+api@1.9.1_kysely@0.29.5_pg@8.18.0_postgres@3.4.9_patch_hash_uil4xuf7icnddjurbgy2qn5oo4/node_modules/src/pg-core/session.ts:73:10
+ ❯ eraseAccountAccess src/services/saas/account-deletion.ts:284:3
+    282|   // immutable receipt row for audit, but erase its user-authored reas…
+    283|   // a support or legal hold keeps the account row pending physical de…
+    284|   await tx.execute(sql`update ${humanWorkflowCoverages}
+       |   ^
+    285|     set revoked_at=coalesce(revoked_at,${now}),
+    286|         revoked_by_user_id=case when revoked_at is null then null else…
+ ❯ src/services/saas/account-deletion.ts:134:7
+ ❯ ../packages/db/src/work-signals.ts:38:22
+ ❯ scope ../../v10-dep-qualification/node_modules/.pnpm/postgres@3.4.9_patch_hash=sryle6qd5qfmnxvoebal4gashi/node_modules/postgres/src/index.js:279:18
+ ❯ sql.begin ../../v10-dep-qualification/node_modules/.pnpm/postgres@3.4.9_patch_hash=sryle6qd5qfmnxvoebal4gashi/node_modules/postgres/src/index.js:257:14
+ ❯ PostgresJsDatabase.connection.transaction ../packages/db/src/work-signals.ts:35:22
+ ❯ src/__tests__/v6-account-deletion.integration.test.ts:680:24
+
+Caused by: TypeError: The "string" argument must be of type string or an instance of Buffer or ArrayBuffer. Received an instance of Date
+ ❯ reset.str ../../v10-dep-qualification/node_modules/.pnpm/postgres@3.4.9_patch_hash=sryle6qd5qfmnxvoebal4gashi/node_modules/postgres/src/bytes.js:22:27
+ ❯ ../../v10-dep-qualification/node_modules/.pnpm/postgres@3.4.9_patch_hash=sryle6qd5qfmnxvoebal4gashi/node_modules/postgres/src/connection.js:968:16
+ ❯ Bind ../../v10-dep-qualification/node_modules/.pnpm/postgres@3.4.9_patch_hash=sryle6qd5qfmnxvoebal4gashi/node_modules/postgres/src/connection.js:958:16
+ ❯ prepared ../../v10-dep-qualification/node_modules/.pnpm/postgres@3.4.9_patch_hash=sryle6qd5qfmnxvoebal4gashi/node_modules/postgres/src/connection.js:209:7
+ ❯ ParameterDescription ../../v10-dep-qualification/node_modules/.pnpm/postgres@3.4.9_patch_hash=sryle6qd5qfmnxvoebal4gashi/node_modules/postgres/src/connection.js:637:58
+ ❯ handle ../../v10-dep-qualification/node_modules/.pnpm/postgres@3.4.9_patch_hash=sryle6qd5qfmnxvoebal4gashi/node_modules/postgres/src/connection.js:493:6
+ ❯ Socket.data ../../v10-dep-qualification/node_modules/.pnpm/postgres@3.4.9_patch_hash=sryle6qd5qfmnxvoebal4gashi/node_modules/postgres/src/connection.js:324:9
+
+⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯
+Serialized Error: { code: 'ERR_INVALID_ARG_TYPE', query: 'update "human_workflow_coverages"\n    set revoked_at=coalesce(revoked_at,$1),\n        revoked_by_user_id=case when revoked_at is null then null else revoked_by_user_id end,\n        reason=\'Revoked during account deletion\'\n    where principal_user_id=$2 or delegatee_user_id=$3', parameters: [ '2026-10-28T16:23:10.323Z', 'support-held-delete', 'support-held-delete' ], args: [ '2026-10-28T16:23:10.323Z', 'support-held-delete', 'support-held-delete' ], types: [ 1184, 25, 25 ] }
+⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯[8/11]⎯
+
+ FAIL  |@paperclipai/server| src/__tests__/v6-account-deletion.integration.test.ts > V6 personal account offboarding > retains an authored local event when its other support case has uncertain sibling delivery
+Error: Failed query: update "human_workflow_coverages"
+    set revoked_at=coalesce(revoked_at,$1),
+        revoked_by_user_id=case when revoked_at is null then null else revoked_by_user_id end,
+        reason='Revoked during account deletion'
+    where principal_user_id=$2 or delegatee_user_id=$3
+params: Wed Oct 28 2026 16:23:10 GMT+0000 (Coordinated Universal Time),support-event-author,support-event-author
+ ❯ PostgresJsPreparedQuery.queryWithCache ../../v10-dep-qualification/node_modules/.pnpm/drizzle-orm@0.45.2_@opentelemetry+api@1.9.1_kysely@0.29.5_pg@8.18.0_postgres@3.4.9_patch_hash_uil4xuf7icnddjurbgy2qn5oo4/node_modules/src/pg-core/session.ts:73:10
+ ❯ eraseAccountAccess src/services/saas/account-deletion.ts:284:3
+    282|   // immutable receipt row for audit, but erase its user-authored reas…
+    283|   // a support or legal hold keeps the account row pending physical de…
+    284|   await tx.execute(sql`update ${humanWorkflowCoverages}
+       |   ^
+    285|     set revoked_at=coalesce(revoked_at,${now}),
+    286|         revoked_by_user_id=case when revoked_at is null then null else…
+ ❯ src/services/saas/account-deletion.ts:134:7
+ ❯ ../packages/db/src/work-signals.ts:38:22
+ ❯ scope ../../v10-dep-qualification/node_modules/.pnpm/postgres@3.4.9_patch_hash=sryle6qd5qfmnxvoebal4gashi/node_modules/postgres/src/index.js:279:18
+ ❯ sql.begin ../../v10-dep-qualification/node_modules/.pnpm/postgres@3.4.9_patch_hash=sryle6qd5qfmnxvoebal4gashi/node_modules/postgres/src/index.js:257:14
+ ❯ PostgresJsDatabase.connection.transaction ../packages/db/src/work-signals.ts:35:22
+ ❯ src/__tests__/v6-account-deletion.integration.test.ts:785:7
+
+Caused by: TypeError: The "string" argument must be of type string or an instance of Buffer or ArrayBuffer. Received an instance of Date
+ ❯ reset.str ../../v10-dep-qualification/node_modules/.pnpm/postgres@3.4.9_patch_hash=sryle6qd5qfmnxvoebal4gashi/node_modules/postgres/src/bytes.js:22:27
+ ❯ ../../v10-dep-qualification/node_modules/.pnpm/postgres@3.4.9_patch_hash=sryle6qd5qfmnxvoebal4gashi/node_modules/postgres/src/connection.js:968:16
+ ❯ Bind ../../v10-dep-qualification/node_modules/.pnpm/postgres@3.4.9_patch_hash=sryle6qd5qfmnxvoebal4gashi/node_modules/postgres/src/connection.js:958:16
+ ❯ prepared ../../v10-dep-qualification/node_modules/.pnpm/postgres@3.4.9_patch_hash=sryle6qd5qfmnxvoebal4gashi/node_modules/postgres/src/connection.js:209:7
+ ❯ ParameterDescription ../../v10-dep-qualification/node_modules/.pnpm/postgres@3.4.9_patch_hash=sryle6qd5qfmnxvoebal4gashi/node_modules/postgres/src/connection.js:637:58
+ ❯ handle ../../v10-dep-qualification/node_modules/.pnpm/postgres@3.4.9_patch_hash=sryle6qd5qfmnxvoebal4gashi/node_modules/postgres/src/connection.js:493:6
+ ❯ Socket.data ../../v10-dep-qualification/node_modules/.pnpm/postgres@3.4.9_patch_hash=sryle6qd5qfmnxvoebal4gashi/node_modules/postgres/src/connection.js:324:9
+
+⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯
+Serialized Error: { code: 'ERR_INVALID_ARG_TYPE', query: 'update "human_workflow_coverages"\n    set revoked_at=coalesce(revoked_at,$1),\n        revoked_by_user_id=case when revoked_at is null then null else revoked_by_user_id end,\n        reason=\'Revoked during account deletion\'\n    where principal_user_id=$2 or delegatee_user_id=$3', parameters: [ '2026-10-28T16:23:10.428Z', 'support-event-author', 'support-event-author' ], args: [ '2026-10-28T16:23:10.428Z', 'support-event-author', 'support-event-author' ], types: [ 1184, 25, 25 ] }
+⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯[9/11]⎯
+
+ FAIL  |@paperclipai/server| src/__tests__/v6-account-deletion.integration.test.ts > V6 personal account offboarding > accepts the full supported Unicode password for irreversible account confirmation
+AssertionError: promise rejected "Error: Failed query: update "human_workfl… { …(2) }" instead of resolving
+ ❯ src/__tests__/v6-account-deletion.integration.test.ts:823:10
+    821|       await expect(accountDeletionService(db, effects).request(id, {
+    822|         ...input("unicode-password-offboarding-001"), password: unicod…
+    823|       })).resolves.toMatchObject({ status: "requested" });
+       |          ^
+    824|     });
+    825|     it("erases native authenticators when offboarding retains a scrubb…
+
+Caused by: Error: Failed query: update "human_workflow_coverages"
+    set revoked_at=coalesce(revoked_at,$1),
+        revoked_by_user_id=case when revoked_at is null then null else revoked_by_user_id end,
+        reason='Revoked during account deletion'
+    where principal_user_id=$2 or delegatee_user_id=$3
+params: Wed Oct 28 2026 16:23:10 GMT+0000 (Coordinated Universal Time),unicode-password-offboarding,unicode-password-offboarding
+ ❯ PostgresJsPreparedQuery.queryWithCache ../../v10-dep-qualification/node_modules/.pnpm/drizzle-orm@0.45.2_@opentelemetry+api@1.9.1_kysely@0.29.5_pg@8.18.0_postgres@3.4.9_patch_hash_uil4xuf7icnddjurbgy2qn5oo4/node_modules/drizzle-orm/pg-core/session.js:41:15
+ ❯ eraseAccountAccess src/services/saas/account-deletion.ts:284:3
+ ❯ src/services/saas/account-deletion.ts:134:7
+ ❯ ../packages/db/src/work-signals.ts:38:22
+ ❯ scope ../../v10-dep-qualification/node_modules/.pnpm/postgres@3.4.9_patch_hash=sryle6qd5qfmnxvoebal4gashi/node_modules/postgres/src/index.js:279:18
+ ❯ sql.begin ../../v10-dep-qualification/node_modules/.pnpm/postgres@3.4.9_patch_hash=sryle6qd5qfmnxvoebal4gashi/node_modules/postgres/src/index.js:257:14
+ ❯ PostgresJsDatabase.connection.transaction ../packages/db/src/work-signals.ts:35:22
+ ❯ src/__tests__/v6-account-deletion.integration.test.ts:821:7
+
+⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯
+Serialized Error: { query: 'update "human_workflow_coverages"\n    set revoked_at=coalesce(revoked_at,$1),\n        revoked_by_user_id=case when revoked_at is null then null else revoked_by_user_id end,\n        reason=\'Revoked during account deletion\'\n    where principal_user_id=$2 or delegatee_user_id=$3', params: [ '2026-10-28T16:23:10.602Z', 'unicode-password-offboarding', 'unicode-password-offboarding' ] }
+Caused by: TypeError: The "string" argument must be of type string or an instance of Buffer or ArrayBuffer. Received an instance of Date
+ ❯ reset.str ../../v10-dep-qualification/node_modules/.pnpm/postgres@3.4.9_patch_hash=sryle6qd5qfmnxvoebal4gashi/node_modules/postgres/src/bytes.js:22:27
+ ❯ ../../v10-dep-qualification/node_modules/.pnpm/postgres@3.4.9_patch_hash=sryle6qd5qfmnxvoebal4gashi/node_modules/postgres/src/connection.js:968:16
+ ❯ Bind ../../v10-dep-qualification/node_modules/.pnpm/postgres@3.4.9_patch_hash=sryle6qd5qfmnxvoebal4gashi/node_modules/postgres/src/connection.js:958:16
+ ❯ prepared ../../v10-dep-qualification/node_modules/.pnpm/postgres@3.4.9_patch_hash=sryle6qd5qfmnxvoebal4gashi/node_modules/postgres/src/connection.js:209:7
+ ❯ ParameterDescription ../../v10-dep-qualification/node_modules/.pnpm/postgres@3.4.9_patch_hash=sryle6qd5qfmnxvoebal4gashi/node_modules/postgres/src/connection.js:637:58
+ ❯ handle ../../v10-dep-qualification/node_modules/.pnpm/postgres@3.4.9_patch_hash=sryle6qd5qfmnxvoebal4gashi/node_modules/postgres/src/connection.js:493:6
+ ❯ Socket.data ../../v10-dep-qualification/node_modules/.pnpm/postgres@3.4.9_patch_hash=sryle6qd5qfmnxvoebal4gashi/node_modules/postgres/src/connection.js:324:9
+
+⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯
+Serialized Error: { code: 'ERR_INVALID_ARG_TYPE', query: 'update "human_workflow_coverages"\n    set revoked_at=coalesce(revoked_at,$1),\n        revoked_by_user_id=case when revoked_at is null then null else revoked_by_user_id end,\n        reason=\'Revoked during account deletion\'\n    where principal_user_id=$2 or delegatee_user_id=$3', parameters: [ '2026-10-28T16:23:10.602Z', 'unicode-password-offboarding', 'unicode-password-offboarding' ], args: [ '2026-10-28T16:23:10.602Z', 'unicode-password-offboarding', 'unicode-password-offboarding' ], types: [ 1184, 25, 25 ] }
+⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯[10/11]⎯
+
+ FAIL  |@paperclipai/server| src/__tests__/v6-account-deletion.integration.test.ts > V6 personal account offboarding > erases native authenticators when offboarding retains a scrubbed user row
+Error: Failed query: update "human_workflow_coverages"
+    set revoked_at=coalesce(revoked_at,$1),
+        revoked_by_user_id=case when revoked_at is null then null else revoked_by_user_id end,
+        reason='Revoked during account deletion'
+    where principal_user_id=$2 or delegatee_user_id=$3
+params: Wed Oct 28 2026 16:23:10 GMT+0000 (Coordinated Universal Time),native-authenticator-erasure,native-authenticator-erasure
+ ❯ PostgresJsPreparedQuery.queryWithCache ../../v10-dep-qualification/node_modules/.pnpm/drizzle-orm@0.45.2_@opentelemetry+api@1.9.1_kysely@0.29.5_pg@8.18.0_postgres@3.4.9_patch_hash_uil4xuf7icnddjurbgy2qn5oo4/node_modules/src/pg-core/session.ts:73:10
+ ❯ eraseAccountAccess src/services/saas/account-deletion.ts:284:3
+    282|   // immutable receipt row for audit, but erase its user-authored reas…
+    283|   // a support or legal hold keeps the account row pending physical de…
+    284|   await tx.execute(sql`update ${humanWorkflowCoverages}
+       |   ^
+    285|     set revoked_at=coalesce(revoked_at,${now}),
+    286|         revoked_by_user_id=case when revoked_at is null then null else…
+ ❯ src/services/saas/account-deletion.ts:134:7
+ ❯ ../packages/db/src/work-signals.ts:38:22
+ ❯ scope ../../v10-dep-qualification/node_modules/.pnpm/postgres@3.4.9_patch_hash=sryle6qd5qfmnxvoebal4gashi/node_modules/postgres/src/index.js:279:18
+ ❯ sql.begin ../../v10-dep-qualification/node_modules/.pnpm/postgres@3.4.9_patch_hash=sryle6qd5qfmnxvoebal4gashi/node_modules/postgres/src/index.js:257:14
+ ❯ PostgresJsDatabase.connection.transaction ../packages/db/src/work-signals.ts:35:22
+ ❯ src/__tests__/v6-account-deletion.integration.test.ts:858:7
+
+Caused by: TypeError: The "string" argument must be of type string or an instance of Buffer or ArrayBuffer. Received an instance of Date
+ ❯ reset.str ../../v10-dep-qualification/node_modules/.pnpm/postgres@3.4.9_patch_hash=sryle6qd5qfmnxvoebal4gashi/node_modules/postgres/src/bytes.js:22:27
+ ❯ ../../v10-dep-qualification/node_modules/.pnpm/postgres@3.4.9_patch_hash=sryle6qd5qfmnxvoebal4gashi/node_modules/postgres/src/connection.js:968:16
+ ❯ Bind ../../v10-dep-qualification/node_modules/.pnpm/postgres@3.4.9_patch_hash=sryle6qd5qfmnxvoebal4gashi/node_modules/postgres/src/connection.js:958:16
+ ❯ prepared ../../v10-dep-qualification/node_modules/.pnpm/postgres@3.4.9_patch_hash=sryle6qd5qfmnxvoebal4gashi/node_modules/postgres/src/connection.js:209:7
+ ❯ ParameterDescription ../../v10-dep-qualification/node_modules/.pnpm/postgres@3.4.9_patch_hash=sryle6qd5qfmnxvoebal4gashi/node_modules/postgres/src/connection.js:637:58
+ ❯ handle ../../v10-dep-qualification/node_modules/.pnpm/postgres@3.4.9_patch_hash=sryle6qd5qfmnxvoebal4gashi/node_modules/postgres/src/connection.js:493:6
+ ❯ Socket.data ../../v10-dep-qualification/node_modules/.pnpm/postgres@3.4.9_patch_hash=sryle6qd5qfmnxvoebal4gashi/node_modules/postgres/src/connection.js:324:9
+
+⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯
+Serialized Error: { code: 'ERR_INVALID_ARG_TYPE', query: 'update "human_workflow_coverages"\n    set revoked_at=coalesce(revoked_at,$1),\n        revoked_by_user_id=case when revoked_at is null then null else revoked_by_user_id end,\n        reason=\'Revoked during account deletion\'\n    where principal_user_id=$2 or delegatee_user_id=$3', parameters: [ '2026-10-28T16:23:10.699Z', 'native-authenticator-erasure', 'native-authenticator-erasure' ], args: [ '2026-10-28T16:23:10.699Z', 'native-authenticator-erasure', 'native-authenticator-erasure' ], types: [ 1184, 25, 25 ] }
+⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯[11/11]⎯
+
+
+ Test Files  3 failed | 6 passed (9)
+      Tests  11 failed | 258 passed (269)
+   Start at  16:22:01
+   Duration  84.60s (transform 16.23s, setup 407ms, import 28.03s, tests 52.80s, environment 1.95s)
+

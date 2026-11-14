@@ -17,6 +17,14 @@ import {
 vi.setConfig({ testTimeout: 30000 });
 
 const mockWakeup = vi.hoisted(() => vi.fn(async () => undefined));
+const mockAccessDecide = vi.hoisted(() => vi.fn(async (input: { action: string }) => ({
+  allowed: true,
+  action: input.action,
+  reason: "allow_test_fixture",
+  explanation: "The seeded public issue is within the fixture actor's boundary.",
+})));
+const mockAnalyticalPayloadAccess = vi.hoisted(() => vi.fn(async () => undefined));
+const mockCanActorReadIssuePrivacy = vi.hoisted(() => vi.fn(async () => true));
 const mockFindExistingIssueBlockersResolvedWakeForReadyState = vi.hoisted(() => vi.fn(async () => null));
 const mockIssueService = vi.hoisted(() => ({
   getAncestors: vi.fn(),
@@ -39,6 +47,7 @@ vi.mock("../services/index.js", () => ({
   }),
   accessService: () => ({
     canUser: vi.fn(),
+    decide: mockAccessDecide,
     hasPermission: vi.fn(),
   }),
   agentService: () => ({
@@ -106,6 +115,16 @@ vi.mock("../services/index.js", () => ({
   }),
 }));
 
+vi.mock("../services/authorization.js", async () => {
+  const actual = await vi.importActual<typeof import("../services/authorization.js")>("../services/authorization.js");
+  return { ...actual, canActorReadIssuePrivacy: mockCanActorReadIssuePrivacy };
+});
+
+vi.mock("../services/analytical-context-authority.js", async () => {
+  const actual = await vi.importActual<typeof import("../services/analytical-context-authority.js")>("../services/analytical-context-authority.js");
+  return { ...actual, assertAnalyticalContextPayloadAccess: mockAnalyticalPayloadAccess };
+});
+
 vi.mock("../services/issue-dependency-wakeups.js", async () => {
   const actual = await vi.importActual<typeof import("../services/issue-dependency-wakeups.js")>(
     "../services/issue-dependency-wakeups.js",
@@ -161,6 +180,14 @@ describe("issue dependency wakeups in issue routes", () => {
     vi.doUnmock("../middleware/index.js");
     vi.clearAllMocks();
     mockFindExistingIssueBlockersResolvedWakeForReadyState.mockResolvedValue(null);
+    mockAccessDecide.mockImplementation(async (input) => ({
+      allowed: true,
+      action: input.action,
+      reason: "allow_test_fixture",
+      explanation: "The seeded public issue is within the fixture actor's boundary.",
+    }));
+    mockCanActorReadIssuePrivacy.mockResolvedValue(true);
+    mockAnalyticalPayloadAccess.mockResolvedValue(undefined);
     mockIssueService.getAncestors.mockResolvedValue([]);
     mockIssueService.getByIdForUpdate.mockImplementation(async () => mockIssueService.getById());
     mockIssueService.getComment.mockResolvedValue(null);
@@ -679,6 +706,17 @@ describe("issue dependency wakeups in issue routes", () => {
     const res = await request(await createApp()).patch("/api/issues/issue-1").send({ status: "done" });
     expect(res.status).toBe(200);
     await new Promise((resolve) => setTimeout(resolve, 50));
+    expect(mockWakeup).not.toHaveBeenCalled();
+  });
+
+  it("keeps a private issue hidden before applying a status transition", async () => {
+    mockCanActorReadIssuePrivacy.mockResolvedValue(false);
+    mockIssueService.getById.mockResolvedValue(issueRecord({ status: "blocked" }));
+
+    const res = await request(await createApp()).patch("/api/issues/issue-1").send({ status: "done" });
+
+    expect(res.status).toBe(404);
+    expect(mockIssueService.update).not.toHaveBeenCalled();
     expect(mockWakeup).not.toHaveBeenCalled();
   });
 });

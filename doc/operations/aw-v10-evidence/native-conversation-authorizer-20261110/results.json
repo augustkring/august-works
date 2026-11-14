@@ -1,0 +1,384 @@
+{
+  "uniquePassingCases": 32,
+  "invocations": [
+    {
+      "label": "local-native-reservation-session-source-r6",
+      "passingCases": 1,
+      "tests": [
+        {
+          "path": "server/src/__tests__/v7-model-reservations.integration.test.ts",
+          "test": "native model reservation ledger and dispatch boundary binds live reservations to the actual Human session and current conversation generation"
+        }
+      ],
+      "resourceReceipt": {
+        "command": [
+          "node",
+          "/workspace/blentera-v10/node_modules/vitest/vitest.mjs",
+          "run",
+          "--config",
+          "vitest.config.ts",
+          "src/__tests__/v7-model-reservations.integration.test.ts",
+          "-t",
+          "binds live reservations to the actual Human session and current conversation generation",
+          "--maxWorkers=1",
+          "--no-file-parallelism",
+          "--reporter=default",
+          "--reporter=json",
+          "--outputFile=/workspace/v10-preparation/combined-source-20261109/local-native-reservation-session-source-r6.json"
+        ],
+        "cwd": "/workspace/blentera-v10/server",
+        "leaseWaitSeconds": 4.447699757292867e-05,
+        "sourceManifest": "local-native-reservation-session-source-r6-source-manifest.json",
+        "filesystemFloorBytes": {
+          "/workspace": 122880000,
+          "/tmp": 1073741824
+        },
+        "globalMemoryReserveBytes": 2147483648,
+        "exit": 0,
+        "seconds": 136.72375298700354,
+        "stopReason": null,
+        "nodeHeapMiB": 768,
+        "ownedDescendantRssLimitBytes": 4294967296,
+        "observedPeakOwnedDescendantRssBytes": 3077980160,
+        "processRssAtObservedPeak": [
+          {
+            "pid": 207256,
+            "parentPid": 207232,
+            "executable": "node",
+            "rssBytes": 1107169280,
+            "nodeOptions": "--max-old-space-size=768"
+          },
+          {
+            "pid": 207232,
+            "parentPid": 207112,
+            "executable": "node",
+            "rssBytes": 818249728,
+            "nodeOptions": "--max-old-space-size=768"
+          },
+          {
+            "pid": 207333,
+            "parentPid": 207318,
+            "executable": "postgres",
+            "rssBytes": 310738944
+          },
+          {
+            "pid": 208169,
+            "parentPid": 207256,
+            "executable": "node",
+            "rssBytes": 256544768,
+            "nodeOptions": null
+          },
+          {
+            "pid": 207344,
+            "parentPid": 207318,
+            "executable": "postgres",
+            "rssBytes": 232820736
+          },
+          {
+            "pid": 207342,
+            "parentPid": 207318,
+            "executable": "postgres",
+            "rssBytes": 231038976
+          },
+          {
+            "pid": 207343,
+            "parentPid": 207318,
+            "executable": "postgres",
+            "rssBytes": 37261312
+          },
+          {
+            "pid": 207318,
+            "parentPid": 207256,
+            "executable": "postgres",
+            "rssBytes": 24588288
+          },
+          {
+            "pid": 207319,
+            "parentPid": 207318,
+            "executable": "postgres",
+            "rssBytes": 13246464
+          },
+          {
+            "pid": 207325,
+            "parentPid": 207318,
+            "executable": "postgres",
+            "rssBytes": 9232384
+          },
+          {
+            "pid": 207326,
+            "parentPid": 207318,
+            "executable": "postgres",
+            "rssBytes": 8085504
+          },
+          {
+            "pid": 207327,
+            "parentPid": 207318,
+            "executable": "postgres",
+            "rssBytes": 7221248
+          },
+          {
+            "pid": 207323,
+            "parentPid": 207318,
+            "executable": "postgres",
+            "rssBytes": 6516736
+          },
+          {
+            "pid": 207322,
+            "parentPid": 207318,
+            "executable": "postgres",
+            "rssBytes": 5431296
+          },
+          {
+            "pid": 207321,
+            "parentPid": 207318,
+            "executable": "postgres",
+            "rssBytes": 5402624
+          },
+          {
+            "pid": 207320,
+            "parentPid": 207318,
+            "executable": "postgres",
+            "rssBytes": 4431872
+          }
+        ],
+        "rssAccounting": "sum of per-process RSS, including shared pages in each mapped process; sampled observation, not unique physical memory",
+        "trackedPidCount": 30,
+        "observedPostgresRelatedPids": [
+          207282,
+          207292,
+          207305,
+          207315,
+          207318,
+          207319,
+          207320,
+          207321,
+          207322,
+          207323,
+          207325,
+          207326,
+          207327,
+          207330,
+          207333,
+          207342,
+          207343,
+          207344,
+          208395
+        ],
+        "uniqueTempRoot": "/var/tmp/mpg-v9oywfzl",
+        "samplingIntervalSeconds": 0.2,
+        "samples": 628,
+        "memoryBefore": "low 0\nhigh 0\nmax 0\noom 0\noom_kill 0\noom_group_kill 0\n",
+        "memoryAfter": "low 0\nhigh 0\nmax 0\noom 0\noom_kill 0\noom_group_kill 0\n",
+        "qualification": "software fixture with actual embedded PostgreSQL; no external provider/SDK/host proof"
+      }
+    },
+    {
+      "label": "native-startup-span-redaction-r7",
+      "passingCases": 31,
+      "tests": [
+        {
+          "path": "server/src/__tests__/redaction.test.ts",
+          "test": "redaction preserves the exact authored Agent schema only as a schema discriminator"
+        },
+        {
+          "path": "server/src/__tests__/redaction.test.ts",
+          "test": "redaction keeps the discriminator allowlist in exact PRP v1 schema parity"
+        },
+        {
+          "path": "server/src/__tests__/redaction.test.ts",
+          "test": "redaction keeps the v2 additions in parity with the canonical v2 schema"
+        },
+        {
+          "path": "server/src/__tests__/redaction.test.ts",
+          "test": "redaction preserves every discriminator in the cross-language replay stream"
+        },
+        {
+          "path": "server/src/__tests__/redaction.test.ts",
+          "test": "redaction preserves current PRP v2 session discriminators"
+        },
+        {
+          "path": "server/src/__tests__/redaction.test.ts",
+          "test": "redaction redacts unknown or mismatched PRP discriminators"
+        },
+        {
+          "path": "server/src/__tests__/redaction.test.ts",
+          "test": "redaction redacts sensitive keys and nested secret values"
+        },
+        {
+          "path": "server/src/__tests__/redaction.test.ts",
+          "test": "redaction redacts jwt-looking values even when key name is not sensitive"
+        },
+        {
+          "path": "server/src/__tests__/redaction.test.ts",
+          "test": "redaction preserves only the Task-close audit source while withholding JWT-shaped source data"
+        },
+        {
+          "path": "server/src/__tests__/redaction.test.ts",
+          "test": "redaction preserves Paperclip protocol schema identifiers"
+        },
+        {
+          "path": "server/src/__tests__/redaction.test.ts",
+          "test": "redaction preserves only known PRP v1 event discriminators inside validated envelopes"
+        },
+        {
+          "path": "server/src/__tests__/redaction.test.ts",
+          "test": "redaction redacts unknown dotted event values even in a PRP-shaped envelope"
+        },
+        {
+          "path": "server/src/__tests__/redaction.test.ts",
+          "test": "redaction does not trust discriminators inside a forged unknown schema"
+        },
+        {
+          "path": "server/src/__tests__/redaction.test.ts",
+          "test": "redaction preserves native run span identities without weakening hostname redaction"
+        },
+        {
+          "path": "server/src/__tests__/redaction.test.ts",
+          "test": "redaction redacts payload objects while preserving null"
+        },
+        {
+          "path": "server/src/__tests__/redaction.test.ts",
+          "test": "redaction redacts credentials in ordinary nested diagnostic strings"
+        },
+        {
+          "path": "server/src/__tests__/redaction.test.ts",
+          "test": "redaction preserves authorization decision reasons in audit payloads"
+        },
+        {
+          "path": "server/src/__tests__/redaction.test.ts",
+          "test": "redaction keeps numeric removal-receipt counts but still redacts non-numeric values on the same keys"
+        },
+        {
+          "path": "server/src/__tests__/redaction.test.ts",
+          "test": "redaction redacts common secret shapes from unstructured text"
+        },
+        {
+          "path": "server/src/__tests__/redaction.test.ts",
+          "test": "redaction redacts authorization variants and standalone bearer credentials from diagnostic text"
+        },
+        {
+          "path": "server/src/__tests__/redaction.test.ts",
+          "test": "redaction redacts raw and escaped quote-delimited authorization values without leaking nested content"
+        },
+        {
+          "path": "server/src/__tests__/redaction.test.ts",
+          "test": "redaction redacts raw and serialized standalone bearer values without leaking quoted content"
+        },
+        {
+          "path": "server/src/__tests__/redaction.test.ts",
+          "test": "redaction redacts token tails attached to raw and escaped closing credential quotes"
+        },
+        {
+          "path": "server/src/__tests__/redaction.test.ts",
+          "test": "redaction redacts inline secrets from command metadata without hiding safe command text"
+        },
+        {
+          "path": "server/src/__tests__/redaction.test.ts",
+          "test": "redaction redacts non-string command args after secret flags"
+        },
+        {
+          "path": "server/src/__tests__/redaction.test.ts",
+          "test": "redaction does not treat bare args payloads as command args"
+        },
+        {
+          "path": "server/src/__tests__/redaction.test.ts",
+          "test": "redaction redacts every plaintext agent env binding while preserving secret references"
+        },
+        {
+          "path": "server/src/__tests__/redaction.test.ts",
+          "test": "redaction redacts non-env adapter keys while leaving env binding shapes intact"
+        },
+        {
+          "path": "server/src/__tests__/redaction.test.ts",
+          "test": "redaction redacts adapter configs that have no env block"
+        },
+        {
+          "path": "server/src/__tests__/helpers/managed-native-conversation-sandbox-host.test.ts",
+          "test": "synthetic Host proc namespace links reuses only exact existing symlinks and rejects conflicting entries"
+        },
+        {
+          "path": "server/src/__tests__/helpers/managed-native-conversation-sandbox-host.test.ts",
+          "test": "projects only bounded completed startup span facts"
+        }
+      ],
+      "resourceReceipt": {
+        "command": [
+          "node",
+          "/workspace/blentera-v10/node_modules/vitest/vitest.mjs",
+          "run",
+          "--config",
+          "vitest.config.ts",
+          "src/__tests__/redaction.test.ts",
+          "src/__tests__/helpers/managed-native-conversation-sandbox-host.test.ts",
+          "--maxWorkers=1",
+          "--no-file-parallelism",
+          "--reporter=default",
+          "--reporter=json",
+          "--outputFile=/workspace/v10-preparation/combined-source-20261109/native-startup-span-redaction-r7.json"
+        ],
+        "cwd": "/workspace/blentera-v10/server",
+        "leaseWaitSeconds": 3.9719998312648386e-05,
+        "sourceManifest": "native-startup-span-redaction-r7-source-manifest.json",
+        "filesystemFloorBytes": {
+          "/workspace": 122880000,
+          "/tmp": 1073741824
+        },
+        "globalMemoryReserveBytes": 2147483648,
+        "exit": 0,
+        "seconds": 15.074396932002855,
+        "stopReason": null,
+        "nodeHeapMiB": 768,
+        "ownedDescendantRssLimitBytes": 4294967296,
+        "observedPeakOwnedDescendantRssBytes": 1497800704,
+        "processRssAtObservedPeak": [
+          {
+            "pid": 208627,
+            "parentPid": 208580,
+            "executable": "node",
+            "rssBytes": 796491776,
+            "nodeOptions": "--max-old-space-size=768"
+          },
+          {
+            "pid": 208659,
+            "parentPid": 208627,
+            "executable": "node",
+            "rssBytes": 701308928,
+            "nodeOptions": "--max-old-space-size=768"
+          }
+        ],
+        "rssAccounting": "sum of per-process RSS, including shared pages in each mapped process; sampled observation, not unique physical memory",
+        "trackedPidCount": 3,
+        "observedPostgresRelatedPids": [],
+        "uniqueTempRoot": "/var/tmp/mpg-wy54tmui",
+        "samplingIntervalSeconds": 0.2,
+        "samples": 70,
+        "memoryBefore": "low 0\nhigh 0\nmax 0\noom 0\noom_kill 0\noom_group_kill 0\n",
+        "memoryAfter": "low 0\nhigh 0\nmax 0\noom 0\noom_kill 0\noom_group_kill 0\n",
+        "qualification": "controlled component modules, no PostgreSQL process observed; no external provider/SDK/host proof"
+      }
+    }
+  ],
+  "serverTypecheck": {
+    "steps": [
+      {
+        "command": [
+          "node",
+          "../node_modules/typescript/bin/tsc",
+          "--noEmit",
+          "--singleThreaded"
+        ],
+        "exit": 0,
+        "seconds": 96.16634907999833,
+        "peakGroupRssBytes": 6117449728,
+        "stopped": null
+      }
+    ],
+    "memoryBefore": "low 0\nhigh 0\nmax 0\noom 0\noom_kill 0\noom_group_kill 0\n",
+    "memoryAfter": "low 0\nhigh 0\nmax 0\noom 0\noom_kill 0\noom_group_kill 0\n"
+  },
+  "limits": [
+    "One selected actual pinned managed OpenCode/runnerd conversation case uses deterministic HTTP and a signed software Host. It proves actual provider reservation and session/generation refusal checks under a max-three application pool. It does not qualify a paid provider or physical Host.",
+    "The temporary backend/stack timing probe is removed and excluded from qualification. Earlier watchdog failures remain private diagnostics. This passing case does not establish that the full conversation reservation, offboarding, temporal or serial suites pass.",
+    "Existing product deadlines, Source/Host/privacy/Stop gates, lease ceilings and pool bounds remain unchanged. No requirement or migration phase is promoted."
+  ]
+}

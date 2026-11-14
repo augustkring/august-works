@@ -1,0 +1,91 @@
+(!) Your Vite config uses features that are unsupported by `configLoader: 'native'`, which is planned to become the default in a future major version of Vite:
+  - `__dirname` (vitest.config.ts:7:25). Use `import.meta.dirname` instead
+Set `VITE_CONFIG_NATIVE_IGNORE_WARNING=true` to suppress this warning.
+
+ RUN  v4.1.11 /workspace/blentera-v10
+
+ ❯ |@paperclipai/server| src/__tests__/authorization-service.test.ts (87 tests | 4 failed | 83 skipped) 16712ms
+     × native graph preserves the current conversation Human and Agent even for open tasks 800ms
+     × native graph retains all copied Project sources across changes and erasure 453ms
+     × native graph narrows unbound runs by actual Context Tasks and retains copied Task roots after Context erasure 316ms
+     × native graph follows run-only Context through actual Task binding and denies malformed refs without self cycles 816ms
+
+⎯⎯⎯⎯⎯⎯⎯ Failed Tests 4 ⎯⎯⎯⎯⎯⎯⎯
+
+ FAIL  |@paperclipai/server| src/__tests__/authorization-service.test.ts > authorization service > native graph preserves the current conversation Human and Agent even for open tasks
+AssertionError: expected true to be false // Object.is equality
+
+- Expected
++ Received
+
+- false
++ true
+
+ ❯ src/__tests__/authorization-service.test.ts:3028:111
+    3026|       conversationAgentId: f.agent.id, conversationUserId: f.owner, co…
+    3027|     expect(await canActorReadIssuePrivacy(db, f.human(f.owner), conver…
+    3028|     expect(await canActorReadIssuePrivacy(db, { ...f.human(f.reader), …
+       |                                                                                                               ^
+    3029|     await db.insert(issueAccessGrants).values({ companyId: f.company.i…
+    3030|     expect(await canActorReadIssuePrivacy(db, f.human(f.reader), conve…
+
+⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯[1/4]⎯
+
+ FAIL  |@paperclipai/server| src/__tests__/authorization-service.test.ts > authorization service > native graph retains all copied Project sources across changes and erasure
+AssertionError: expected true to be false // Object.is equality
+
+- Expected
++ Received
+
+- false
++ true
+
+ ❯ src/__tests__/authorization-service.test.ts:3049:75
+    3047|     const [copy] = await db.insert(projects).values({ companyId: f.com…
+    3048|     expect(await canActorReadProjectPrivacy(db, f.human(f.owner), copy…
+    3049|     expect(await canActorReadProjectPrivacy(db, f.human(f.reader), cop…
+       |                                                                           ^
+    3050|     const additional = await createProject(db, f.company.id, "Addition…
+    3051|     await db.update(projects).set({ sourceProjectIds: [additional.id] …
+
+⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯[2/4]⎯
+
+ FAIL  |@paperclipai/server| src/__tests__/authorization-service.test.ts > authorization service > native graph narrows unbound runs by actual Context Tasks and retains copied Task roots after Context erasure
+AssertionError: expected true to be false // Object.is equality
+
+- Expected
++ Received
+
+- false
++ true
+
+ ❯ src/__tests__/authorization-service.test.ts:3070:79
+
+
+⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯[3/4]⎯
+
+ FAIL  |@paperclipai/server| src/__tests__/authorization-service.test.ts > authorization service > native graph follows run-only Context through actual Task binding and denies malformed refs without self cycles
+AssertionError: expected true to be false // Object.is equality
+
+- Expected
++ Received
+
+- false
++ true
+
+ ❯ src/__tests__/authorization-service.test.ts:3084:73
+    3082|     const manifest = await persistTaskContext(f.company.id, f.agent.id…
+    3083|     expect(await canActorReadIssuePrivacy(db, f.human(f.owner), task))…
+    3084|     expect(await canActorReadIssuePrivacy(db, f.human(f.reader), task)…
+       |                                                                         ^
+    3085|     await db.update(contextManifests).set({ issueId: task.id }).where(…
+    3086|     await db.update(contextManifestItems).set({ sourceRef: `issue://${…
+
+⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯[4/4]⎯
+
+
+ Test Files  1 failed (1)
+      Tests  4 failed | 83 skipped (87)
+   Start at  21:11:11
+   Duration  35.51s (transform 9.66s, setup 213ms, import 18.05s, tests 16.71s, environment 0ms)
+

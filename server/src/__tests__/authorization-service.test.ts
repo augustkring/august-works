@@ -3,12 +3,19 @@ import { afterAll, afterEach, beforeAll, describe, expect, it } from "vitest";
 import { and, eq, sql } from "drizzle-orm";
 import {
   agents,
+  agentApiKeys,
+  issueAccessGrants,
+  issuePrivacySources,
+  projectAccessMembers,
   authUsers,
   companies,
   companyMemberships,
   createDb,
+  EMBEDDED_POSTGRES_TEST_TIMEOUT_MS,
   instanceUserRoles,
   heartbeatRuns,
+  contextManifests,
+  contextManifestItems,
   issueComments,
   issues,
   principalPermissionGrants,
@@ -20,7 +27,7 @@ import {
   getEmbeddedPostgresTestSupport,
   startEmbeddedPostgresTestDatabase,
 } from "./helpers/embedded-postgres.js";
-import { authorizationService } from "../services/authorization.js";
+import { authorizationService, canActorReadIssuePrivacy, canActorReadProjectPrivacy, canActorReadHeartbeatRunPrivacy, issueReadSqlCondition, type AuthorizationActor } from "../services/authorization.js";
 
 const embeddedPostgresSupport = await getEmbeddedPostgresTestSupport();
 const describeEmbeddedPostgres = embeddedPostgresSupport.supported ? describe : describe.skip;
@@ -63,6 +70,7 @@ async function createProject(db: ReturnType<typeof createDb>, companyId: string,
     .values({
       companyId,
       name: `Project ${label} ${randomUUID()}`,
+      sourceProvenanceQualified: true,
     })
     .returning()
     .then((rows) => rows[0]!);
@@ -171,9 +179,10 @@ describeEmbeddedPostgres("authorization service", () => {
   beforeAll(async () => {
     tempDb = await startEmbeddedPostgresTestDatabase("paperclip-authorization-service-");
     db = createDb(tempDb.connectionString);
-  }, 20_000);
+  }, EMBEDDED_POSTGRES_TEST_TIMEOUT_MS);
 
   afterEach(async () => {
+    await db.delete(agentApiKeys);
     await db.delete(issueComments);
     await db.delete(userInboxAgentPolicies);
     await db.delete(principalPermissionGrants);
@@ -777,6 +786,47 @@ describeEmbeddedPostgres("authorization service", () => {
       allowed: true,
       reason: "allow_self",
     });
+  });
+
+  it("responsible authority freshness rejects same-actor skill effects after membership withdrawal", async () => {
+    const company = await createCompany(db, "ResponsibleSameActorWithdrawal");
+    const agent = await createAgent(db, company.id);
+    const userId = await createUser(db);
+    await grantAgentPermission(db, company.id, agent.id, "skills:create");
+    await db.insert(companyMemberships).values({ companyId: company.id, principalType: "user", principalId: userId, status: "active", membershipRole: "operator" });
+    const actor: AuthorizationActor = { type: "agent", source: "agent_jwt", companyId: company.id, agentId: agent.id, onBehalfOfUserId: userId };
+    const authz = authorizationService(db);
+    const resource = { type: "company" as const, companyId: company.id };
+    await expect(authz.decide({ actor, action: "company_scope:read", resource, enforceResponsibleUserIntersection: true })).resolves.toMatchObject({ allowed: true });
+    await db.update(companyMemberships).set({ status: "suspended" }).where(and(eq(companyMemberships.companyId, company.id), eq(companyMemberships.principalType, "user"), eq(companyMemberships.principalId, userId)));
+    await expect(authz.decide({ actor, action: "skill_config:update", resource, enforceResponsibleUserIntersection: true })).resolves.toMatchObject({ allowed: false, code: "RESPONSIBLE_USER_UNAVAILABLE" });
+    await db.update(companyMemberships).set({ status: "active" }).where(and(eq(companyMemberships.companyId, company.id), eq(companyMemberships.principalType, "user"), eq(companyMemberships.principalId, userId)));
+    await expect(authz.decide({ actor, action: "skill_config:update", resource, enforceResponsibleUserIntersection: true })).resolves.toMatchObject({ allowed: true });
+  });
+
+  it("responsible authority freshness rejects membership DTO proof for a missing account", async () => {
+    const company = await createCompany(db, "ResponsibleMissingAccountDto");
+    const agent = await createAgent(db, company.id);
+    const userId = `missing-${randomUUID()}`;
+    await grantAgentPermission(db, company.id, agent.id, "skills:create");
+    const actor: AuthorizationActor = { type: "agent", source: "agent_jwt", companyId: company.id, agentId: agent.id, onBehalfOfUserId: userId,
+      onBehalfOfMemberships: [{ companyId: company.id, status: "active", membershipRole: "operator" }] };
+    await expect(authorizationService(db).decide({ actor, action: "skill_config:update", resource: { type: "company", companyId: company.id }, enforceResponsibleUserIntersection: true }))
+      .resolves.toMatchObject({ allowed: false, code: "RESPONSIBLE_USER_UNAVAILABLE" });
+  });
+
+  it("responsible authority freshness rejects an erased account with retained membership on the same actor", async () => {
+    const company = await createCompany(db, "ResponsibleErasedAccount");
+    const agent = await createAgent(db, company.id);
+    const userId = await createUser(db);
+    await db.insert(companyMemberships).values({ companyId: company.id, principalType: "user", principalId: userId, status: "active", membershipRole: "operator" });
+    const actor: AuthorizationActor = { type: "agent", source: "agent_jwt", companyId: company.id, agentId: agent.id, onBehalfOfUserId: userId };
+    const authz = authorizationService(db);
+    const request = { actor, action: "company_scope:read" as const, resource: { type: "company" as const, companyId: company.id }, enforceResponsibleUserIntersection: true };
+    await expect(authz.decide(request)).resolves.toMatchObject({ allowed: true });
+    await db.delete(authUsers).where(eq(authUsers.id, userId));
+    expect(await db.select().from(companyMemberships).where(and(eq(companyMemberships.companyId, company.id), eq(companyMemberships.principalType, "user"), eq(companyMemberships.principalId, userId)))).toHaveLength(1);
+    await expect(authz.decide(request)).resolves.toMatchObject({ allowed: false, code: "RESPONSIBLE_USER_UNAVAILABLE" });
   });
 
   it("rechecks responsible-user membership on a new request actor after revocation", async () => {
@@ -2814,7 +2864,7 @@ describeEmbeddedPostgres("authorization service", () => {
       expect((await owner.decide(input)).allowed).toBe(true);
       await tx.update(companyMemberships).set({ status: "inactive" }).where(and(eq(companyMemberships.companyId, company.id), eq(companyMemberships.principalType, "user"), eq(companyMemberships.principalId, userId)));
       const ordinary = await authorizationService(tx).decide(input);
-      expect(ordinary).toMatchObject({ allowed: false, code: "RESPONSIBLE_USER_UNAUTHORIZED" });
+      expect(ordinary).toMatchObject({ allowed: false, code: "RESPONSIBLE_USER_UNAVAILABLE" });
       expect(await owner.decide(input)).toEqual(ordinary);
     }));
   });
@@ -2846,6 +2896,211 @@ describeEmbeddedPostgres("authorization service", () => {
       expect(ordinary.allowed).toBe(false);
       expect(await owner.decide(input)).toEqual(ordinary);
     });
+  });
+
+
+  async function privateFixture() {
+    const company = await createCompany(db, "PrivateCore"), owner = await createUser(db), reader = await createUser(db);
+    await db.insert(companyMemberships).values([owner, reader].map(principalId => ({ companyId: company.id, principalType: "user", principalId, status: "active", membershipRole: "owner" })));
+    const agent = await createAgent(db, company.id);
+    const [issue] = await db.insert(issues).values({ companyId: company.id, title: "private-content-canary", visibility: "private", responsibleUserId: owner, assigneeAgentId: agent.id }).returning();
+    const [run] = await db.insert(heartbeatRuns).values({ companyId: company.id, agentId: agent.id, responsibleUserId: owner, nativeIssueId: issue.id, status: "running" }).returning();
+    const human = (userId: string): AuthorizationActor => ({ type: "board", source: "session", userId });
+    const worker: AuthorizationActor = { type: "agent", source: "agent_jwt", companyId: company.id, agentId: agent.id, runId: run.id, onBehalfOfUserId: owner };
+    const resource = { type: "issue" as const, companyId: company.id, issueId: issue.id, assigneeAgentId: agent.id, assigneeUserId: null, status: "todo" };
+    return { company, owner, reader, agent, issue, run, human, worker, resource };
+  }
+
+  it("private core denies administrative DTOs, unrelated owners and every write influence channel", async () => {
+    const f = await privateFixture(), owner = f.human(f.owner), actor = { ...f.human(f.reader), isInstanceAdmin: true };
+    const authz = authorizationService(db);
+    expect((await authz.decide({ actor: owner, action: "issue:read", resource: f.resource })).allowed).toBe(true);
+    for (const action of ["issue:read", "issue:comment", "issue:mutate", "tasks:assign", "tasks:manage_active_checkouts"] as const)
+      expect(await authz.decide({ actor, action, resource: f.resource })).toMatchObject({ allowed: false, reason: "deny_issue_private" });
+    expect(await canActorReadIssuePrivacy(db, { type: "board", source: "local_implicit" }, f.issue)).toBe(false);
+    const [open] = await db.insert(issues).values({ companyId: f.company.id, title: "Open" }).returning();
+    const visible = await db.select({ id: issues.id }).from(issues).where(and(eq(issues.companyId, f.company.id), await issueReadSqlCondition(db, actor)));
+    expect(visible.map(row => row.id)).toEqual([open.id]);
+  });
+
+  it("private core binds the current Human and Agent to the actual reader run or key", async () => {
+    const f = await privateFixture();
+    expect(await canActorReadIssuePrivacy(db, f.worker, f.issue)).toBe(true);
+    expect(await canActorReadIssuePrivacy(db, { ...f.worker, onBehalfOfUserId: f.reader }, f.issue)).toBe(false);
+    expect(await canActorReadIssuePrivacy(db, { ...f.worker, runId: randomUUID() }, f.issue)).toBe(false);
+    expect(await canActorReadIssuePrivacy(db, { ...f.worker, onBehalfOfUserId: null }, f.issue)).toBe(false);
+    const [key] = await db.insert(agentApiKeys).values({ companyId: f.company.id, agentId: f.agent.id, responsibleUserId: f.owner, name: "fixture", keyHash: randomUUID() }).returning();
+    const keyActor: AuthorizationActor = { ...f.worker, source: "agent_key", runId: null, keyId: key.id };
+    expect(await canActorReadIssuePrivacy(db, keyActor, f.issue)).toBe(true);
+    await db.update(agentApiKeys).set({ revokedAt: new Date() }).where(eq(agentApiKeys.id, key.id));
+    expect(await canActorReadIssuePrivacy(db, keyActor, f.issue)).toBe(false);
+    await db.delete(agentApiKeys).where(eq(agentApiKeys.id, key.id));
+    await db.update(companyMemberships).set({ status: "suspended" }).where(eq(companyMemberships.principalId, f.owner));
+    expect(await canActorReadIssuePrivacy(db, f.worker, f.issue)).toBe(false);
+  });
+
+  it("private core preserves independent active grant reasons and revokes without a positive cache", async () => {
+    const f = await privateFixture(), actor = f.human(f.reader);
+    const grants = await db.insert(issueAccessGrants).values(["explicit", "assignment"].map(source => ({ companyId: f.company.id, issueId: f.issue.id, subjectType: "user", subjectId: f.reader, source }))).returning();
+    expect(await canActorReadIssuePrivacy(db, actor, f.issue)).toBe(true);
+    await db.update(issueAccessGrants).set({ revokedAt: new Date() }).where(eq(issueAccessGrants.id, grants[0].id));
+    expect(await canActorReadIssuePrivacy(db, actor, f.issue)).toBe(true);
+    await db.update(issueAccessGrants).set({ revokedAt: new Date() }).where(eq(issueAccessGrants.id, grants[1].id));
+    expect(await canActorReadIssuePrivacy(db, actor, f.issue)).toBe(false);
+    const foreign = await createCompany(db, "ForeignGrant");
+    await expect(db.insert(issueAccessGrants).values({ companyId: foreign.id, issueId: f.issue.id, subjectType: "user", subjectId: f.reader, source: "explicit" })).rejects.toThrow();
+  });
+
+  it("private core retains old project sources across raw moves and denies deleted-source tombstones", async () => {
+    const f = await privateFixture();
+    const [project] = await db.insert(projects).values({ companyId: f.company.id, name: "Private project", visibility: "private", sourceProvenanceQualified: true }).returning();
+    await db.insert(projectAccessMembers).values({ companyId: f.company.id, projectId: project.id, subjectType: "user", subjectId: f.owner });
+    await db.update(issues).set({ projectId: project.id }).where(eq(issues.id, f.issue.id));
+    expect(await canActorReadIssuePrivacy(db, f.human(f.owner), f.issue)).toBe(true);
+    await db.update(issues).set({ projectId: null }).where(eq(issues.id, f.issue.id));
+    await db.insert(issueAccessGrants).values({ companyId: f.company.id, issueId: f.issue.id, subjectType: "user", subjectId: f.reader, source: "explicit" });
+    expect(await canActorReadIssuePrivacy(db, f.human(f.reader), f.issue)).toBe(false);
+    await db.delete(projects).where(eq(projects.id, project.id));
+    expect(await canActorReadIssuePrivacy(db, f.human(f.owner), f.issue)).toBe(false);
+    expect(await db.select().from(issuePrivacySources).where(eq(issuePrivacySources.issueId, f.issue.id))).toEqual(expect.arrayContaining([expect.objectContaining({ sourceKind: "project", sourceId: project.id })]));
+  });
+
+  it("private core denies retained source cycles, foreign sources and complete-graph overflow", async () => {
+    const f = await privateFixture(), actor = f.human(f.owner);
+    const [child] = await db.insert(issues).values({ companyId: f.company.id, title: "Child", parentId: f.issue.id }).returning();
+    await db.insert(issuePrivacySources).values({ companyId: f.company.id, issueId: f.issue.id, sourceKind: "issue", sourceId: child.id });
+    expect(await canActorReadIssuePrivacy(db, actor, f.issue)).toBe(false);
+    await db.delete(issuePrivacySources).where(eq(issuePrivacySources.issueId, f.issue.id));
+    const foreign = await createCompany(db, "ForeignSource");
+    const source = await createIssue(db, foreign.id);
+    await db.insert(issuePrivacySources).values({ companyId: f.company.id, issueId: f.issue.id, sourceKind: "issue", sourceId: source.id });
+    expect(await canActorReadIssuePrivacy(db, actor, f.issue)).toBe(false);
+    await db.delete(issuePrivacySources).where(eq(issuePrivacySources.issueId, f.issue.id));
+    const sources = await db.insert(issues).values(Array.from({ length: 256 }, () => ({ companyId: f.company.id, title: "Source" }))).returning();
+    await db.insert(issuePrivacySources).values(sources.map(row => ({ companyId: f.company.id, issueId: f.issue.id, sourceKind: "issue" as const, sourceId: row.id })));
+    expect(await canActorReadIssuePrivacy(db, actor, f.issue)).toBe(false);
+  });
+
+  it("private core keeps run scope immutable through context edits and source deletion", async () => {
+    const f = await privateFixture();
+    await db.update(heartbeatRuns).set({ status: "succeeded", scopeKind: "company", contextSnapshot: {} }).where(eq(heartbeatRuns.id, f.run.id));
+    expect(await canActorReadHeartbeatRunPrivacy(db, f.human(f.owner), f.run)).toBe(true);
+    expect(await canActorReadHeartbeatRunPrivacy(db, f.human(f.reader), f.run)).toBe(false);
+    expect((await db.select().from(heartbeatRuns).where(eq(heartbeatRuns.id, f.run.id)))[0]).toMatchObject({ scopeKind: "issue", issueId: f.issue.id });
+    await db.delete(issues).where(eq(issues.id, f.issue.id));
+    expect(await canActorReadHeartbeatRunPrivacy(db, f.human(f.owner), f.run)).toBe(false);
+    expect((await db.select().from(heartbeatRuns).where(eq(heartbeatRuns.id, f.run.id)))[0].issueId).toBe(f.issue.id);
+  });
+
+
+  it("project source privacy preserves all actual roots across updates and source erasure", async () => {
+    const f = await privateFixture();
+    const [project] = await db.insert(projects).values({ companyId: f.company.id, name: "Derived project", sourceProvenanceQualified: true, sourceIssueIds: [f.issue.id] }).returning();
+    expect(await canActorReadProjectPrivacy(db, f.human(f.owner), project)).toBe(true);
+    expect(await canActorReadProjectPrivacy(db, f.human(f.reader), project)).toBe(false);
+    const additionalSource = await createIssue(db, f.company.id);
+    await db.update(projects).set({ sourceIssueIds: [additionalSource.id] }).where(eq(projects.id, project.id));
+    await db.update(projects).set({ sourceIssueIds: [], name: "Renamed" }).where(eq(projects.id, project.id));
+    expect(new Set((await db.select().from(projects).where(eq(projects.id, project.id)))[0].sourceIssueIds))
+      .toEqual(new Set([f.issue.id, additionalSource.id]));
+    expect(await canActorReadProjectPrivacy(db, f.human(f.reader), project)).toBe(false);
+    await db.delete(issues).where(eq(issues.id, f.issue.id));
+    expect(await canActorReadProjectPrivacy(db, f.human(f.owner), project)).toBe(false);
+  });
+
+  it("project source privacy withholds unqualified history and rejects foreign roots or source cycles", async () => {
+    const f = await privateFixture();
+    const [unknown] = await db.insert(projects).values({ companyId: f.company.id, name: "Unqualified history" }).returning();
+    expect(await canActorReadProjectPrivacy(db, f.human(f.owner), unknown)).toBe(false);
+    const foreign = await createCompany(db, "ForeignProjectRoot"), foreignIssue = await createIssue(db, foreign.id);
+    const [project] = await db.insert(projects).values({ companyId: f.company.id, name: "Foreign root", sourceProvenanceQualified: true, sourceIssueIds: [foreignIssue.id] }).returning();
+    expect(await canActorReadProjectPrivacy(db, f.human(f.owner), project)).toBe(false);
+    const [cycle] = await db.insert(projects).values({ companyId: f.company.id, name: "Cycle", sourceProvenanceQualified: true, sourceIssueIds: [f.issue.id] }).returning();
+    await db.update(issues).set({ projectId: cycle.id }).where(eq(issues.id, f.issue.id));
+    expect(await canActorReadProjectPrivacy(db, f.human(f.owner), cycle)).toBe(false);
+  });
+
+  it("native graph preserves the current conversation Human and Agent even for open tasks", async () => {
+    const f = await privateFixture();
+    const [conversation] = await db.insert(issues).values({ companyId: f.company.id, title: "Owned conversation", visibility: "open", status: "in_progress",
+      conversationAgentId: f.agent.id, conversationUserId: f.owner, conversationState: "active", assigneeAgentId: f.agent.id }).returning();
+    expect(await canActorReadIssuePrivacy(db, f.human(f.owner), conversation)).toBe(true);
+    expect(await canActorReadIssuePrivacy(db, { ...f.human(f.reader), isInstanceAdmin: true }, conversation)).toBe(false);
+    await db.insert(issueAccessGrants).values({ companyId: f.company.id, issueId: conversation.id, subjectType: "user", subjectId: f.reader, source: "explicit" });
+    expect(await canActorReadIssuePrivacy(db, f.human(f.reader), conversation)).toBe(false);
+    expect(await canActorReadIssuePrivacy(db, f.worker, conversation)).toBe(true);
+    const [readerRun] = await db.insert(heartbeatRuns).values({ companyId: f.company.id, agentId: f.agent.id, responsibleUserId: f.reader, status: "running" }).returning();
+    expect(await canActorReadIssuePrivacy(db, { ...f.worker, runId: readerRun.id, onBehalfOfUserId: f.reader }, conversation)).toBe(false);
+    const otherAgent = await createAgent(db, f.company.id);
+    const [otherRun] = await db.insert(heartbeatRuns).values({ companyId: f.company.id, agentId: otherAgent.id, responsibleUserId: f.owner, status: "running" }).returning();
+    expect(await canActorReadIssuePrivacy(db, { ...f.worker, agentId: otherAgent.id, runId: otherRun.id }, conversation)).toBe(false);
+    expect(await canActorReadIssuePrivacy(db, { type: "board", source: "local_implicit" }, conversation)).toBe(false);
+    await db.update(issues).set({ conversationAgentId: null, conversationUserId: null, conversationState: null, conversationRetiredAt: new Date(),
+      status: "cancelled", hiddenAt: new Date(), assigneeAgentId: null }).where(eq(issues.id, conversation.id));
+    expect(await canActorReadIssuePrivacy(db, f.human(f.owner), conversation)).toBe(false);
+  });
+
+  it("native graph retains all copied Project sources across changes and erasure", async () => {
+    const f = await privateFixture();
+    const [source] = await db.insert(projects).values({ companyId: f.company.id, name: "Private original", visibility: "private", sourceProvenanceQualified: true }).returning();
+    await db.insert(projectAccessMembers).values({ companyId: f.company.id, projectId: source.id, subjectType: "user", subjectId: f.owner });
+    const [copy] = await db.insert(projects).values({ companyId: f.company.id, name: "Open copy", sourceProvenanceQualified: true, sourceProjectIds: [source.id] }).returning();
+    expect(await canActorReadProjectPrivacy(db, f.human(f.owner), copy)).toBe(true);
+    expect(await canActorReadProjectPrivacy(db, f.human(f.reader), copy)).toBe(false);
+    const additional = await createProject(db, f.company.id, "Additional source");
+    await db.update(projects).set({ sourceProjectIds: [additional.id] }).where(eq(projects.id, copy.id));
+    await db.update(projects).set({ sourceProjectIds: [] }).where(eq(projects.id, copy.id));
+    expect(new Set((await db.select().from(projects).where(eq(projects.id, copy.id)))[0].sourceProjectIds)).toEqual(new Set([source.id, additional.id]));
+    await db.delete(projects).where(eq(projects.id, source.id));
+    expect(await canActorReadProjectPrivacy(db, f.human(f.owner), copy)).toBe(false);
+  });
+
+  async function persistTaskContext(companyId: string, agentId: string, runId: string, sourceId: string, issueId: string | null = null) {
+    const [manifest] = await db.insert(contextManifests).values({ companyId, agentId, runId, issueId, queryHash: "a".repeat(64), policySnapshotHash: "b".repeat(64) }).returning();
+    await db.insert(contextManifestItems).values({ companyId, manifestId: manifest.id, sourceClass: "task", sourceProvider: "august_works_tasks", sourceRef: `issue://${sourceId}`,
+      sourceVersion: "1", contentHash: "c".repeat(64), trustLevel: "high", sensitivity: "internal", rank: 0, selectionReason: "Actual persisted native-source software fixture" });
+    return manifest;
+  }
+
+  it("native graph narrows unbound runs by actual Context Tasks and retains copied Task roots after Context erasure", async () => {
+    const f = await privateFixture();
+    const [run] = await db.insert(heartbeatRuns).values({ companyId: f.company.id, agentId: f.agent.id, responsibleUserId: f.owner, status: "succeeded" }).returning();
+    const manifest = await persistTaskContext(f.company.id, f.agent.id, run.id, f.issue.id);
+    expect(await canActorReadHeartbeatRunPrivacy(db, f.human(f.owner), run)).toBe(true);
+    expect(await canActorReadHeartbeatRunPrivacy(db, f.human(f.reader), run)).toBe(false);
+    const [copy] = await db.insert(issues).values({ companyId: f.company.id, title: "Copied Context payload", originRunId: run.id }).returning();
+    expect(await db.select().from(issuePrivacySources).where(and(eq(issuePrivacySources.issueId, copy.id), eq(issuePrivacySources.sourceKind, "issue"), eq(issuePrivacySources.sourceId, f.issue.id)))).toHaveLength(1);
+    await db.delete(contextManifests).where(eq(contextManifests.id, manifest.id));
+    expect(await canActorReadIssuePrivacy(db, f.human(f.owner), copy)).toBe(true);
+    expect(await canActorReadIssuePrivacy(db, f.human(f.reader), copy)).toBe(false);
+  });
+
+  it("native graph follows run-only Context through actual Task binding and denies malformed refs without self cycles", async () => {
+    const f = await privateFixture();
+    const task = await createIssue(db, f.company.id);
+    const [run] = await db.insert(heartbeatRuns).values({ companyId: f.company.id, agentId: f.agent.id, responsibleUserId: f.owner, nativeIssueId: task.id, status: "succeeded" }).returning();
+    await persistTaskContext(f.company.id, f.agent.id, run.id, f.issue.id);
+    expect(await canActorReadIssuePrivacy(db, f.human(f.owner), task)).toBe(true);
+    expect(await canActorReadIssuePrivacy(db, f.human(f.reader), task)).toBe(false);
+    const self = await createIssue(db, f.company.id);
+    const [selfRun] = await db.insert(heartbeatRuns).values({ companyId: f.company.id, agentId: f.agent.id, responsibleUserId: f.owner, nativeIssueId: self.id, status: "succeeded" }).returning();
+    await persistTaskContext(f.company.id, f.agent.id, selfRun.id, self.id, self.id);
+    expect(await canActorReadIssuePrivacy(db, f.human(f.owner), self)).toBe(true);
+    const malformed = await createIssue(db, f.company.id);
+    const [malformedRun] = await db.insert(heartbeatRuns).values({ companyId: f.company.id, agentId: f.agent.id, responsibleUserId: f.owner, nativeIssueId: malformed.id, status: "succeeded" }).returning();
+    await persistTaskContext(f.company.id, f.agent.id, malformedRun.id, "invalid-source");
+    expect(await canActorReadIssuePrivacy(db, f.human(f.owner), malformed)).toBe(false);
+    expect(await canActorReadHeartbeatRunPrivacy(db, f.human(f.owner), malformedRun)).toBe(false);
+  });
+
+  it("native graph rejects excess work from duplicate Context edges", async () => {
+    const f = await privateFixture();
+    const [run] = await db.insert(heartbeatRuns).values({ companyId: f.company.id, agentId: f.agent.id, responsibleUserId: f.owner, status: "succeeded" }).returning();
+    const manifest = await persistTaskContext(f.company.id, f.agent.id, run.id, f.issue.id);
+    await db.insert(contextManifestItems).values(Array.from({ length: 256 }, (_, index) => ({ companyId: f.company.id, manifestId: manifest.id,
+      sourceClass: "task", sourceProvider: "august_works_tasks", sourceRef: `issue://${f.issue.id}`, sourceVersion: "1", contentHash: "d".repeat(64),
+      trustLevel: "high", sensitivity: "internal", rank: index + 1, selectionReason: "Repeated native root exceeds complete-work budget" })));
+    expect(await canActorReadHeartbeatRunPrivacy(db, f.human(f.owner), run)).toBe(false);
   });
 
 });

@@ -1,0 +1,74 @@
+(!) Your Vite config uses features that are unsupported by `configLoader: 'native'`, which is planned to become the default in a future major version of Vite:
+  - `__dirname` (vitest.config.ts:7:25). Use `import.meta.dirname` instead
+Set `VITE_CONFIG_NATIVE_IGNORE_WARNING=true` to suppress this warning.
+
+ RUN  v4.1.11 /workspace/blentera-v10
+
+ ❯ |@paperclipai/server| src/__tests__/native-two-factor.integration.test.ts (8 tests | 1 failed | 7 skipped) 13067ms
+     × refuses a verified TOTP value reused with another real password challenge 882ms
+
+⎯⎯⎯⎯⎯⎯⎯ Failed Tests 1 ⎯⎯⎯⎯⎯⎯⎯
+
+ FAIL  |@paperclipai/server| src/__tests__/native-two-factor.integration.test.ts > maintained native TOTP and recovery lifecycle > refuses a verified TOTP value reused with another real password challenge
+AssertionError: expected 200 to be 401 // Object.is equality
+
+- Expected
++ Received
+
+- 401
++ 200
+
+ ❯ src/__tests__/native-two-factor.integration.test.ts:235:32
+    233|     expect(signin.body.twoFactorRedirect).toBe(true);
+    234|     const replay = await post("two-factor/verify-totp", cookies("", si…
+    235|     expect.soft(replay.status).toBe(401);
+       |                                ^
+    236|     expect.soft(replay.body.code).toBe("OTP_ALREADY_USED");
+    237|     expect.soft(await db.select().from(authSessions).where(eq(authSess…
+
+⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯[1/3]⎯
+
+ FAIL  |@paperclipai/server| src/__tests__/native-two-factor.integration.test.ts > maintained native TOTP and recovery lifecycle > refuses a verified TOTP value reused with another real password challenge
+AssertionError: expected undefined to be 'OTP_ALREADY_USED' // Object.is equality
+
+- Expected:
+"OTP_ALREADY_USED"
+
++ Received:
+undefined
+
+ ❯ src/__tests__/native-two-factor.integration.test.ts:236:35
+    234|     const replay = await post("two-factor/verify-totp", cookies("", si…
+    235|     expect.soft(replay.status).toBe(401);
+    236|     expect.soft(replay.body.code).toBe("OTP_ALREADY_USED");
+       |                                   ^
+    237|     expect.soft(await db.select().from(authSessions).where(eq(authSess…
+    238|   }, 60_000);
+
+⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯[2/3]⎯
+
+ FAIL  |@paperclipai/server| src/__tests__/native-two-factor.integration.test.ts > maintained native TOTP and recovery lifecycle > refuses a verified TOTP value reused with another real password challenge
+AssertionError: expected [ { …(11) }, { …(11) } ] to have a length of 1 but got 2
+
+- Expected
++ Received
+
+- 1
++ 2
+
+ ❯ src/__tests__/native-two-factor.integration.test.ts:237:102
+    235|     expect.soft(replay.status).toBe(401);
+    236|     expect.soft(replay.body.code).toBe("OTP_ALREADY_USED");
+    237|     expect.soft(await db.select().from(authSessions).where(eq(authSess…
+       |                                                                                                      ^
+    238|   }, 60_000);
+    239|
+
+⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯[3/3]⎯
+
+
+ Test Files  1 failed (1)
+      Tests  1 failed | 7 skipped (8)
+   Start at  01:33:12
+   Duration  43.32s (transform 20.22s, setup 179ms, import 29.66s, tests 13.07s, environment 0ms)
+

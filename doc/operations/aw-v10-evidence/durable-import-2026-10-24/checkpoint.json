@@ -1,0 +1,119 @@
+{
+  "recordedAt": "2026-10-24T20:40:53.939062+00:00",
+  "implementationParent": "a297efa6540f18e0da885f7c95f975cc66084982",
+  "requirements": [
+    "CE-08",
+    "V10-019",
+    "V10-021",
+    "V10-022",
+    "V10-023"
+  ],
+  "status": "in_progress; bounded native import durability, not complete V10 acceptance",
+  "checks": {
+    "durable-import-attempt-db": {
+      "exit": 0,
+      "log": "durable-import-attempt-db.log"
+    },
+    "durable-import-attempt-generate": {
+      "exit": 0,
+      "log": "durable-import-attempt-generate.log"
+    },
+    "durable-import-checked": {
+      "exit": 0,
+      "log": "durable-import-checked.log"
+    },
+    "durable-import-current": {
+      "exit": 1,
+      "log": "durable-import-current.log"
+    },
+    "durable-import-db-build": {
+      "exit": 0,
+      "log": "durable-import-db-build.log"
+    },
+    "durable-import-expanded": {
+      "exit": 1,
+      "log": "durable-import-expanded.log"
+    },
+    "durable-import-final": {
+      "exit": 0,
+      "log": "durable-import-final.log"
+    },
+    "durable-import-generate": {
+      "exit": 0,
+      "log": "durable-import-generate.log"
+    },
+    "durable-import-legacy-checked": {
+      "exit": 0,
+      "log": "durable-import-legacy-checked.log"
+    },
+    "durable-import-legacy-owned": {
+      "exit": 1,
+      "log": "durable-import-legacy-owned.log"
+    },
+    "durable-import-legacy": {
+      "exit": 1,
+      "log": "durable-import-legacy.log"
+    },
+    "durable-import-native": {
+      "exit": 1,
+      "log": "durable-import-native.log"
+    },
+    "durable-import-owned": {
+      "exit": 1,
+      "log": "durable-import-owned.log"
+    },
+    "durable-import-process-owned": {
+      "exit": 0,
+      "log": "durable-import-process-owned.log"
+    },
+    "durable-import-process": {
+      "exit": 1,
+      "log": "durable-import-process.log"
+    },
+    "durable-import-shared": {
+      "exit": 0,
+      "log": "durable-import-shared.log"
+    },
+    "durable-import-slot-types": {
+      "exit": 0,
+      "log": "durable-import-slot-types.log"
+    },
+    "durable-import-slot": {
+      "exit": 0,
+      "log": "durable-import-slot.log"
+    },
+    "durable-import-tokens": {
+      "exit": 0,
+      "log": "durable-import-tokens.log"
+    },
+    "durable-import-types-final": {
+      "exit": 0,
+      "log": "durable-import-types-final.log"
+    },
+    "durable-import-types-owned": {
+      "exit": 0,
+      "log": "durable-import-types-owned.log"
+    },
+    "durable-import-types": {
+      "exit": 1,
+      "log": "durable-import-types.log"
+    },
+    "durable-import-ui-types": {
+      "exit": 0,
+      "log": "durable-import-ui-types.log"
+    },
+    "durable-import-ui": {
+      "exit": 0,
+      "log": "durable-import-ui.log"
+    }
+  },
+  "observations": [
+    "CustomerOperation is a durable status/coordination envelope only. Original portability service performs effects; no replacement execution engine. Existing Board/cloud native synchronous and async routes use durable admission and status; optional 1h detail cache has no status authority.",
+    "Native DB actor lock/unique semantic key binds requester, target scope, operation and canonical request hash. Original attempt UUID fences start/settlement; attempt counter increments only for known original pre-domain rejection. Such retries also respect another active import. Unknown effects never start a new attempt.",
+    "Actual original SID/key credential pins and current native target access are checked at admission/start. Original verified session and Board-key expiration are preserved by middleware; current account erasure blocks new durable admission and removes private receipts. This is not all-effect lifetime authorization qualification.",
+    "Original process-kill test uses actual native Agent-only import against actual PostgreSQL, pauses automation, waits for persisted effect, physically SIGKILLs child before metadata settlement, then reconstructs service. Original unknown identity/attempt and one persisted Agent remain; same and different key cannot replay. No provider or model called.",
+    "Broad final run:183 passes across10 suites. Additional final slot regression suite6 passes (overlap, not189 distinct). Earlier failed fixture/projection/parser stages archived. Native metadata and route fixtures are not physical cookie/host authorization proof.",
+    "Server/UI typechecks and token gates passed; final incremental server result recorded separately. UI evidence component tests; no new built browser/manual accessibility qualification.",
+    "Canonical request fingerprint does not pin fetched source bytes, preview identity or selections. Native per-effect ID mapping/checkpoints, full effect-time current-authority checks, safe automatic resume, cancellation and authoritative reconciliation remain open. Retention metadata exists; full lifecycle remains open. No complete CE-08/V10, release, PR-ready, merge or deployment claim."
+  ]
+}

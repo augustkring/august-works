@@ -9,7 +9,9 @@ import { readinessService } from "../readiness/readiness-service.js";
 import type { ActivityPublication } from "../activity-log.js";
 import { logActivity } from "../v7-mutations.js";
 import { retainedOrchestrationContract } from "./orchestration-contracts.js";
-import { qualifyNativeDraftWorker } from "./native-draft-runtime.js";
+import { qualifyNativeDraftWorker, qualifyNativeReviewRun } from "./native-draft-runtime.js";
+import { getNativeReviewSourceAssignment, readNativeReviewAssignmentContext } from "../native-runtime/native-review-participant.js";
+import { nativeDraftToolActionBudgetFits } from "./native-draft-output-capability.js";
 
 type Plan = typeof orchestrationPlans.$inferSelect;
 /** Called under the plan lock. Terminal provider runs release slots, never certify work. */
@@ -36,6 +38,41 @@ export async function hasOrchestrationPlan(db: Db, companyId: string, issueId: s
   return issueId ? Boolean(await scope(db, companyId, issueId)) : false;
 }
 async function admit(tx: Db, input: { companyId: string; issueId: string; actor: AuthorizationActor; runId?: string; workflowRunId?: string; executionManifestId?: string }, publications: ActivityPublication[], rootDb?: Db) {
+  if (input.runId && input.actor.type === "agent" && input.actor.companyId === input.companyId) {
+    const reviewAgentId = typeof input.actor.agentId === "string" && input.actor.agentId.trim().length > 0
+      ? input.actor.agentId : null;
+    if (!reviewAgentId) throw forbidden("A persisted Agent principal is required for Native review admission");
+    const [reviewRun] = await tx.select().from(heartbeatRuns).where(and(eq(heartbeatRuns.companyId, input.companyId),
+      eq(heartbeatRuns.id, input.runId), eq(heartbeatRuns.agentId, reviewAgentId)));
+    const reviewContext = readNativeReviewAssignmentContext(reviewRun?.contextSnapshot);
+    if (reviewContext) {
+      if (!rootDb || !reviewRun?.responsibleUserId || reviewRun.contextSnapshot?.issueId !== input.issueId &&
+        reviewRun.contextSnapshot?.nativeIssueId !== input.issueId)
+        throw forbidden("The exact persisted Native review wake and original Human are required");
+      const sourceAssignment = await getNativeReviewSourceAssignment(tx, { companyId: input.companyId, issueId: input.issueId,
+        reviewerAgentId: reviewAgentId, contextSnapshot: reviewRun.contextSnapshot });
+      const sourceAttempts = sourceAssignment ? await tx.select({ attempt: orchestrationWorkerAttempts, planId: orchestrationWorkerAttempts.planId })
+        .from(orchestrationWorkerAttempts).innerJoin(orchestrationWorkers, and(
+          eq(orchestrationWorkers.companyId, orchestrationWorkerAttempts.companyId),
+          eq(orchestrationWorkers.id, orchestrationWorkerAttempts.workerId))).where(and(
+          eq(orchestrationWorkerAttempts.companyId, input.companyId),
+          eq(orchestrationWorkerAttempts.runId, sourceAssignment.sourceRun.id),
+          eq(orchestrationWorkerAttempts.agentId, sourceAssignment.sourceRun.agentId),
+          eq(orchestrationWorkers.issueId, input.issueId))).limit(2) : [];
+      if (sourceAssignment && sourceAttempts.length === 1 && sourceAttempts[0]!.attempt.status === "running" &&
+        ["succeeded", "failed", "cancelled", "timed_out"].includes(sourceAssignment.sourceRun.status)) {
+        const [sourcePlan] = await tx.select().from(orchestrationPlans).where(and(
+          eq(orchestrationPlans.companyId, input.companyId), eq(orchestrationPlans.id, sourceAttempts[0]!.planId))).for("update");
+        if (sourcePlan) await reconcileOrchestrationAttempts(tx, sourcePlan);
+      }
+      // This qualifies current review owner, source witness, manifest, provider,
+      // accepted plan, Human ACL and residual shared plan budgets. It creates no
+      // orchestrationWorkerAttempt and never borrows the source writer attempt.
+      await qualifyNativeReviewRun(rootDb, tx, { companyId: input.companyId, agentId: reviewAgentId,
+        runId: input.runId, issueId: input.issueId, responsibleUserId: reviewRun.responsibleUserId });
+      return null;
+    }
+  }
   const binding = await scope(tx, input.companyId, input.issueId);
   if (!binding) return null;
   const [plan] = await tx.select().from(orchestrationPlans).where(and(eq(orchestrationPlans.companyId, input.companyId), eq(orchestrationPlans.id, binding.plan.id))).for("update");
@@ -50,8 +87,8 @@ async function admit(tx: Db, input: { companyId: string; issueId: string; actor:
   const [worker] = await tx.select().from(orchestrationWorkers).where(and(eq(orchestrationWorkers.companyId, input.companyId), eq(orchestrationWorkers.id, binding.worker.id)));
   if (!task || !worker || ["done", "cancelled"].includes(task.status) || task.assigneeAgentId !== worker.agentId) throw forbidden("Worker no longer has the plan's canonical assignment");
   if (plan.budgets.maxModelCostMinor !== null) {
-    const qualified = await qualifyNativeDraftWorker(rootDb!, tx, plan, worker, (plan.executionPrincipal as { type: "user"; userId: string }).userId);
-    if (plan.modelCostReserved + qualified.maximumMinor > plan.budgets.maxModelCostMinor || plan.toolActionsUsed + 2 > plan.budgets.maxToolActions)
+    const qualified = await qualifyNativeDraftWorker(rootDb!, tx, plan, worker, (plan.executionPrincipal as { type: "user"; userId: string }).userId, input.runId);
+    if (plan.modelCostReserved + qualified.maximumMinor > plan.budgets.maxModelCostMinor || !nativeDraftToolActionBudgetFits(plan.toolActionsUsed, plan.budgets.maxToolActions, qualified.minimumToolActions))
       throw forbidden("The remaining budget cannot admit the declared draft");
   }
   await assertV7Authorization(tx, input.actor, input.companyId, "issue:mutate", { type: "issue", companyId: input.companyId, issueId: task.id, projectId: task.projectId, parentIssueId: task.parentId, assigneeAgentId: task.assigneeAgentId, assigneeUserId: task.assigneeUserId, status: task.status });

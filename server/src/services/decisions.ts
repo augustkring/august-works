@@ -1,5 +1,5 @@
 import { randomUUID } from "node:crypto";
-import { and, asc, count, desc, eq, gt, gte, inArray, lte, or, sql } from "drizzle-orm";
+import { and, asc, count, desc, eq, gt, gte, ilike, inArray, lte, or, sql } from "drizzle-orm";
 import type { Db } from "@paperclipai/db";
 import { companyMemberships, decisionBundles, decisionEffectExecutions, decisionRetention, decisions, decisionTargetIssues, heartbeatRuns, issueRelations, issues } from "@paperclipai/db";
 import { ATTENTION_SOURCE_KINDS, decisionEffectTargetIssueIds } from "@paperclipai/shared";
@@ -798,4 +798,45 @@ export function decisionService(db: Db, options: DecisionServiceOptions) {
   }
 
   return { create, createBundle, get, list, stats, outcome, decide, cancel, dismiss, sweepExpired };
+}
+
+/** Bounded Universal Find projection through current decision and issue readers. */
+export function decisionSearchService(db: Db) {
+  const authz = authorizationService(db);
+  return {
+    async search(companyId: string, actor: AuthorizationActor, query: string, limit = 20) {
+      const scope = await authz.decide({ actor, action: "decision_queue:read", resource: { type: "company", companyId } });
+      if (!scope.allowed) throw forbidden("Decision search is outside this actor's authorization boundary");
+      const tokens = query.trim().split(/\s+/).filter(Boolean).slice(0, 8);
+      const tokenConditions = tokens.map((token) => {
+        const escaped = token.replace(/[\\%_]/g, (value) => `\\${value}`);
+        const pattern = `%${escaped}%`;
+        return or(ilike(decisions.title, pattern), ilike(decisions.body, pattern));
+      });
+      const safeLimit = Math.min(100, Math.max(1, limit));
+      const candidates = await db.select().from(decisions).where(and(
+        eq(decisions.companyId, companyId),
+        ...tokenConditions,
+      )).orderBy(desc(decisions.createdAt), asc(decisions.id)).limit(safeLimit + 1);
+      const items: Array<Pick<typeof decisions.$inferSelect, "id" | "title" | "body" | "createdAt">> = [];
+      for (const candidate of candidates.slice(0, safeLimit)) {
+        const snapshots = candidate.targetSnapshots as Record<string, Snapshot>;
+        const targetIds = [...new Set([
+          candidate.originIssueId,
+          ...Object.keys(snapshots).filter((id) => /^[0-9a-f]{8}-[0-9a-f]{4}-[1-5][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i.test(id)),
+        ].filter((id): id is string => Boolean(id)))];
+        if (!targetIds.length) continue;
+        const targets = await db.select().from(issues).where(and(
+          eq(issues.companyId, companyId), inArray(issues.id, targetIds),
+        ));
+        if (targets.length !== targetIds.length) continue;
+        const access = await Promise.all(targets.map((target) => authz.decide({
+          actor, action: "issue:read", resource: resource(target),
+        })));
+        if (access.some((decision) => !decision.allowed)) continue;
+        items.push({ id: candidate.id, title: candidate.title, body: candidate.body, createdAt: candidate.createdAt });
+      }
+      return { items, partial: candidates.length > safeLimit };
+    },
+  };
 }

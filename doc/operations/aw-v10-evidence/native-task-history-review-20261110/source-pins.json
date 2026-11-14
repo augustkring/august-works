@@ -1,0 +1,30 @@
+{
+  "parentCommit": "c3a7db5ec11ed7b9ddf670814b6fb903aafdeca5",
+  "files": {
+    "server/src/__tests__/heartbeat-comment-wake-batching-managed-positive.integration.test.ts": "e0f02404343cd556863e91da2815c41a26f372690e79dfe771c42ded22f9b009",
+    "server/src/__tests__/heartbeat-dependency-draft-controller.integration.test.ts": "83b500b9a84cf4c9f669d10c67b4bf8c15019408ab492bb6021e1bff9961791c",
+    "server/src/__tests__/heartbeat-managed-project-workspace.integration.test.ts": "8d5e704c7ef86db66d83d56182bfc1b93203a18a957544b8ba8a9d6e17684dd4",
+    "server/src/__tests__/heartbeat-managed-scheduler.integration.test.ts": "f2c6c805b6de47ee249f2268ce4cb76fbc45d14431a9e27fb46366abeca662f2",
+    "server/src/__tests__/helpers/managed-native-conversation-frame.ts": "3fcfe16cb531ea2b0dc2681bef456cbd29ddf03b06f6f4283c2e4b8fc0d42c68",
+    "server/src/__tests__/helpers/managed-native-conversation-sandbox-host.test.ts": "67791a2105b224bd246849abc20aa0d826dbe26498bb5f245b14c2d3977a4784",
+    "server/src/__tests__/helpers/managed-native-conversation-sandbox-host.ts": "2afa0feb40fd7bc883d90dd60f6d4cbf698fcd77814307a46aa11fdd6047daea",
+    "server/src/__tests__/helpers/managed-native-heartbeat-fixture.ts": "6b4494a2efa3f0eb6a8b090fdba7f3d5528fb7429fc16a4d8adcc45801f7a385",
+    "server/src/__tests__/helpers/managed-native-opencode-e2e-fixture.ts": "36d7eaefacd3576bd265795fc7c50503f694014d8952318a020c6792dc4c5e19",
+    "server/src/__tests__/native-task-wake-continuation-source.integration.test.ts": "46b15b2917e1cbc2a80a44502e8703f6245572ee326272a31e3466f7999b736d",
+    "server/src/__tests__/redaction.test.ts": "87bfcdc1aa333f7d9a73cc480cccefdd3324587b06295e402b6b2a3123bbb158",
+    "server/src/__tests__/v7-model-reservations.integration.test.ts": "e574cdfafd645cb1eddf84d45b1aebec901172aa6e6acf1a989f1864b893889c",
+    "server/src/db-errors.ts": "7de93c7a0828f6f004351243b7867e896123715baf0537756ac40a15eb657590",
+    "server/src/redaction.ts": "c84aed655cadecbb89aca3b9b31dbe5a43a7b219c66a7b74085eb6b4e60c74a6",
+    "server/src/services/agent-conversations.ts": "d91fe23d34ac1e699dfee1df9a3c2c923e563a317b538ca5f953da4bc3db6857",
+    "server/src/services/execution-continuation.ts": "7aa343163348db362bf50b0c5be506f3ed89fef58d7f15175282002649dd0394",
+    "server/src/services/heartbeat.ts": "7dccb0144fa007ceda3b338a8e88e66b6e1f1656e892368a1af8b6c2d5ba680f",
+    "server/src/services/issues.ts": "b5cfb8748cbda3ebcaa96390985ce5c8165ed381c1075fca10ab483e2bfff04e",
+    "server/src/services/native-direct-input.ts": "4b3f3c3cd665895526f2cca5e80fdd0b760c5bfc484ce98082ae6fefcc265dcf",
+    "server/src/services/native-runtime/native-execution-input.test.ts": "3f147f7569e842f74ec6d2c5ec936e670185cdfc99ed02c11863a35721f91a6f",
+    "server/src/services/native-runtime/native-execution-input.ts": "418cd00b2a6ae95aae9789ef666dd254e1c02e2f30eee9a8b73d5e8541254c69",
+    "server/src/services/native-runtime/native-interaction-bridge.ts": "57008fb261bd66268713e5c44c99f8a92dd570392bd179a0af273a29ed166f38",
+    "server/src/services/native-runtime/native-opencode-managed-source.integration.test.ts": "7f11ad2e25e35f374ac6b9c092e998b6885d5b356e0b4d472f23297e4b80dba0",
+    "server/src/services/native-runtime/native-run-finalizer.ts": "da0d37140e3119cfb508f9dbffb80ebf12eeb84a9f9f4dff87f4e33b354953f9"
+  },
+  "scope": "Current source leaves; each invocation records its own exact earlier observation window and unchanged source/input pins. Historical SDK windows are not a claim of all cases rerun against this final tree."
+}

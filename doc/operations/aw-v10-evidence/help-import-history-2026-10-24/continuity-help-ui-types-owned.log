@@ -1,0 +1,8 @@
+
+> @paperclipai/ui@0.3.1 typecheck /workspace/blentera-v10/ui
+> tsc -b
+
+src/api/access.ts(1,61): error TS2724: '"@paperclipai/shared"' has no exported member named 'ArchiveCompanyMemberResponse'. Did you mean 'CompanyMembersResponse'?
+/workspace/blentera-v10/ui:
+ ERR_PNPM_RECURSIVE_RUN_FIRST_FAIL  @paperclipai/ui@0.3.1 typecheck: `tsc -b`
+Exit status 1

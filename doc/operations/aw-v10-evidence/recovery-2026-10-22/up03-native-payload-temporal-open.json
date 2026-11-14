@@ -1,0 +1,48 @@
+{
+  "status": "OPEN genuine native temporal regressions; no correction claimed",
+  "actual": {
+    "session": 85299,
+    "exit_code": 1,
+    "durable_exit_file": "up03-native-payload-temporal-retry.exit",
+    "failed": 2,
+    "seconds": 59.07,
+    "pg_cleanup": "closed",
+    "positive_preconditions": "Earlier public outputs are readable before later private selection; later actual Context persists; Alice reads later outputs and Bob cannot. Failures occur only when rereading original earlier outputs."
+  },
+  "source_sha256": {
+    "server/src/__tests__/native-payload-temporal-sources.integration.test.ts": "ec7bafc174038a031eb7716f3247adadf110d48c00daf76455be277165d31789",
+    "server/src/services/context/context-manifest.ts": "429c9f292664d941d2a00e6e19c643b831f7979aebdd80f3483e3f32702b8cf8",
+    "server/src/services/authorization.ts": "ee7a4e4055e0bed062c8bbc35f60cd27a4175b77437c8b2c4d52e3d709b2c442",
+    "server/src/services/issues.ts": "4e3f0b6647a1b150181beca5be1c2da8fbfc0069c61d700a3b8465d2df5e3b23",
+    "server/src/services/memory/memory-privacy.ts": "3515861aa9ad55a09b979bf77d26de00017ea92b61bcacd2b7ab774d15882470",
+    "server/src/services/memory/memory-service.ts": "94c0a50d3068747641d18fd2a561ef5c9fe59a3f26930dfa03df9df1a0a75938"
+  },
+  "prior_attempts": [
+    {
+      "session": 73500,
+      "exit_code": 1,
+      "scope_result": "one genuine WS scope-wait failure; HTTP scope-wait positive passed",
+      "temporal_result": "genuine Task temporal failure; Memory candidate fixture lacked required createdByOperationId:null",
+      "seconds": 95.81
+    },
+    {
+      "session": 61531,
+      "exit_code": 1,
+      "temporal_result": "genuine Task temporal failure; Memory get denial contract is null, but fixture incorrectly expected rejection",
+      "seconds": 147.93
+    },
+    {
+      "session": 35997,
+      "exit_code": null,
+      "result": "environment-interrupted after startup; no test verdict"
+    }
+  ],
+  "root_cause_owners": [
+    "Original Context create mutates bound Task issuePrivacySources when selected Task body is merely read.",
+    "Original Task/Run SQL graph also follows later current run Contexts instead of exact creation-time payload roots."
+  ],
+  "limits": [
+    "This is no-copy/private-read temporal availability proof, not complete private Memory copied-body qualification.",
+    "Frozen actual payload input roots, current policy anchors, SQL-before-limit full source guard and native input receipt still unimplemented."
+  ]
+}

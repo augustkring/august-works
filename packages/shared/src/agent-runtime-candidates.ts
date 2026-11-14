@@ -9,6 +9,12 @@ export const agentRuntimeCandidateCreateSchema = z.strictObject({
 export const agentRuntimeCandidateCatalogSchema = z.strictObject({
   companyId: z.uuid(), draftId: z.uuid(), version, agentId: z.uuid().nullable(),
   identityId: z.uuid().nullable().default(null),
+  lifecycleInventory: z.strictObject({
+    profileId: z.uuid().nullable(), model: z.string().nullable(), status: z.enum(["untracked", "candidate", "qualifying", "qualified", "active", "deprecated", "migration_required", "blocked", "retired"]),
+    owner: z.string().nullable(), retirementAt: z.iso.datetime().nullable(), replacementProfileId: z.string().nullable(),
+    regionOrRoutingProfile: z.string().nullable(), dataUseProfile: z.string().nullable(), unresolvedProfileReference: z.boolean(),
+    publishedWorkflows: z.array(z.strictObject({ workflowId: z.uuid(), revisionId: z.uuid(), name: z.string().min(1).max(200) })).max(500),
+  }),
   choices: z.array(z.strictObject({ modelProfileId: z.uuid(), model: z.string().min(1).max(200),
     configurationHash: hash, maxOutputTokens: z.number().int().positive(), maximumMinorPerCall: z.number().int().nonnegative(),
     currency: z.literal("USD"), requiresConformance: z.literal(true), changesLive: z.literal(false),

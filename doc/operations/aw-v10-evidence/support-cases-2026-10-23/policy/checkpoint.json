@@ -1,0 +1,57 @@
+{
+  "checkpoint": "Bind support create/reply to the customer-observed processing disclosure",
+  "recordedAt": "2026-10-23",
+  "scope": "Native local receipt and customer UI consistency; no provider dispatch or full SUP/V10 qualification.",
+  "sourcePins": "support-policy-final.sources",
+  "runs": [
+    {
+      "name": "Native authenticated support API and PostgreSQL",
+      "result": "52 passed in63.21s,exit0. Includes four same-version policy replacements (recipient, notice, retention, region), unchanged durable command retries, stale create/reply rejection with zero new event, and rejection of moving an existing case to a different policy.",
+      "log": "support-policy-native.log",
+      "exit": "support-policy-native.exit"
+    },
+    {
+      "name": "Shared schema and customer UI",
+      "result": "34 passed across2files in16.98s,exit0. Includes missing/malformed revisions, draft preservation, disabled send while refreshing disclosure, explicit send with new revision/key, and existing-case reply rejection.",
+      "log": "support-policy-ui-shared.log",
+      "exit": "support-policy-ui-shared.exit"
+    },
+    {
+      "name": "UI compiler",
+      "result": "exit0",
+      "log": "support-policy-ui-types.log",
+      "exit": "support-policy-ui-types.exit"
+    },
+    {
+      "name": "Server compiler",
+      "result": "exit0",
+      "log": "support-policy-server-types.log",
+      "exit": "support-policy-server-types.exit"
+    },
+    {
+      "name": "Token gates",
+      "result": "clean,exit0",
+      "log": "support-policy-token-gates.log",
+      "exit": "support-policy-token-gates.exit"
+    },
+    {
+      "name": "Production-build native authenticated Chromium reload regression",
+      "result": "1 passed in1.8min,exit0. Both before/after durable acceptance; actual policy route and required revision in original native API. Graceful server/PostgreSQL shutdown. No invite bearer token URL in raw log.",
+      "log": "support-policy-browser.log",
+      "exit": "support-policy-browser.exit",
+      "originalLogSha256": "c2ffc04a2ce931ba8daf0a44b582b50d53ff4facd82fec64e8f319151719e466",
+      "redactions": 0,
+      "testSourcesCommit": "0b1f8e9b2"
+    }
+  ],
+  "behavior": [
+    "Disclosure revision hashes the entire parsed operator configuration, including fields not exposed in the customer projection; it is a consistency revision, never authority or a provider receipt.",
+    "Missing or stale revision cannot admit new description/reply text. Original idempotent accepted commands recover before evaluating replacement configuration.",
+    "UI freezes attempted payloads. A definitive policy rejection releases only that rejected attempt/key while keeping description/reply and return navigation; disclosure refresh never sends automatically.",
+    "An existing case retains its original immutable processing policy; replies under changed processing direct the customer to support, while close remains independent of intake availability."
+  ],
+  "limits": [
+    "No external gateway/provider, case-linked privileged session, uploads, Help search, physical process crash, source privacy/temporal or full workspace qualification."
+  ],
+  "verification": "All eight final source pins matched after actual native/browser/compiler/token exits0; sessions closed."
+}

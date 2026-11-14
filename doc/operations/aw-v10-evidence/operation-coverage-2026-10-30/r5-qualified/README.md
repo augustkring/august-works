@@ -1,0 +1,1 @@
+Scoped operation inventory update: 997 mounted UI calls and 12 checker tests pass. The archive preserves exact source pins, logs, changes and stage list. Responsibility labels grant no permissions. Broader release qualification is pending.

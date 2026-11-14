@@ -1,0 +1,28 @@
+{
+  "scope": "Full recursive configured workspace typecheck at exact clean commit",
+  "head": "ba7cd42ca8ce0e90357af92eee3e9d31faf65baa",
+  "commands": [
+    "pnpm run preflight:workspace-links",
+    "pnpm -r --workspace-concurrency=1 typecheck"
+  ],
+  "environment": {
+    "node": "24.21.0",
+    "pnpm": "9.15.4",
+    "GOMEMLIMIT": "6GiB",
+    "GOMAXPROCS": 2,
+    "CARGO_BUILD_JOBS": 2,
+    "nodeMaxOldSpaceMiB": 6144
+  },
+  "result": {
+    "actualExit": 0,
+    "durableExit": 0,
+    "processClosed": true,
+    "worktreeCleanBeforeAndAfter": true,
+    "log": "v10-workspace-typecheck-ba7cd42ca.log"
+  },
+  "limits": [
+    "Includes workspace-defined Rust/Runner/provider contract build prerequisites; compiler/build checks do not qualify real provider, target-host isolation or customer outcomes.",
+    "Existing targeted UI copy test now exposes one stale expected permission label at this commit; raw failure retained in preparation and will be fixed in the next source slice. Full test:run and pnpm build are not qualified by typecheck.",
+    "Open original native copied-private-Memory/temporal regressions and incomplete V10 packages remain open; no PR-ready/release claim."
+  ]
+}

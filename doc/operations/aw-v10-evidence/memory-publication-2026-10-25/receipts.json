@@ -1,0 +1,431 @@
+{
+  "status": "in_progress",
+  "sourceCommit": "637b4a0ffbadd68c2956ba2b547b1742921dc5c1",
+  "meaning": "Exact private Memory proposal/publication implementation at637b4a0ff; explicit consent and actual original Human carrier required; ordinary review never expands access. Original combined75PASS before final bounded replay/carrier/tool-evidence refinements; final native11PASS, core24PASS checkpoint, UI4PASS, shared2PASS, OpenAPI25PASS, DBbuild/snapshot1PASS and server/UI compilers. Broader complete18input-family and temporal Source qualification remain open; no private-work launch/provider/fullV10 claim. Failed test invocation/fixture/help-registry/precommit-source-review/compiler attempts retained separately.",
+  "logs": [
+    {
+      "name": "memory-private-publication-final-native2",
+      "exitCode": 0,
+      "rawSha256": "7fe3ca854e7daf4ebe65311df4409f8c8903951e4e0a3a2297b7b78661f9cb36",
+      "sanitizedSha256": "7fe3ca854e7daf4ebe65311df4409f8c8903951e4e0a3a2297b7b78661f9cb36",
+      "archiveSha256": "cf23c45fcbf96da4ec58b0875b77ec4e6ae41edeaf0795a32de9287fe4cada5c",
+      "redactions": {
+        "ansi": 0,
+        "bearer": 0,
+        "jwt": 0,
+        "credential_field": 0,
+        "url_credential": 0
+      },
+      "summary": [
+        "Test Files  2 passed (2)",
+        "Tests  12 passed (12)",
+        "Duration  30.05s (transform 8.79s, setup 122ms, import 13.53s, tests 16.16s, environment 0ms)"
+      ]
+    },
+    {
+      "name": "memory-private-publication-final-native7",
+      "exitCode": 0,
+      "rawSha256": "4d142b73d89b168a67c773eaf4d84b5e19f68c946f173ccd4f2be9a5fea2adb3",
+      "sanitizedSha256": "4d142b73d89b168a67c773eaf4d84b5e19f68c946f173ccd4f2be9a5fea2adb3",
+      "archiveSha256": "52119ef4d9188978189eb36a99aba9798f4693db93569cdb3aa46bb5e15dce4c",
+      "redactions": {
+        "ansi": 0,
+        "bearer": 0,
+        "jwt": 0,
+        "credential_field": 0,
+        "url_credential": 0
+      },
+      "summary": [
+        "Test Files  1 passed (1)",
+        "Tests  10 passed (10)",
+        "Duration  20.03s (transform 2.59s, setup 77ms, import 4.01s, tests 15.84s, environment 0ms)"
+      ]
+    },
+    {
+      "name": "memory-private-publication-replay-final",
+      "exitCode": 0,
+      "rawSha256": "ca48c09bfe9252b850533f5d50e5e79d2108496e58de6650e6e046745bf65802",
+      "sanitizedSha256": "ca48c09bfe9252b850533f5d50e5e79d2108496e58de6650e6e046745bf65802",
+      "archiveSha256": "06f7c051dcc44a30546ff5bf4f8fee6587bdbfb81c7dfd4efac774c98ac304fc",
+      "redactions": {
+        "ansi": 0,
+        "bearer": 0,
+        "jwt": 0,
+        "credential_field": 0,
+        "url_credential": 0
+      },
+      "summary": [
+        "Test Files  1 passed (1)",
+        "Tests  10 passed (10)",
+        "Duration  20.07s (transform 2.42s, setup 75ms, import 3.82s, tests 16.05s, environment 0ms)"
+      ]
+    },
+    {
+      "name": "memory-private-publication-v10-negative1",
+      "exitCode": 0,
+      "rawSha256": "e9d2ff4c2f30cc858838b39138424232c06b2d770d58d9535100daf0acce8d2f",
+      "sanitizedSha256": "bdb2a67d6bf261e00b85121e0b5cf97327c208ea404872689106755e1a6b17ff",
+      "archiveSha256": "595283b13d1f4e4ceac8718f2aa6fd396753f46c334ff665d00139f63fa07c58",
+      "redactions": {
+        "ansi": 18,
+        "bearer": 0,
+        "jwt": 0,
+        "credential_field": 0,
+        "url_credential": 0
+      },
+      "summary": [
+        "Test Files  1 passed (1)",
+        "Tests  32 passed (32)",
+        "Duration  23.33s (transform 8.58s, setup 68ms, import 11.94s, tests 11.21s, environment 0ms)"
+      ]
+    },
+    {
+      "name": "memory-publication-original-full",
+      "exitCode": 0,
+      "rawSha256": "bd33411aff89521a3609c0221eb52105e186eeb697febe31f91849b056b053eb",
+      "sanitizedSha256": "6053312a634c4a385b8aab511759a64dfd1c5bda8d2dd35fec6978e3c9a13608",
+      "archiveSha256": "d48e641595a05d1d224f2c17a4d3638cea0134293de2ab7065bacdd3b5efd55c",
+      "redactions": {
+        "ansi": 18,
+        "bearer": 0,
+        "jwt": 0,
+        "credential_field": 0,
+        "url_credential": 0
+      },
+      "summary": [
+        "Test Files  5 passed (5)",
+        "Tests  75 passed (75)",
+        "Duration  77.74s (transform 11.08s, setup 301ms, import 25.81s, tests 51.02s, environment 0ms)"
+      ]
+    },
+    {
+      "name": "memory-publication-reviewed-carrier-final",
+      "exitCode": 0,
+      "rawSha256": "8afdd95a3b2aa393136f1077bf9c477baa288ea936a173600df349a225d640e1",
+      "sanitizedSha256": "8afdd95a3b2aa393136f1077bf9c477baa288ea936a173600df349a225d640e1",
+      "archiveSha256": "f2a172ae2a87405b69a41aceafe2d92125231e314aa46f2aabc3a563b2b49eba",
+      "redactions": {
+        "ansi": 0,
+        "bearer": 0,
+        "jwt": 0,
+        "credential_field": 0,
+        "url_credential": 0
+      },
+      "summary": [
+        "Test Files  2 passed (2)",
+        "Tests  34 passed (34)",
+        "Duration  38.65s (transform 3.44s, setup 125ms, import 7.15s, tests 31.15s, environment 0ms)"
+      ]
+    },
+    {
+      "name": "memory-publication-tool-evidence-final",
+      "exitCode": 0,
+      "rawSha256": "63fe2b44077e8e7d9da2048d7ea2f4fd1c869cd168979637dfdc0e86253682b3",
+      "sanitizedSha256": "63fe2b44077e8e7d9da2048d7ea2f4fd1c869cd168979637dfdc0e86253682b3",
+      "archiveSha256": "7a8bb54f3a68ffed8d4cdb9f7ea45d49bb1e08396a868b804c4af1fc934faefe",
+      "redactions": {
+        "ansi": 0,
+        "bearer": 0,
+        "jwt": 0,
+        "credential_field": 0,
+        "url_credential": 0
+      },
+      "summary": [
+        "Test Files  1 passed (1)",
+        "Tests  11 passed (11)",
+        "Duration  22.33s (transform 3.31s, setup 77ms, import 5.06s, tests 17.09s, environment 0ms)"
+      ]
+    },
+    {
+      "name": "memory-tool-evidence-typecheck",
+      "exitCode": 0,
+      "rawSha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+      "sanitizedSha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+      "archiveSha256": "f61f27bd17de546264aa58f40f3aafaac7021e0ef69c17f6b1b4cd7664a037ec",
+      "redactions": {
+        "ansi": 0,
+        "bearer": 0,
+        "jwt": 0,
+        "credential_field": 0,
+        "url_credential": 0
+      },
+      "summary": []
+    },
+    {
+      "name": "memory-publication-ui",
+      "exitCode": 1,
+      "rawSha256": "311b61f212e081ad529e1cec907af03f8712617909a032131de901fe5e42741e",
+      "sanitizedSha256": "311b61f212e081ad529e1cec907af03f8712617909a032131de901fe5e42741e",
+      "archiveSha256": "ce2bfb21d5ead6bc40beb62598f4584722f8eb8cadb679e1c91280205b1938a4",
+      "redactions": {
+        "ansi": 0,
+        "bearer": 0,
+        "jwt": 0,
+        "credential_field": 0,
+        "url_credential": 0
+      },
+      "summary": [
+        "\u23af\u23af\u23af\u23af\u23af\u23af\u23af Failed Tests 3 \u23af\u23af\u23af\u23af\u23af\u23af\u23af",
+        "Test Files  1 failed (1)",
+        "Tests  3 failed (3)",
+        "Duration  4.20s (transform 2.12s, setup 19ms, import 3.33s, tests 51ms, environment 603ms)"
+      ]
+    },
+    {
+      "name": "memory-publication-ui-final",
+      "exitCode": 0,
+      "rawSha256": "8f6c4d32ed664d2e32d169129f69c790dbee78fcc52979b2de59dd6d80927c24",
+      "sanitizedSha256": "8f6c4d32ed664d2e32d169129f69c790dbee78fcc52979b2de59dd6d80927c24",
+      "archiveSha256": "76a831f7a9a2a1d88b5db7734a4e7822931b26e900c337fa05beedab6af66652",
+      "redactions": {
+        "ansi": 0,
+        "bearer": 0,
+        "jwt": 0,
+        "credential_field": 0,
+        "url_credential": 0
+      },
+      "summary": [
+        "Test Files  1 passed (1)",
+        "Tests  4 passed (4)",
+        "Duration  5.18s (transform 2.58s, setup 28ms, import 4.00s, tests 303ms, environment 721ms)"
+      ]
+    },
+    {
+      "name": "memory-publication-ui-typecheck-final",
+      "exitCode": 0,
+      "rawSha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+      "sanitizedSha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+      "archiveSha256": "f61f27bd17de546264aa58f40f3aafaac7021e0ef69c17f6b1b4cd7664a037ec",
+      "redactions": {
+        "ansi": 0,
+        "bearer": 0,
+        "jwt": 0,
+        "credential_field": 0,
+        "url_credential": 0
+      },
+      "summary": []
+    },
+    {
+      "name": "memory-publication-ui-tokens",
+      "exitCode": 0,
+      "rawSha256": "95111ece317b5a16b3e72dddaccba713230ba12152aac3359b1fa5e3dc0a62aa",
+      "sanitizedSha256": "95111ece317b5a16b3e72dddaccba713230ba12152aac3359b1fa5e3dc0a62aa",
+      "archiveSha256": "70b8c4e56494901a278001b11e9750a65be037bd94a7056e09d42f85c0e90738",
+      "redactions": {
+        "ansi": 0,
+        "bearer": 0,
+        "jwt": 0,
+        "credential_field": 0,
+        "url_credential": 0
+      },
+      "summary": []
+    },
+    {
+      "name": "memory-publication-shared-contract",
+      "exitCode": 0,
+      "rawSha256": "144801a16e173c99ee0c66e4f23457c7d6841d5f3790e01e2d30d1f913106bcd",
+      "sanitizedSha256": "144801a16e173c99ee0c66e4f23457c7d6841d5f3790e01e2d30d1f913106bcd",
+      "archiveSha256": "72bc1ee8c2e20ef623f8beca83d19e2f38a885c95eb5256b8d1a49b78da53508",
+      "redactions": {
+        "ansi": 0,
+        "bearer": 0,
+        "jwt": 0,
+        "credential_field": 0,
+        "url_credential": 0
+      },
+      "summary": [
+        "Test Files  1 passed (1)",
+        "Tests  2 passed (2)",
+        "Duration  239ms (transform 44ms, setup 0ms, import 116ms, tests 6ms, environment 0ms)"
+      ]
+    },
+    {
+      "name": "memory-publication-openapi",
+      "exitCode": 1,
+      "rawSha256": "e6086b3971bc2359dc62bcc0acb8a7d6c175f8691c25eae0700c92bf400a0712",
+      "sanitizedSha256": "e6086b3971bc2359dc62bcc0acb8a7d6c175f8691c25eae0700c92bf400a0712",
+      "archiveSha256": "aad17f753bff2312bef6f3d71d166ef0531f1cc2aca9b5ef95535a3a741bcfb1",
+      "redactions": {
+        "ansi": 0,
+        "bearer": 0,
+        "jwt": 0,
+        "credential_field": 0,
+        "url_credential": 0
+      },
+      "summary": []
+    },
+    {
+      "name": "memory-publication-openapi-final",
+      "exitCode": 0,
+      "rawSha256": "4beb7ca46bff67ce2b9b57f40ba9c21cca4a4138cf43bfead2c57cbd9df23ea2",
+      "sanitizedSha256": "4beb7ca46bff67ce2b9b57f40ba9c21cca4a4138cf43bfead2c57cbd9df23ea2",
+      "archiveSha256": "45a902d6ba01d5d2ef41973b1bfd407d8dd16c4a1f9ec21e531d350ac1e5919b",
+      "redactions": {
+        "ansi": 0,
+        "bearer": 0,
+        "jwt": 0,
+        "credential_field": 0,
+        "url_credential": 0
+      },
+      "summary": [
+        "Test Files  1 passed (1)",
+        "Tests  25 passed (25)",
+        "Duration  7.26s (transform 3.39s, setup 70ms, import 5.38s, tests 1.68s, environment 0ms)"
+      ]
+    },
+    {
+      "name": "memory-publication-schema-generate",
+      "exitCode": 0,
+      "rawSha256": "31eafe40030fa3b8a1d70c2e8b16dcbc9832a0199cfa92bba9896ced66c63105",
+      "sanitizedSha256": "31eafe40030fa3b8a1d70c2e8b16dcbc9832a0199cfa92bba9896ced66c63105",
+      "archiveSha256": "aef530978d3c8b5a6aab63cc0004ae34bc0c8c0ddf71378aea52e4ee044704df",
+      "redactions": {
+        "ansi": 0,
+        "bearer": 0,
+        "jwt": 0,
+        "credential_field": 0,
+        "url_credential": 0
+      },
+      "summary": []
+    },
+    {
+      "name": "memory-publication-schema-generate-final",
+      "exitCode": 0,
+      "rawSha256": "276d813c908726c3c73611e89ca5e83f1475940767e70dbb1cf09e1eee6a59c9",
+      "sanitizedSha256": "276d813c908726c3c73611e89ca5e83f1475940767e70dbb1cf09e1eee6a59c9",
+      "archiveSha256": "68176ede04f021038282ee40b242857249b2619c88e589b9c873a24317c42fc0",
+      "redactions": {
+        "ansi": 0,
+        "bearer": 0,
+        "jwt": 0,
+        "credential_field": 0,
+        "url_credential": 0
+      },
+      "summary": []
+    },
+    {
+      "name": "memory-publication-db-build",
+      "exitCode": 0,
+      "rawSha256": "735b13b321a0d844c61cc5735733c499e312a21d01d97261d985adaa507abe05",
+      "sanitizedSha256": "735b13b321a0d844c61cc5735733c499e312a21d01d97261d985adaa507abe05",
+      "archiveSha256": "e569e70f9707d13d935b9baaa08a884af39ce861656893768e9406139f34544b",
+      "redactions": {
+        "ansi": 0,
+        "bearer": 0,
+        "jwt": 0,
+        "credential_field": 0,
+        "url_credential": 0
+      },
+      "summary": []
+    },
+    {
+      "name": "memory-publication-snapshot-drift",
+      "exitCode": 0,
+      "rawSha256": "f9171793b5c3950ea2ca0af5ad4bc5723a3e1568ac338af6aa087c5382d17baa",
+      "sanitizedSha256": "f9171793b5c3950ea2ca0af5ad4bc5723a3e1568ac338af6aa087c5382d17baa",
+      "archiveSha256": "3bf71b8f60a703bbaeb40c570ea565353af7e4bcc20552138390979999ab5d19",
+      "redactions": {
+        "ansi": 0,
+        "bearer": 0,
+        "jwt": 0,
+        "credential_field": 0,
+        "url_credential": 0
+      },
+      "summary": [
+        "Test Files  1 passed (1)",
+        "Tests  1 passed (1)",
+        "Duration  6.33s (transform 3.34s, setup 0ms, import 1.16s, tests 4.98s, environment 0ms)"
+      ]
+    },
+    {
+      "name": "memory-publication-help-check",
+      "exitCode": 1,
+      "rawSha256": "48f5b762f784199cd3d6b9906dbf90eca4c6d5b7114826c52b728a158b5b87f2",
+      "sanitizedSha256": "48f5b762f784199cd3d6b9906dbf90eca4c6d5b7114826c52b728a158b5b87f2",
+      "archiveSha256": "c8e8428de1fcd368d8c6d300be14b005d4ecdc438127112f6bca579339815952",
+      "redactions": {
+        "ansi": 0,
+        "bearer": 0,
+        "jwt": 0,
+        "credential_field": 0,
+        "url_credential": 0
+      },
+      "summary": []
+    },
+    {
+      "name": "memory-publication-help-check-final",
+      "exitCode": 0,
+      "rawSha256": "400154533b2f266c494a57ee480fe073567dafa2e87b826ac0cb0676b46885bc",
+      "sanitizedSha256": "400154533b2f266c494a57ee480fe073567dafa2e87b826ac0cb0676b46885bc",
+      "archiveSha256": "9fc8ba837b9bf91304d8cb7d8f50559a74c76354fdbd9b6b6428562554a47350",
+      "redactions": {
+        "ansi": 0,
+        "bearer": 0,
+        "jwt": 0,
+        "credential_field": 0,
+        "url_credential": 0
+      },
+      "summary": []
+    },
+    {
+      "name": "memory-publication-server-typecheck",
+      "exitCode": 1,
+      "rawSha256": "b80ac71c3c0b0b8606f1bccc54df3c3c28f125ce54aa2b225064fa455e62e40b",
+      "sanitizedSha256": "b80ac71c3c0b0b8606f1bccc54df3c3c28f125ce54aa2b225064fa455e62e40b",
+      "archiveSha256": "41e0e62233a605c329d75f955ebeaff0ccf5a61d3523e6f5a50823c98a6af036",
+      "redactions": {
+        "ansi": 0,
+        "bearer": 0,
+        "jwt": 0,
+        "credential_field": 0,
+        "url_credential": 0
+      },
+      "summary": []
+    },
+    {
+      "name": "memory-publication-server-typecheck-final",
+      "exitCode": 1,
+      "rawSha256": "b80ac71c3c0b0b8606f1bccc54df3c3c28f125ce54aa2b225064fa455e62e40b",
+      "sanitizedSha256": "b80ac71c3c0b0b8606f1bccc54df3c3c28f125ce54aa2b225064fa455e62e40b",
+      "archiveSha256": "41e0e62233a605c329d75f955ebeaff0ccf5a61d3523e6f5a50823c98a6af036",
+      "redactions": {
+        "ansi": 0,
+        "bearer": 0,
+        "jwt": 0,
+        "credential_field": 0,
+        "url_credential": 0
+      },
+      "summary": []
+    },
+    {
+      "name": "memory-publication-source-review",
+      "exitCode": 1,
+      "rawSha256": "0dec0724cb4b6c8d69662aec8605dd4fc1e934f40069aafb73fb5c174640af09",
+      "sanitizedSha256": "0dec0724cb4b6c8d69662aec8605dd4fc1e934f40069aafb73fb5c174640af09",
+      "archiveSha256": "8c270bc303e8c2f7662ced4a1b9c9b68d851cf7a61dc6d0bd29a55b87c4974d6",
+      "redactions": {
+        "ansi": 0,
+        "bearer": 0,
+        "jwt": 0,
+        "credential_field": 0,
+        "url_credential": 0
+      },
+      "summary": []
+    },
+    {
+      "name": "memory-publication-source-review-final",
+      "exitCode": 0,
+      "rawSha256": "13b0777aad4316270e3d16c626845c83d10817e849419c1e7c3f9848d8795d33",
+      "sanitizedSha256": "13b0777aad4316270e3d16c626845c83d10817e849419c1e7c3f9848d8795d33",
+      "archiveSha256": "0cae4e41edd64a6f84b264bc9e6bf4ab27d0b59175edfb2851063ed52fae3505",
+      "redactions": {
+        "ansi": 0,
+        "bearer": 0,
+        "jwt": 0,
+        "credential_field": 0,
+        "url_credential": 0
+      },
+      "summary": []
+    }
+  ]
+}

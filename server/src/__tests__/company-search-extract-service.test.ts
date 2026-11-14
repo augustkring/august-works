@@ -3,6 +3,7 @@ import { afterAll, afterEach, beforeAll, describe, expect, it } from "vitest";
 import {
   companies,
   createDb,
+  EMBEDDED_POSTGRES_TEST_TIMEOUT_MS,
   documents,
   issueComments,
   issueDocuments,
@@ -18,6 +19,7 @@ import {
   startEmbeddedPostgresTestDatabase,
 } from "./helpers/embedded-postgres.js";
 import { companySearchExtractService } from "../services/company-search-extract.js";
+import { issueReadSqlCondition } from "../services/authorization.js";
 
 const embeddedPostgresSupport = await getEmbeddedPostgresTestSupport();
 const describeEmbeddedPostgres = embeddedPostgresSupport.supported ? describe : describe.skip;
@@ -66,7 +68,7 @@ describeEmbeddedPostgres("companySearchExtractService", () => {
     tempDb = await startEmbeddedPostgresTestDatabase("paperclip-company-search-extract-");
     db = createDb(tempDb.connectionString);
     svc = companySearchExtractService(db);
-  }, 20_000);
+  }, EMBEDDED_POSTGRES_TEST_TIMEOUT_MS);
 
   afterEach(async () => {
     await db.delete(issueDocuments);
@@ -146,6 +148,18 @@ describeEmbeddedPostgres("companySearchExtractService", () => {
       "document_title",
     ]);
     expect(result.results[0]?.matchesTruncated).toBe(false);
+    expect(result.truncated).toBe(false);
+  });
+
+  it.each(["native", "filtered"] as const)("omits private extraction sources before the page window and hasMore (%s)", async mode => {
+    const companyId = await createCompany();
+    await createIssue(companyId, { title: "Private needle", identifier: `PRIVATE-${randomUUID()}`, visibility: "private", updatedAt: new Date("2026-10-22") });
+    const visible = await createIssue(companyId, { title: "Public needle", identifier: `PUBLIC-${randomUUID()}`, updatedAt: new Date("2026-10-21") });
+    const result = await svc.extract(companyId, companySearchExtractQuerySchema.parse({ contains: "needle", limit: 1 }), mode === "filtered" ? {
+      issueReadCondition: await issueReadSqlCondition(db, { type: "none" }),
+    } : undefined);
+    expect(result.results.map(row => row.issueId)).toEqual([visible]);
+    expect(result.hasMore).toBe(false);
     expect(result.truncated).toBe(false);
   });
 

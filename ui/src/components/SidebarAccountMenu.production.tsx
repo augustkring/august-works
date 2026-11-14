@@ -9,6 +9,7 @@ import {
   UserRoundPen,
 } from "lucide-react";
 import type { DeploymentMode } from "@paperclipai/shared";
+import { PRODUCT_IDENTITY } from "@paperclipai/shared/product-identity";
 import { Link } from "@/lib/router";
 import { authApi } from "@/api/auth";
 import { queryKeys } from "@/lib/queryKeys";
@@ -21,10 +22,10 @@ import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar";
 import { cn, SIDEBAR_RAIL_HIDDEN_LABEL } from "../lib/utils";
 import { ThemeToggle } from "./ThemeToggle";
 import { SidebarServerInfo } from "./SidebarServerInfo";
+import { useV9FeatureEnabled } from "../hooks/useV9FeatureEnabled";
 
 const PROFILE_SETTINGS_PATH = "/company/settings/instance/profile";
-const DOCS_URL = "https://docs.paperclip.ing/";
-const FEEDBACK_URL = "https://paperclip.ing/feedback";
+const DOCS_URL = PRODUCT_IDENTITY.docsOrigin;
 
 interface SidebarAccountMenuProps {
   deploymentMode?: DeploymentMode;
@@ -108,6 +109,7 @@ export function SidebarAccountMenu({
   onOpenChange,
 }: SidebarAccountMenuProps) {
   const isCloud = Boolean(useCloudInstance());
+  const customerFeedback = useV9FeatureEnabled("customer_feedback_v9");
   const [internalOpen, setInternalOpen] = useState(false);
   const { isMobile, setSidebarOpen, collapsed, peeking } = useSidebar();
   const rail = collapsed && !peeking;
@@ -194,7 +196,7 @@ export function SidebarAccountMenu({
               />
               <MenuAction
                 label="Documentation"
-                description="Open Paperclip docs in a new tab."
+                description={`Open ${PRODUCT_IDENTITY.productName} documentation in a new tab.`}
                 icon={BookOpen}
                 href={DOCS_URL}
                 external
@@ -229,18 +231,20 @@ export function SidebarAccountMenu({
           </div>
         </PopoverContent>
         </Popover>
-        {!rail && !isCloud ? (
+        {!rail && !isCloud && customerFeedback.enabled ? (
           <Tooltip>
             <TooltipTrigger asChild>
-              <a
-                href={FEEDBACK_URL}
-                target="_blank"
-                rel="noreferrer"
+              <button
+                type="button"
                 aria-label="Share feedback"
                 className="flex size-8 shrink-0 items-center justify-center rounded-lg text-muted-foreground/50 transition-colors hover:bg-accent/50 hover:text-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
+                onClick={() => {
+                  closeNavigationChrome();
+                  document.dispatchEvent(new CustomEvent("paperclip:open-feedback", { detail: { returnFocus: "global_feedback" } }));
+                }}
               >
                 <Flag className="h-4 w-4" aria-hidden="true" />
-              </a>
+              </button>
             </TooltipTrigger>
             <TooltipContent side="top">Share feedback</TooltipContent>
           </Tooltip>

@@ -1,0 +1,74 @@
+{
+  "scope": "Closed Host42\u201346 status/restore and report-only probes; not an overall qualification pass",
+  "hosts": {
+    "42": {
+      "restoreLogSha256": "22f576297855a531d97608db0ae44fc32f0dde4c317820d5d49768a8566e3b44",
+      "exitCodes": {
+        "db-build": "0",
+        "host-session-node": "0",
+        "managed-source-target-vitest": "1",
+        "qualification-clock-vitest": "0",
+        "shared-build": "0",
+        "source-oxc": "0"
+      },
+      "resultBeforeRestoreSha256": "cfcb7ef2804c1287d972f82a90be49b9b1824b5bcfb378233f85473784afaaf6"
+    },
+    "43": {
+      "restoreLogSha256": "22f576297855a531d97608db0ae44fc32f0dde4c317820d5d49768a8566e3b44",
+      "exitCodes": {
+        "db-build": "0",
+        "host-session-node": "0",
+        "managed-source-target-vitest": "1",
+        "qualification-clock-vitest": "0",
+        "shared-build": "0",
+        "source-oxc": "0"
+      },
+      "resultBeforeRestoreSha256": "cfcb7ef2804c1287d972f82a90be49b9b1824b5bcfb378233f85473784afaaf6"
+    },
+    "44": {
+      "restoreLogSha256": "22f576297855a531d97608db0ae44fc32f0dde4c317820d5d49768a8566e3b44",
+      "exitCodes": {
+        "db-build": "0",
+        "host-session-node": "0",
+        "managed-source-target-vitest": "1",
+        "qualification-clock-vitest": "0",
+        "shared-build": "0",
+        "source-oxc": "0"
+      },
+      "resultBeforeRestoreSha256": "cfcb7ef2804c1287d972f82a90be49b9b1824b5bcfb378233f85473784afaaf6"
+    },
+    "45": {
+      "restoreLogSha256": "22f576297855a531d97608db0ae44fc32f0dde4c317820d5d49768a8566e3b44",
+      "exitCodes": {
+        "db-build": "0",
+        "server-tsc": "1",
+        "shared-build": "0",
+        "source-oxc": "0"
+      },
+      "resultBeforeRestoreSha256": null
+    },
+    "46": {
+      "restoreLogSha256": "22f576297855a531d97608db0ae44fc32f0dde4c317820d5d49768a8566e3b44",
+      "exitCodes": {
+        "db-build": "0",
+        "host-session-node": "0",
+        "managed-source-target-vitest": "1",
+        "qualification-clock-vitest": "0",
+        "server-tsc": "0",
+        "shared-build": "0",
+        "source-oxc": "0"
+      },
+      "resultBeforeRestoreSha256": "926f609c176947af5762720b6ef811df9035ce919f88a00cf625634fb6902422"
+    }
+  },
+  "host46ActualRoute": {
+    "managedSourceReportLogSha256": "5d07de513ae0ce07b8c103b62868735e4bcdeed17460d5931622016137e6b819",
+    "hostSessionNodeLogSha256": "35cb174c2a9278d194312a9ef8b29a1be7735638df53c8beb441d0e5d6c18083",
+    "probeRows": 19,
+    "passedProbeRows": 19,
+    "managedSourceVitestExit": "1",
+    "hostSessionNodeExit": "0",
+    "routeOutcome": "Host admission passed, but the managed Project GET route failed before model invocation because provider lease expiry was missing; no model call is claimed."
+  },
+  "limitations": "Host42\u201346 restore receipts preserve qualification state; Host42\u201344 and Host46 managed-source Vitest commands failed. Host45 TypeScript check failed. The 19/19 Host46 protected report rows do not override the failed route."
+}

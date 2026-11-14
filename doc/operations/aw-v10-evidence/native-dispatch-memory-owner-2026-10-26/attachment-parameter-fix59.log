@@ -1,0 +1,43 @@
+Copied and verified source files 120
+
+ RUN  v4.1.11 /workspace/v10-dep-qualification/server
+
+stderr | src/services/native-runtime/native-model-input-dispatch.integration.test.ts > native model input dispatch intent > qualifies only the current PG attachment bytes staged by executor admission
+native dispatch persistence diagnostic {
+  stage: 'intent_persist',
+  pgCode: '23514',
+  constraint: null,
+  safeMessageIndex: null
+}
+
+ ❯ src/services/native-runtime/native-model-input-dispatch.integration.test.ts (42 tests | 1 failed | 41 skipped) 8442ms
+     × qualifies only the current PG attachment bytes staged by executor admission 4332ms
+
+⎯⎯⎯⎯⎯⎯⎯ Failed Tests 1 ⎯⎯⎯⎯⎯⎯⎯
+
+ FAIL  src/services/native-runtime/native-model-input-dispatch.integration.test.ts > native model input dispatch intent > qualifies only the current PG attachment bytes staged by executor admission
+Error: native_model_input_attachment_stage_rejected
+ ❯ src/services/native-runtime/native-session-executor.ts:7557:11
+    7555|       safeMessageIndex: safeMessageIndex >= 0 ? safeMessageIndex : nul…
+    7556|     const message = error instanceof Error ? error.message : "";
+    7557|     throw new Error([
+       |           ^
+    7558|       "native_session_lease_lost", "native_session_lease_ttl_invalid",
+    7559|       "native_model_input_run_binding_changed", "native_model_input_la…
+ ❯ recordNativeModelInputDispatchIntent src/services/native-runtime/native-session-executor.ts:7409:3
+ ❯ Object.onTurnInput src/services/native-runtime/native-session-executor.ts:9607:34
+ ❯ executeNativeSession ../packages/paperclip-runner/src/native-session-runtime.ts:2382:30
+ ❯ trace.measure.parentName src/services/native-runtime/native-session-executor.ts:9522:24
+ ❯ Object.measure src/services/native-runtime/native-run-trace.ts:481:14
+ ❯ executePaperclipNativeSessionWithinScope src/services/native-runtime/native-session-executor.ts:9514:14
+ ❯ executePaperclipNativeSession src/services/native-runtime/native-session-executor.ts:8494:12
+ ❯ executeVerifiedAttachmentCase src/services/native-runtime/native-model-input-dispatch.integration.test.ts:349:7
+
+⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯[1/1]⎯
+
+
+ Test Files  1 failed (1)
+      Tests  1 failed | 41 skipped (42)
+   Start at  02:55:31
+   Duration  21.85s (transform 9.72s, setup 73ms, import 13.20s, tests 8.44s, environment 0ms)
+

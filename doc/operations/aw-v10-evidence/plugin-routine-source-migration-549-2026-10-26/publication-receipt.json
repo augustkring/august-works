@@ -1,0 +1,13 @@
+{
+  "generator": "drizzle-kit 0.31.10 generate --custom",
+  "entry": {
+    "idx": 549,
+    "version": "7",
+    "when": 1793012901762,
+    "tag": "0549_native_plugin_routine_source_binding",
+    "breakpoints": true
+  },
+  "schemaUnchangedFrom548": true,
+  "sqlSha256": "f715f95e8587975b44b57a9c93dbfdc128bef299fc3d0b087bcd35b55a1daf6b",
+  "scope": "Metadata publication only; plugin source-node acceptance requires fresh actual PostgreSQL tests."
+}

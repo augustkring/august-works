@@ -71,6 +71,8 @@ export const boardCliAuthAccessLevelSchema = z.enum([
 export type BoardCliAuthAccessLevel = z.infer<typeof boardCliAuthAccessLevelSchema>;
 
 export const createCliAuthChallengeSchema = z.object({
+  keyName: z.string().trim().min(1).max(120).optional(),
+  keyExpiresAt: z.coerce.date().nullable().optional(),
   command: z.string().min(1).max(240),
   clientName: z.string().max(120).optional().nullable(),
   requestedAccess: boardCliAuthAccessLevelSchema.default("board"),
@@ -102,6 +104,32 @@ export const updateMemberPermissionsSchema = z.object({
   ),
 });
 
+export const createHumanWorkflowCoverageSchema = z.object({
+  requestId: z.uuid(),
+  delegateeUserId: z.string().min(1).max(300),
+  workflowId: z.uuid(),
+  workflowRevisionId: z.uuid(),
+  scopeType: z.enum(["manual", "task"]),
+  taskId: z.uuid().nullable().optional(),
+  startsAt: z.coerce.date().optional(),
+  expiresAt: z.coerce.date(),
+  reason: z.string().trim().min(1).max(500),
+}).strict().superRefine((value, ctx) => {
+  if ((value.scopeType === "task") !== Boolean(value.taskId)) {
+    ctx.addIssue({ code: "custom", path: ["taskId"], message: "Task-scoped coverage must include exactly one Task ID." });
+  }
+  const startsAt = value.startsAt ?? new Date();
+  const now = Date.now();
+  if (startsAt.getTime() < now - 60_000 || startsAt.getTime() > now + 30 * 24 * 60 * 60_000) {
+    ctx.addIssue({ code: "custom", path: ["startsAt"], message: "Coverage start must be within the next 30 days." });
+  }
+  if (value.expiresAt.getTime() <= startsAt.getTime() || value.expiresAt.getTime() > startsAt.getTime() + 30 * 24 * 60 * 60_000) {
+    ctx.addIssue({ code: "custom", path: ["expiresAt"], message: "Coverage must expire after it starts and within 30 days." });
+  }
+});
+
+export type CreateHumanWorkflowCoverage = z.input<typeof createHumanWorkflowCoverageSchema>;
+
 export type UpdateMemberPermissions = z.infer<typeof updateMemberPermissionsSchema>;
 
 const editableMembershipStatuses = ["pending", "active", "suspended"] as const;
@@ -125,6 +153,12 @@ export const updateCompanyMemberWithPermissionsSchema = z.object({
 
 export type UpdateCompanyMemberWithPermissions = z.infer<typeof updateCompanyMemberWithPermissionsSchema>;
 
+export const securitySuspendCompanyMemberSchema = z.object({
+  reasonCode: z.enum(["suspected_compromise", "reported_loss", "policy_violation", "other"]),
+}).strict();
+
+export type SecuritySuspendCompanyMember = z.infer<typeof securitySuspendCompanyMemberSchema>;
+
 export const archiveCompanyMemberSchema = z.object({
   reassignment: z
     .object({
@@ -133,6 +167,7 @@ export const archiveCompanyMemberSchema = z.object({
     })
     .optional()
     .nullable(),
+  routineResponsibleUserId: z.string().trim().min(1).max(500).optional().nullable(),
 }).superRefine((value, ctx) => {
   if (value.reassignment?.assigneeAgentId && value.reassignment.assigneeUserId) {
     ctx.addIssue({
@@ -214,6 +249,18 @@ export const authSessionSchema = z.object({
 
 export type AuthSession = z.infer<typeof authSessionSchema>;
 
+export const nativeAuthenticationSecuritySchema = z.object({
+  userId: z.string().min(1),
+  hasPassword: z.boolean(),
+  twoFactorEnabled: z.boolean(),
+  phishingResistantRequired: z.boolean(),
+  passkeysAvailable: z.boolean().optional(),
+});
+export type NativeAuthenticationSecurity = z.infer<typeof nativeAuthenticationSecuritySchema>;
+export const nativeAuthenticationConfirmationSchema = z.object({ sessionId: z.string().min(1) });
+export const nativeRecoveryCodesSchema = z.object({ sessionId: z.string().min(1), backupCodes: z.array(z.string().min(1).max(128)).min(1).max(32) });
+export const nativeTotpEnrollmentSchema = nativeRecoveryCodesSchema.extend({ totpURI: z.string().min(1).max(4096) });
+
 export const updateCurrentUserProfileSchema = z.object({
   name: z.string().trim().min(1).max(120),
   image: z
@@ -226,12 +273,32 @@ export type UpdateCurrentUserProfile = z.infer<typeof updateCurrentUserProfileSc
 
 // Personal preferences are shared across companies, but only the signed-in
 // user can read or change them. companyId supplies the mutation audit context.
+export const accountLocaleSchema = z.enum(["en", "da"]);
 export const currentUserPreferencesSchema = z.object({
   keyboardShortcuts: z.boolean(),
+  // Optional only for compatibility with older clients and test fixtures.
+  locale: accountLocaleSchema.nullable().optional(),
 });
-export const updateCurrentUserPreferencesSchema = currentUserPreferencesSchema.extend({
+export const updateCurrentUserPreferencesSchema = z.object({
   expectedUserId: z.string().min(1),
-  companyId: z.string().uuid(),
-}).strict();
+  keyboardShortcuts: z.boolean().optional(),
+  locale: accountLocaleSchema.nullable().optional(),
+  companyId: z.string().uuid().optional(),
+}).strict()
+  .refine((value) => value.keyboardShortcuts !== undefined || value.locale !== undefined, {
+    message: "At least one preference must be supplied",
+  })
+  .refine((value) => value.keyboardShortcuts === undefined || value.companyId !== undefined, {
+    message: "companyId is required when updating keyboard shortcuts",
+    path: ["companyId"],
+  });
 export type CurrentUserPreferences = z.infer<typeof currentUserPreferencesSchema>;
 export type UpdateCurrentUserPreferences = z.infer<typeof updateCurrentUserPreferencesSchema>;
+
+
+export const nativeAuthenticationMethodsSchema = z.object({ passkey: z.boolean() });
+export const nativePasskeySchema = z.object({ id: z.string().min(1).max(256), name: z.string().max(120).nullable(), createdAt: z.string().datetime() });
+export const nativePasskeyListSchema = z.array(nativePasskeySchema).max(16);
+export const nativePasskeyRegistrationSchema = nativePasskeySchema.extend({ sessionId: z.string().min(1) });
+export const nativePasskeyAuthenticationSchema = nativeAuthenticationConfirmationSchema.extend({ userId: z.string().min(1) });
+export type NativePasskey = z.infer<typeof nativePasskeySchema>;

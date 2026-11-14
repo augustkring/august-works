@@ -1,0 +1,159 @@
+(!) Your Vite config uses features that are unsupported by `configLoader: 'native'`, which is planned to become the default in a future major version of Vite:
+  - `__dirname` (vitest.config.ts:7:25). Use `import.meta.dirname` instead
+Set `VITE_CONFIG_NATIVE_IGNORE_WARNING=true` to suppress this warning.
+
+ RUN  v4.1.11 /workspace/blentera-v10
+
+[19:19:46] [33mWARN[39m: [36mfailed to wake assignee on issue assignment[39m [90m{"issueId":"889552a6-a9b0-42ca-89b6-f88f00b6157b"}[39m
+    err: {
+      "type": "Error",
+      "message": "queue unavailable",
+      "stack":
+          Error: queue unavailable
+              at Object.wakeup (/workspace/blentera-v10/server/src/__tests__/routines-service.test.ts:2034:15)
+              at Object.wakeup (/workspace/blentera-v10/server/src/__tests__/routines-service.test.ts:201:41)
+              at queueIssueAssignmentWakeup (/workspace/blentera-v10/server/src/services/issue-assignment-wakeup.ts:58:6)
+              at /workspace/blentera-v10/server/src/services/routines.ts:2029:17
+              at processTicksAndRejections (node:internal/process/task_queues:104:5)
+              at scope (file:///workspace/blentera-v10/node_modules/.pnpm/postgres@3.4.9_patch_hash=sryle6qd5qfmnxvoebal4gashi/node_modules/postgres/src/index.js:279:18)
+              at sql.begin (file:///workspace/blentera-v10/node_modules/.pnpm/postgres@3.4.9_patch_hash=sryle6qd5qfmnxvoebal4gashi/node_modules/postgres/src/index.js:257:14)
+              at dispatchRoutineRun (/workspace/blentera-v10/server/src/services/routines.ts:2490:19)
+              at /workspace/blentera-v10/server/src/__tests__/routines-service.test.ts:2038:17
+              at file:///workspace/blentera-v10/node_modules/.pnpm/@vitest+runner@4.1.11/node_modules/@vitest/runner/dist/chunk-artifact.js:1903:20
+    }
+[19:19:46] [33mWARN[39m: [36mroutine Task dispatch remains pending[39m [90m{"routineRunId":"5149bc11-9b49-4710-9a02-7883a8b37f04"}[39m
+ ❯ |@paperclipai/server| src/__tests__/routines-service.test.ts (74 tests | 4 failed) 19164ms
+     × excludes activity from heartbeat runs executing the routine's own issue 211ms
+     × limits project-scoped gates to activity in the routine project 141ms
+     × retains the committed execution issue when wakeup queueing fails 190ms
+     × dispatches one Fireflies run for concurrent retries and passes meeting metadata 231ms
+[19:20:00] [33mWARN[39m: [36mfailed to wake assignee on issue assignment[39m [90m{"issueId":"90969e24-0d48-49b6-9bf7-11bfd808931e"}[39m
+    err: {
+      "type": "Error",
+      "message": "simulated queue response loss before receipt",
+      "stack":
+          Error: simulated queue response loss before receipt
+              at Object.wakeup (/workspace/blentera-v10/server/src/__tests__/routine-source-identity.integration.test.ts:114:13)
+              at queueIssueAssignmentWakeup (/workspace/blentera-v10/server/src/services/issue-assignment-wakeup.ts:58:6)
+              at /workspace/blentera-v10/server/src/services/routines.ts:2029:17
+              at processTicksAndRejections (node:internal/process/task_queues:104:5)
+              at scope (file:///workspace/blentera-v10/node_modules/.pnpm/postgres@3.4.9_patch_hash=sryle6qd5qfmnxvoebal4gashi/node_modules/postgres/src/index.js:279:18)
+              at sql.begin (file:///workspace/blentera-v10/node_modules/.pnpm/postgres@3.4.9_patch_hash=sryle6qd5qfmnxvoebal4gashi/node_modules/postgres/src/index.js:257:14)
+              at dispatchRoutineRun (/workspace/blentera-v10/server/src/services/routines.ts:2490:19)
+              at /workspace/blentera-v10/server/src/__tests__/routine-source-identity.integration.test.ts:116:19
+              at file:///workspace/blentera-v10/node_modules/.pnpm/@vitest+runner@4.1.11/node_modules/@vitest/runner/dist/chunk-artifact.js:1903:20
+    }
+[19:20:00] [33mWARN[39m: [36mroutine Task dispatch remains pending[39m [90m{"routineRunId":"5f20bde6-57d3-4d67-a2df-494004145206"}[39m
+[19:20:00] [33mWARN[39m: [36mfailed to wake assignee on issue assignment[39m [90m{"issueId":"5eb8cc19-d59a-4660-a417-2ee8f5861591"}[39m
+    err: {
+      "type": "Error",
+      "message": "simulated accepted queue request with lost response",
+      "stack":
+          Error: simulated accepted queue request with lost response
+              at Object.wakeup (/workspace/blentera-v10/server/src/__tests__/routine-source-identity.integration.test.ts:147:13)
+              at processTicksAndRejections (node:internal/process/task_queues:104:5)
+              at /workspace/blentera-v10/server/src/services/routines.ts:2029:11
+              at scope (file:///workspace/blentera-v10/node_modules/.pnpm/postgres@3.4.9_patch_hash=sryle6qd5qfmnxvoebal4gashi/node_modules/postgres/src/index.js:279:18)
+              at sql.begin (file:///workspace/blentera-v10/node_modules/.pnpm/postgres@3.4.9_patch_hash=sryle6qd5qfmnxvoebal4gashi/node_modules/postgres/src/index.js:257:14)
+              at dispatchRoutineRun (/workspace/blentera-v10/server/src/services/routines.ts:2490:19)
+              at /workspace/blentera-v10/server/src/__tests__/routine-source-identity.integration.test.ts:149:19
+              at file:///workspace/blentera-v10/node_modules/.pnpm/@vitest+runner@4.1.11/node_modules/@vitest/runner/dist/chunk-artifact.js:1903:20
+    }
+[19:20:00] [33mWARN[39m: [36mroutine Task dispatch remains pending[39m [90m{"routineRunId":"5319a147-fbce-4eb1-b20f-4b4a0e50b8b9"}[39m
+
+⎯⎯⎯⎯⎯⎯⎯ Failed Tests 4 ⎯⎯⎯⎯⎯⎯⎯
+
+ FAIL  |@paperclipai/server| src/__tests__/routines-service.test.ts > routine service live-execution coalescing > excludes activity from heartbeat runs executing the routine's own issue
+AssertionError: expected { fire: true, …(2) } to match object { fire: false, …(2) }
+
+- Expected
++ Received
+
+  {
+-   "fire": false,
+-   "matchedActivity": null,
++   "fire": true,
++   "matchedActivity": {
++     "action": "project.payload_source_captured",
++     "createdAt": 2026-10-24T19:19:38.509Z,
++     "id": "873496e1-b700-4124-9ccc-3969d3929e64",
++   },
+    "windowStart": 2026-10-24T19:18:38.593Z,
+  }
+
+ ❯ src/__tests__/routines-service.test.ts:524:57
+    522|     });
+    523|
+    524|     await expect(svc.evaluateActivityGate(routine, now)).resolves.toMa…
+       |                                                         ^
+    525|       fire: false,
+    526|       windowStart,
+
+⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯[1/4]⎯
+
+ FAIL  |@paperclipai/server| src/__tests__/routines-service.test.ts > routine service live-execution coalescing > limits project-scoped gates to activity in the routine project
+AssertionError: expected { fire: true, …(2) } to match object { fire: false }
+(5 matching properties omitted from actual)
+
+- Expected
++ Received
+
+  {
+-   "fire": false,
++   "fire": true,
+  }
+
+ ❯ src/__tests__/routines-service.test.ts:694:64
+    692|     });
+    693|
+    694|     await expect(svc.evaluateActivityGate(projectRoutine, now)).resolv…
+       |                                                                ^
+    695|
+    696|     await db.insert(activityLog).values({
+
+⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯[2/4]⎯
+
+ FAIL  |@paperclipai/server| src/__tests__/routines-service.test.ts > routine service live-execution coalescing > retains the committed execution issue when wakeup queueing fails
+AssertionError: expected 'assignment_queue_pending' to contain 'queue unavailable'
+
+Expected: "queue unavailable"
+Received: "assignment_queue_pending"
+
+ ❯ src/__tests__/routines-service.test.ts:2041:31
+    2039|
+    2040|     expect(run.status).toBe("received");
+    2041|     expect(run.failureReason).toContain("queue unavailable");
+       |                               ^
+    2042|     expect(run.linkedIssueId).toBeTruthy();
+    2043|
+
+⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯[3/4]⎯
+
+ FAIL  |@paperclipai/server| src/__tests__/routines-service.test.ts > routine service live-execution coalescing > dispatches one Fireflies run for concurrent retries and passes meeting metadata
+AssertionError: expected [ 'received', 'issue_created' ] to deeply equal [ 'issue_created', 'issue_created' ]
+
+- Expected
++ Received
+
+  [
+-   "issue_created",
++   "received",
+    "issue_created",
+  ]
+
+ ❯ src/__tests__/routines-service.test.ts:2335:46
+    2333|       svc.firePublicTrigger(trigger.publicId!, delivery({ timestamp: 1…
+    2334|     ]);
+    2335|     expect(results.map((run) => run.status)).toEqual(["issue_created",…
+       |                                              ^
+    2336|     const runs = await svc.listRuns(routine.id);
+    2337|     expect(runs).toHaveLength(1);
+
+⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯[4/4]⎯
+
+
+ Test Files  1 failed | 2 passed (3)
+      Tests  4 failed | 84 passed (88)
+   Start at  19:19:19
+   Duration  49.39s (transform 9.71s, setup 174ms, import 20.08s, tests 28.78s, environment 0ms)
+

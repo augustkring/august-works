@@ -1,0 +1,13 @@
+# Context, queue and Human verification evidence — 2026-11-09
+
+A same-Run workspace binding can preserve a captured Context Task item only when its rendered facts are unchanged, its old Source snapshot is the exact audited transform prefix, and the canonical current Task/source/audit/ACL owner still accepts it. Ordinary Context items retain exact version, snapshot and evidence checks. Current rendered Task facts and version also enter the graph-proof key before any reader reuse.
+
+Manual queue adoption retains the original Human comment authors and exact coalesced queue identities. The actual Run principal and server-origin manual marker must match; current queue/comment owners are independently re-read. Replacing an original queue row with another row carrying the same comment IDs invalidates the old Native wake source. A forged Agent payload marker cannot grant manual authority. Same-author source hashes retain their ordinary shape.
+
+Native model-done decisions remain in review while the matching V7 plan or worker requires server verification. The existing database guard remains unchanged. Managed SDK fixtures now use their actual initiating Human through canonical Plan packet/review before asserting Task completion; that behavior awaits actual SDK CI. The local installed Text result independently proves Human review and never claims model completion authority.
+
+The archive records 115 unique passing local cases, explicit repeated selections, exact invocation inputs, resource bounds, clean PostgreSQL process exits and the final server TypeScript check. Earlier failed or resource-stopped attempts are diagnostic entries, not passing evidence. Each PostgreSQL run uses a 768 MiB Node heap, 4 GiB summed descendant RSS cap, 180-second deadline and 2 GiB global reserve. The compiler uses its separately recorded cap and deadline. Kernel cache eviction retained all files and lowered the idle cgroup footprint before the complete compiler repeat.
+
+Additional fixture repairs enable only the exact collective-Memory prerequisite, keep conversation ToolProfile names unique, and read canonical remote Stop proof rather than treating the managed asset PID as a local live process. Closed Host-action and bounded existing lock diagnostics support the remaining real SDK timeout investigation. No production Stop, paid transport, credential, SQL completion or privacy guard is waived.
+
+This is bounded local software evidence. Full current-head CI, remaining legacy fixture and browser failures, V10 acceptance, provider/Host and Human qualification remain open. PR 42 stays draft; do not merge or deploy from this evidence.

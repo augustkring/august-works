@@ -1,0 +1,271 @@
+(!) Your Vite config uses features that are unsupported by `configLoader: 'native'`, which is planned to become the default in a future major version of Vite:
+  - `__dirname` (vitest.config.ts:7:25). Use `import.meta.dirname` instead
+Set `VITE_CONFIG_NATIVE_IGNORE_WARNING=true` to suppress this warning.
+
+ RUN  v4.1.11 /workspace/blentera-v10
+
+ ❯ |@paperclipai/server| src/__tests__/typed-task-origin.integration.test.ts (7 tests | 3 failed) 26811ms
+     × creates and reads a Task from its exact same-company Workflow and WorkflowRun, without heartbeat ownership 270ms
+     × does not substitute a same-ID heartbeat when the typed WorkflowRun is missing 225ms
+     × creates and reads a routine-origin Task using the run's retained revision 441ms
+ ❯ |@paperclipai/server| src/__tests__/routine-source-identity.integration.test.ts (3 tests | 3 failed) 19836ms
+     × keeps the service-pinned older revision through routine updates and run completion 500ms
+     × rejects cross-company, wrong-parent, and retargeted run or revision identities 202ms
+     × rejects routine revision snapshot edits but preserves the existing null-revision run shape 65ms
+
+⎯⎯⎯⎯⎯⎯⎯ Failed Tests 6 ⎯⎯⎯⎯⎯⎯⎯
+
+ FAIL  |@paperclipai/server| src/__tests__/routine-source-identity.integration.test.ts > Routine run and revision source identity > keeps the service-pinned older revision through routine updates and run completion
+AssertionError: expected { …(20) } to match object { …(4) }
+(16 matching properties omitted from actual)
+
+- Expected
++ Received
+
+  {
+    "companyId": "3386f560-a5b2-460e-9cbf-9ad425ce6750",
+    "routineId": "bcd2af2d-026b-49e7-b9d6-97cd1a12f1dc",
+    "routineRevisionId": "aa52f986-ceb6-4d39-8db3-589e487d124a",
+-   "status": "issue_created",
++   "status": "failed",
+  }
+
+ ❯ src/__tests__/routine-source-identity.integration.test.ts:65:17
+     63|     const originalRevisionId = routine.latestRevisionId!;
+     64|     const run = await owner.service.runRoutine(routine.id, { source: "…
+     65|     expect(run).toMatchObject({ companyId: owner.companyId, routineId:…
+       |                 ^
+     66|       routineRevisionId: originalRevisionId, status: "issue_created" }…
+     67|     expect(run.linkedIssueId).toBeTruthy();
+
+⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯[1/6]⎯
+
+ FAIL  |@paperclipai/server| src/__tests__/routine-source-identity.integration.test.ts > Routine run and revision source identity > rejects cross-company, wrong-parent, and retargeted run or revision identities
+AssertionError: promise resolved "[]" instead of rejecting
+
+- Expected:
+Error {
+  "message": "rejected promise",
+}
+
++ Received:
+[]
+
+ ❯ src/__tests__/routine-source-identity.integration.test.ts:99:97
+     97|
+     98|     await expect(db.insert(routineRuns).values({ companyId: owner.comp…
+     99|       routineRevisionId: foreignRoutine.latestRevisionId!, source: "ap…
+       |                                                                                                 ^
+    100|     await expect(db.insert(routineRuns).values({ companyId: owner.comp…
+    101|       routineRevisionId: otherRevisionId, source: "api", status: "rece…
+
+⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯[2/6]⎯
+
+ FAIL  |@paperclipai/server| src/__tests__/routine-source-identity.integration.test.ts > Routine run and revision source identity > rejects routine revision snapshot edits but preserves the existing null-revision run shape
+AssertionError: promise resolved "[ { …(14) } ]" instead of rejecting
+
+- Expected:
+Error {
+  "message": "rejected promise",
+}
+
++ Received:
+[
+  {
+    "changeSummary": "Created routine",
+    "companyId": "af708bbb-49d0-4269-99e3-6a67b05742eb",
+    "createdAt": 2026-10-24T15:45:26.304Z,
+    "createdByAgentId": null,
+    "createdByRunId": null,
+    "createdByUserId": "a7e618e1-cf4f-4c7c-8f94-a96667f4a184",
+    "description": null,
+    "id": "78b82210-2efb-4845-a0ba-f9bc5a22a2ab",
+    "responsibleUserId": "a7e618e1-cf4f-4c7c-8f94-a96667f4a184",
+    "restoredFromRevisionId": null,
+    "revisionNumber": 1,
+    "routineId": "d85139dc-3587-4e4e-bdb9-a898281d0aba",
+    "snapshot": {
+      "routine": {
+        "activityGatePolicy": "always",
+        "activityGateScope": "company",
+        "assigneeAgentId": "e454e380-31ea-4106-9d3e-c14d8d382e9c",
+        "catchUpPolicy": "skip_missed",
+        "companyId": "af708bbb-49d0-4269-99e3-6a67b05742eb",
+        "concurrencyPolicy": "always_enqueue",
+        "description": null,
+        "env": null,
+        "executionTargetKind": "agent_task",
+        "executionTargetRef": "e454e380-31ea-4106-9d3e-c14d8d382e9c",
+        "goalId": null,
+        "id": "d85139dc-3587-4e4e-bdb9-a898281d0aba",
+        "managementReviewTemplate": null,
+        "parentIssueId": null,
+        "priority": "medium",
+        "projectId": null,
+        "responsibleUserId": "a7e618e1-cf4f-4c7c-8f94-a96667f4a184",
+        "status": "active",
+        "title": "Immutable routine snapshot",
+        "variables": [],
+        "workflowExecutionPrincipal": null,
+      },
+      "triggers": [],
+      "version": 1,
+    },
+    "title": "Forged revision title",
+  },
+]
+
+ ❯ src/__tests__/routine-source-identity.integration.test.ts:123:65
+    121|       routine: { ...revision!.snapshot.routine, title: "Forged revisio…
+    122|     await expect(db.update(routineRevisions).set({ title: "Forged revi…
+    123|       .where(eq(routineRevisions.id, revision!.id)).returning()).rejec…
+       |                                                                 ^
+    124|     await expect(db.update(routineRevisions).set({ snapshot: changedSn…
+    125|       .where(eq(routineRevisions.id, revision!.id)).returning()).rejec…
+
+⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯[3/6]⎯
+
+ FAIL  |@paperclipai/server| src/__tests__/typed-task-origin.integration.test.ts > typed workflow and routine Task origins > creates and reads a Task from its exact same-company Workflow and WorkflowRun, without heartbeat ownership
+Error: Task privacy source is unavailable
+ ❯ notFound src/errors.ts:25:10
+     23|
+     24| export function notFound(message = "Not found", details?: unknown) {
+     25|   return new HttpError(404, message, details);
+       |          ^
+     26| }
+     27|
+ ❯ resolveIssuePrivacy src/services/issues.ts:2058:21
+ ❯ persist src/services/issues.ts:10471:25
+ ❯ scope ../node_modules/.pnpm/postgres@3.4.9_patch_hash=sryle6qd5qfmnxvoebal4gashi/node_modules/postgres/src/index.js:279:18
+ ❯ sql.begin ../node_modules/.pnpm/postgres@3.4.9_patch_hash=sryle6qd5qfmnxvoebal4gashi/node_modules/postgres/src/index.js:257:14
+ ❯ Object.create src/services/issues.ts:10606:25
+ ❯ src/__tests__/typed-task-origin.integration.test.ts:74:23
+
+⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯[4/6]⎯
+
+ FAIL  |@paperclipai/server| src/__tests__/typed-task-origin.integration.test.ts > typed workflow and routine Task origins > does not substitute a same-ID heartbeat when the typed WorkflowRun is missing
+AssertionError: promise resolved "{ …(81) }" instead of rejecting
+
+- Expected
++ Received
+
+- Error {
+-   "message": "rejected promise",
++ {
++   "assigneeAdapterOverrides": null,
++   "assigneeAgentId": null,
++   "assigneeUserId": null,
++   "billingCode": null,
++   "blockedBy": [],
++   "blockedOwnerNotifiedAt": null,
++   "blockedTransitionAt": null,
++   "blocks": [],
++   "cancelledAt": null,
++   "checkoutRunId": null,
++   "companyId": "67e67c02-06b4-4ca6-bcaf-1953d49228f1",
++   "completedAt": null,
++   "continuationIdentityContextId": null,
++   "conversationAgentId": null,
++   "conversationBoundaryCommentId": null,
++   "conversationRetiredAt": null,
++   "conversationSessionGeneration": 0,
++   "conversationState": null,
++   "conversationUserId": null,
++   "createdAt": 2026-10-24T15:44:36.207Z,
++   "createdByAgentId": null,
++   "createdByUserId": "5eeefcb2-10aa-46bd-b499-929030c0e7ab",
++   "description": null,
++   "estimatedEffortMinutes": null,
++   "executionAgentNameKey": null,
++   "executionLockedAt": null,
++   "executionPolicy": null,
++   "executionRunId": null,
++   "executionState": null,
++   "executionWorkspaceId": null,
++   "executionWorkspacePreference": null,
++   "executionWorkspaceSettings": null,
++   "forecastConfidence": null,
++   "forecastEndAt": null,
++   "forecastReason": null,
++   "forecastStartAt": null,
++   "goalId": null,
++   "harnessKind": null,
++   "hiddenAt": null,
++   "id": "fea616e6-e6f0-4d6f-8a3f-eef8d3b21288",
++   "identifier": "TO67e67c-1",
++   "issueNumber": 1,
++   "labelIds": [],
++   "labels": [],
++   "lastStatusDecisionId": null,
++   "milestoneId": null,
++   "monitorAttemptCount": 0,
++   "monitorLastTriggeredAt": null,
++   "monitorNextCheckAt": null,
++   "monitorNotes": null,
++   "monitorScheduledBy": null,
++   "monitorWakeRequestedAt": null,
++   "originFingerprint": "default",
++   "originId": "dc75a7e4-316c-4776-97bb-5583632aba1e",
++   "originIdentityContextId": null,
++   "originKind": "workflow_task",
++   "originRunId": "18cf2965-1f0a-4932-9c89-6a8707b0f976",
++   "parentId": null,
++   "payloadSourceProtocolVersion": 0,
++   "payloadSourceSnapshot": null,
++   "payloadSourceSnapshotInvalidated": false,
++   "plannedEndAt": null,
++   "plannedStartAt": null,
++   "priority": "medium",
++   "privacyParentIssueId": null,
++   "privacyRootIssueId": null,
++   "projectId": null,
++   "projectWorkspaceId": null,
++   "requestDepth": 0,
++   "responsibleUserId": "5eeefcb2-10aa-46bd-b499-929030c0e7ab",
++   "reviewPolicy": null,
++   "sourceTrust": null,
++   "startedAt": null,
++   "status": "backlog",
++   "statusVersion": 0,
++   "title": "Typed-origin Task",
++   "unblockDescriptor": null,
++   "updatedAt": 2026-10-24T15:44:36.207Z,
++   "visibility": "open",
++   "watchdog": null,
++   "workMode": "standard",
+  }
+
+ ❯ src/__tests__/typed-task-origin.integration.test.ts:112:76
+    110|     const absentTypedOwner = { originKind: "workflow_task" as const, o…
+    111|       originRunId: absentTypedRunId };
+    112|     await expect(createTask(home.companyId, home.userId, absentTypedOw…
+       |                                                                            ^
+    113|     const fallbackTask = await seedHistoricalTask(home.companyId, abse…
+    114|     expect(await canActorReadIssuePrivacy(db, home.actor, fallbackTask…
+
+⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯[5/6]⎯
+
+ FAIL  |@paperclipai/server| src/__tests__/typed-task-origin.integration.test.ts > typed workflow and routine Task origins > creates and reads a routine-origin Task using the run's retained revision
+Error: Task privacy source is unavailable
+ ❯ notFound src/errors.ts:25:10
+     23|
+     24| export function notFound(message = "Not found", details?: unknown) {
+     25|   return new HttpError(404, message, details);
+       |          ^
+     26| }
+     27|
+ ❯ resolveIssuePrivacy src/services/issues.ts:2058:21
+ ❯ persist src/services/issues.ts:10471:25
+ ❯ scope ../node_modules/.pnpm/postgres@3.4.9_patch_hash=sryle6qd5qfmnxvoebal4gashi/node_modules/postgres/src/index.js:279:18
+ ❯ sql.begin ../node_modules/.pnpm/postgres@3.4.9_patch_hash=sryle6qd5qfmnxvoebal4gashi/node_modules/postgres/src/index.js:257:14
+ ❯ Object.create src/services/issues.ts:10606:25
+ ❯ src/__tests__/typed-task-origin.integration.test.ts:121:18
+
+⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯[6/6]⎯
+
+
+ Test Files  2 failed (2)
+      Tests  6 failed | 4 passed (10)
+   Start at  15:42:46
+   Duration  160.38s (transform 64.75s, setup 654ms, import 112.26s, tests 46.65s, environment 0ms)
+

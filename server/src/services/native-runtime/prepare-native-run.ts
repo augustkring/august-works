@@ -7,7 +7,7 @@ import { completionContracts, heartbeatRuns } from "@paperclipai/db";
 
 import { ensureNativeCompletionContract, nativeCompletionContractInput } from "./completion-contracts.js";
 import { NATIVE_RUNTIME_RESOLVER_VERSION } from "./runtime-mode.js";
-import { CHAT_CONTROL_RECOVERY_ADMISSION_KEY } from "../chat-control-recovery-stop.js";
+import { QUALIFIED_OPENCODE_RUNNER_VERSION, resolvePaperclipRunnerProviderProfile } from "./provider-profile.js";
 
 function record(value: unknown): Record<string, unknown> {
   return typeof value === "object" && value !== null && !Array.isArray(value)
@@ -57,22 +57,20 @@ export async function prepareNativeHeartbeatRun(input: {
     reviewPolicy?: string | null;
   };
   environmentLeaseId: string;
+  provider?: "codex" | "opencode";
+  model?: string;
 }) {
   if (input.run.runtimeModeResolvedAt && input.run.runtimeMode !== "native") {
     throw new Error("native_runtime_mode_conflict");
   }
-  const persistedProfile = record(input.run.runnerProfileJson);
+  const selectedProfile = resolvePaperclipRunnerProviderProfile({ provider: input.provider ?? "codex", model: input.model });
+  const provider = selectedProfile.provider;
+  if (provider !== "codex" && provider !== "opencode") throw new Error("native_runtime_provider_invalid");
+  // Preserve the original Codex fixture representation; OpenCode uses the canonical selected backend.
+  const driverKind = provider === "opencode" ? selectedProfile.backend : "codex";
+  const driverVersion = provider === "opencode" ? QUALIFIED_OPENCODE_RUNNER_VERSION : "codex-app-server-v1";
   const runnerInstanceId = input.run.runnerInstanceId ?? randomUUID();
   const normalizedSessionId = input.run.nativeSessionId ?? randomUUID();
-  const turnId = typeof persistedProfile.turnId === "string"
-    ? persistedProfile.turnId
-    : randomUUID();
-  const itemId = typeof persistedProfile.itemId === "string"
-    ? persistedProfile.itemId
-    : randomUUID();
-  const environmentLeaseId = typeof persistedProfile.environmentLeaseId === "string"
-    ? persistedProfile.environmentLeaseId
-    : input.environmentLeaseId;
 
   const persistedContract = input.run.completionContractId
     ? await input.db
@@ -96,7 +94,7 @@ export async function prepareNativeHeartbeatRun(input: {
     });
   const binding = contractBinding(completion.contract, completion.row.revision);
 
-  await input.db.transaction(async (tx) => {
+  const retainedProfile = await input.db.transaction(async (tx) => {
     const [locked] = await tx
       .select()
       .from(heartbeatRuns)
@@ -122,6 +120,17 @@ export async function prepareNativeHeartbeatRun(input: {
     ) {
       throw new Error("native_runtime_binding_conflict");
     }
+    const lockedProfile = record(locked.runnerProfileJson);
+    if (
+      (lockedProfile.provider !== undefined && lockedProfile.provider !== provider) ||
+      (locked.driverKind !== null && locked.driverKind !== driverKind &&
+        !(provider === "codex" && locked.driverKind === selectedProfile.backend)) ||
+      (provider === "opencode" && locked.driverVersion !== null && locked.driverVersion !== driverVersion)
+    ) throw new Error("native_runtime_provider_binding_conflict");
+    const turnId = typeof lockedProfile.turnId === "string" ? lockedProfile.turnId : randomUUID();
+    const itemId = typeof lockedProfile.itemId === "string" ? lockedProfile.itemId : randomUUID();
+    const environmentLeaseId = typeof lockedProfile.environmentLeaseId === "string"
+      ? lockedProfile.environmentLeaseId : input.environmentLeaseId;
     await tx
       .update(heartbeatRuns)
       .set({
@@ -131,28 +140,18 @@ export async function prepareNativeHeartbeatRun(input: {
         runtimeModeReason: locked.runtimeModeReason ?? "explicit_paperclip_runner",
         runtimeModeResolvedAt: locked.runtimeModeResolvedAt ?? new Date(),
         runnerProfileJson: {
+          ...lockedProfile,
           schema: "paperclip.runner.profile.v1",
-          provider: "codex",
+          provider,
           turnId,
           itemId,
           environmentLeaseId,
-          // This server-owned field is never taken from the supplied profile.
-          // Retain malformed evidence too so admission can fail closed later.
-          ...(Object.hasOwn(
-            record(locked.runnerProfileJson),
-            CHAT_CONTROL_RECOVERY_ADMISSION_KEY,
-          )
-            ? {
-              [CHAT_CONTROL_RECOVERY_ADMISSION_KEY]:
-                record(locked.runnerProfileJson)[CHAT_CONTROL_RECOVERY_ADMISSION_KEY],
-            }
-            : {}),
         },
         runnerInstanceId,
         nativeSessionId: normalizedSessionId,
         nativeIssueId: input.issue.id,
-        driverKind: "codex",
-        driverVersion: "codex-app-server-v1",
+        driverKind: locked.driverKind ?? driverKind,
+        driverVersion: locked.driverVersion ?? driverVersion,
         completionContractId: completion.row.id,
         completionContractSha256: completion.row.canonicalSha256,
         nativePhase: "provider_running",
@@ -160,14 +159,13 @@ export async function prepareNativeHeartbeatRun(input: {
         updatedAt: new Date(),
       })
       .where(eq(heartbeatRuns.id, input.run.id));
+    return { turnId, itemId, environmentLeaseId };
   });
 
   return {
     runnerInstanceId,
     normalizedSessionId,
-    turnId,
-    itemId,
-    environmentLeaseId,
+    ...retainedProfile,
     completionContract: binding,
   };
 }

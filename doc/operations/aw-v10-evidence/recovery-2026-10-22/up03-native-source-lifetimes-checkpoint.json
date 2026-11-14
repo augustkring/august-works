@@ -1,0 +1,74 @@
+{
+  "scope": "Current credential and captured row lifetime in the original native Source callback for Task/Project/ Foundation reads",
+  "sources": {
+    "server/src/services/authorization.ts": "8fa11fec98051da60fbb80dc46451c3a181e1740e2c15e65dd3e262b4de3a10a",
+    "server/src/__tests__/foundation-read-source-authority.integration.test.ts": "84f9b7bac0254a347944cc940feb0345145ffeef421e5c14c01e131364af6b42",
+    "server/src/__tests__/business-metrics.integration.test.ts": "4eb407a761782e707a5f2d9a0caa565a45d3624364b341859df50106f7d245b3",
+    "server/src/__tests__/strategy-execution.integration.test.ts": "fdd1eee96e81e2b10d138813cb23d91181c96a4d5208cc076fdfd504927d6aac"
+  },
+  "regressions": [
+    {
+      "log": "up03-all-native-source-pins-baseline.log",
+      "failed": 2,
+      "passed": 2,
+      "filtered": 13,
+      "seconds": 67.59,
+      "finding": "Actual HTTP Task read allowed stale Agent/Board hashes after real Source wait; Foundation controls passed."
+    },
+    {
+      "log": "up03-all-native-source-lifetimes-baseline.log",
+      "failed": 6,
+      "passed": 5,
+      "filtered": 10,
+      "seconds": 131.11,
+      "finding": "Task key hash, JWT wait/return expiry, real cookie logout and unlisted Task callback allow. Exact failed test sources/pins retained."
+    }
+  ],
+  "implementation": "Reuse original NOWAIT IAM loaders for all same-company real-transaction native Source reads. Require requested Task/Project rows in original captured maps. Bind actual verified credential markers to current original principal and responsible Human; retain original canonical credential-free internal actor policy and outside-transaction per-call semantics. No permission cache, schema or cloned policy.",
+  "verification": {
+    "originalSourceAndAuthorizationAndMiddleware": {
+      "files": 3,
+      "passed": 140,
+      "seconds": 180.19,
+      "exit": 0,
+      "log": "up03-all-native-source-lifetimes-final.log"
+    },
+    "actualConsumerBaseline": {
+      "base": "5d49d9b9a",
+      "failed": 21,
+      "passed": 24,
+      "seconds": 170.77,
+      "exit": 1,
+      "log": "up03-native-callers-head-baseline.log",
+      "finding": "Exact original committed authorization reproduces all21 consumer failures with raw unqualified Project fixtures, matching first generalized-owner run."
+    },
+    "canonicalProjectIntermediate": {
+      "passed": 43,
+      "failed": 2,
+      "errors": 1,
+      "seconds": 194.19,
+      "exit": 1,
+      "log": "up03-native-callers-canonical-projects.log",
+      "finding": "Actual original project POST replaces raw positive fixture insert; all29 metrics pass. Reached strategy harness has missing authUsers reviewer and actual40P01 from Memory-before-company inversion. Failed harness source retained."
+    },
+    "finalOriginalConsumers": {
+      "files": 2,
+      "passed": 45,
+      "seconds": 201.65,
+      "exit": 0,
+      "log": "up03-native-callers-final.log",
+      "fixtureChanges": "Actual Board project creation route, persisted real reviewer row, canonical company-before-Memory harness lock order; all original assertions preserved. Negative foreign/unknown rows stay unknown."
+    },
+    "finalServerCompiler": {
+      "exit": 0,
+      "log": "up03-native-callers-and-mail-server-types.log"
+    },
+    "finalPinsMatch": true,
+    "processesClosed": true
+  },
+  "limits": [
+    "Bounded callback lifetime only; SQL outside this owner remains unqualified.",
+    "No complete input receipt, temporal source graph or original private Memory regression closure.",
+    "Latest full recursive workspace/test/build and complete V10/PR/release gates remain open."
+  ]
+}

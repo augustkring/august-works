@@ -1,0 +1,54 @@
+(!) Your Vite config uses features that are unsupported by `configLoader: 'native'`, which is planned to become the default in a future major version of Vite:
+  - `__dirname` (vitest.config.ts:7:25). Use `import.meta.dirname` instead
+Set `VITE_CONFIG_NATIVE_IGNORE_WARNING=true` to suppress this warning.
+
+ RUN  v4.1.11 /workspace/blentera-v10
+
+ ❯ |@paperclipai/server| src/__tests__/typed-task-private-sources.integration.test.ts (4 tests | 2 failed) 4917ms
+     × retains the exact typed RoutineRun edge and limits its private Task to the actual routine owner 628ms
+     × withdraws the copied Task for both readers when its actual authoring source is erased 420ms
+
+⎯⎯⎯⎯⎯⎯⎯ Failed Tests 2 ⎯⎯⎯⎯⎯⎯⎯
+
+ FAIL  |@paperclipai/server| src/__tests__/typed-task-private-sources.integration.test.ts > typed routine Task private source graph > retains the exact typed RoutineRun edge and limits its private Task to the actual routine owner
+Error: Task privacy source is unavailable
+ ❯ notFound src/errors.ts:25:10
+     23|
+     24| export function notFound(message = "Not found", details?: unknown) {
+     25|   return new HttpError(404, message, details);
+       |          ^
+     26| }
+     27|
+ ❯ assertIssuePrivacySourcesReadable src/services/issues.ts:2141:26
+ ❯ persist src/services/issues.ts:10523:9
+ ❯ scope ../node_modules/.pnpm/postgres@3.4.9_patch_hash=sryle6qd5qfmnxvoebal4gashi/node_modules/postgres/src/index.js:279:18
+ ❯ sql.begin ../node_modules/.pnpm/postgres@3.4.9_patch_hash=sryle6qd5qfmnxvoebal4gashi/node_modules/postgres/src/index.js:257:14
+ ❯ Object.create src/services/issues.ts:10650:25
+ ❯ src/__tests__/typed-task-private-sources.integration.test.ts:89:18
+
+⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯[1/2]⎯
+
+ FAIL  |@paperclipai/server| src/__tests__/typed-task-private-sources.integration.test.ts > typed routine Task private source graph > withdraws the copied Task for both readers when its actual authoring source is erased
+Error: Task privacy source is unavailable
+ ❯ notFound src/errors.ts:25:10
+     23|
+     24| export function notFound(message = "Not found", details?: unknown) {
+     25|   return new HttpError(404, message, details);
+       |          ^
+     26| }
+     27|
+ ❯ assertIssuePrivacySourcesReadable src/services/issues.ts:2141:26
+ ❯ persist src/services/issues.ts:10523:9
+ ❯ scope ../node_modules/.pnpm/postgres@3.4.9_patch_hash=sryle6qd5qfmnxvoebal4gashi/node_modules/postgres/src/index.js:279:18
+ ❯ sql.begin ../node_modules/.pnpm/postgres@3.4.9_patch_hash=sryle6qd5qfmnxvoebal4gashi/node_modules/postgres/src/index.js:257:14
+ ❯ Object.create src/services/issues.ts:10650:25
+ ❯ src/__tests__/typed-task-private-sources.integration.test.ts:99:18
+
+⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯[2/2]⎯
+
+
+ Test Files  1 failed (1)
+      Tests  2 failed | 2 passed (4)
+   Start at  19:22:30
+   Duration  17.25s (transform 8.97s, setup 69ms, import 12.16s, tests 4.92s, environment 0ms)
+

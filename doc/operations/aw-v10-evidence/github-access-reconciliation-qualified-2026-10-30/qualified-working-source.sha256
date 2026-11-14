@@ -1,0 +1,8 @@
+bc0d08faa58226ee933743bc41ad2f6f66f544e6c11c2a46298e4166e5adf6f2  packages/db/src/schema/tool_access.ts
+e67593f15a92752edb32c4edccb57422a3ee88da26f70109d532b30c9f8146e6  packages/shared/src/types/tool-access.ts
+a2841ff3c8a57df361d49c95c7262c09a328139398123fe5eea3df0617519ad9  server/src/services/tool-access.ts
+3b22188622a3112fa762e8c9168344a745a69c70c71db11efb4a7355bca2db88  server/src/services/tool-connection-lifecycle.ts
+e2003276e44f8ee9e6ea7486464782cb608f5c98cc820ec9017f126d3311b58a  server/src/services/github-connection-events.ts
+b8ca73debfd80c052ff9aa6f0b39f9dc7edd051aff434e67b79d9d10b1ffa916  server/src/services/tool-connection-lifecycle.test.ts
+a883f45b8c00cf2359fb91061249fc907522e0aaf174f691f4e1d5fd2f1d549e  server/src/__tests__/tool-access-service.test.ts
+8bb1260d53ba796e93e13c7650b53ddc9158410641d8887a8b4f938bc7ad4dd0  server/src/__tests__/v9-connector-recovery.integration.test.ts

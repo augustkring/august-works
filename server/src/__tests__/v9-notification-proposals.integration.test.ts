@@ -102,17 +102,18 @@ describe("Owned conversational notification proposals require explicit current H
   });
   it("uses the actual SDK descriptor and shows only current body-free conversation references",async()=>{
     const name="paperclip-self:propose_notification_preferences";
+    const canonicalName="blentera.notification.preferences.propose";
     await db.insert(toolPolicies).values({companyId:f.home,name:"Explicit notification proposal software fixture",policyType:"allow",selectors:{toolName:name}});
     const gateway=createToolGatewayService(db,{toolActionSigningSecret:"notification-proposal-test-only-secret"});
     const session=await gateway.createSession({companyId:f.home,agentId:f.presence.id,runId,issueId:conversationId});
-    expect((await gateway.listToolsForSession(session.token)).map(tool=>tool.name)).toContain(name);
+    expect((await gateway.listToolsForSession(session.token)).map(tool=>tool.name)).toContain(canonicalName);
     const receipt=await gateway.executeTool({sessionToken:session.token,tool:name,parameters:input()});
     expect(receipt).toMatchObject({status:"completed",result:{data:{status:"created",preferenceApplied:false}}});
     const saved=await create(),view=await conversationAuthoringService(db).get(f.actor,f.home,conversationId);
     expect(view.savedNotificationProposals).toEqual([{kind:"notification_proposal",id:saved.proposalId,category:"work_update",status:"pending",version:1}]);
     expect(JSON.stringify(view)).not.toMatch(/baselineHash|emailEnabled|responsibleUserId/);
     await instanceSettingsService(db).updateExperimental({notification_policy_v9:false});
-    expect((await gateway.listToolsForSession(session.token)).map(tool=>tool.name)).not.toContain(name);
+    expect((await gateway.listToolsForSession(session.token)).map(tool=>tool.name)).not.toContain(canonicalName);
   });
   it("rejects direct provenance changes and serializes concurrent confirmations",async()=>{
     const saved=await create();

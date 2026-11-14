@@ -1,0 +1,64 @@
+{
+  "remainingOwnedPostgresProcesses": [
+    {
+      "pid": 327066,
+      "parentPid": 1,
+      "executable": "postgres"
+    },
+    {
+      "pid": 327067,
+      "parentPid": 327066,
+      "executable": "postgres"
+    },
+    {
+      "pid": 327068,
+      "parentPid": 327066,
+      "executable": "postgres"
+    },
+    {
+      "pid": 327069,
+      "parentPid": 327066,
+      "executable": "postgres"
+    },
+    {
+      "pid": 327070,
+      "parentPid": 327066,
+      "executable": "postgres"
+    },
+    {
+      "pid": 327071,
+      "parentPid": 327066,
+      "executable": "postgres"
+    },
+    {
+      "pid": 327073,
+      "parentPid": 327066,
+      "executable": "postgres"
+    },
+    {
+      "pid": 327074,
+      "parentPid": 327066,
+      "executable": "postgres"
+    },
+    {
+      "pid": 327075,
+      "parentPid": 327066,
+      "executable": "postgres"
+    }
+  ],
+  "normalTestProcessExit": 1,
+  "observedDetachedFixtureRuntimeProcesses": [
+    327066,
+    327067,
+    327068,
+    327069,
+    327070,
+    327071,
+    327073,
+    327074,
+    327075
+  ],
+  "remainingOwnedRuntimeProcesses": [],
+  "postRunKillsPerformed": true,
+  "tempRoot": "/var/tmp/mpg-0z3gyw9t"
+}

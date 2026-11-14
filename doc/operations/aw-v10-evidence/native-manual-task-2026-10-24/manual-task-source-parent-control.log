@@ -1,0 +1,86 @@
+(!) Your Vite config uses features that are unsupported by `configLoader: 'native'`, which is planned to become the default in a future major version of Vite:
+  - `__dirname` (vitest.config.ts:7:25). Use `import.meta.dirname` instead
+Set `VITE_CONFIG_NATIVE_IGNORE_WARNING=true` to suppress this warning.
+
+ RUN  v4.1.11 /workspace/blentera-v10
+
+ ❯ |@paperclipai/server| src/__tests__/issue-create-deduplication-routes.test.ts (9 tests | 1 failed | 8 skipped) 8912ms
+     × records the mutation's project and status receipt for native projection without turning metadata edits into transitions 402ms
+[08:10:39] [34mDEBUG[39m: [36msafe authenticated GET observed[39m [90m{"event":"safe_get_request_observed","route":"GET /api/companies/:companyId/issues","companyId":"5d613e04-05cf-4859-ad0e-c2e50584553a","actorType":"board","actorIdentityHash":"cp0jWqDSP6P8pSnV","clientHash":"tyW0XNaQNMuB9rot","cacheKeyHash":"ibraLIIDoG9KRUeY","queryKeys":["createdFromIssueId","excludeRoutineExecutions","includeBlockedBy","includeBlockedInboxAttention","includeLiveDescendantSummary","includePluginOperations","includeRoutineExecutions","limit","offset"],"requestCount":1,"durationMs":469,"statusCode":200,"responseBytes":7733,"compressedBytes":null,"contentEncoding":null,"cacheStatus":"miss","etagOutcome":"none","referer":null,"visibilityHint":null}[39m
+[08:10:39] [34mDEBUG[39m: [36msafe authenticated GET observed[39m [90m{"event":"safe_get_request_observed","route":"GET /api/companies/:companyId/issues","companyId":"5d613e04-05cf-4859-ad0e-c2e50584553a","actorType":"board","actorIdentityHash":"cp0jWqDSP6P8pSnV","clientHash":"tyW0XNaQNMuB9rot","cacheKeyHash":"zRxYmIa_Lbr83rs6","queryKeys":["createdFromIssueId","excludeRoutineExecutions","includeBlockedBy","includeBlockedInboxAttention","includeLiveDescendantSummary","includePluginOperations","includeRoutineExecutions","limit","offset","sortDir","sortField"],"requestCount":1,"durationMs":114,"statusCode":200,"responseBytes":5134,"compressedBytes":null,"contentEncoding":null,"cacheStatus":"miss","etagOutcome":"none","referer":null,"visibilityHint":null}[39m
+ ❯ |@paperclipai/server| src/__tests__/issue-created-from-routes.test.ts (6 tests | 2 failed | 4 skipped) 9332ms
+     × returns both runners' created tasks, regardless of parent, project or completion 631ms
+     × keeps cursor pages complete when activity changes or an earlier task disappears 142ms
+
+⎯⎯⎯⎯⎯⎯⎯ Failed Tests 3 ⎯⎯⎯⎯⎯⎯⎯
+
+ FAIL  |@paperclipai/server| src/__tests__/issue-create-deduplication-routes.test.ts > issue create deduplication routes > records the mutation's project and status receipt for native projection without turning metadata edits into transitions
+Error: expected 201 "Created", got 404 "Not Found"
+ ❯ src/__tests__/issue-create-deduplication-routes.test.ts:97:142
+     95|     await db.insert(projects).values({id:projectId,companyId,name:"Rec…
+     96|     const app=createApp();
+     97|     const created=await request(app).post(`/api/companies/${companyId}…
+       |                                                                                                                                              ^
+     98|     await request(app).patch(`/api/issues/${created.body.id}`).send({s…
+     99|     await request(app).patch(`/api/issues/${created.body.id}`).send({t…
+ ❯ Test._assertStatus ../node_modules/.pnpm/supertest@7.2.2/node_modules/supertest/lib/test.js:309:14
+ ❯ ../node_modules/.pnpm/supertest@7.2.2/node_modules/supertest/lib/test.js:365:13
+ ❯ Test._assertFunction ../node_modules/.pnpm/supertest@7.2.2/node_modules/supertest/lib/test.js:342:13
+ ❯ Test.assert ../node_modules/.pnpm/supertest@7.2.2/node_modules/supertest/lib/test.js:195:23
+ ❯ localAssert ../node_modules/.pnpm/supertest@7.2.2/node_modules/supertest/lib/test.js:138:14
+ ❯ Server.<anonymous> ../node_modules/.pnpm/supertest@7.2.2/node_modules/supertest/lib/test.js:152:11
+
+⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯[1/3]⎯
+
+ FAIL  |@paperclipai/server| src/__tests__/issue-created-from-routes.test.ts > tasks created from an issue > returns both runners' created tasks, regardless of parent, project or completion
+AssertionError: expected Set{ …(3) } to deeply equal Set{ …(5) }
+
+- Expected
++ Received
+
+  Set {
+    "0ff10af9-594a-4642-9039-b3b1d3724ffa",
+-   "2a3f2d7b-7114-47ad-903b-75e31a28ceb7",
+-   "39376d77-e7b3-4961-aff8-79ddb1eb4904",
+    "5d335d1b-74c0-44d7-8d0c-15db5845a0fa",
+    "6efc4a48-870c-4fce-a4c7-39f45b7b2056",
+  }
+
+ ❯ src/__tests__/issue-created-from-routes.test.ts:105:73
+    103|       const result = await request(app()).get(`/api/companies/${compan…
+    104|       expect(result.status, JSON.stringify(result.body)).toBe(200);
+    105|       expect(new Set(result.body.map((row: { id: string }) => row.id))…
+       |                                                                         ^
+    106|     }
+    107|   });
+
+⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯[2/3]⎯
+
+ FAIL  |@paperclipai/server| src/__tests__/issue-created-from-routes.test.ts > tasks created from an issue > keeps cursor pages complete when activity changes or an earlier task disappears
+AssertionError: expected [ …(2) ] to deeply equal [ …(2) ]
+
+- Expected
++ Received
+
+  [
+    "0ff10af9-594a-4642-9039-b3b1d3724ffa",
+-   "2a3f2d7b-7114-47ad-903b-75e31a28ceb7",
++   "5d335d1b-74c0-44d7-8d0c-15db5845a0fa",
+  ]
+
+ ❯ src/__tests__/issue-created-from-routes.test.ts:113:61
+    111|     expect(first.status).toBe(200);
+    112|     const sortedIds = [...expected].sort();
+    113|     expect(first.body.map((row: { id: string }) => row.id)).toEqual(so…
+       |                                                             ^
+    114|     await db.update(issues).set({ updatedAt: new Date("2099-01-01"), p…
+    115|     await db.update(issues).set({ hiddenAt: new Date() }).where(eq(iss…
+
+⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯[3/3]⎯
+
+
+ Test Files  2 failed (2)
+      Tests  3 failed | 12 skipped (15)
+   Start at  08:09:29
+   Duration  69.84s (transform 27.06s, setup 227ms, import 50.70s, tests 18.24s, environment 0ms)
+

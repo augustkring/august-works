@@ -12,9 +12,10 @@ import { aiGovernanceService } from "../services/ai-governance/governance-servic
 import { instanceSettingsService } from "../services/instance-settings.js";
 import { analyticalPurpose, metricDefinition } from "./helpers/business-metric-fixture.js";
 import { getEmbeddedPostgresTestSupport, startEmbeddedPostgresTestDatabase } from "./helpers/embedded-postgres.js";
+import { createCanonicalHumanProject, seedCurrentHumanSourceActor } from "./helpers/current-human-source-fixture.js";
 const support = await getEmbeddedPostgresTestSupport();
 const suite = support.supported ? describe : describe.skip;
-const actor = { type: "board" as const, source: "local_implicit" as const };
+let actor: Awaited<ReturnType<typeof seedCurrentHumanSourceActor>>;
 const flags = { analytical_lineage_v8: true, business_metrics_v8: true, ai_use_cases_v7: true, governance_evidence_v7: true };
 suite("human metric commitments on migrated PostgreSQL", () => {
   let database: Awaited<ReturnType<typeof startEmbeddedPostgresTestDatabase>>;
@@ -26,8 +27,9 @@ suite("human metric commitments on migrated PostgreSQL", () => {
     await instanceSettingsService(db, { runtimeEnv: {} }).updateExperimental(flags);
     companyId = randomUUID(); otherCompanyId = randomUUID(); goalId = randomUUID(); projectId = randomUUID();
     await db.insert(companies).values([{ id: companyId, name: "Target company", issuePrefix: randomUUID() }, { id: otherCompanyId, name: "Foreign", issuePrefix: randomUUID() }]);
+    actor = await seedCurrentHumanSourceActor(db, [companyId]);
     await db.insert(goals).values({ id: goalId, companyId, title: "Native goal" });
-    await db.insert(projects).values({ id: projectId, companyId, name: "Native project" });
+    const project = await createCanonicalHumanProject(db, companyId, actor, "Native project"); projectId = project.id;
     const policy = await aiGovernanceService(db).obligation(actor, companyId, analyticalPurpose());
     pinned = await businessMetricService(db).create(companyId, actor, { key: "completion", definition: metricDefinition(policy.id) });
     await businessMetricService(db).publish(companyId, actor, pinned.metric.id, { expectedRevision: 1, versionId: pinned.version.id });

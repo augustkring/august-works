@@ -7,6 +7,7 @@ import { describe, expect, it } from "vitest";
 import { CONNECTION_INTENT_AGENT_GUIDANCE } from "@paperclipai/shared";
 import {
   readPaperclipRuntimeSkillEntries,
+  ensurePaperclipSkillSymlink,
   resolvePaperclipSkillsDir,
   applyPaperclipWorkspaceEnv,
   appendWithByteCap,
@@ -92,6 +93,40 @@ describe("runtime connection tool delivery", () => {
     expect(DEFAULT_PAPERCLIP_CONVERSATION_PROMPT_TEMPLATE).toContain(CONNECTION_INTENT_AGENT_GUIDANCE);
     expect(DEFAULT_PAPERCLIP_CONVERSATION_PROMPT_TEMPLATE).not.toContain("Execution contract:");
     expect(DEFAULT_PAPERCLIP_CONVERSATION_PROMPT_TEMPLATE).not.toContain("child issues");
+  });
+});
+
+describe("required platform Skill integrity", () => {
+  it("requires the platform procedure even for an empty desired set and removes the legacy overlapping default", () => {
+    expect(resolveLegacyPaperclipDesiredSkillNames({ paperclipSkillSync: { desiredSkills: [] } }, [
+      { key: PAPERCLIP_OPERATIONAL_SKILL_KEY, runtimeName: "paperclip" },
+      { key: "blentera-platform", runtimeName: "blentera-platform" },
+    ])).toEqual(["blentera-platform"]);
+  });
+
+  it("preserves an unrelated reserved-name directory and rejects its use", async () => {
+    const dir = await fs.mkdtemp(path.join(os.tmpdir(), "platform-skill-collision-"));
+    try {
+      const source = path.join(dir, "authoritative"), target = path.join(dir, "managed", "blentera-platform");
+      await fs.mkdir(source); await fs.mkdir(target, { recursive: true });
+      await fs.writeFile(path.join(source, "SKILL.md"), "# Platform release\n");
+      await fs.writeFile(path.join(target, "SKILL.md"), "# Customer procedure\n");
+      await expect(ensurePaperclipSkillSymlink(source, target)).rejects.toThrow("platform_skill_collision");
+      expect(await fs.readFile(path.join(target, "SKILL.md"), "utf8")).toBe("# Customer procedure\n");
+    } finally { await fs.rm(dir, { recursive: true, force: true }); }
+  });
+
+  it("accepts only the exact managed release link and preserves a conflicting link", async () => {
+    const dir = await fs.mkdtemp(path.join(os.tmpdir(), "platform-skill-link-"));
+    try {
+      const source = path.join(dir, "release"), other = path.join(dir, "other"), target = path.join(dir, "blentera-platform");
+      await fs.mkdir(source); await fs.mkdir(other);
+      expect(await ensurePaperclipSkillSymlink(source, target)).toBe("created");
+      expect(await ensurePaperclipSkillSymlink(source, target)).toBe("skipped");
+      await fs.unlink(target); await fs.symlink(other, target);
+      await expect(ensurePaperclipSkillSymlink(source, target)).rejects.toThrow("platform_skill_collision");
+      expect(await fs.realpath(target)).toBe(await fs.realpath(other));
+    } finally { await fs.rm(dir, { recursive: true, force: true }); }
   });
 });
 

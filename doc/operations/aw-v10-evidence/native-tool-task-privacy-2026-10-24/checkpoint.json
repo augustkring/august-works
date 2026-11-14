@@ -1,0 +1,45 @@
+{
+  "parentCommit": "556b31e51",
+  "requirements": [
+    "UP-03",
+    "CE-04"
+  ],
+  "sourcePinsFile": "source-pins.json",
+  "checks": {
+    "originalNativePrivacyCounterexamples": {
+      "exit": 1,
+      "failed": 2,
+      "suites": 1,
+      "log": "native-tool-task-privacy-red.log"
+    },
+    "nativePrivacyAndExistingAuthority": {
+      "exit": 0,
+      "passed": 28,
+      "suites": 2,
+      "log": "native-tool-task-privacy-owned.log"
+    },
+    "finalNativePrivacyIncludingRevocation": {
+      "exit": 0,
+      "passed": 3,
+      "suites": 1,
+      "log": "native-tool-task-privacy-final.log"
+    },
+    "serverCompiler": {
+      "exit": 0,
+      "log": "native-tool-task-privacy-types.log"
+    }
+  },
+  "observations": [
+    "The original get_task_context child selection filtered company/parent/hidden state only; search_tasks called issueService.list without a readCondition. Actual two-Human native fixtures reproduce private title/body disclosure and private rows displacing an older public child before the101-row cutoff.",
+    "Both original queries now use the existing canonical issueReadSqlCondition with the actual bound native run/Agent and its current DB responsible Human. Child privacy narrows SQL before ordering/limit/truncation; search passes the same predicate into the original issue list before matching text and choosing model-visible results. Existing output shapes remain unchanged.",
+    "The fixture uses actual Alice/Bob users and memberships, a running native Bob run on an assigned open parent, an original domain-created Alice private child, and public controls. Direct canonical helper checks first prove Bob denial, Alice access and public access. A102-row private fixture proves denied children do not consume the visible cutoff or set a false truncated flag.",
+    "The final third case adds a real explicit Bob sharing row, verifies visibility through both tools, revokes that row, and verifies both tools stop returning it while retaining the public control. The source predicate is evaluated afresh on the subsequent reads.",
+    "Original two cases fail,28 cases across the new native/existing authority suites pass after the query fix, final three native cases including revocation pass, and server compilation passes. A bounded gpt-6-luna agent prepared the original native counterexamples; Root reviewed/extended controls and implemented the query narrowing."
+  ],
+  "limits": [
+    "This is native privacy SQL narrowing. It supplies no company/action grant, complete run receipt or source-history reconstruction. Existing per-resource Agent action scope and physical source/credential lifetime closure are separate open work.",
+    "Other get_task_context fields still need their own source review. In particular the shared childReviewOutcomes helper can expose private child identifiers/reviewer IDs through both tool and continuation paths and remains the next concrete fix. This checkpoint does not claim the entire tool response family is closed.",
+    "The fixtures exercise actual PostgreSQL/domain/native authority calls, not browser cookies, JWT signing, external provider transport or representative host execution. UI/provider paths were unchanged and not rerun here.",
+    "The six typed/private-Memory/temporal regressions and broader V10 gates remain open. No private-work enablement, full V10/PR readiness, release, merge or deployment is claimed."
+  ]
+}

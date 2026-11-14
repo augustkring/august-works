@@ -1,0 +1,5 @@
+{
+  "R609": "60 passed, 1 failed: missing timestamps in newly added auth-user fixture; corrected fixture",
+  "R611": "Board HTTP passed, Agent test failed: nonexistent key-expiry column assumption; removed unsupported expiry field and used actual revocation",
+  "R614": "74 passed, 1 failed: real key-update/source-lock contention; added original-operation deferral and deterministic held-lock regression; R615/R617 subsequently pass"
+}

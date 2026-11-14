@@ -1,0 +1,1011 @@
+Copied and verified source files 151
+
+ RUN  v4.1.11 /workspace/v10-dep-qualification/server
+
+············[05:38:57] [33mWARN[39m: [36mCould not recover approved tool action[39m [90m{"actionRequestId":"00000000-0000-4000-8000-000000000000"}[39m
+    err: {
+      "type": "Error",
+      "message": "Unavailable approval dependency",
+      "stack":
+          Error: Unavailable approval dependency
+              at /workspace/v10-dep-qualification/server/src/__tests__/tool-gateway-service.test.ts:853:81
+              at process.processTicksAndRejections (node:internal/process/task_queues:104:5)
+              at async file:///workspace/v10-dep-qualification/node_modules/.pnpm/@vitest+runner@4.1.11/node_modules/@vitest/runner/dist/chunk-artifact.js:1903:20
+    }
+[05:38:57] [33mWARN[39m: [36mCould not recover approved tool action[39m [90m{"actionRequestId":"00000000-0000-4000-8000-000000000001"}[39m
+    err: {
+      "type": "Error",
+      "message": "Unavailable approval dependency",
+      "stack":
+          Error: Unavailable approval dependency
+              at /workspace/v10-dep-qualification/server/src/__tests__/tool-gateway-service.test.ts:853:81
+              at process.processTicksAndRejections (node:internal/process/task_queues:104:5)
+              at async file:///workspace/v10-dep-qualification/node_modules/.pnpm/@vitest+runner@4.1.11/node_modules/@vitest/runner/dist/chunk-artifact.js:1903:20
+    }
+[05:38:57] [33mWARN[39m: [36mCould not recover approved tool action[39m [90m{"actionRequestId":"00000000-0000-4000-8000-000000000002"}[39m
+    err: {
+      "type": "Error",
+      "message": "Unavailable approval dependency",
+      "stack":
+          Error: Unavailable approval dependency
+              at /workspace/v10-dep-qualification/server/src/__tests__/tool-gateway-service.test.ts:853:81
+              at process.processTicksAndRejections (node:internal/process/task_queues:104:5)
+              at async file:///workspace/v10-dep-qualification/node_modules/.pnpm/@vitest+runner@4.1.11/node_modules/@vitest/runner/dist/chunk-artifact.js:1903:20
+    }
+[05:38:57] [33mWARN[39m: [36mCould not recover approved tool action[39m [90m{"actionRequestId":"00000000-0000-4000-8000-000000000003"}[39m
+    err: {
+      "type": "Error",
+      "message": "Unavailable approval dependency",
+      "stack":
+          Error: Unavailable approval dependency
+              at /workspace/v10-dep-qualification/server/src/__tests__/tool-gateway-service.test.ts:853:81
+              at process.processTicksAndRejections (node:internal/process/task_queues:104:5)
+              at async file:///workspace/v10-dep-qualification/node_modules/.pnpm/@vitest+runner@4.1.11/node_modules/@vitest/runner/dist/chunk-artifact.js:1903:20
+    }
+[05:38:57] [33mWARN[39m: [36mCould not recover approved tool action[39m [90m{"actionRequestId":"00000000-0000-4000-8000-000000000004"}[39m
+    err: {
+      "type": "Error",
+      "message": "Unavailable approval dependency",
+      "stack":
+          Error: Unavailable approval dependency
+              at /workspace/v10-dep-qualification/server/src/__tests__/tool-gateway-service.test.ts:853:81
+              at process.processTicksAndRejections (node:internal/process/task_queues:104:5)
+              at async file:///workspace/v10-dep-qualification/node_modules/.pnpm/@vitest+runner@4.1.11/node_modules/@vitest/runner/dist/chunk-artifact.js:1903:20
+    }
+[05:38:57] [33mWARN[39m: [36mCould not recover approved tool action[39m [90m{"actionRequestId":"00000000-0000-4000-8000-000000000005"}[39m
+    err: {
+      "type": "Error",
+      "message": "Unavailable approval dependency",
+      "stack":
+          Error: Unavailable approval dependency
+              at /workspace/v10-dep-qualification/server/src/__tests__/tool-gateway-service.test.ts:853:81
+              at process.processTicksAndRejections (node:internal/process/task_queues:104:5)
+              at async file:///workspace/v10-dep-qualification/node_modules/.pnpm/@vitest+runner@4.1.11/node_modules/@vitest/runner/dist/chunk-artifact.js:1903:20
+    }
+[05:38:57] [33mWARN[39m: [36mCould not recover approved tool action[39m [90m{"actionRequestId":"00000000-0000-4000-8000-000000000006"}[39m
+    err: {
+      "type": "Error",
+      "message": "Unavailable approval dependency",
+      "stack":
+          Error: Unavailable approval dependency
+              at /workspace/v10-dep-qualification/server/src/__tests__/tool-gateway-service.test.ts:853:81
+              at process.processTicksAndRejections (node:internal/process/task_queues:104:5)
+              at async file:///workspace/v10-dep-qualification/node_modules/.pnpm/@vitest+runner@4.1.11/node_modules/@vitest/runner/dist/chunk-artifact.js:1903:20
+    }
+[05:38:57] [33mWARN[39m: [36mCould not recover approved tool action[39m [90m{"actionRequestId":"00000000-0000-4000-8000-000000000007"}[39m
+    err: {
+      "type": "Error",
+      "message": "Unavailable approval dependency",
+      "stack":
+          Error: Unavailable approval dependency
+              at /workspace/v10-dep-qualification/server/src/__tests__/tool-gateway-service.test.ts:853:81
+              at process.processTicksAndRejections (node:internal/process/task_queues:104:5)
+              at async file:///workspace/v10-dep-qualification/node_modules/.pnpm/@vitest+runner@4.1.11/node_modules/@vitest/runner/dist/chunk-artifact.js:1903:20
+    }
+[05:38:57] [33mWARN[39m: [36mCould not recover approved tool action[39m [90m{"actionRequestId":"00000000-0000-4000-8000-000000000008"}[39m
+    err: {
+      "type": "Error",
+      "message": "Unavailable approval dependency",
+      "stack":
+          Error: Unavailable approval dependency
+              at /workspace/v10-dep-qualification/server/src/__tests__/tool-gateway-service.test.ts:853:81
+              at process.processTicksAndRejections (node:internal/process/task_queues:104:5)
+              at async file:///workspace/v10-dep-qualification/node_modules/.pnpm/@vitest+runner@4.1.11/node_modules/@vitest/runner/dist/chunk-artifact.js:1903:20
+    }
+[05:38:57] [33mWARN[39m: [36mCould not recover approved tool action[39m [90m{"actionRequestId":"00000000-0000-4000-8000-000000000009"}[39m
+    err: {
+      "type": "Error",
+      "message": "Unavailable approval dependency",
+      "stack":
+          Error: Unavailable approval dependency
+              at /workspace/v10-dep-qualification/server/src/__tests__/tool-gateway-service.test.ts:853:81
+              at process.processTicksAndRejections (node:internal/process/task_queues:104:5)
+              at async file:///workspace/v10-dep-qualification/node_modules/.pnpm/@vitest+runner@4.1.11/node_modules/@vitest/runner/dist/chunk-artifact.js:1903:20
+    }
+[05:38:57] [33mWARN[39m: [36mCould not recover approved tool action[39m [90m{"actionRequestId":"00000000-0000-4000-8000-000000000010"}[39m
+    err: {
+      "type": "Error",
+      "message": "Unavailable approval dependency",
+      "stack":
+          Error: Unavailable approval dependency
+              at /workspace/v10-dep-qualification/server/src/__tests__/tool-gateway-service.test.ts:853:81
+              at process.processTicksAndRejections (node:internal/process/task_queues:104:5)
+              at async file:///workspace/v10-dep-qualification/node_modules/.pnpm/@vitest+runner@4.1.11/node_modules/@vitest/runner/dist/chunk-artifact.js:1903:20
+    }
+[05:38:57] [33mWARN[39m: [36mCould not recover approved tool action[39m [90m{"actionRequestId":"00000000-0000-4000-8000-000000000011"}[39m
+    err: {
+      "type": "Error",
+      "message": "Unavailable approval dependency",
+      "stack":
+          Error: Unavailable approval dependency
+              at /workspace/v10-dep-qualification/server/src/__tests__/tool-gateway-service.test.ts:853:81
+              at process.processTicksAndRejections (node:internal/process/task_queues:104:5)
+              at async file:///workspace/v10-dep-qualification/node_modules/.pnpm/@vitest+runner@4.1.11/node_modules/@vitest/runner/dist/chunk-artifact.js:1903:20
+    }
+[05:38:57] [33mWARN[39m: [36mCould not recover approved tool action[39m [90m{"actionRequestId":"00000000-0000-4000-8000-000000000012"}[39m
+    err: {
+      "type": "Error",
+      "message": "Unavailable approval dependency",
+      "stack":
+          Error: Unavailable approval dependency
+              at /workspace/v10-dep-qualification/server/src/__tests__/tool-gateway-service.test.ts:853:81
+              at process.processTicksAndRejections (node:internal/process/task_queues:104:5)
+              at async file:///workspace/v10-dep-qualification/node_modules/.pnpm/@vitest+runner@4.1.11/node_modules/@vitest/runner/dist/chunk-artifact.js:1903:20
+    }
+[05:38:57] [33mWARN[39m: [36mCould not recover approved tool action[39m [90m{"actionRequestId":"00000000-0000-4000-8000-000000000013"}[39m
+    err: {
+      "type": "Error",
+      "message": "Unavailable approval dependency",
+      "stack":
+          Error: Unavailable approval dependency
+              at /workspace/v10-dep-qualification/server/src/__tests__/tool-gateway-service.test.ts:853:81
+              at process.processTicksAndRejections (node:internal/process/task_queues:104:5)
+              at async file:///workspace/v10-dep-qualification/node_modules/.pnpm/@vitest+runner@4.1.11/node_modules/@vitest/runner/dist/chunk-artifact.js:1903:20
+    }
+[05:38:57] [33mWARN[39m: [36mCould not recover approved tool action[39m [90m{"actionRequestId":"00000000-0000-4000-8000-000000000014"}[39m
+    err: {
+      "type": "Error",
+      "message": "Unavailable approval dependency",
+      "stack":
+          Error: Unavailable approval dependency
+              at /workspace/v10-dep-qualification/server/src/__tests__/tool-gateway-service.test.ts:853:81
+              at process.processTicksAndRejections (node:internal/process/task_queues:104:5)
+              at async file:///workspace/v10-dep-qualification/node_modules/.pnpm/@vitest+runner@4.1.11/node_modules/@vitest/runner/dist/chunk-artifact.js:1903:20
+    }
+[05:38:57] [33mWARN[39m: [36mCould not recover approved tool action[39m [90m{"actionRequestId":"00000000-0000-4000-8000-000000000015"}[39m
+    err: {
+      "type": "Error",
+      "message": "Unavailable approval dependency",
+      "stack":
+          Error: Unavailable approval dependency
+              at /workspace/v10-dep-qualification/server/src/__tests__/tool-gateway-service.test.ts:853:81
+              at process.processTicksAndRejections (node:internal/process/task_queues:104:5)
+              at async file:///workspace/v10-dep-qualification/node_modules/.pnpm/@vitest+runner@4.1.11/node_modules/@vitest/runner/dist/chunk-artifact.js:1903:20
+    }
+[05:38:57] [33mWARN[39m: [36mCould not recover approved tool action[39m [90m{"actionRequestId":"00000000-0000-4000-8000-000000000016"}[39m
+    err: {
+      "type": "Error",
+      "message": "Unavailable approval dependency",
+      "stack":
+          Error: Unavailable approval dependency
+              at /workspace/v10-dep-qualification/server/src/__tests__/tool-gateway-service.test.ts:853:81
+              at process.processTicksAndRejections (node:internal/process/task_queues:104:5)
+              at async file:///workspace/v10-dep-qualification/node_modules/.pnpm/@vitest+runner@4.1.11/node_modules/@vitest/runner/dist/chunk-artifact.js:1903:20
+    }
+[05:38:57] [33mWARN[39m: [36mCould not recover approved tool action[39m [90m{"actionRequestId":"00000000-0000-4000-8000-000000000017"}[39m
+    err: {
+      "type": "Error",
+      "message": "Unavailable approval dependency",
+      "stack":
+          Error: Unavailable approval dependency
+              at /workspace/v10-dep-qualification/server/src/__tests__/tool-gateway-service.test.ts:853:81
+              at process.processTicksAndRejections (node:internal/process/task_queues:104:5)
+              at async file:///workspace/v10-dep-qualification/node_modules/.pnpm/@vitest+runner@4.1.11/node_modules/@vitest/runner/dist/chunk-artifact.js:1903:20
+    }
+[05:38:57] [33mWARN[39m: [36mCould not recover approved tool action[39m [90m{"actionRequestId":"00000000-0000-4000-8000-000000000018"}[39m
+    err: {
+      "type": "Error",
+      "message": "Unavailable approval dependency",
+      "stack":
+          Error: Unavailable approval dependency
+              at /workspace/v10-dep-qualification/server/src/__tests__/tool-gateway-service.test.ts:853:81
+              at process.processTicksAndRejections (node:internal/process/task_queues:104:5)
+              at async file:///workspace/v10-dep-qualification/node_modules/.pnpm/@vitest+runner@4.1.11/node_modules/@vitest/runner/dist/chunk-artifact.js:1903:20
+    }
+[05:38:57] [33mWARN[39m: [36mCould not recover approved tool action[39m [90m{"actionRequestId":"00000000-0000-4000-8000-000000000019"}[39m
+    err: {
+      "type": "Error",
+      "message": "Unavailable approval dependency",
+      "stack":
+          Error: Unavailable approval dependency
+              at /workspace/v10-dep-qualification/server/src/__tests__/tool-gateway-service.test.ts:853:81
+              at process.processTicksAndRejections (node:internal/process/task_queues:104:5)
+              at async file:///workspace/v10-dep-qualification/node_modules/.pnpm/@vitest+runner@4.1.11/node_modules/@vitest/runner/dist/chunk-artifact.js:1903:20
+    }
+[05:38:57] [33mWARN[39m: [36mCould not recover approved tool action[39m [90m{"actionRequestId":"00000000-0000-4000-8000-000000000020"}[39m
+    err: {
+      "type": "Error",
+      "message": "Unavailable approval dependency",
+      "stack":
+          Error: Unavailable approval dependency
+              at /workspace/v10-dep-qualification/server/src/__tests__/tool-gateway-service.test.ts:853:81
+              at process.processTicksAndRejections (node:internal/process/task_queues:104:5)
+              at async file:///workspace/v10-dep-qualification/node_modules/.pnpm/@vitest+runner@4.1.11/node_modules/@vitest/runner/dist/chunk-artifact.js:1903:20
+    }
+[05:38:57] [33mWARN[39m: [36mCould not recover approved tool action[39m [90m{"actionRequestId":"00000000-0000-4000-8000-000000000021"}[39m
+    err: {
+      "type": "Error",
+      "message": "Unavailable approval dependency",
+      "stack":
+          Error: Unavailable approval dependency
+              at /workspace/v10-dep-qualification/server/src/__tests__/tool-gateway-service.test.ts:853:81
+              at process.processTicksAndRejections (node:internal/process/task_queues:104:5)
+              at async file:///workspace/v10-dep-qualification/node_modules/.pnpm/@vitest+runner@4.1.11/node_modules/@vitest/runner/dist/chunk-artifact.js:1903:20
+    }
+[05:38:57] [33mWARN[39m: [36mCould not recover approved tool action[39m [90m{"actionRequestId":"00000000-0000-4000-8000-000000000022"}[39m
+    err: {
+      "type": "Error",
+      "message": "Unavailable approval dependency",
+      "stack":
+          Error: Unavailable approval dependency
+              at /workspace/v10-dep-qualification/server/src/__tests__/tool-gateway-service.test.ts:853:81
+              at process.processTicksAndRejections (node:internal/process/task_queues:104:5)
+              at async file:///workspace/v10-dep-qualification/node_modules/.pnpm/@vitest+runner@4.1.11/node_modules/@vitest/runner/dist/chunk-artifact.js:1903:20
+    }
+[05:38:57] [33mWARN[39m: [36mCould not recover approved tool action[39m [90m{"actionRequestId":"00000000-0000-4000-8000-000000000023"}[39m
+    err: {
+      "type": "Error",
+      "message": "Unavailable approval dependency",
+      "stack":
+          Error: Unavailable approval dependency
+              at /workspace/v10-dep-qualification/server/src/__tests__/tool-gateway-service.test.ts:853:81
+              at process.processTicksAndRejections (node:internal/process/task_queues:104:5)
+              at async file:///workspace/v10-dep-qualification/node_modules/.pnpm/@vitest+runner@4.1.11/node_modules/@vitest/runner/dist/chunk-artifact.js:1903:20
+    }
+[05:38:57] [33mWARN[39m: [36mCould not recover approved tool action[39m [90m{"actionRequestId":"00000000-0000-4000-8000-000000000024"}[39m
+    err: {
+      "type": "Error",
+      "message": "Unavailable approval dependency",
+      "stack":
+          Error: Unavailable approval dependency
+              at /workspace/v10-dep-qualification/server/src/__tests__/tool-gateway-service.test.ts:853:81
+              at process.processTicksAndRejections (node:internal/process/task_queues:104:5)
+              at async file:///workspace/v10-dep-qualification/node_modules/.pnpm/@vitest+runner@4.1.11/node_modules/@vitest/runner/dist/chunk-artifact.js:1903:20
+    }
+[05:38:57] [33mWARN[39m: [36mCould not recover approved tool action[39m [90m{"actionRequestId":"00000000-0000-4000-8000-000000000025"}[39m
+    err: {
+      "type": "Error",
+      "message": "Unavailable approval dependency",
+      "stack":
+          Error: Unavailable approval dependency
+              at /workspace/v10-dep-qualification/server/src/__tests__/tool-gateway-service.test.ts:853:81
+              at process.processTicksAndRejections (node:internal/process/task_queues:104:5)
+              at async file:///workspace/v10-dep-qualification/node_modules/.pnpm/@vitest+runner@4.1.11/node_modules/@vitest/runner/dist/chunk-artifact.js:1903:20
+    }
+[05:38:57] [33mWARN[39m: [36mCould not recover approved tool action[39m [90m{"actionRequestId":"00000000-0000-4000-8000-000000000026"}[39m
+    err: {
+      "type": "Error",
+      "message": "Unavailable approval dependency",
+      "stack":
+          Error: Unavailable approval dependency
+              at /workspace/v10-dep-qualification/server/src/__tests__/tool-gateway-service.test.ts:853:81
+              at process.processTicksAndRejections (node:internal/process/task_queues:104:5)
+              at async file:///workspace/v10-dep-qualification/node_modules/.pnpm/@vitest+runner@4.1.11/node_modules/@vitest/runner/dist/chunk-artifact.js:1903:20
+    }
+[05:38:57] [33mWARN[39m: [36mCould not recover approved tool action[39m [90m{"actionRequestId":"00000000-0000-4000-8000-000000000027"}[39m
+    err: {
+      "type": "Error",
+      "message": "Unavailable approval dependency",
+      "stack":
+          Error: Unavailable approval dependency
+              at /workspace/v10-dep-qualification/server/src/__tests__/tool-gateway-service.test.ts:853:81
+              at process.processTicksAndRejections (node:internal/process/task_queues:104:5)
+              at async file:///workspace/v10-dep-qualification/node_modules/.pnpm/@vitest+runner@4.1.11/node_modules/@vitest/runner/dist/chunk-artifact.js:1903:20
+    }
+[05:38:57] [33mWARN[39m: [36mCould not recover approved tool action[39m [90m{"actionRequestId":"00000000-0000-4000-8000-000000000028"}[39m
+    err: {
+      "type": "Error",
+      "message": "Unavailable approval dependency",
+      "stack":
+          Error: Unavailable approval dependency
+              at /workspace/v10-dep-qualification/server/src/__tests__/tool-gateway-service.test.ts:853:81
+              at process.processTicksAndRejections (node:internal/process/task_queues:104:5)
+              at async file:///workspace/v10-dep-qualification/node_modules/.pnpm/@vitest+runner@4.1.11/node_modules/@vitest/runner/dist/chunk-artifact.js:1903:20
+    }
+[05:38:57] [33mWARN[39m: [36mCould not recover approved tool action[39m [90m{"actionRequestId":"00000000-0000-4000-8000-000000000029"}[39m
+    err: {
+      "type": "Error",
+      "message": "Unavailable approval dependency",
+      "stack":
+          Error: Unavailable approval dependency
+              at /workspace/v10-dep-qualification/server/src/__tests__/tool-gateway-service.test.ts:853:81
+              at process.processTicksAndRejections (node:internal/process/task_queues:104:5)
+              at async file:///workspace/v10-dep-qualification/node_modules/.pnpm/@vitest+runner@4.1.11/node_modules/@vitest/runner/dist/chunk-artifact.js:1903:20
+    }
+[05:38:57] [33mWARN[39m: [36mCould not recover approved tool action[39m [90m{"actionRequestId":"00000000-0000-4000-8000-000000000030"}[39m
+    err: {
+      "type": "Error",
+      "message": "Unavailable approval dependency",
+      "stack":
+          Error: Unavailable approval dependency
+              at /workspace/v10-dep-qualification/server/src/__tests__/tool-gateway-service.test.ts:853:81
+              at process.processTicksAndRejections (node:internal/process/task_queues:104:5)
+              at async file:///workspace/v10-dep-qualification/node_modules/.pnpm/@vitest+runner@4.1.11/node_modules/@vitest/runner/dist/chunk-artifact.js:1903:20
+    }
+[05:38:57] [33mWARN[39m: [36mCould not recover approved tool action[39m [90m{"actionRequestId":"00000000-0000-4000-8000-000000000031"}[39m
+    err: {
+      "type": "Error",
+      "message": "Unavailable approval dependency",
+      "stack":
+          Error: Unavailable approval dependency
+              at /workspace/v10-dep-qualification/server/src/__tests__/tool-gateway-service.test.ts:853:81
+              at process.processTicksAndRejections (node:internal/process/task_queues:104:5)
+              at async file:///workspace/v10-dep-qualification/node_modules/.pnpm/@vitest+runner@4.1.11/node_modules/@vitest/runner/dist/chunk-artifact.js:1903:20
+    }
+[05:38:57] [33mWARN[39m: [36mCould not recover approved tool action[39m [90m{"actionRequestId":"00000000-0000-4000-8000-000000000032"}[39m
+    err: {
+      "type": "Error",
+      "message": "Unavailable approval dependency",
+      "stack":
+          Error: Unavailable approval dependency
+              at /workspace/v10-dep-qualification/server/src/__tests__/tool-gateway-service.test.ts:853:81
+              at process.processTicksAndRejections (node:internal/process/task_queues:104:5)
+              at async file:///workspace/v10-dep-qualification/node_modules/.pnpm/@vitest+runner@4.1.11/node_modules/@vitest/runner/dist/chunk-artifact.js:1903:20
+    }
+[05:38:57] [33mWARN[39m: [36mCould not recover approved tool action[39m [90m{"actionRequestId":"00000000-0000-4000-8000-000000000033"}[39m
+    err: {
+      "type": "Error",
+      "message": "Unavailable approval dependency",
+      "stack":
+          Error: Unavailable approval dependency
+              at /workspace/v10-dep-qualification/server/src/__tests__/tool-gateway-service.test.ts:853:81
+              at process.processTicksAndRejections (node:internal/process/task_queues:104:5)
+              at async file:///workspace/v10-dep-qualification/node_modules/.pnpm/@vitest+runner@4.1.11/node_modules/@vitest/runner/dist/chunk-artifact.js:1903:20
+    }
+[05:38:57] [33mWARN[39m: [36mCould not recover approved tool action[39m [90m{"actionRequestId":"00000000-0000-4000-8000-000000000034"}[39m
+    err: {
+      "type": "Error",
+      "message": "Unavailable approval dependency",
+      "stack":
+          Error: Unavailable approval dependency
+              at /workspace/v10-dep-qualification/server/src/__tests__/tool-gateway-service.test.ts:853:81
+              at process.processTicksAndRejections (node:internal/process/task_queues:104:5)
+              at async file:///workspace/v10-dep-qualification/node_modules/.pnpm/@vitest+runner@4.1.11/node_modules/@vitest/runner/dist/chunk-artifact.js:1903:20
+    }
+[05:38:57] [33mWARN[39m: [36mCould not recover approved tool action[39m [90m{"actionRequestId":"00000000-0000-4000-8000-000000000035"}[39m
+    err: {
+      "type": "Error",
+      "message": "Unavailable approval dependency",
+      "stack":
+          Error: Unavailable approval dependency
+              at /workspace/v10-dep-qualification/server/src/__tests__/tool-gateway-service.test.ts:853:81
+              at process.processTicksAndRejections (node:internal/process/task_queues:104:5)
+              at async file:///workspace/v10-dep-qualification/node_modules/.pnpm/@vitest+runner@4.1.11/node_modules/@vitest/runner/dist/chunk-artifact.js:1903:20
+    }
+[05:38:57] [33mWARN[39m: [36mCould not recover approved tool action[39m [90m{"actionRequestId":"00000000-0000-4000-8000-000000000036"}[39m
+    err: {
+      "type": "Error",
+      "message": "Unavailable approval dependency",
+      "stack":
+          Error: Unavailable approval dependency
+              at /workspace/v10-dep-qualification/server/src/__tests__/tool-gateway-service.test.ts:853:81
+              at process.processTicksAndRejections (node:internal/process/task_queues:104:5)
+              at async file:///workspace/v10-dep-qualification/node_modules/.pnpm/@vitest+runner@4.1.11/node_modules/@vitest/runner/dist/chunk-artifact.js:1903:20
+    }
+[05:38:57] [33mWARN[39m: [36mCould not recover approved tool action[39m [90m{"actionRequestId":"00000000-0000-4000-8000-000000000037"}[39m
+    err: {
+      "type": "Error",
+      "message": "Unavailable approval dependency",
+      "stack":
+          Error: Unavailable approval dependency
+              at /workspace/v10-dep-qualification/server/src/__tests__/tool-gateway-service.test.ts:853:81
+              at process.processTicksAndRejections (node:internal/process/task_queues:104:5)
+              at async file:///workspace/v10-dep-qualification/node_modules/.pnpm/@vitest+runner@4.1.11/node_modules/@vitest/runner/dist/chunk-artifact.js:1903:20
+    }
+[05:38:57] [33mWARN[39m: [36mCould not recover approved tool action[39m [90m{"actionRequestId":"00000000-0000-4000-8000-000000000038"}[39m
+    err: {
+      "type": "Error",
+      "message": "Unavailable approval dependency",
+      "stack":
+          Error: Unavailable approval dependency
+              at /workspace/v10-dep-qualification/server/src/__tests__/tool-gateway-service.test.ts:853:81
+              at process.processTicksAndRejections (node:internal/process/task_queues:104:5)
+              at async file:///workspace/v10-dep-qualification/node_modules/.pnpm/@vitest+runner@4.1.11/node_modules/@vitest/runner/dist/chunk-artifact.js:1903:20
+    }
+[05:38:57] [33mWARN[39m: [36mCould not recover approved tool action[39m [90m{"actionRequestId":"00000000-0000-4000-8000-000000000039"}[39m
+    err: {
+      "type": "Error",
+      "message": "Unavailable approval dependency",
+      "stack":
+          Error: Unavailable approval dependency
+              at /workspace/v10-dep-qualification/server/src/__tests__/tool-gateway-service.test.ts:853:81
+              at process.processTicksAndRejections (node:internal/process/task_queues:104:5)
+              at async file:///workspace/v10-dep-qualification/node_modules/.pnpm/@vitest+runner@4.1.11/node_modules/@vitest/runner/dist/chunk-artifact.js:1903:20
+    }
+[05:38:57] [33mWARN[39m: [36mCould not recover approved tool action[39m [90m{"actionRequestId":"00000000-0000-4000-8000-000000000040"}[39m
+    err: {
+      "type": "Error",
+      "message": "Unavailable approval dependency",
+      "stack":
+          Error: Unavailable approval dependency
+              at /workspace/v10-dep-qualification/server/src/__tests__/tool-gateway-service.test.ts:853:81
+              at process.processTicksAndRejections (node:internal/process/task_queues:104:5)
+              at async file:///workspace/v10-dep-qualification/node_modules/.pnpm/@vitest+runner@4.1.11/node_modules/@vitest/runner/dist/chunk-artifact.js:1903:20
+    }
+[05:38:57] [33mWARN[39m: [36mCould not recover approved tool action[39m [90m{"actionRequestId":"00000000-0000-4000-8000-000000000041"}[39m
+    err: {
+      "type": "Error",
+      "message": "Unavailable approval dependency",
+      "stack":
+          Error: Unavailable approval dependency
+              at /workspace/v10-dep-qualification/server/src/__tests__/tool-gateway-service.test.ts:853:81
+              at process.processTicksAndRejections (node:internal/process/task_queues:104:5)
+              at async file:///workspace/v10-dep-qualification/node_modules/.pnpm/@vitest+runner@4.1.11/node_modules/@vitest/runner/dist/chunk-artifact.js:1903:20
+    }
+[05:38:57] [33mWARN[39m: [36mCould not recover approved tool action[39m [90m{"actionRequestId":"00000000-0000-4000-8000-000000000042"}[39m
+    err: {
+      "type": "Error",
+      "message": "Unavailable approval dependency",
+      "stack":
+          Error: Unavailable approval dependency
+              at /workspace/v10-dep-qualification/server/src/__tests__/tool-gateway-service.test.ts:853:81
+              at process.processTicksAndRejections (node:internal/process/task_queues:104:5)
+              at async file:///workspace/v10-dep-qualification/node_modules/.pnpm/@vitest+runner@4.1.11/node_modules/@vitest/runner/dist/chunk-artifact.js:1903:20
+    }
+[05:38:57] [33mWARN[39m: [36mCould not recover approved tool action[39m [90m{"actionRequestId":"00000000-0000-4000-8000-000000000043"}[39m
+    err: {
+      "type": "Error",
+      "message": "Unavailable approval dependency",
+      "stack":
+          Error: Unavailable approval dependency
+              at /workspace/v10-dep-qualification/server/src/__tests__/tool-gateway-service.test.ts:853:81
+              at process.processTicksAndRejections (node:internal/process/task_queues:104:5)
+              at async file:///workspace/v10-dep-qualification/node_modules/.pnpm/@vitest+runner@4.1.11/node_modules/@vitest/runner/dist/chunk-artifact.js:1903:20
+    }
+[05:38:57] [33mWARN[39m: [36mCould not recover approved tool action[39m [90m{"actionRequestId":"00000000-0000-4000-8000-000000000044"}[39m
+    err: {
+      "type": "Error",
+      "message": "Unavailable approval dependency",
+      "stack":
+          Error: Unavailable approval dependency
+              at /workspace/v10-dep-qualification/server/src/__tests__/tool-gateway-service.test.ts:853:81
+              at process.processTicksAndRejections (node:internal/process/task_queues:104:5)
+              at async file:///workspace/v10-dep-qualification/node_modules/.pnpm/@vitest+runner@4.1.11/node_modules/@vitest/runner/dist/chunk-artifact.js:1903:20
+    }
+[05:38:57] [33mWARN[39m: [36mCould not recover approved tool action[39m [90m{"actionRequestId":"00000000-0000-4000-8000-000000000045"}[39m
+    err: {
+      "type": "Error",
+      "message": "Unavailable approval dependency",
+      "stack":
+          Error: Unavailable approval dependency
+              at /workspace/v10-dep-qualification/server/src/__tests__/tool-gateway-service.test.ts:853:81
+              at process.processTicksAndRejections (node:internal/process/task_queues:104:5)
+              at async file:///workspace/v10-dep-qualification/node_modules/.pnpm/@vitest+runner@4.1.11/node_modules/@vitest/runner/dist/chunk-artifact.js:1903:20
+    }
+[05:38:57] [33mWARN[39m: [36mCould not recover approved tool action[39m [90m{"actionRequestId":"00000000-0000-4000-8000-000000000046"}[39m
+    err: {
+      "type": "Error",
+      "message": "Unavailable approval dependency",
+      "stack":
+          Error: Unavailable approval dependency
+              at /workspace/v10-dep-qualification/server/src/__tests__/tool-gateway-service.test.ts:853:81
+              at process.processTicksAndRejections (node:internal/process/task_queues:104:5)
+              at async file:///workspace/v10-dep-qualification/node_modules/.pnpm/@vitest+runner@4.1.11/node_modules/@vitest/runner/dist/chunk-artifact.js:1903:20
+    }
+[05:38:57] [33mWARN[39m: [36mCould not recover approved tool action[39m [90m{"actionRequestId":"00000000-0000-4000-8000-000000000047"}[39m
+    err: {
+      "type": "Error",
+      "message": "Unavailable approval dependency",
+      "stack":
+          Error: Unavailable approval dependency
+              at /workspace/v10-dep-qualification/server/src/__tests__/tool-gateway-service.test.ts:853:81
+              at process.processTicksAndRejections (node:internal/process/task_queues:104:5)
+              at async file:///workspace/v10-dep-qualification/node_modules/.pnpm/@vitest+runner@4.1.11/node_modules/@vitest/runner/dist/chunk-artifact.js:1903:20
+    }
+[05:38:57] [33mWARN[39m: [36mCould not recover approved tool action[39m [90m{"actionRequestId":"00000000-0000-4000-8000-000000000048"}[39m
+    err: {
+      "type": "Error",
+      "message": "Unavailable approval dependency",
+      "stack":
+          Error: Unavailable approval dependency
+              at /workspace/v10-dep-qualification/server/src/__tests__/tool-gateway-service.test.ts:853:81
+              at process.processTicksAndRejections (node:internal/process/task_queues:104:5)
+              at async file:///workspace/v10-dep-qualification/node_modules/.pnpm/@vitest+runner@4.1.11/node_modules/@vitest/runner/dist/chunk-artifact.js:1903:20
+    }
+[05:38:57] [33mWARN[39m: [36mCould not recover approved tool action[39m [90m{"actionRequestId":"00000000-0000-4000-8000-000000000049"}[39m
+    err: {
+      "type": "Error",
+      "message": "Unavailable approval dependency",
+      "stack":
+          Error: Unavailable approval dependency
+              at /workspace/v10-dep-qualification/server/src/__tests__/tool-gateway-service.test.ts:853:81
+              at process.processTicksAndRejections (node:internal/process/task_queues:104:5)
+              at async file:///workspace/v10-dep-qualification/node_modules/.pnpm/@vitest+runner@4.1.11/node_modules/@vitest/runner/dist/chunk-artifact.js:1903:20
+    }
+[05:38:57] [33mWARN[39m: [36mCould not recover approved tool action[39m [90m{"actionRequestId":"00000000-0000-4000-8000-000000000050"}[39m
+    err: {
+      "type": "Error",
+      "message": "Unavailable approval dependency",
+      "stack":
+          Error: Unavailable approval dependency
+              at /workspace/v10-dep-qualification/server/src/__tests__/tool-gateway-service.test.ts:853:81
+              at process.processTicksAndRejections (node:internal/process/task_queues:104:5)
+              at async file:///workspace/v10-dep-qualification/node_modules/.pnpm/@vitest+runner@4.1.11/node_modules/@vitest/runner/dist/chunk-artifact.js:1903:20
+    }
+[05:38:57] [33mWARN[39m: [36mCould not recover approved tool action[39m [90m{"actionRequestId":"00000000-0000-4000-8000-000000000051"}[39m
+    err: {
+      "type": "Error",
+      "message": "Unavailable approval dependency",
+      "stack":
+          Error: Unavailable approval dependency
+              at /workspace/v10-dep-qualification/server/src/__tests__/tool-gateway-service.test.ts:853:81
+              at process.processTicksAndRejections (node:internal/process/task_queues:104:5)
+              at async file:///workspace/v10-dep-qualification/node_modules/.pnpm/@vitest+runner@4.1.11/node_modules/@vitest/runner/dist/chunk-artifact.js:1903:20
+    }
+[05:38:57] [33mWARN[39m: [36mCould not recover approved tool action[39m [90m{"actionRequestId":"00000000-0000-4000-8000-000000000052"}[39m
+    err: {
+      "type": "Error",
+      "message": "Unavailable approval dependency",
+      "stack":
+          Error: Unavailable approval dependency
+              at /workspace/v10-dep-qualification/server/src/__tests__/tool-gateway-service.test.ts:853:81
+              at process.processTicksAndRejections (node:internal/process/task_queues:104:5)
+              at async file:///workspace/v10-dep-qualification/node_modules/.pnpm/@vitest+runner@4.1.11/node_modules/@vitest/runner/dist/chunk-artifact.js:1903:20
+    }
+[05:38:57] [33mWARN[39m: [36mCould not recover approved tool action[39m [90m{"actionRequestId":"00000000-0000-4000-8000-000000000053"}[39m
+    err: {
+      "type": "Error",
+      "message": "Unavailable approval dependency",
+      "stack":
+          Error: Unavailable approval dependency
+              at /workspace/v10-dep-qualification/server/src/__tests__/tool-gateway-service.test.ts:853:81
+              at process.processTicksAndRejections (node:internal/process/task_queues:104:5)
+              at async file:///workspace/v10-dep-qualification/node_modules/.pnpm/@vitest+runner@4.1.11/node_modules/@vitest/runner/dist/chunk-artifact.js:1903:20
+    }
+[05:38:57] [33mWARN[39m: [36mCould not recover approved tool action[39m [90m{"actionRequestId":"00000000-0000-4000-8000-000000000054"}[39m
+    err: {
+      "type": "Error",
+      "message": "Unavailable approval dependency",
+      "stack":
+          Error: Unavailable approval dependency
+              at /workspace/v10-dep-qualification/server/src/__tests__/tool-gateway-service.test.ts:853:81
+              at process.processTicksAndRejections (node:internal/process/task_queues:104:5)
+              at async file:///workspace/v10-dep-qualification/node_modules/.pnpm/@vitest+runner@4.1.11/node_modules/@vitest/runner/dist/chunk-artifact.js:1903:20
+    }
+[05:38:57] [33mWARN[39m: [36mCould not recover approved tool action[39m [90m{"actionRequestId":"00000000-0000-4000-8000-000000000055"}[39m
+    err: {
+      "type": "Error",
+      "message": "Unavailable approval dependency",
+      "stack":
+          Error: Unavailable approval dependency
+              at /workspace/v10-dep-qualification/server/src/__tests__/tool-gateway-service.test.ts:853:81
+              at process.processTicksAndRejections (node:internal/process/task_queues:104:5)
+              at async file:///workspace/v10-dep-qualification/node_modules/.pnpm/@vitest+runner@4.1.11/node_modules/@vitest/runner/dist/chunk-artifact.js:1903:20
+    }
+[05:38:57] [33mWARN[39m: [36mCould not recover approved tool action[39m [90m{"actionRequestId":"00000000-0000-4000-8000-000000000056"}[39m
+    err: {
+      "type": "Error",
+      "message": "Unavailable approval dependency",
+      "stack":
+          Error: Unavailable approval dependency
+              at /workspace/v10-dep-qualification/server/src/__tests__/tool-gateway-service.test.ts:853:81
+              at process.processTicksAndRejections (node:internal/process/task_queues:104:5)
+              at async file:///workspace/v10-dep-qualification/node_modules/.pnpm/@vitest+runner@4.1.11/node_modules/@vitest/runner/dist/chunk-artifact.js:1903:20
+    }
+[05:38:57] [33mWARN[39m: [36mCould not recover approved tool action[39m [90m{"actionRequestId":"00000000-0000-4000-8000-000000000057"}[39m
+    err: {
+      "type": "Error",
+      "message": "Unavailable approval dependency",
+      "stack":
+          Error: Unavailable approval dependency
+              at /workspace/v10-dep-qualification/server/src/__tests__/tool-gateway-service.test.ts:853:81
+              at process.processTicksAndRejections (node:internal/process/task_queues:104:5)
+              at async file:///workspace/v10-dep-qualification/node_modules/.pnpm/@vitest+runner@4.1.11/node_modules/@vitest/runner/dist/chunk-artifact.js:1903:20
+    }
+[05:38:57] [33mWARN[39m: [36mCould not recover approved tool action[39m [90m{"actionRequestId":"00000000-0000-4000-8000-000000000058"}[39m
+    err: {
+      "type": "Error",
+      "message": "Unavailable approval dependency",
+      "stack":
+          Error: Unavailable approval dependency
+              at /workspace/v10-dep-qualification/server/src/__tests__/tool-gateway-service.test.ts:853:81
+              at process.processTicksAndRejections (node:internal/process/task_queues:104:5)
+              at async file:///workspace/v10-dep-qualification/node_modules/.pnpm/@vitest+runner@4.1.11/node_modules/@vitest/runner/dist/chunk-artifact.js:1903:20
+    }
+[05:38:57] [33mWARN[39m: [36mCould not recover approved tool action[39m [90m{"actionRequestId":"00000000-0000-4000-8000-000000000059"}[39m
+    err: {
+      "type": "Error",
+      "message": "Unavailable approval dependency",
+      "stack":
+          Error: Unavailable approval dependency
+              at /workspace/v10-dep-qualification/server/src/__tests__/tool-gateway-service.test.ts:853:81
+              at process.processTicksAndRejections (node:internal/process/task_queues:104:5)
+              at async file:///workspace/v10-dep-qualification/node_modules/.pnpm/@vitest+runner@4.1.11/node_modules/@vitest/runner/dist/chunk-artifact.js:1903:20
+    }
+[05:38:57] [33mWARN[39m: [36mCould not recover approved tool action[39m [90m{"actionRequestId":"00000000-0000-4000-8000-000000000060"}[39m
+    err: {
+      "type": "Error",
+      "message": "Unavailable approval dependency",
+      "stack":
+          Error: Unavailable approval dependency
+              at /workspace/v10-dep-qualification/server/src/__tests__/tool-gateway-service.test.ts:853:81
+              at process.processTicksAndRejections (node:internal/process/task_queues:104:5)
+              at async file:///workspace/v10-dep-qualification/node_modules/.pnpm/@vitest+runner@4.1.11/node_modules/@vitest/runner/dist/chunk-artifact.js:1903:20
+    }
+[05:38:57] [33mWARN[39m: [36mCould not recover approved tool action[39m [90m{"actionRequestId":"00000000-0000-4000-8000-000000000061"}[39m
+    err: {
+      "type": "Error",
+      "message": "Unavailable approval dependency",
+      "stack":
+          Error: Unavailable approval dependency
+              at /workspace/v10-dep-qualification/server/src/__tests__/tool-gateway-service.test.ts:853:81
+              at process.processTicksAndRejections (node:internal/process/task_queues:104:5)
+              at async file:///workspace/v10-dep-qualification/node_modules/.pnpm/@vitest+runner@4.1.11/node_modules/@vitest/runner/dist/chunk-artifact.js:1903:20
+    }
+[05:38:57] [33mWARN[39m: [36mCould not recover approved tool action[39m [90m{"actionRequestId":"00000000-0000-4000-8000-000000000062"}[39m
+    err: {
+      "type": "Error",
+      "message": "Unavailable approval dependency",
+      "stack":
+          Error: Unavailable approval dependency
+              at /workspace/v10-dep-qualification/server/src/__tests__/tool-gateway-service.test.ts:853:81
+              at process.processTicksAndRejections (node:internal/process/task_queues:104:5)
+              at async file:///workspace/v10-dep-qualification/node_modules/.pnpm/@vitest+runner@4.1.11/node_modules/@vitest/runner/dist/chunk-artifact.js:1903:20
+    }
+[05:38:57] [33mWARN[39m: [36mCould not recover approved tool action[39m [90m{"actionRequestId":"00000000-0000-4000-8000-000000000063"}[39m
+    err: {
+      "type": "Error",
+      "message": "Unavailable approval dependency",
+      "stack":
+          Error: Unavailable approval dependency
+              at /workspace/v10-dep-qualification/server/src/__tests__/tool-gateway-service.test.ts:853:81
+              at process.processTicksAndRejections (node:internal/process/task_queues:104:5)
+              at async file:///workspace/v10-dep-qualification/node_modules/.pnpm/@vitest+runner@4.1.11/node_modules/@vitest/runner/dist/chunk-artifact.js:1903:20
+    }
+[05:38:57] [33mWARN[39m: [36mCould not recover approved tool action[39m [90m{"actionRequestId":"00000000-0000-4000-8000-000000000064"}[39m
+    err: {
+      "type": "Error",
+      "message": "Unavailable approval dependency",
+      "stack":
+          Error: Unavailable approval dependency
+              at /workspace/v10-dep-qualification/server/src/__tests__/tool-gateway-service.test.ts:853:81
+              at process.processTicksAndRejections (node:internal/process/task_queues:104:5)
+              at async file:///workspace/v10-dep-qualification/node_modules/.pnpm/@vitest+runner@4.1.11/node_modules/@vitest/runner/dist/chunk-artifact.js:1903:20
+    }
+[05:38:57] [33mWARN[39m: [36mCould not recover approved tool action[39m [90m{"actionRequestId":"00000000-0000-4000-8000-000000000065"}[39m
+    err: {
+      "type": "Error",
+      "message": "Unavailable approval dependency",
+      "stack":
+          Error: Unavailable approval dependency
+              at /workspace/v10-dep-qualification/server/src/__tests__/tool-gateway-service.test.ts:853:81
+              at process.processTicksAndRejections (node:internal/process/task_queues:104:5)
+              at async file:///workspace/v10-dep-qualification/node_modules/.pnpm/@vitest+runner@4.1.11/node_modules/@vitest/runner/dist/chunk-artifact.js:1903:20
+    }
+[05:38:57] [33mWARN[39m: [36mCould not recover approved tool action[39m [90m{"actionRequestId":"00000000-0000-4000-8000-000000000066"}[39m
+    err: {
+      "type": "Error",
+      "message": "Unavailable approval dependency",
+      "stack":
+          Error: Unavailable approval dependency
+              at /workspace/v10-dep-qualification/server/src/__tests__/tool-gateway-service.test.ts:853:81
+              at process.processTicksAndRejections (node:internal/process/task_queues:104:5)
+              at async file:///workspace/v10-dep-qualification/node_modules/.pnpm/@vitest+runner@4.1.11/node_modules/@vitest/runner/dist/chunk-artifact.js:1903:20
+    }
+[05:38:57] [33mWARN[39m: [36mCould not recover approved tool action[39m [90m{"actionRequestId":"00000000-0000-4000-8000-000000000067"}[39m
+    err: {
+      "type": "Error",
+      "message": "Unavailable approval dependency",
+      "stack":
+          Error: Unavailable approval dependency
+              at /workspace/v10-dep-qualification/server/src/__tests__/tool-gateway-service.test.ts:853:81
+              at process.processTicksAndRejections (node:internal/process/task_queues:104:5)
+              at async file:///workspace/v10-dep-qualification/node_modules/.pnpm/@vitest+runner@4.1.11/node_modules/@vitest/runner/dist/chunk-artifact.js:1903:20
+    }
+[05:38:57] [33mWARN[39m: [36mCould not recover approved tool action[39m [90m{"actionRequestId":"00000000-0000-4000-8000-000000000068"}[39m
+    err: {
+      "type": "Error",
+      "message": "Unavailable approval dependency",
+      "stack":
+          Error: Unavailable approval dependency
+              at /workspace/v10-dep-qualification/server/src/__tests__/tool-gateway-service.test.ts:853:81
+              at process.processTicksAndRejections (node:internal/process/task_queues:104:5)
+              at async file:///workspace/v10-dep-qualification/node_modules/.pnpm/@vitest+runner@4.1.11/node_modules/@vitest/runner/dist/chunk-artifact.js:1903:20
+    }
+[05:38:57] [33mWARN[39m: [36mCould not recover approved tool action[39m [90m{"actionRequestId":"00000000-0000-4000-8000-000000000069"}[39m
+    err: {
+      "type": "Error",
+      "message": "Unavailable approval dependency",
+      "stack":
+          Error: Unavailable approval dependency
+              at /workspace/v10-dep-qualification/server/src/__tests__/tool-gateway-service.test.ts:853:81
+              at process.processTicksAndRejections (node:internal/process/task_queues:104:5)
+              at async file:///workspace/v10-dep-qualification/node_modules/.pnpm/@vitest+runner@4.1.11/node_modules/@vitest/runner/dist/chunk-artifact.js:1903:20
+    }
+[05:38:57] [33mWARN[39m: [36mCould not recover approved tool action[39m [90m{"actionRequestId":"00000000-0000-4000-8000-000000000070"}[39m
+    err: {
+      "type": "Error",
+      "message": "Unavailable approval dependency",
+      "stack":
+          Error: Unavailable approval dependency
+              at /workspace/v10-dep-qualification/server/src/__tests__/tool-gateway-service.test.ts:853:81
+              at process.processTicksAndRejections (node:internal/process/task_queues:104:5)
+              at async file:///workspace/v10-dep-qualification/node_modules/.pnpm/@vitest+runner@4.1.11/node_modules/@vitest/runner/dist/chunk-artifact.js:1903:20
+    }
+[05:38:57] [33mWARN[39m: [36mCould not recover approved tool action[39m [90m{"actionRequestId":"00000000-0000-4000-8000-000000000071"}[39m
+    err: {
+      "type": "Error",
+      "message": "Unavailable approval dependency",
+      "stack":
+          Error: Unavailable approval dependency
+              at /workspace/v10-dep-qualification/server/src/__tests__/tool-gateway-service.test.ts:853:81
+              at process.processTicksAndRejections (node:internal/process/task_queues:104:5)
+              at async file:///workspace/v10-dep-qualification/node_modules/.pnpm/@vitest+runner@4.1.11/node_modules/@vitest/runner/dist/chunk-artifact.js:1903:20
+    }
+[05:38:57] [33mWARN[39m: [36mCould not recover approved tool action[39m [90m{"actionRequestId":"00000000-0000-4000-8000-000000000072"}[39m
+    err: {
+      "type": "Error",
+      "message": "Unavailable approval dependency",
+      "stack":
+          Error: Unavailable approval dependency
+              at /workspace/v10-dep-qualification/server/src/__tests__/tool-gateway-service.test.ts:853:81
+              at process.processTicksAndRejections (node:internal/process/task_queues:104:5)
+              at async file:///workspace/v10-dep-qualification/node_modules/.pnpm/@vitest+runner@4.1.11/node_modules/@vitest/runner/dist/chunk-artifact.js:1903:20
+    }
+[05:38:57] [33mWARN[39m: [36mCould not recover approved tool action[39m [90m{"actionRequestId":"00000000-0000-4000-8000-000000000073"}[39m
+    err: {
+      "type": "Error",
+      "message": "Unavailable approval dependency",
+      "stack":
+          Error: Unavailable approval dependency
+              at /workspace/v10-dep-qualification/server/src/__tests__/tool-gateway-service.test.ts:853:81
+              at process.processTicksAndRejections (node:internal/process/task_queues:104:5)
+              at async file:///workspace/v10-dep-qualification/node_modules/.pnpm/@vitest+runner@4.1.11/node_modules/@vitest/runner/dist/chunk-artifact.js:1903:20
+    }
+[05:38:57] [33mWARN[39m: [36mCould not recover approved tool action[39m [90m{"actionRequestId":"00000000-0000-4000-8000-000000000074"}[39m
+    err: {
+      "type": "Error",
+      "message": "Unavailable approval dependency",
+      "stack":
+          Error: Unavailable approval dependency
+              at /workspace/v10-dep-qualification/server/src/__tests__/tool-gateway-service.test.ts:853:81
+              at process.processTicksAndRejections (node:internal/process/task_queues:104:5)
+              at async file:///workspace/v10-dep-qualification/node_modules/.pnpm/@vitest+runner@4.1.11/node_modules/@vitest/runner/dist/chunk-artifact.js:1903:20
+    }
+[05:38:57] [33mWARN[39m: [36mCould not recover approved tool action[39m [90m{"actionRequestId":"00000000-0000-4000-8000-000000000075"}[39m
+    err: {
+      "type": "Error",
+      "message": "Unavailable approval dependency",
+      "stack":
+          Error: Unavailable approval dependency
+              at /workspace/v10-dep-qualification/server/src/__tests__/tool-gateway-service.test.ts:853:81
+              at process.processTicksAndRejections (node:internal/process/task_queues:104:5)
+              at async file:///workspace/v10-dep-qualification/node_modules/.pnpm/@vitest+runner@4.1.11/node_modules/@vitest/runner/dist/chunk-artifact.js:1903:20
+    }
+[05:38:57] [33mWARN[39m: [36mCould not recover approved tool action[39m [90m{"actionRequestId":"00000000-0000-4000-8000-000000000076"}[39m
+    err: {
+      "type": "Error",
+      "message": "Unavailable approval dependency",
+      "stack":
+          Error: Unavailable approval dependency
+              at /workspace/v10-dep-qualification/server/src/__tests__/tool-gateway-service.test.ts:853:81
+              at process.processTicksAndRejections (node:internal/process/task_queues:104:5)
+              at async file:///workspace/v10-dep-qualification/node_modules/.pnpm/@vitest+runner@4.1.11/node_modules/@vitest/runner/dist/chunk-artifact.js:1903:20
+    }
+[05:38:57] [33mWARN[39m: [36mCould not recover approved tool action[39m [90m{"actionRequestId":"00000000-0000-4000-8000-000000000077"}[39m
+    err: {
+      "type": "Error",
+      "message": "Unavailable approval dependency",
+      "stack":
+          Error: Unavailable approval dependency
+              at /workspace/v10-dep-qualification/server/src/__tests__/tool-gateway-service.test.ts:853:81
+              at process.processTicksAndRejections (node:internal/process/task_queues:104:5)
+              at async file:///workspace/v10-dep-qualification/node_modules/.pnpm/@vitest+runner@4.1.11/node_modules/@vitest/runner/dist/chunk-artifact.js:1903:20
+    }
+[05:38:57] [33mWARN[39m: [36mCould not recover approved tool action[39m [90m{"actionRequestId":"00000000-0000-4000-8000-000000000078"}[39m
+    err: {
+      "type": "Error",
+      "message": "Unavailable approval dependency",
+      "stack":
+          Error: Unavailable approval dependency
+              at /workspace/v10-dep-qualification/server/src/__tests__/tool-gateway-service.test.ts:853:81
+              at process.processTicksAndRejections (node:internal/process/task_queues:104:5)
+              at async file:///workspace/v10-dep-qualification/node_modules/.pnpm/@vitest+runner@4.1.11/node_modules/@vitest/runner/dist/chunk-artifact.js:1903:20
+    }
+[05:38:57] [33mWARN[39m: [36mCould not recover approved tool action[39m [90m{"actionRequestId":"00000000-0000-4000-8000-000000000079"}[39m
+    err: {
+      "type": "Error",
+      "message": "Unavailable approval dependency",
+      "stack":
+          Error: Unavailable approval dependency
+              at /workspace/v10-dep-qualification/server/src/__tests__/tool-gateway-service.test.ts:853:81
+              at process.processTicksAndRejections (node:internal/process/task_queues:104:5)
+              at async file:///workspace/v10-dep-qualification/node_modules/.pnpm/@vitest+runner@4.1.11/node_modules/@vitest/runner/dist/chunk-artifact.js:1903:20
+    }
+[05:38:57] [33mWARN[39m: [36mCould not recover approved tool action[39m [90m{"actionRequestId":"00000000-0000-4000-8000-000000000080"}[39m
+    err: {
+      "type": "Error",
+      "message": "Unavailable approval dependency",
+      "stack":
+          Error: Unavailable approval dependency
+              at /workspace/v10-dep-qualification/server/src/__tests__/tool-gateway-service.test.ts:853:81
+              at process.processTicksAndRejections (node:internal/process/task_queues:104:5)
+              at async file:///workspace/v10-dep-qualification/node_modules/.pnpm/@vitest+runner@4.1.11/node_modules/@vitest/runner/dist/chunk-artifact.js:1903:20
+    }
+[05:38:57] [33mWARN[39m: [36mCould not recover approved tool action[39m [90m{"actionRequestId":"00000000-0000-4000-8000-000000000081"}[39m
+    err: {
+      "type": "Error",
+      "message": "Unavailable approval dependency",
+      "stack":
+          Error: Unavailable approval dependency
+              at /workspace/v10-dep-qualification/server/src/__tests__/tool-gateway-service.test.ts:853:81
+              at process.processTicksAndRejections (node:internal/process/task_queues:104:5)
+              at async file:///workspace/v10-dep-qualification/node_modules/.pnpm/@vitest+runner@4.1.11/node_modules/@vitest/runner/dist/chunk-artifact.js:1903:20
+    }
+[05:38:57] [33mWARN[39m: [36mCould not recover approved tool action[39m [90m{"actionRequestId":"00000000-0000-4000-8000-000000000082"}[39m
+    err: {
+      "type": "Error",
+      "message": "Unavailable approval dependency",
+      "stack":
+          Error: Unavailable approval dependency
+              at /workspace/v10-dep-qualification/server/src/__tests__/tool-gateway-service.test.ts:853:81
+              at process.processTicksAndRejections (node:internal/process/task_queues:104:5)
+              at async file:///workspace/v10-dep-qualification/node_modules/.pnpm/@vitest+runner@4.1.11/node_modules/@vitest/runner/dist/chunk-artifact.js:1903:20
+    }
+[05:38:57] [33mWARN[39m: [36mCould not recover approved tool action[39m [90m{"actionRequestId":"00000000-0000-4000-8000-000000000083"}[39m
+    err: {
+      "type": "Error",
+      "message": "Unavailable approval dependency",
+      "stack":
+          Error: Unavailable approval dependency
+              at /workspace/v10-dep-qualification/server/src/__tests__/tool-gateway-service.test.ts:853:81
+              at process.processTicksAndRejections (node:internal/process/task_queues:104:5)
+              at async file:///workspace/v10-dep-qualification/node_modules/.pnpm/@vitest+runner@4.1.11/node_modules/@vitest/runner/dist/chunk-artifact.js:1903:20
+    }
+[05:38:57] [33mWARN[39m: [36mCould not recover approved tool action[39m [90m{"actionRequestId":"00000000-0000-4000-8000-000000000084"}[39m
+    err: {
+      "type": "Error",
+      "message": "Unavailable approval dependency",
+      "stack":
+          Error: Unavailable approval dependency
+              at /workspace/v10-dep-qualification/server/src/__tests__/tool-gateway-service.test.ts:853:81
+              at process.processTicksAndRejections (node:internal/process/task_queues:104:5)
+              at async file:///workspace/v10-dep-qualification/node_modules/.pnpm/@vitest+runner@4.1.11/node_modules/@vitest/runner/dist/chunk-artifact.js:1903:20
+    }
+[05:38:57] [33mWARN[39m: [36mCould not recover approved tool action[39m [90m{"actionRequestId":"00000000-0000-4000-8000-000000000085"}[39m
+    err: {
+      "type": "Error",
+      "message": "Unavailable approval dependency",
+      "stack":
+          Error: Unavailable approval dependency
+              at /workspace/v10-dep-qualification/server/src/__tests__/tool-gateway-service.test.ts:853:81
+              at process.processTicksAndRejections (node:internal/process/task_queues:104:5)
+              at async file:///workspace/v10-dep-qualification/node_modules/.pnpm/@vitest+runner@4.1.11/node_modules/@vitest/runner/dist/chunk-artifact.js:1903:20
+    }
+[05:38:57] [33mWARN[39m: [36mCould not recover approved tool action[39m [90m{"actionRequestId":"00000000-0000-4000-8000-000000000086"}[39m
+    err: {
+      "type": "Error",
+      "message": "Unavailable approval dependency",
+      "stack":
+          Error: Unavailable approval dependency
+              at /workspace/v10-dep-qualification/server/src/__tests__/tool-gateway-service.test.ts:853:81
+              at process.processTicksAndRejections (node:internal/process/task_queues:104:5)
+              at async file:///workspace/v10-dep-qualification/node_modules/.pnpm/@vitest+runner@4.1.11/node_modules/@vitest/runner/dist/chunk-artifact.js:1903:20
+    }
+[05:38:57] [33mWARN[39m: [36mCould not recover approved tool action[39m [90m{"actionRequestId":"00000000-0000-4000-8000-000000000087"}[39m
+    err: {
+      "type": "Error",
+      "message": "Unavailable approval dependency",
+      "stack":
+          Error: Unavailable approval dependency
+              at /workspace/v10-dep-qualification/server/src/__tests__/tool-gateway-service.test.ts:853:81
+              at process.processTicksAndRejections (node:internal/process/task_queues:104:5)
+              at async file:///workspace/v10-dep-qualification/node_modules/.pnpm/@vitest+runner@4.1.11/node_modules/@vitest/runner/dist/chunk-artifact.js:1903:20
+    }
+[05:38:57] [33mWARN[39m: [36mCould not recover approved tool action[39m [90m{"actionRequestId":"00000000-0000-4000-8000-000000000088"}[39m
+    err: {
+      "type": "Error",
+      "message": "Unavailable approval dependency",
+      "stack":
+          Error: Unavailable approval dependency
+              at /workspace/v10-dep-qualification/server/src/__tests__/tool-gateway-service.test.ts:853:81
+              at process.processTicksAndRejections (node:internal/process/task_queues:104:5)
+              at async file:///workspace/v10-dep-qualification/node_modules/.pnpm/@vitest+runner@4.1.11/node_modules/@vitest/runner/dist/chunk-artifact.js:1903:20
+    }
+[05:38:57] [33mWARN[39m: [36mCould not recover approved tool action[39m [90m{"actionRequestId":"00000000-0000-4000-8000-000000000089"}[39m
+    err: {
+      "type": "Error",
+      "message": "Unavailable approval dependency",
+      "stack":
+          Error: Unavailable approval dependency
+              at /workspace/v10-dep-qualification/server/src/__tests__/tool-gateway-service.test.ts:853:81
+              at process.processTicksAndRejections (node:internal/process/task_queues:104:5)
+              at async file:///workspace/v10-dep-qualification/node_modules/.pnpm/@vitest+runner@4.1.11/node_modules/@vitest/runner/dist/chunk-artifact.js:1903:20
+    }
+[05:38:57] [33mWARN[39m: [36mCould not recover approved tool action[39m [90m{"actionRequestId":"00000000-0000-4000-8000-000000000090"}[39m
+    err: {
+      "type": "Error",
+      "message": "Unavailable approval dependency",
+      "stack":
+          Error: Unavailable approval dependency
+              at /workspace/v10-dep-qualification/server/src/__tests__/tool-gateway-service.test.ts:853:81
+              at process.processTicksAndRejections (node:internal/process/task_queues:104:5)
+              at async file:///workspace/v10-dep-qualification/node_modules/.pnpm/@vitest+runner@4.1.11/node_modules/@vitest/runner/dist/chunk-artifact.js:1903:20
+    }
+[05:38:57] [33mWARN[39m: [36mCould not recover approved tool action[39m [90m{"actionRequestId":"00000000-0000-4000-8000-000000000091"}[39m
+    err: {
+      "type": "Error",
+      "message": "Unavailable approval dependency",
+      "stack":
+          Error: Unavailable approval dependency
+              at /workspace/v10-dep-qualification/server/src/__tests__/tool-gateway-service.test.ts:853:81
+              at process.processTicksAndRejections (node:internal/process/task_queues:104:5)
+              at async file:///workspace/v10-dep-qualification/node_modules/.pnpm/@vitest+runner@4.1.11/node_modules/@vitest/runner/dist/chunk-artifact.js:1903:20
+    }
+[05:38:57] [33mWARN[39m: [36mCould not recover approved tool action[39m [90m{"actionRequestId":"00000000-0000-4000-8000-000000000092"}[39m
+    err: {
+      "type": "Error",
+      "message": "Unavailable approval dependency",
+      "stack":
+          Error: Unavailable approval dependency
+              at /workspace/v10-dep-qualification/server/src/__tests__/tool-gateway-service.test.ts:853:81
+              at process.processTicksAndRejections (node:internal/process/task_queues:104:5)
+              at async file:///workspace/v10-dep-qualification/node_modules/.pnpm/@vitest+runner@4.1.11/node_modules/@vitest/runner/dist/chunk-artifact.js:1903:20
+    }
+[05:38:57] [33mWARN[39m: [36mCould not recover approved tool action[39m [90m{"actionRequestId":"00000000-0000-4000-8000-000000000093"}[39m
+    err: {
+      "type": "Error",
+      "message": "Unavailable approval dependency",
+      "stack":
+          Error: Unavailable approval dependency
+              at /workspace/v10-dep-qualification/server/src/__tests__/tool-gateway-service.test.ts:853:81
+              at process.processTicksAndRejections (node:internal/process/task_queues:104:5)
+              at async file:///workspace/v10-dep-qualification/node_modules/.pnpm/@vitest+runner@4.1.11/node_modules/@vitest/runner/dist/chunk-artifact.js:1903:20
+    }
+[05:38:57] [33mWARN[39m: [36mCould not recover approved tool action[39m [90m{"actionRequestId":"00000000-0000-4000-8000-000000000094"}[39m
+    err: {
+      "type": "Error",
+      "message": "Unavailable approval dependency",
+      "stack":
+          Error: Unavailable approval dependency
+              at /workspace/v10-dep-qualification/server/src/__tests__/tool-gateway-service.test.ts:853:81
+              at process.processTicksAndRejections (node:internal/process/task_queues:104:5)
+              at async file:///workspace/v10-dep-qualification/node_modules/.pnpm/@vitest+runner@4.1.11/node_modules/@vitest/runner/dist/chunk-artifact.js:1903:20
+    }
+[05:38:57] [33mWARN[39m: [36mCould not recover approved tool action[39m [90m{"actionRequestId":"00000000-0000-4000-8000-000000000095"}[39m
+    err: {
+      "type": "Error",
+      "message": "Unavailable approval dependency",
+      "stack":
+          Error: Unavailable approval dependency
+              at /workspace/v10-dep-qualification/server/src/__tests__/tool-gateway-service.test.ts:853:81
+              at process.processTicksAndRejections (node:internal/process/task_queues:104:5)
+              at async file:///workspace/v10-dep-qualification/node_modules/.pnpm/@vitest+runner@4.1.11/node_modules/@vitest/runner/dist/chunk-artifact.js:1903:20
+    }
+[05:38:57] [33mWARN[39m: [36mCould not recover approved tool action[39m [90m{"actionRequestId":"00000000-0000-4000-8000-000000000096"}[39m
+    err: {
+      "type": "Error",
+      "message": "Unavailable approval dependency",
+      "stack":
+          Error: Unavailable approval dependency
+              at /workspace/v10-dep-qualification/server/src/__tests__/tool-gateway-service.test.ts:853:81
+              at process.processTicksAndRejections (node:internal/process/task_queues:104:5)
+              at async file:///workspace/v10-dep-qualification/node_modules/.pnpm/@vitest+runner@4.1.11/node_modules/@vitest/runner/dist/chunk-artifact.js:1903:20
+    }
+[05:38:57] [33mWARN[39m: [36mCould not recover approved tool action[39m [90m{"actionRequestId":"00000000-0000-4000-8000-000000000097"}[39m
+    err: {
+      "type": "Error",
+      "message": "Unavailable approval dependency",
+      "stack":
+          Error: Unavailable approval dependency
+              at /workspace/v10-dep-qualification/server/src/__tests__/tool-gateway-service.test.ts:853:81
+              at process.processTicksAndRejections (node:internal/process/task_queues:104:5)
+              at async file:///workspace/v10-dep-qualification/node_modules/.pnpm/@vitest+runner@4.1.11/node_modules/@vitest/runner/dist/chunk-artifact.js:1903:20
+    }
+[05:38:57] [33mWARN[39m: [36mCould not recover approved tool action[39m [90m{"actionRequestId":"00000000-0000-4000-8000-000000000098"}[39m
+    err: {
+      "type": "Error",
+      "message": "Unavailable approval dependency",
+      "stack":
+          Error: Unavailable approval dependency
+              at /workspace/v10-dep-qualification/server/src/__tests__/tool-gateway-service.test.ts:853:81
+              at process.processTicksAndRejections (node:internal/process/task_queues:104:5)
+              at async file:///workspace/v10-dep-qualification/node_modules/.pnpm/@vitest+runner@4.1.11/node_modules/@vitest/runner/dist/chunk-artifact.js:1903:20
+    }
+[05:38:57] [33mWARN[39m: [36mCould not recover approved tool action[39m [90m{"actionRequestId":"00000000-0000-4000-8000-000000000099"}[39m
+    err: {
+      "type": "Error",
+      "message": "Unavailable approval dependency",
+      "stack":
+          Error: Unavailable approval dependency
+              at /workspace/v10-dep-qualification/server/src/__tests__/tool-gateway-service.test.ts:853:81
+              at process.processTicksAndRejections (node:internal/process/task_queues:104:5)
+              at async file:///workspace/v10-dep-qualification/node_modules/.pnpm/@vitest+runner@4.1.11/node_modules/@vitest/runner/dist/chunk-artifact.js:1903:20
+    }
+········································
+
+ Test Files  1 passed (1)
+      Tests  52 passed (52)
+   Start at  05:38:30
+   Duration  34.25s (transform 9.99s, setup 75ms, import 14.55s, tests 19.49s, environment 0ms)
+

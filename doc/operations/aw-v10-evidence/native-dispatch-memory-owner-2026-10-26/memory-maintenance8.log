@@ -1,0 +1,33 @@
+
+ RUN  v4.1.11 /workspace/v10-dep-qualification/server
+
+ ❯ src/services/memory/memory-maintenance.test.ts (14 tests | 1 failed | 13 skipped) 4356ms
+     × refuses success when a native job lacks or disagrees with its original postcondition receipt 177ms
+
+⎯⎯⎯⎯⎯⎯⎯ Failed Tests 1 ⎯⎯⎯⎯⎯⎯⎯
+
+ FAIL  src/services/memory/memory-maintenance.test.ts > Governed native Memory maintenance > refuses success when a native job lacks or disagrees with its original postcondition receipt
+AssertionError: expected undefined to be 'verification_unavailable' // Object.is equality
+
+- Expected:
+"verification_unavailable"
+
++ Received:
+undefined
+
+ ❯ src/services/memory/memory-maintenance.test.ts:95:114
+     93|     await db.insert(activityLog).values(receipt!);
+     94|     await db.update(memoryJobs).set({ resultJson: { ...completed.resul…
+     95|     expect((await readMemoryMaintenanceHistory(db, historyActor(seeded…
+       |                                                                                                                  ^
+     96|     await db.update(memoryJobs).set({ resultJson: completed.resultJson…
+     97|     await db.insert(activityLog).values({ ...receipt!, id: randomUUID(…
+
+⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯[1/1]⎯
+
+
+ Test Files  1 failed (1)
+      Tests  1 failed | 13 skipped (14)
+   Start at  01:56:36
+   Duration  18.08s (transform 9.47s, setup 71ms, import 13.54s, tests 4.36s, environment 0ms)
+

@@ -1,0 +1,51 @@
+(!) Your Vite config uses features that are unsupported by `configLoader: 'native'`, which is planned to become the default in a future major version of Vite:
+  - `__dirname` (vitest.config.ts:7:25). Use `import.meta.dirname` instead
+Set `VITE_CONFIG_NATIVE_IGNORE_WARNING=true` to suppress this warning.
+
+ RUN  v4.1.11 /workspace/blentera-v10
+
+ ✓ |@paperclipai/server| src/services/context/context-engine-integration.test.ts > Context Engine integration > executes Foundation and Memory query nodes with approved and accepted sources only 10316ms
+ ✓ |@paperclipai/server| src/services/context/context-engine-integration.test.ts > Context Engine integration > assembles authorized approved Foundation and task context into a durable manifest 683ms
+ × |@paperclipai/server| src/services/context/context-engine-integration.test.ts > Context Engine integration > binds actual approved Foundation and private Task Context to one native bootstrap witness and rechecks current Human authority 289ms
+   → Failed query: insert into "principal_permission_grants" ("id", "company_id", "principal_type", "principal_id", "permission_key", "scope", "granted_by_user_id", "created_at", "updated_at") values (default, $1, $2, $3, $4, $5, default, default, default)
+params: ee155345-230f-43a5-9698-e5246d600908,user,user-ee155345-230f-43a5-9698-e5246d600908,foundation:read,
+ ✓ |@paperclipai/server| src/services/context/context-engine-integration.test.ts > Context Engine integration > preserves an original Human Task source across status changes and rejects it after a canonical body edit 658ms
+ ✓ |@paperclipai/server| src/services/context/context-engine-integration.test.ts > Context Engine integration > retrieves only issue-authorized synced GitHub evidence into the governed Context packet 557ms
+ ✓ |@paperclipai/server| src/services/context/context-engine-integration.test.ts > Context Engine integration > keeps Memory hydration disabled until Memory flags are enabled 6296ms
+ ✓ |@paperclipai/server| src/services/context/context-engine-integration.test.ts > Context Engine integration > hydrates only eligible relevant shared and owner-private Memory into Context 13478ms
+ ✓ |@paperclipai/server| src/services/context/context-engine-integration.test.ts > Context Engine integration > keeps unsupported, expired, erased, and foreign Human Task evidence out of Memory payload snapshots 1112ms
+[11:51:42] [33mWARN[39m: [36mresponsible-user authorization intersection denied[39m [90m{"authzMode":"enforce","code":"RESPONSIBLE_USER_UNAUTHORIZED","reason":"deny_missing_grant","action":"foundation:read","resourceType":"company","companyId":"f4548d18-0a91-478d-9138-fe910f3f58c0","actorAgentId":"39b216ff-f16c-4489-ad76-0beca7f3b9cd","responsibleUserId":"user-f4548d18-0a91-478d-9138-fe910f3f58c0"}[39m
+ ✓ |@paperclipai/server| src/services/context/context-engine-integration.test.ts > Context Engine integration > omits Foundation without foundation:read but still admits authorized task context 3743ms
+ ✓ |@paperclipai/server| src/services/context/context-engine-integration.test.ts > Context Engine integration > enforces the represented human's source permission for V5 even in shadow mode 220ms
+
+⎯⎯⎯⎯⎯⎯⎯ Failed Tests 1 ⎯⎯⎯⎯⎯⎯⎯
+
+ FAIL  |@paperclipai/server| src/services/context/context-engine-integration.test.ts > Context Engine integration > binds actual approved Foundation and private Task Context to one native bootstrap witness and rechecks current Human authority
+Error: Failed query: insert into "principal_permission_grants" ("id", "company_id", "principal_type", "principal_id", "permission_key", "scope", "granted_by_user_id", "created_at", "updated_at") values (default, $1, $2, $3, $4, $5, default, default, default)
+params: ee155345-230f-43a5-9698-e5246d600908,user,user-ee155345-230f-43a5-9698-e5246d600908,foundation:read,
+ ❯ PostgresJsPreparedQuery.queryWithCache ../../v10-dep-qualification/node_modules/.pnpm/drizzle-orm@0.45.2_@opentelemetry+api@1.9.1_kysely@0.29.5_pg@8.18.0_postgres@3.4.9_patch_hash_uil4xuf7icnddjurbgy2qn5oo4/node_modules/src/pg-core/session.ts:73:10
+ ❯ src/services/context/context-engine-integration.test.ts:659:5
+    657|     await db.insert(principalPermissionGrants).values({ companyId: see…
+    658|       principalId: seeded.agent.id, permissionKey: "foundation:read", …
+    659|     await db.insert(principalPermissionGrants).values({ companyId: see…
+       |     ^
+    660|       principalId: seeded.userId, permissionKey: "foundation:read", sc…
+    661|     const foundation = await createApprovedFoundation({ companyId: see…
+
+⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯
+Serialized Error: { query: 'insert into "principal_permission_grants" ("id", "company_id", "principal_type", "principal_id", "permission_key", "scope", "granted_by_user_id", "created_at", "updated_at") values (default, $1, $2, $3, $4, $5, default, default, default)', params: [ 'ee155345-230f-43a5-9698-e5246d600908', 'user', 'user-ee155345-230f-43a5-9698-e5246d600908', 'foundation:read', null ] }
+Caused by: PostgresError: duplicate key value violates unique constraint "principal_permission_grants_unique_idx"
+ ❯ ErrorResponse ../../v10-dep-qualification/node_modules/.pnpm/postgres@3.4.9_patch_hash=sryle6qd5qfmnxvoebal4gashi/node_modules/postgres/src/connection.js:819:30
+ ❯ handle ../../v10-dep-qualification/node_modules/.pnpm/postgres@3.4.9_patch_hash=sryle6qd5qfmnxvoebal4gashi/node_modules/postgres/src/connection.js:493:6
+ ❯ Socket.data ../../v10-dep-qualification/node_modules/.pnpm/postgres@3.4.9_patch_hash=sryle6qd5qfmnxvoebal4gashi/node_modules/postgres/src/connection.js:324:9
+
+⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯
+Serialized Error: { severity_local: 'ERROR', severity: 'ERROR', code: '23505', detail: 'Key (company_id, principal_type, principal_id, permission_key)=(ee155345-230f-43a5-9698-e5246d600908, user, user-ee155345-230f-43a5-9698-e5246d600908, foundation:read) already exists.', schema_name: 'public', table_name: 'principal_permission_grants', constraint_name: 'principal_permission_grants_unique_idx', file: 'nbtinsert.c', routine: '_bt_check_unique', query: 'insert into "principal_permission_grants" ("id", "company_id", "principal_type", "principal_id", "permission_key", "scope", "granted_by_user_id", "created_at", "updated_at") values (default, $1, $2, $3, $4, $5, default, default, default)', parameters: [ 'ee155345-230f-43a5-9698-e5246d600908', 'user', 'user-ee155345-230f-43a5-9698-e5246d600908', 'foundation:read', null ], args: [ 'ee155345-230f-43a5-9698-e5246d600908', 'user', 'user-ee155345-230f-43a5-9698-e5246d600908', 'foundation:read', null ], types: [ 2950, 25, 25, 25, 3802 ] }
+⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯[1/1]⎯
+
+
+ Test Files  1 failed (1)
+      Tests  1 failed | 9 passed (10)
+   Start at  11:50:44
+   Duration  57.68s (transform 10.76s, setup 77ms, import 15.50s, tests 41.98s, environment 0ms)
+

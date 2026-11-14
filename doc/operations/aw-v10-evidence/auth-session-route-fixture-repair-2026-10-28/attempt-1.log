@@ -1,0 +1,100 @@
+
+ RUN  v4.1.11 /workspace/blentera-v10/server
+
+[11:10:09] [33mWARN[39m: [36mFailed to resolve auth session from request headers[39m [90m{"method":"GET","url":"/actor"}[39m
+ ❯ src/__tests__/auth-session-route.test.ts (13 tests | 4 failed) 78ms
+     × trusts Cloud tenant identity headers and seeds board access 13ms
+     × lets the cloud tenant actor through assertCompanyAccess for a company it holds a membership row in 12ms
+     × repairs a legacy machine company name from the trusted human-name header 7ms
+     × purges a stale instance_admin row so the session path stops elevating the cloud-tenant user 9ms
+
+⎯⎯⎯⎯⎯⎯⎯ Failed Tests 4 ⎯⎯⎯⎯⎯⎯⎯
+
+ FAIL  src/__tests__/auth-session-route.test.ts > actorMiddleware authenticated session profile > trusts Cloud tenant identity headers and seeds board access
+AssertionError: expected 500 to be 200 // Object.is equality
+
+- Expected
++ Received
+
+- 200
++ 500
+
+ ❯ src/__tests__/auth-session-route.test.ts:141:24
+    139|       .set("x-paperclip-cloud-stack-role", "owner");
+    140|
+    141|     expect(res.status).toBe(200);
+       |                        ^
+    142|     expect(res.body).toMatchObject({
+    143|       type: "board",
+
+⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯[1/4]⎯
+
+ FAIL  src/__tests__/auth-session-route.test.ts > actorMiddleware authenticated session profile > lets the cloud tenant actor through assertCompanyAccess for a company it holds a membership row in
+AssertionError: expected 500 to be 200 // Object.is equality
+
+- Expected
++ Received
+
+- 200
++ 500
+
+ ❯ src/__tests__/auth-session-route.test.ts:231:25
+    229|     // membership row (write access also consults actor.memberships).
+    230|     const read = await request(app).get(`/companies/${importedCompanyI…
+    231|     expect(read.status).toBe(200);
+       |                         ^
+    232|     expect(read.body.companyIds).toContain(importedCompanyId);
+    233|
+
+⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯[2/4]⎯
+
+ FAIL  src/__tests__/auth-session-route.test.ts > actorMiddleware authenticated session profile > repairs a legacy machine company name from the trusted human-name header
+AssertionError: expected 500 to be 200 // Object.is equality
+
+- Expected
++ Received
+
+- 200
++ 500
+
+ ❯ src/__tests__/auth-session-route.test.ts:320:24
+    318|       .set("x-paperclip-cloud-stack-role", "owner");
+    319|
+    320|     expect(res.status).toBe(200);
+       |                        ^
+    321|     expect(updates).toHaveLength(1);
+    322|     expect(updates[0]).toMatchObject({ name: "Purple Rain" });
+
+⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯[3/4]⎯
+
+ FAIL  src/__tests__/auth-session-route.test.ts > actorMiddleware authenticated session profile > purges a stale instance_admin row so the session path stops elevating the cloud-tenant user
+AssertionError: expected {} to match object { source: 'cloud_tenant', …(1) }
+
+- Expected
++ Received
+
+- {
+-   "isInstanceAdmin": false,
+-   "source": "cloud_tenant",
+- }
++ {}
+
+ ❯ src/__tests__/auth-session-route.test.ts:405:24
+    403|       .set("x-paperclip-cloud-stack-id", "stack-alpha")
+    404|       .set("x-paperclip-cloud-stack-role", "owner");
+    405|     expect(cloud.body).toMatchObject({ source: "cloud_tenant", isInsta…
+       |                        ^
+    406|     expect(state.staleInstanceAdminRow).toBe(false);
+    407|
+
+⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯[4/4]⎯
+
+
+ Test Files  1 failed (1)
+      Tests  4 failed | 9 passed (13)
+   Start at  11:09:51
+   Duration  18.21s (transform 12.79s, setup 139ms, import 17.80s, tests 78ms, environment 0ms)
+
+undefined
+/workspace/blentera-v10/server:
+ ERR_PNPM_RECURSIVE_EXEC_FIRST_FAIL  Command failed with exit code 1: vitest run src/__tests__/auth-session-route.test.ts

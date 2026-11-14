@@ -1,0 +1,12 @@
+Context Engine full integration file, 2026-10-26
+
+Fresh qualification snapshot and syntax preflight exited 0. Command: `vitest run src/services/context/context-engine-integration.test.ts --maxWorkers=1`. Result: 1 file passed, all 10 tests passed, exit 0; duration 66.95s. This run followed focused R7 green (exact target 1/1).
+
+The Context deadline diagnostic showed the later native Context read completed within the unchanged budget (796ms providers + 376ms manifest, 321ms left). The `context-manifest.ts` change checks Memory roots and copied Tasks first, then rechecks primary Task/Run/Human/project at the end; the exact primary Task is not redundantly checked earlier in that final sequence. The fixture reuses its original actual Human session when creating Memory, avoiding an unintended second passkey/session rotation. No deadline or access predicate was relaxed.
+
+This snapshot includes Binary's bounded issue-privacy diagnostic helper, which was complete and syntax-valid in this run; test evidence is based on that exact source pin. A prior full-file attempt that captured its transient helper-call-before-definition edit is contaminated and excluded.
+
+Source pins: context-engine-full-r2-20261026-source-pins.json
+  SHA256 2063eb8aad44591cd09c792bc0887085c6d21c1dfa80e7f95a63bc61955aa40a
+Syntax log SHA256 7ae24f08d6f9765c2f1b81971e21563ca7da52b27adba821d67ebc92f8b5a00e (exit 0)
+Test log SHA256 340c8b28784327f908f7a22493c28e59bbc63358874e5d5aee73e2bb06b322fc (exit 0)

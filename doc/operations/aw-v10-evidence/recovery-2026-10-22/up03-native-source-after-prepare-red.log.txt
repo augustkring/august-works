@@ -1,0 +1,146 @@
+(!) Your Vite config uses features that are unsupported by `configLoader: 'native'`, which is planned to become the default in a future major version of Vite:
+  - `__dirname` (vitest.config.ts:7:25). Use `import.meta.dirname` instead
+Set `VITE_CONFIG_NATIVE_IGNORE_WARNING=true` to suppress this warning.
+
+ RUN  v4.1.11 /workspace/blentera-v10
+
+ ❯ |@paperclipai/server| src/services/native-runtime/native-session-executor.test.ts (468 tests | 2 failed | 466 skipped) 308ms
+     × blocks provider creation when source authority is withdrawn during attachment staging 284ms
+     × blocks provider admission when source authority changes during launch-intent persistence 18ms
+
+⎯⎯⎯⎯⎯⎯⎯ Failed Tests 2 ⎯⎯⎯⎯⎯⎯⎯
+
+ FAIL  |@paperclipai/server| src/services/native-runtime/native-session-executor.test.ts > runnerd provider runtime wiring > blocks provider creation when source authority is withdrawn during attachment staging
+AssertionError: promise resolved "{ exitCode: +0, signal: null, …(12) }" instead of rejecting
+
+- Expected
++ Received
+
+- Error {
+-   "message": "rejected promise",
++ {
++   "costUsd": undefined,
++   "errorMessage": null,
++   "exitCode": 0,
++   "model": null,
++   "nativeFinalization": {
++     "companyId": "company",
++     "driverKind": "test",
++     "driverVersion": "1",
++     "highestContiguousSourceSeq": 1,
++     "issueId": "issue",
++     "nativeEventCount": 1,
++     "normalizedSessionId": "withdrawn-staging-session",
++     "providerSessionId": null,
++     "result": {
++       "summary": "completed",
++     },
++     "runId": "run-native-cancel",
++     "runtimeMode": "native",
++     "schema": "paperclip.native-finalization.v1",
++     "sourceInstanceId": "withdrawn-staging",
++     "terminal": {
++       "runTerminalState": "succeeded",
++     },
++     "turnId": "withdrawn-staging-turn",
++     "workspaceFinalizeStatus": "pending",
++   },
++   "provider": "openai",
++   "resultJson": {
++     "nativeResult": {
++       "summary": "completed",
++     },
++     "nativeTerminal": {
++       "runTerminalState": "succeeded",
++     },
++     "planSynchronizations": [],
++   },
++   "sessionDisplayId": "withdrawn-staging-session",
++   "sessionId": "withdrawn-staging-session",
++   "signal": null,
++   "summary": "completed",
++   "timedOut": false,
++   "usage": undefined,
++   "usageBasis": "per_run",
+  }
+
+ ❯ src/services/native-runtime/native-session-executor.test.ts:7799:8
+    7797|     await expect(executePaperclipNativeSession({
+    7798|       db: leaseDb(execution), execution, runnerInstanceId: "withdrawn-…
+    7799|     })).rejects.toBe(denied);
+       |        ^
+    7800|     expect(state.createBackend).not.toHaveBeenCalled();
+    7801|     expect(state.createTransport).not.toHaveBeenCalled();
+
+⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯[1/2]⎯
+
+ FAIL  |@paperclipai/server| src/services/native-runtime/native-session-executor.test.ts > runnerd provider runtime wiring > blocks provider admission when source authority changes during launch-intent persistence
+AssertionError: promise resolved "{ exitCode: +0, signal: null, …(12) }" instead of rejecting
+
+- Expected
++ Received
+
+- Error {
+-   "message": "rejected promise",
++ {
++   "costUsd": undefined,
++   "errorMessage": null,
++   "exitCode": 0,
++   "model": null,
++   "nativeFinalization": {
++     "companyId": "company",
++     "driverKind": "test",
++     "driverVersion": "1",
++     "highestContiguousSourceSeq": 1,
++     "issueId": "issue",
++     "nativeEventCount": 1,
++     "normalizedSessionId": "withdrawn-launch-session",
++     "providerSessionId": null,
++     "result": {
++       "summary": "completed",
++     },
++     "runId": "run-native-cancel",
++     "runtimeMode": "native",
++     "schema": "paperclip.native-finalization.v1",
++     "sourceInstanceId": "withdrawn-launch",
++     "terminal": {
++       "runTerminalState": "succeeded",
++     },
++     "turnId": "withdrawn-launch-turn",
++     "workspaceFinalizeStatus": "pending",
++   },
++   "provider": "openai",
++   "resultJson": {
++     "nativeResult": {
++       "summary": "completed",
++     },
++     "nativeTerminal": {
++       "runTerminalState": "succeeded",
++     },
++     "planSynchronizations": [],
++   },
++   "sessionDisplayId": "withdrawn-launch-session",
++   "sessionId": "withdrawn-launch-session",
++   "signal": null,
++   "summary": "completed",
++   "timedOut": false,
++   "usage": undefined,
++   "usageBasis": "per_run",
+  }
+
+ ❯ src/services/native-runtime/native-session-executor.test.ts:7830:8
+    7828|     await expect(executePaperclipNativeSession({
+    7829|       db: leaseDb(execution, {}, {}, updates), execution, runnerInstan…
+    7830|     })).rejects.toBe(denied);
+       |        ^
+    7831|     expect(updates).toContainEqual({ table: heartbeatRunEvents,
+    7832|       values: expect.objectContaining({ eventType: "native.process_sta…
+
+⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯[2/2]⎯
+
+
+ Test Files  1 failed (1)
+      Tests  2 failed | 466 skipped (468)
+   Start at  00:45:03
+   Duration  43.00s (transform 30.15s, setup 271ms, import 41.78s, tests 308ms, environment 0ms)
+

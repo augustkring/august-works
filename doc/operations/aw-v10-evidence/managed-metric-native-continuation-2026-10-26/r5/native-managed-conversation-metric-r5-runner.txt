@@ -1,0 +1,1 @@
+timeout_seconds=240ntest_file=src/services/native-runtime/native-opencode-managed-conversation-frame.integration.test.tsntest_pattern=continues the real conversation after a metric tool result with its original immutable source receiptn

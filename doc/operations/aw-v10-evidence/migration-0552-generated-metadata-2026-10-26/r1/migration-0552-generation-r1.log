@@ -1,0 +1,3 @@
+Reading config file '/workspace/v10-preparation/conversation-migration-generation-vq_kc6eq/drizzle.config.ts'
+Prepared empty file for your custom SQL migration!
+[✓] Your SQL migration file ➜ migrations/0552_role_pack_company_purge.sql 🚀

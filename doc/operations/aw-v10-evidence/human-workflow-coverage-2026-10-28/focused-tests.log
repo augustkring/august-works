@@ -1,0 +1,39 @@
+(!) Your Vite config uses features that are unsupported by `configLoader: 'native'`, which is planned to become the default in a future major version of Vite:
+  - `__dirname` (vitest.config.ts:7:25). Use `import.meta.dirname` instead
+Set `VITE_CONFIG_NATIVE_IGNORE_WARNING=true` to suppress this warning.
+
+ RUN  v4.1.11 /workspace/blentera-v10
+
+ ❯ |@paperclipai/server| src/__tests__/access-service.test.ts (29 tests | 1 failed | 28 skipped) 4229ms
+     × routes exact published-workflow coverage without copying rights and withdraws it on member suspension 138ms
+
+⎯⎯⎯⎯⎯⎯⎯ Failed Tests 1 ⎯⎯⎯⎯⎯⎯⎯
+
+ FAIL  |@paperclipai/server| src/__tests__/access-service.test.ts > access service > routes exact published-workflow coverage without copying rights and withdraws it on member suspension
+Error: Failed query: insert into "workflow_revisions" ("id", "company_id", "workflow_id", "revision_number", "state", "graph_json", "input_schema", "output_schema", "change_summary", "created_by_user_id", "created_by_agent_id", "created_by_run_id", "created_at") values (default, $1, $2, $3, $4, $5, default, default, default, $6, default, default, default) returning "id", "company_id", "workflow_id", "revision_number", "state", "graph_json", "input_schema", "output_schema", "change_summary", "created_by_user_id", "created_by_agent_id", "created_by_run_id", "created_at"
+params: b6d3a6ac-eba8-41e9-9eea-693438527d5b,59523068-71d0-49b4-a053-868c112510e1,1,published,{"version":1,"nodes":[{"id":"start","type":"core.manual_trigger","name":"Start","position":{"x":0,"y":0},"config":{}}],"edges":[],"variables":[],"settings":{}},cab584c4-b221-42d3-a605-101d47c38b76
+ ❯ PostgresJsPreparedQuery.queryWithCache ../../v10-dep-qualification/node_modules/.pnpm/drizzle-orm@0.45.2_@opentelemetry+api@1.9.1_kysely@0.29.5_pg@8.18.0_postgres@3.4.9_patch_hash_uil4xuf7icnddjurbgy2qn5oo4/node_modules/src/pg-core/session.ts:73:10
+ ❯ ../../v10-dep-qualification/node_modules/.pnpm/drizzle-orm@0.45.2_@opentelemetry+api@1.9.1_kysely@0.29.5_pg@8.18.0_postgres@3.4.9_patch_hash_uil4xuf7icnddjurbgy2qn5oo4/node_modules/src/postgres-js/session.ts:58:16
+ ❯ src/__tests__/access-service.test.ts:120:22
+    118|     ]).returning();
+    119|     const workflow = await db.insert(workflows).values({ companyId: co…
+    120|     const revision = await db.insert(workflowRevisions).values({
+       |                      ^
+    121|       companyId: company.id, workflowId: workflow.id, revisionNumber: …
+    122|       graph: { version: 1, nodes: [{ id: "start", type: "core.manual_t…
+
+Caused by: PostgresError: published workflow revision is not the workflow published pointer
+ ❯ ErrorResponse ../../v10-dep-qualification/node_modules/.pnpm/postgres@3.4.9_patch_hash=sryle6qd5qfmnxvoebal4gashi/node_modules/postgres/src/connection.js:819:30
+ ❯ handle ../../v10-dep-qualification/node_modules/.pnpm/postgres@3.4.9_patch_hash=sryle6qd5qfmnxvoebal4gashi/node_modules/postgres/src/connection.js:493:6
+ ❯ Socket.data ../../v10-dep-qualification/node_modules/.pnpm/postgres@3.4.9_patch_hash=sryle6qd5qfmnxvoebal4gashi/node_modules/postgres/src/connection.js:324:9
+
+⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯
+Serialized Error: { severity_local: 'ERROR', severity: 'ERROR', code: '23514', where: 'PL/pgSQL function aw_check_workflow_revision_backref() line 28 at RAISE', file: 'pl_exec.c', routine: 'exec_stmt_raise', query: 'insert into "workflow_revisions" ("id", "company_id", "workflow_id", "revision_number", "state", "graph_json", "input_schema", "output_schema", "change_summary", "created_by_user_id", "created_by_agent_id", "created_by_run_id", "created_at") values (default, $1, $2, $3, $4, $5, default, default, default, $6, default, default, default) returning "id", "company_id", "workflow_id", "revision_number", "state", "graph_json", "input_schema", "output_schema", "change_summary", "created_by_user_id", "created_by_agent_id", "created_by_run_id", "created_at"', parameters: [ 'b6d3a6ac-eba8-41e9-9eea-693438527d5b', '59523068-71d0-49b4-a053-868c112510e1', '1', 'published', '{"version":1,"nodes":[{"id":"start","type":"core.manual_trigger","name":"Start","position":{"x":0,"y":0},"config":{}}],"edges":[],"variables":[],"settings":{}}', 'cab584c4-b221-42d3-a605-101d47c38b76' ], args: [ 'b6d3a6ac-eba8-41e9-9eea-693438527d5b', '59523068-71d0-49b4-a053-868c112510e1', 1, 'published', '{"version":1,"nodes":[{"id":"start","type":"core.manual_trigger","name":"Start","position":{"x":0,"y":0},"config":{}}],"edges":[],"variables":[],"settings":{}}', 'cab584c4-b221-42d3-a605-101d47c38b76' ], types: [ 2950, 2950, 23, 25, 3802, 25 ] }
+⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯[1/1]⎯
+
+
+ Test Files  1 failed | 1 passed (2)
+      Tests  1 failed | 1 passed | 50 skipped (52)
+   Start at  15:47:49
+   Duration  30.78s (transform 11.89s, setup 158ms, import 21.40s, tests 8.96s, environment 0ms)
+

@@ -1,15 +1,19 @@
 import { appendHeartbeatRunEvent } from "./heartbeat-run-events.js";
+import { hasAcknowledgedNativeStopIntent } from "./acknowledged-native-stop.js";
 import { readQueuedInteractionResponse } from "./queued-interaction-response.js";
 import { isCancelledNativeStartup } from "./cancelled-native-startup.js";
 import { hasNativeLocalProcessStop, hasHistoricalSuspendedNativeSession } from "./native-local-process-stop.js";
 import { completeTerminatedRemoteNativeSessionCleanup } from "../vendor/paperclip-runner/index.js";
 import { hasRemoteTerminationReceipt, remoteLeaseCleanupScope } from "./remote-execution-termination.js";
 import { z } from "zod";
+import { isExactUnknownNativeTextCharge } from "./native-text-unknown-charge.js";
+export { isExactUnknownNativeTextCharge } from "./native-text-unknown-charge.js";
 import { and, eq, inArray, isNull, ne, or, sql } from "drizzle-orm";
 import {
   agents, agentWakeupRequests, approvals, issueApprovals, issueThreadInteractions,
   environmentLeases, heartbeatRuns, issueComments, issueRecoveryActions,
-  issues, nativeRunFinalizations, nativeRunResults, type Db,
+  issues, nativeRunFinalizations, nativeRunResults, orchestrationModelReservations,
+  orchestrationWorkerAttempts, orchestrationWorkers, orchestrationPlans, type Db,
 } from "@paperclipai/db";
 import { executionBlockerPredicate, getExecutionBlocker } from "./execution-blocker.js";
 import { buildExecutionContinuation } from "./execution-continuation.js";
@@ -134,6 +138,49 @@ export async function admitExplicitNativeContinuation(input: {
     executionBlockerPredicate(),
   )).for("update");
   if (!actions.length) return null;
+  const ownsUnknownNativeTextCharge = async (run: Run) => {
+    const action = actions.find(candidate => {
+      const automaticRecovery = candidate.evidence.automaticRecovery;
+      return candidate.cause === "uncertain_provider_action" &&
+        candidate.evidence.runId === run.id &&
+        typeof candidate.evidence.modelReservationId === "string" &&
+        automaticRecovery && typeof automaticRecovery === "object" && !Array.isArray(automaticRecovery) &&
+        (automaticRecovery as Record<string, unknown>).replay === "blocked";
+    });
+    if (!action) return false;
+    const [reservation] = await db.select().from(orchestrationModelReservations).where(and(
+      eq(orchestrationModelReservations.companyId, companyId),
+      eq(orchestrationModelReservations.id, String(action.evidence.modelReservationId)),
+      eq(orchestrationModelReservations.purpose, "worker_model"),
+      eq(orchestrationModelReservations.status, "unknown"),
+    )).limit(1);
+    if (!reservation || reservation.workerAttemptId === null || reservation.planId === null) return false;
+    const [binding] = await db.select({
+      runId: orchestrationWorkerAttempts.runId,
+      agentId: orchestrationWorkerAttempts.agentId,
+      planIssueId: orchestrationPlans.issueId,
+      workerIssueId: orchestrationWorkers.issueId,
+      workerAgentId: orchestrationWorkers.agentId,
+    }).from(orchestrationWorkerAttempts)
+      .innerJoin(orchestrationWorkers, and(
+        eq(orchestrationWorkers.companyId, orchestrationWorkerAttempts.companyId),
+        eq(orchestrationWorkers.id, orchestrationWorkerAttempts.workerId),
+      ))
+      .innerJoin(orchestrationPlans, and(
+        eq(orchestrationPlans.companyId, orchestrationWorkerAttempts.companyId),
+        eq(orchestrationPlans.id, orchestrationWorkerAttempts.planId),
+      ))
+      .where(and(
+        eq(orchestrationWorkerAttempts.companyId, companyId),
+        eq(orchestrationWorkerAttempts.id, reservation.workerAttemptId),
+        eq(orchestrationWorkerAttempts.planId, reservation.planId),
+      )).limit(1);
+    if (!binding) return false;
+    return isExactUnknownNativeTextCharge({
+      run, issueId, actionCause: action.cause, actionEvidence: action.evidence,
+      reservation, binding, wireIntents: run.runnerProfileJson?.nativeAwModelWireIntents,
+    });
+  };
   const blocker = await getExecutionBlocker(db, companyId, issueId);
   if (blocker && blocker.recoveryActionId === null) return null;
   const [pendingInteraction] = await db.select({ id: issueThreadInteractions.id }).from(issueThreadInteractions).where(and(
@@ -233,9 +280,15 @@ export async function admitExplicitNativeContinuation(input: {
       if (leases.some(lease => !lease.releasedAt || lease.cleanupStatus === "failed")) return blocked("local_cleanup", "Waiting for the previous environment to finish cleanup. Your message will start automatically.");
       if (!unusedAdmission && !cancelledStartup) {
         // A missing process identity is not evidence that a provider exited.
+        // Native Text has no child process. Its acknowledged controller Stop
+        // permits only an explicit fresh request; the old unknown charge stays
+        // unresolved and does not assert that the vendor stopped processing.
         if (!run.processPid && !run.processGroupId &&
             !await hasNativeLocalProcessStop(db, companyId, run.id) &&
-            !await hasHistoricalSuspendedNativeSession(db, run)) return blocked("process_identity_missing", "The previous run has no verified stop record. Paperclip cannot start this message yet.");
+            !await hasHistoricalSuspendedNativeSession(db, run) &&
+            !(run.driverKind === "aw_text_messages" && hasAcknowledgedNativeStopIntent(run) &&
+              await ownsUnknownNativeTextCharge(run)))
+          return blocked("process_identity_missing", "The previous run has no verified stop record. Paperclip cannot start this message yet.");
         if (run.processPid && !processStopped(run.processPid)) return blocked("process_running", "Waiting for the previous process to stop. Your message will start automatically.");
         if (run.processGroupId && !processStopped(-run.processGroupId)) return blocked("process_running", "Waiting for the previous process to stop. Your message will start automatically.");
       }

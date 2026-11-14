@@ -1,10 +1,14 @@
 import { randomUUID } from "node:crypto";
+import { secretService } from "../services/secrets.js";
+import { RAILWAY_API_URL, RAILWAY_MCP_URL, RAILWAY_QUERIES, RAILWAY_TOOLS } from "../services/railway.js";
+const workspaceId="11111111-1111-4111-8111-111111111111";
 import { eq } from "drizzle-orm";
 import { afterAll, afterEach, beforeAll, describe, expect, it, vi } from "vitest";
 import {
   activityLog,
   agents,
   companies,
+  companySecrets,
   companyMemberships,
   connectionGrants,
   createDb,
@@ -178,9 +182,11 @@ async function createRemoteMcpTool(db: Db, companyId: string) {
       status: "active",
     })
     .returning();
+  const secret=await secretService(db).create(companyId,{name:`Telemetry Railway ${randomUUID()}`,key:`telemetry_${randomUUID().replace(/-/g,"")}`,provider:"local_encrypted",value:`fixed-railway-${randomUUID()}`});
+  const credentialSecretRefs=[{secretId:secret.id,versionSelector:"latest",configPath:"credentials.authorization",required:true}];
   const config = {
-    url: "https://mcp.telemetry.test/mcp",
-    sourceTemplateKey: "github",
+    url: RAILWAY_MCP_URL,
+    sourceTemplateKey: "railway", connectionMethodKey:"mcp-oauth",railwayApiStatus:"available",
   };
   const [connection] = await db
     .insert(toolConnections)
@@ -189,21 +195,21 @@ async function createRemoteMcpTool(db: Db, companyId: string) {
       applicationId: application!.id,
       name: `Remote connection ${randomUUID()}`,
       uid: `test/${randomUUID()}`,
-      transport: "mcp_remote",
+      transport: "mcp_remote", authKind:"oauth",credentialSource:"paperclip_vault",
       status: "active",
       enabled: true,
       healthStatus: "ok",
       config,
       transportConfig: config,
-      credentialRefs: [],
-      credentialSecretRefs: [],
+      credentialRefs: [{name:"credentials.authorization",secretId:secret.id,version:"latest",placement:"header",key:"Authorization",prefix:"Bearer "}],
+      credentialSecretRefs,
     })
     .returning();
   await db.insert(connectionGrants).values({
     companyId,
     connectionId: connection!.id,
     kind: "organization",
-    credentialSecretRefs: [],
+    credentialSecretRefs,
     status: "active",
     isDefault: true,
   });
@@ -215,15 +221,10 @@ async function createRemoteMcpTool(db: Db, companyId: string) {
       connectionId: connection!.id,
       entryKind: "tool",
       name: `kv_set-${randomUUID()}`,
-      toolName: "kv_set",
+      toolName: "paperclip-railway-list-projects",
       title: "KV Set",
       description: "Set a value",
-      inputSchema: {
-        type: "object",
-        properties: { key: { type: "string" }, value: { type: "string" } },
-        required: ["key", "value"],
-        additionalProperties: false,
-      },
+      inputSchema: RAILWAY_TOOLS.find(tool=>tool.name==="paperclip-railway-list-projects")!.inputSchema,
       annotations: { readOnlyHint: false },
       riskLevel: "write",
       isReadOnly: false,
@@ -252,7 +253,7 @@ async function settledEvents(expectedCount: number) {
   );
 }
 
-describeEmbeddedPostgres("gateway connector invocation telemetry", () => {
+describeEmbeddedPostgres("fixed Railway gateway connector invocation telemetry", () => {
   let db!: Db;
   let tempDb: Awaited<ReturnType<typeof startEmbeddedPostgresTestDatabase>> | null =
     null;
@@ -287,6 +288,7 @@ describeEmbeddedPostgres("gateway connector invocation telemetry", () => {
     await db.delete(projects);
     await db.delete(agents);
     await db.delete(companyMemberships);
+    await db.delete(companySecrets);
     await db.delete(companies);
   });
 
@@ -302,7 +304,13 @@ describeEmbeddedPostgres("gateway connector invocation telemetry", () => {
     await allowAllToolsForAgent(db, company.id, agent.id);
     const gateway = createToolGatewayService(db, {
       toolActionSigningSecret: SIGNING_SECRET,
-      remoteHttpRequest: async (_url, init) => mcpSuccessResponse(init),
+      remoteHttpRequest: async (url, init) => {
+        expect(url).toBe(RAILWAY_API_URL);
+        const payload=JSON.parse(String(init.body));
+        expect(payload.query).toBe(RAILWAY_QUERIES.projects);
+        expect(payload.variables.workspaceId).toBe(workspaceId);
+        return Response.json({data:{projects:{edges:[]}}});
+      },
       ...options,
     });
     const session = await gateway.createSession({
@@ -323,14 +331,14 @@ describeEmbeddedPostgres("gateway connector invocation telemetry", () => {
       f.gateway.executeTool({
         sessionToken: f.session.token,
         tool: f.tool.name,
-        parameters: { key: "a", value: "1" },
+        parameters: {workspaceId,after:"a:1"},
       }),
     ).resolves.toMatchObject({ status: "completed" });
 
     const events = await settledEvents(1);
     expect(events).toHaveLength(1);
     expect(events[0]?.[1]).toMatchObject({
-      connector_key: "github",
+      connector_key: "railway",
       transport: "mcp_remote",
       status: "succeeded",
       origin: "agent",
@@ -345,7 +353,7 @@ describeEmbeddedPostgres("gateway connector invocation telemetry", () => {
       f.gateway.executeTool({
         sessionToken: f.session.token,
         tool: f.tool.name,
-        parameters: { key: "a", value: "1" },
+        parameters: {workspaceId,after:"a:1"},
       }),
     ).rejects.toThrow(/forced activity write failure/);
 
@@ -369,7 +377,7 @@ describeEmbeddedPostgres("gateway connector invocation telemetry", () => {
       f.gateway.executeTool({
         sessionToken: f.session.token,
         tool: f.tool.name,
-        parameters: { key: "a", value: "1" },
+        parameters: {workspaceId,after:"a:1"},
       }),
     ).rejects.toThrow();
 
@@ -391,7 +399,7 @@ describeEmbeddedPostgres("gateway connector invocation telemetry", () => {
       f.gateway.executeTool({
         sessionToken: f.session.token,
         tool: f.tool.name,
-        parameters: { key: "a", value: "1" },
+        parameters: {workspaceId,after:"a:1"},
       }),
     ).rejects.toMatchObject({ reasonCode: expect.any(String) });
 
@@ -413,14 +421,14 @@ describeEmbeddedPostgres("gateway connector invocation telemetry", () => {
       f.gateway.executeTool({
         sessionToken: f.session.token,
         tool: f.tool.name,
-        parameters: { key: "rate", value: "first" },
+        parameters: {workspaceId,after:"rate:first"},
       }),
     ).resolves.toMatchObject({ status: "completed" });
     await expect(
       f.gateway.executeTool({
         sessionToken: f.session.token,
         tool: f.tool.name,
-        parameters: { key: "rate", value: "second" },
+        parameters: {workspaceId,after:"rate:second"},
       }),
     ).rejects.toMatchObject({ status: 429 });
 
@@ -445,7 +453,7 @@ describeEmbeddedPostgres("gateway connector invocation telemetry", () => {
       .executeTool({
         sessionToken: f.session.token,
         tool: f.tool.name,
-        parameters: { key: "a", value: "declined" },
+        parameters: {workspaceId,after:"a:declined"},
       })
       .then(
         () => {
@@ -476,7 +484,7 @@ describeEmbeddedPostgres("gateway connector invocation telemetry", () => {
       .executeTool({
         sessionToken: f.session.token,
         tool: f.tool.name,
-        parameters: { key: "a", value: "approved" },
+        parameters: {workspaceId,after:"a:approved"},
       })
       .then(
         () => {
@@ -514,7 +522,7 @@ describeEmbeddedPostgres("gateway connector invocation telemetry", () => {
       agentId: f.agent.id,
       userId: "board-user",
       toolName: f.tool.name,
-      parameters: { key: "t", value: "1" },
+      parameters: {workspaceId,after:"t:1"},
     });
     expect(testCall).toMatchObject({ decision: "allowed" });
     expect(testCall).not.toHaveProperty("error");
@@ -534,7 +542,7 @@ describeEmbeddedPostgres("gateway connector invocation telemetry", () => {
       f.gateway.executeTool({
         sessionToken: f.session.token,
         tool: f.tool.name,
-        parameters: { key: "a", value: "1" },
+        parameters: {workspaceId,after:"a:1"},
         idempotencyKey,
       }),
     ).resolves.toMatchObject({ status: "completed" });
@@ -543,7 +551,7 @@ describeEmbeddedPostgres("gateway connector invocation telemetry", () => {
       f.gateway.executeTool({
         sessionToken: f.session.token,
         tool: f.tool.name,
-        parameters: { key: "a", value: "1" },
+        parameters: {workspaceId,after:"a:1"},
         idempotencyKey,
       }),
     ).resolves.toMatchObject({ status: "replayed" });
@@ -561,7 +569,7 @@ describeEmbeddedPostgres("gateway connector invocation telemetry", () => {
       f.gateway.executeTool({
         sessionToken: f.session.token,
         tool: f.tool.name,
-        parameters: { key: "a", value: "1" },
+        parameters: {workspaceId,after:"a:1"},
       }),
     ).resolves.toMatchObject({ status: "completed" });
     const [invocation] = await db.select().from(toolInvocations);

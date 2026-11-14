@@ -1,0 +1,29 @@
+(!) Your Vite config uses features that are unsupported by `configLoader: 'native'`, which is planned to become the default in a future major version of Vite:
+  - `__dirname` (vitest.config.ts:7:25). Use `import.meta.dirname` instead
+Set `VITE_CONFIG_NATIVE_IGNORE_WARNING=true` to suppress this warning.
+
+ RUN  v4.1.11 /workspace/blentera-v10
+
+ ❯ |@paperclipai/server| src/__tests__/support-case-storage.integration.test.ts (7 tests | 7 skipped) 90530ms
+
+⎯⎯⎯⎯⎯⎯ Failed Suites 1 ⎯⎯⎯⎯⎯⎯⎯
+
+ FAIL  |@paperclipai/server| src/__tests__/support-case-storage.integration.test.ts > native support case storage and erasure boundaries
+Error: Hook timed out in 90000ms.
+If this is a long-running hook, pass a timeout value as the last argument or configure it globally with "hookTimeout".
+ ❯ src/__tests__/support-case-storage.integration.test.ts:18:3
+     16| describe("native support case storage and erasure boundaries", () => {
+     17|   let database: Awaited<ReturnType<typeof startEmbeddedPostgresTestDat…
+     18|   beforeAll(async () => {
+       |   ^
+     19|     database = await startEmbeddedPostgresTestDatabase("v10-support-ca…
+     20|     db = createDb(database.connectionString);
+
+⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯[1/1]⎯
+
+
+ Test Files  1 failed (1)
+      Tests  7 skipped (7)
+   Start at  16:08:47
+   Duration  175.44s (transform 53.22s, setup 1.99s, import 78.94s, tests 90.53s, environment 2ms)
+

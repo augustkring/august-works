@@ -236,6 +236,28 @@ describe("optimizer promotion policy", () => {
 });
 
 describe("optimizer canary routing and fallback", () => {
+  it("propagates an uncertain trusted fallback without executing it twice", async () => {
+    const decision = evaluateOptimizerPromotion({ riskClass: "C1", sideEffectClass: "pure", policy, evidence: evidence() });
+    const failure = new Error("trusted result unknown");
+    const trusted = vi.fn(async () => { throw failure; });
+    await expect(executeOptimizerCanaryWithFallback({ decision, sideEffectClass: "pure",
+      companyId: "00000000-0000-4000-8000-000000000001", promotionKey: "promotion", routingKey: "invalid",
+      candidateTrafficPercent: 100, guard: async () => ({ passed: true }), executeCandidate: async () => "candidate",
+      validateCandidateOutput: async () => ({ valid: false }), executeTrusted: trusted,
+    })).rejects.toBe(failure);
+    expect(trusted).toHaveBeenCalledTimes(1);
+  });
+  it("refuses an effectful candidate before either execution path starts", async () => {
+    const candidate = vi.fn(async () => "candidate"), trusted = vi.fn(async () => "trusted");
+    const decision = evaluateOptimizerPromotion({ riskClass: "C3", sideEffectClass: "financial", policy,
+      evidence: evidence({ humanApproved: true }) });
+    await expect(executeOptimizerCanaryWithFallback({ decision, sideEffectClass: "financial" as "pure",
+      companyId: "00000000-0000-4000-8000-000000000001", promotionKey: "promotion", routingKey: "effect",
+      candidateTrafficPercent: 100, guard: async () => ({ passed: true }), executeCandidate: candidate,
+      validateCandidateOutput: async () => ({ valid: true }), executeTrusted: trusted,
+    })).rejects.toMatchObject({ details: { code: "optimizer_effectful_canary_unsupported" } });
+    expect(candidate).not.toHaveBeenCalled(); expect(trusted).not.toHaveBeenCalled();
+  });
   it("assigns the same routing key deterministically and honors 0/100 percent boundaries", () => {
     const base = {
       companyId: "00000000-0000-4000-8000-000000000001",
@@ -279,6 +301,7 @@ describe("optimizer canary routing and fallback", () => {
 
     const guarded = await executeOptimizerCanaryWithFallback({
       decision,
+      sideEffectClass: "pure",
       companyId: "00000000-0000-4000-8000-000000000001",
       promotionKey: "promotion",
       routingKey: "guard",
@@ -297,6 +320,7 @@ describe("optimizer canary routing and fallback", () => {
 
     const invalid = await executeOptimizerCanaryWithFallback({
       decision,
+      sideEffectClass: "pure",
       companyId: "00000000-0000-4000-8000-000000000001",
       promotionKey: "promotion",
       routingKey: "invalid",
@@ -313,6 +337,7 @@ describe("optimizer canary routing and fallback", () => {
 
     const failed = await executeOptimizerCanaryWithFallback({
       decision,
+      sideEffectClass: "pure",
       companyId: "00000000-0000-4000-8000-000000000001",
       promotionKey: "promotion",
       routingKey: "throw",
@@ -341,6 +366,7 @@ describe("optimizer canary routing and fallback", () => {
     const trusted = vi.fn(async () => ({ value: "trusted" }));
     const result = await executeOptimizerCanaryWithFallback({
       decision,
+      sideEffectClass: "pure",
       companyId: "00000000-0000-4000-8000-000000000001",
       promotionKey: "promotion",
       routingKey: "candidate",

@@ -76,6 +76,7 @@ describe("cli telemetry", () => {
     }
     delete process.env.PAPERCLIP_TELEMETRY_DISABLED;
     delete process.env.DO_NOT_TRACK;
+    delete process.env.PAPERCLIP_TELEMETRY_ENDPOINT;
     vi.stubGlobal("fetch", vi.fn(async () => ({ ok: true })));
   });
 
@@ -98,11 +99,26 @@ describe("cli telemetry", () => {
     expect(fs.existsSync(path.join(root, "home", "instances", "telemetry-test", "telemetry", "state.json"))).toBe(false);
   });
 
+  it.each(["missing config", "enabled without destination", "destination without enablement"])("does not collect with %s", async mode => {
+    const root = fs.mkdtempSync(path.join(os.tmpdir(), "blentera-cli-telemetry-"));
+    process.env.PAPERCLIP_HOME = path.join(root, "home");
+    process.env.PAPERCLIP_INSTANCE_ID = "closed-telemetry";
+    if (mode === "destination without enablement") process.env.PAPERCLIP_TELEMETRY_ENDPOINT = "https://telemetry.example.test/ingest";
+    const configPath = mode === "missing config" ? path.join(root, "missing.json") : makeConfigPath(root, mode === "enabled without destination");
+    const { initTelemetryFromConfigFile, flushTelemetry } = await import("../telemetry.js");
+    expect(initTelemetryFromConfigFile(configPath)).toBeNull();
+    await flushTelemetry();
+    expect(fetch).not.toHaveBeenCalled();
+    expect(fs.existsSync(path.join(root, "home", "instances", "closed-telemetry", "telemetry"))).toBe(false);
+    fs.rmSync(root, { recursive: true, force: true });
+  });
+
   it("creates telemetry state only after the first event is tracked", async () => {
     const root = fs.mkdtempSync(path.join(os.tmpdir(), "paperclip-cli-telemetry-"));
     process.env.PAPERCLIP_HOME = path.join(root, "home");
     process.env.PAPERCLIP_INSTANCE_ID = "telemetry-test";
 
+    process.env.PAPERCLIP_TELEMETRY_ENDPOINT = "https://telemetry.example.test/ingest";
     const { initTelemetry, flushTelemetry } = await import("../telemetry.js");
     const client = initTelemetry({ enabled: true });
     const statePath = path.join(root, "home", "instances", "telemetry-test", "telemetry", "state.json");
@@ -110,7 +126,7 @@ describe("cli telemetry", () => {
     expect(client).not.toBeNull();
     expect(fs.existsSync(statePath)).toBe(false);
 
-    client!.track("install.started", { setupMode: "quickstart" });
+    client!.track("install.started", {});
 
     expect(fs.existsSync(statePath)).toBe(true);
 

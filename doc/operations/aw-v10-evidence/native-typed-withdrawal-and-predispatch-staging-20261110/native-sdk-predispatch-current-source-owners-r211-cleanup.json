@@ -1,0 +1,9 @@
+{
+  "remainingOwnedPostgresProcesses": [],
+  "normalTestProcessExit": 1,
+  "observedDetachedFixtureRuntimeProcesses": [],
+  "remainingOwnedRuntimeProcesses": [],
+  "postRunKillsPerformed": false,
+  "tempRoot": "/var/tmp/mpg-id_lxdp2",
+  "emptyOuterTempRootRemoved": false
+}

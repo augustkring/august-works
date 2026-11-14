@@ -1,0 +1,18 @@
+{
+  "files": {
+    "package.json": "631b595ef1b57251c2d6f8218ad1a367705072b3d2ec14a6f2010fc9abb9b6f7",
+    "packages/db/src/migrations/0578_keen_celestials.sql": "f70b741198c5e1cd51bc805f7c6cad0976ab1df3d241885c132dffbdb2b23543",
+    "packages/db/src/migrations/meta/0578_snapshot.json": "9c70dcd7408501315d9fbaef46271573d38c23441e12dc200339b64e76b293dd",
+    "packages/db/src/migrations/meta/_journal.json": "506df6cfe8b12162feb0646a35589233f8757ad0203cf37793ee025908e1db36",
+    "packages/db/src/schema/chat_github.ts": "fad6eae2570436abddff6d58a53c035af2b518570b14df7135fea2a18c127933",
+    "packages/db/src/schema/index.ts": "3df027d8cb9cb9704e06911a8ed6c91d1d628842566275b2a319cb4071766c65",
+    "pnpm-lock.yaml": "b70210ed554c63d425e34e4c075f0984309f74f0836d82d85f714b1c4deeb5b2",
+    "server/package.json": "08b8faa2b2b9c69530928aa0b283cf9e53e70e27a692a8cb9fdbee6dec3fb0f4",
+    "server/src/__tests__/chat-channels.integration.test.ts": "e8974d84c2a74010bb811eee00fa390903c27657cdc511d99186d730c9a9a04c",
+    "server/src/services/chat-channels.ts": "cdf774e9f1680e3991c5af5e2a6f700e4052059ae9f9e0ffddd824bc4fed7c8d",
+    "server/src/services/native-runtime/chat-inbound-wakeup-owner.ts": "539c9cf85362fcba9427e01c7bbe1e372dff0e43812661ac413f793485a98b2e",
+    "server/tsconfig.json": "41b38f5d62b35e02f2b15c294baf39d196a8e6af125bd4a4d7b5e30d9334d150"
+  },
+  "allPinsUnchanged": true,
+  "allMtimesUnchanged": true
+}

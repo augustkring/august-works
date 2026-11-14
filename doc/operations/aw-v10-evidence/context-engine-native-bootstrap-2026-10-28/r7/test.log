@@ -1,0 +1,25 @@
+(!) Your Vite config uses features that are unsupported by `configLoader: 'native'`, which is planned to become the default in a future major version of Vite:
+  - `__dirname` (vitest.config.ts:7:25). Use `import.meta.dirname` instead
+Set `VITE_CONFIG_NATIVE_IGNORE_WARNING=true` to suppress this warning.
+
+ RUN  v4.1.11 /workspace/blentera-v10
+
+ ✓ |@paperclipai/server| src/services/context/context-engine-integration.test.ts > Context Engine integration > executes Foundation and Memory query nodes with approved and accepted sources only 10515ms
+[12:01:45] [33mWARN[39m: [36mresponsible-user authorization intersection denied[39m [90m{"authzMode":"enforce","code":"RESPONSIBLE_USER_UNAVAILABLE","reason":"deny_missing_membership","action":"company_scope:read","resourceType":"company","companyId":"7156c154-f754-45a2-8043-037bd6f6b0e1","actorAgentId":"f04833f5-5e33-4250-a1e1-8ecb3bcf0879","responsibleUserId":"user-7156c154-f754-45a2-8043-037bd6f6b0e1"}[39m
+[12:01:45] [33mWARN[39m: [36mresponsible-user authorization intersection denied[39m [90m{"authzMode":"enforce","code":"RESPONSIBLE_USER_UNAVAILABLE","reason":"deny_missing_membership","action":"company_scope:read","resourceType":"company","companyId":"7156c154-f754-45a2-8043-037bd6f6b0e1","actorAgentId":"f04833f5-5e33-4250-a1e1-8ecb3bcf0879","responsibleUserId":"user-7156c154-f754-45a2-8043-037bd6f6b0e1"}[39m
+ ✓ |@paperclipai/server| src/services/context/context-engine-integration.test.ts > Context Engine integration > assembles authorized approved Foundation and task context into a durable manifest 776ms
+ ✓ |@paperclipai/server| src/services/context/context-engine-integration.test.ts > Context Engine integration > binds actual approved Foundation and private Task Context to one native bootstrap witness and rechecks current Human authority 5455ms
+ ✓ |@paperclipai/server| src/services/context/context-engine-integration.test.ts > Context Engine integration > preserves an original Human Task source across status changes and rejects it after a canonical body edit 747ms
+ ✓ |@paperclipai/server| src/services/context/context-engine-integration.test.ts > Context Engine integration > retrieves only issue-authorized synced GitHub evidence into the governed Context packet 543ms
+ ✓ |@paperclipai/server| src/services/context/context-engine-integration.test.ts > Context Engine integration > keeps Memory hydration disabled until Memory flags are enabled 6801ms
+ ✓ |@paperclipai/server| src/services/context/context-engine-integration.test.ts > Context Engine integration > hydrates only eligible relevant shared and owner-private Memory into Context 12502ms
+ ✓ |@paperclipai/server| src/services/context/context-engine-integration.test.ts > Context Engine integration > keeps unsupported, expired, erased, and foreign Human Task evidence out of Memory payload snapshots 1113ms
+[12:02:10] [33mWARN[39m: [36mresponsible-user authorization intersection denied[39m [90m{"authzMode":"enforce","code":"RESPONSIBLE_USER_UNAUTHORIZED","reason":"deny_missing_grant","action":"foundation:read","resourceType":"company","companyId":"d38fa377-80e7-42ae-ab09-4089d382d97c","actorAgentId":"b0445d03-27f1-4c68-90ae-93d7308cd09d","responsibleUserId":"user-d38fa377-80e7-42ae-ab09-4089d382d97c"}[39m
+ ✓ |@paperclipai/server| src/services/context/context-engine-integration.test.ts > Context Engine integration > omits Foundation without foundation:read but still admits authorized task context 3643ms
+ ✓ |@paperclipai/server| src/services/context/context-engine-integration.test.ts > Context Engine integration > enforces the represented human's source permission for V5 even in shadow mode 254ms
+
+ Test Files  1 passed (1)
+      Tests  10 passed (10)
+   Start at  12:01:06
+   Duration  64.09s (transform 11.77s, setup 86ms, import 16.82s, tests 47.04s, environment 0ms)
+

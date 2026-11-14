@@ -1,0 +1,35 @@
+{
+  "baseCommit": "25febe398",
+  "sources": {
+    "server/src/services/plugin-host-services.ts": "cbcf71ba81294c491d62fda8b69880a7c5bfc7c6ab5f02a0105383516039095b",
+    "server/src/__tests__/plugin-access-authorization-host-services.test.ts": "fd9bb57d824256d4a289bfb4752f91fb3698631e82fdb741cb37c5bb78fb4917"
+  },
+  "baseline": {
+    "result": "2FAIL/5filtered47.16s,actual exit1. Original Task policy replacement rejects stale body binding; Project fixture also changes its native normalized body by adding enabled:false. Exact initial fixture preserved.",
+    "log": "baseline.log"
+  },
+  "fixtureCorrection": "Final new Project fixture includes the native enabled:false default, so first update truly leaves the JSON body unchanged; all original policy/audit assertions retained.",
+  "intermediate": {
+    "result": "7PASS66.28s,actual exit0,before adding explicit policy-result assertions",
+    "log": "initial-final.log"
+  },
+  "interrupted": {
+    "result": "Stopped during collection withSIGTERM;actual exit143,no test summary. No passing result inferred.",
+    "log": "interrupted-collection.log"
+  },
+  "final": {
+    "result": "7PASS147.08s,actual exit0. Existing plugin access/grant/audit suite plus changed/unchanged Task and Project captures and explicit policy-result assertions.",
+    "log": "final.log",
+    "invocation": "GOMEMLIMIT=2GiB GOMAXPROCS=2 node --max-old-space-size=4096 ... --maxWorkers=1",
+    "profile": "Two-second local collector CPU trace shows Vite source-map/parse work among samples. It is diagnostic only, not a product performance qualification. Inspector closed."
+  },
+  "serverCompiler": {
+    "result": "actual exit0,process closed;native server tsconfig excludes test files",
+    "log": "server-types.log"
+  },
+  "limits": [
+    "Structural snapshot fixtures through original plugin host services; no authenticated producer/complete input receipt or privileged plugin credential-lifetime qualification.",
+    "Native comparisons occur in the same UPDATE and retain company scope; no new grant, protocol activation, reader admission, source-free release or complete V10/PR claim.",
+    "Other native body writers, original source/privacy and31 substantive portability failures remain open."
+  ]
+}

@@ -1,0 +1,4 @@
+00650dcdad084aeab8eef6c439d66d59a46e5e879f0122e55980e9b57d4bda04  packages/shared/src/feature-catalog.ts
+1c6f8b100e179bb5dbcc5f8fbf16165fb5d33732e84f82f5fc9608f3230945f2  packages/shared/src/feature-catalog.test.ts
+c94e593f1d714a088c4abcaac5bddc63d66167f047e01321b07f971822a68af7  scripts/create-github-release.sh
+0e03be3ec22ad1c468a3d98e1d5e49ed389dab73f78d3c228b4ee45ddc740f77  scripts/generate-feature-catalog.ts

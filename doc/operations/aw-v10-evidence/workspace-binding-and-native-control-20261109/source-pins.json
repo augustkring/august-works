@@ -1,0 +1,20 @@
+{
+  "parentCommit": "954b3fe7bb6cd09803461fcdfd3452c9b197ef4d",
+  "scope": "Final reviewed source and frozen dependency/journal inputs. Each invocation retains its own exact input manifest.",
+  "files": {
+    "server/src/__tests__/heartbeat-dependency-draft-controller.integration.test.ts": "ab6ae2bdbd8b8ea1f3623362070cd55ae7eec1e4a6a45c3911904e4b124bb44c",
+    "server/src/__tests__/heartbeat-responsible-user-invariant.test.ts": "c2e5597fdab7071b7b30cc7764502f765e9dcef70b622dc14b528a5b39ee619f",
+    "server/src/__tests__/helpers/managed-native-completion-diagnostic.test.ts": "898d69147faff88d77293277022460cfffe11d5d3c73d628a6b1c3f9eeb9acec",
+    "server/src/__tests__/helpers/managed-native-completion-diagnostic.ts": "5d5490e5e6a545b05c9d9946fa2d64de31abf849390e2ce9715688f1f9d3ebe3",
+    "server/src/__tests__/helpers/managed-native-conversation-sandbox-host.ts": "46289b4d928529a443f0ab31f3b0144097850cd3d20bd8677541b7511e57cc97",
+    "server/src/__tests__/manual-task-payload-source.integration.test.ts": "5146e623dec11988812aea1496b9d379881772311377abbd53fa44d058d370be",
+    "server/src/__tests__/v7-sandbox-policy.test.ts": "4f5874fdadaea377b0603b86a306453ab3a61a743f6d5260b3f44594947035a4",
+    "server/src/services/issues.ts": "0220b9cd83e0bcc208a7d334c1d29844fbc560e61a6a072d9ef4ce1a880eaa38",
+    "server/src/services/native-runtime/native-finalization-error-diagnostic.ts": "a85632149230f741ba7d754b54625e8294df3ca41665aa4bac5be69bc9973443",
+    "server/src/services/native-runtime/native-opencode-managed-source.integration.test.ts": "662f59697b425cb855860a2c2f6b9c4c80106f2de6e6f9a2b7e3ee3854455d33",
+    "package.json": "631b595ef1b57251c2d6f8218ad1a367705072b3d2ec14a6f2010fc9abb9b6f7",
+    "server/package.json": "08b8faa2b2b9c69530928aa0b283cf9e53e70e27a692a8cb9fdbee6dec3fb0f4",
+    "pnpm-lock.yaml": "b70210ed554c63d425e34e4c075f0984309f74f0836d82d85f714b1c4deeb5b2",
+    "packages/db/src/migrations/meta/_journal.json": "a1c07a3d5293a29a66a97997b7fc75e126f838e91009826a5735ea41d35c17c3"
+  }
+}

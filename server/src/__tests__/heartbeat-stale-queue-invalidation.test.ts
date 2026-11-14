@@ -1,10 +1,12 @@
 import { mockedCodexAdapterConfig } from "./helpers/mocked-codex-config.js";
+import { spawn } from "node:child_process";
 import { randomUUID } from "node:crypto";
 import { mkdtemp, rm } from "node:fs/promises";
 import os from "node:os";
 import path from "node:path";
 import { eq, sql } from "drizzle-orm";
-import { afterAll, afterEach, beforeAll, describe, expect, it, vi } from "vitest";
+import { afterAll, afterEach, beforeAll, beforeEach, describe, expect, it, vi } from "vitest";
+import { admitMockedLegacyDispatch, resetMockedLegacyDispatch } from "./helpers/mocked-legacy-paid-dispatch.js";
 import {
   agents,
   agentWakeupRequests,
@@ -30,10 +32,13 @@ import {
   MAX_TURN_CONTINUATION_RETRY_REASON,
   MAX_TURN_CONTINUATION_WAKE_REASON,
   heartbeatService,
+  persistHeartbeatRunProcessMetadata,
 } from "../services/heartbeat.ts";
+import { recordNativeLocalProcessStopAfterExit } from "../services/native-local-process-stop.ts";
 import { runningProcesses } from "../adapters/index.ts";
 import { recoveryService } from "../services/recovery/service.ts";
 import { withQueuedCommentIdsInWakePayload } from "../services/issue-queued-comment-queue.ts";
+import { installHeartbeatApiUrlFixture, seedHeartbeatResponsibleHuman } from "./helpers/heartbeat-runtime-fixtures.js";
 
 const mockAdapterExecute = vi.hoisted(() =>
   vi.fn(async () => ({
@@ -127,12 +132,19 @@ type SeedResult = {
   agentId: string;
 };
 
+// Mocked legacy dispatch: see helpers/mocked-legacy-paid-dispatch.ts.
+vi.mock("../services/native-runtime/paid-transport-admission.js", async (importOriginal) =>
+  (await import("./helpers/mocked-legacy-paid-dispatch.js")).withMockedLegacyDispatchAdmission(await importOriginal()));
+beforeEach(() => admitMockedLegacyDispatch());
+afterEach(() => resetMockedLegacyDispatch());
+
 describeEmbeddedPostgres("heartbeat stale queued-run invalidation", () => {
   let db!: ReturnType<typeof createDb>;
   let heartbeat!: ReturnType<typeof heartbeatService>;
   let tempDb: Awaited<ReturnType<typeof startEmbeddedPostgresTestDatabase>> | null = null;
   const previousPaperclipHome = process.env.PAPERCLIP_HOME;
   let fixtureHome: string | undefined;
+  let restoreApiUrl: (() => void) | null = null;
   let beforeContinuationDispatchCheck:
     | ((input: { runId: string; issueId: string }) => Promise<void>)
     | null = null;
@@ -144,6 +156,7 @@ describeEmbeddedPostgres("heartbeat stale queued-run invalidation", () => {
     mockAdapterExecute.mock.calls.filter(([context]) => context?.runId === runId).length;
 
   beforeAll(async () => {
+    restoreApiUrl = installHeartbeatApiUrlFixture();
     fixtureHome = await mkdtemp(path.join(os.tmpdir(), "paperclip-stale-queue-home-"));
     process.env.PAPERCLIP_HOME = fixtureHome;
     tempDb = await startEmbeddedPostgresTestDatabase("paperclip-heartbeat-stale-queue-");
@@ -190,6 +203,7 @@ describeEmbeddedPostgres("heartbeat stale queued-run invalidation", () => {
       if (previousPaperclipHome === undefined) delete process.env.PAPERCLIP_HOME;
       else process.env.PAPERCLIP_HOME = previousPaperclipHome;
       if (fixtureHome) await rm(fixtureHome, { recursive: true, force: true });
+      restoreApiUrl?.();
     }
   }, 30_000);
 
@@ -203,6 +217,8 @@ describeEmbeddedPostgres("heartbeat stale queued-run invalidation", () => {
       defaultResponsibleUserId: "responsible-user",
       requireBoardApprovalForNewAgents: false,
     });
+    await seedHeartbeatResponsibleHuman(db, companyId, "responsible-user", "owner");
+    await seedHeartbeatResponsibleHuman(db, companyId, "local-board", "owner");
     await db.insert(agents).values({
       id: agentId,
       companyId,
@@ -302,6 +318,72 @@ describeEmbeddedPostgres("heartbeat stale queued-run invalidation", () => {
       key: ISSUE_CONTINUATION_SUMMARY_DOCUMENT_KEY,
     });
   }
+
+  async function recordSettledNativeLocalOwner(runId: string, companyId: string) {
+    const child = spawn(process.execPath, ["-e", "setTimeout(() => process.exit(0), 60)"], {
+      detached: true,
+      stdio: "ignore",
+    });
+    if (!child.pid) throw new Error("Native owner proof child did not expose a PID");
+    const closed = new Promise<void>((resolve) => child.once("close", () => resolve()));
+    await persistHeartbeatRunProcessMetadata(db, runId, {
+      pid: child.pid,
+      processGroupId: child.pid,
+      startedAt: new Date().toISOString(),
+    });
+    await db.insert(environmentLeases).values({
+      companyId,
+      heartbeatRunId: runId,
+      provider: "local",
+      status: "active",
+      leasePolicy: "ephemeral",
+    });
+    await closed;
+    await db.update(environmentLeases).set({ status: "released", releasedAt: new Date(), cleanupStatus: "success" })
+      .where(eq(environmentLeases.heartbeatRunId, runId));
+    expect(await recordNativeLocalProcessStopAfterExit(db, companyId, runId)).toBe(true);
+  }
+
+  it.each(["legacy", "native"])("delivers an accepted non-assignee queue after its %s owner finished", async runtimeMode => {
+    const { companyId, agentId } = await seedCompanyAndAgent();
+    const [recipient] = await db.insert(agents).values({ companyId, name: "Saved feedback recipient", role: "engineer",
+      status: "idle", adapterType: "codex_local", adapterConfig: { ...mockedCodexAdapterConfig }, runtimeConfig: { heartbeat: { wakeOnDemand: true } }, permissions: {},
+    }).returning();
+    const [issue] = await db.insert(issues).values({ companyId, title: "Existing accepted feedback", status: "in_progress", assigneeAgentId: agentId }).returning();
+    const [owner] = await db.insert(heartbeatRuns).values({ companyId, agentId, invocationSource: "assignment", status: "succeeded",
+      runtimeMode, nativeIssueId: runtimeMode === "native" ? issue.id : null, startedAt: new Date(), finishedAt: new Date(), contextSnapshot: { issueId: issue.id },
+    }).returning();
+    if (runtimeMode === "native") {
+      await db.insert(nativeRunFinalizations).values({ runId: owner.id, companyId, issueId: issue.id, phase: "committed" });
+      // A finished Native owner releases the issue only with physical cleanup
+      // proof (native-owner-release.ts). Record the canonical local Stop.
+      await recordSettledNativeLocalOwner(owner.id, companyId);
+    }
+    const [comment] = await db.insert(issueComments).values({ companyId, issueId: issue.id, body: "Saved feedback for the recipient",
+      authorAgentId: agentId, createdByRunId: owner.id,
+    }).returning();
+    const [wake] = await db.insert(agentWakeupRequests).values({ companyId, agentId: recipient.id, source: "automation",
+      reason: "issue_execution_deferred", status: "deferred_issue_execution", requestedByActorType: "agent", requestedByActorId: agentId,
+      payload: withQueuedCommentIdsInWakePayload({ issueId: issue.id, _paperclipWakeContext: {
+        issueId: issue.id, wakeReason: "issue_comment_mentioned", wakeSource: "automation",
+      } }, [comment.id]),
+    }).returning();
+    await heartbeat.resumeQueuedRuns();
+    const [delivered] = await db.select().from(agentWakeupRequests).where(eq(agentWakeupRequests.id, wake.id));
+    expect(delivered.runId).toBeTruthy();
+    // Promotion commits before its asynchronous dispatch registers live work.
+    // Wait for the actual adapter call before draining that execution.
+    await waitForCondition(async () => countExecuteCallsForRun(delivered.runId!) > 0);
+    await heartbeat.waitForRunExecutionDrain(delivered.runId!);
+    const recovered = await heartbeat.getRun(delivered.runId!);
+    expect(countExecuteCallsForRun(delivered.runId!), JSON.stringify({ status: recovered?.status,
+      runtimeMode: recovered?.runtimeMode, errorCode: recovered?.errorCode, error: recovered?.error })).toBe(1);
+    expect((await heartbeat.getRun(delivered.runId!))?.contextSnapshot).toMatchObject({ wakeCommentIds: [comment.id] });
+    await heartbeat.resumeQueuedRuns();
+    expect(countExecuteCallsForRun(delivered.runId!)).toBe(1);
+    expect((await db.select().from(issueComments).where(eq(issueComments.id, comment.id)))[0]?.body).toBe(comment.body);
+    expect((await db.select().from(issues).where(eq(issues.id, issue.id)))[0]?.assigneeAgentId).toBe(agentId);
+  });
 
   it.each([
     { name: "assignments", sameIssue: true, first: "assignment", second: "assignment" },

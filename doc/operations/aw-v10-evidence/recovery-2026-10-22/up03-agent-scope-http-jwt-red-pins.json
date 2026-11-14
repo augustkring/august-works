@@ -1,0 +1,11 @@
+{
+  "server/src/realtime/live-events-ws.ts": "f515533b29d90e3a37c544dea3309a41bbd0496f4df5034c2e279b6504f98e83",
+  "server/src/services/authorization.ts": "ee7a4e4055e0bed062c8bbc35f60cd27a4175b77437c8b2c4d52e3d709b2c442",
+  "packages/shared/src/validators/agent.ts": "2a87b79bd1ee5d520921563e33beb3c31e1929d9e6d9384cea52951b1356a985",
+  "server/src/middleware/auth.ts": "e002afb69b5cdaf4e0856636b842dde52600b1c7126cf35edce3c9df938a61dd",
+  "server/src/agent-auth-jwt.ts": "d337ac08574be0e5a98a47d8d12db0d0f064eb9d04e825b6b6590bc3e1cfc8a1",
+  "server/src/services/agents.ts": "06de28b9e0508fa4de02f484ede923a25ebbe29579c61219e3004c3ca9c8c180",
+  "ui/src/api/agents.ts": "89a8a9aa27bcd9840918bb445a27937c1db049f9b7985fd188def65da86cacf6",
+  "server/src/__tests__/live-events-agent-key-authority.integration.test.ts": "79d735c2f1b559afb9cac3d4432486e9708b33536d90ddb4ea2212f1be22664c",
+  "server/src/__tests__/agent-auth-jwt.test.ts": "1399e011dd1e69ed7516ba1d74fa40fd36f2da633f040429c73c98872162e2e8"
+}

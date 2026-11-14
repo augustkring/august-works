@@ -1,0 +1,89 @@
+{
+  "cacheAdvice": [
+    {
+      "elapsedSeconds": 2.477159207002842,
+      "filesAdvised": 364710,
+      "memoryAfter": 8434716672,
+      "contentChanged": false,
+      "activeTemporaryWorkspacesExcluded": true
+    }
+  ],
+  "harnessSha256": "771f3e74b41fd8d573564172d7cdecfe46200d700354c66f7cfa4ee143dcd408",
+  "command": [
+    "node",
+    "/workspace/blentera-v10/node_modules/vitest/vitest.mjs",
+    "run",
+    "--config",
+    "vitest.config.ts",
+    "src/__tests__/http.test.ts",
+    "src/__tests__/plugin-init.test.ts",
+    "src/__tests__/worktree.test.ts",
+    "--maxWorkers=1",
+    "--no-file-parallelism",
+    "--testNamePattern",
+    "PaperclipApiClient|plugin target diagnostics|rejects a source migration journal that diverges|rejects reseed targets without worktree env metadata",
+    "--reporter=verbose",
+    "--bail=1"
+  ],
+  "cwd": "/workspace/blentera-v10/cli",
+  "leaseWaitSeconds": 3.910899977199733e-05,
+  "sourceManifest": "cli-brand-copy-affected-r307-source-manifest.json",
+  "filesystemFloorBytes": {
+    "/workspace": 122880000,
+    "/tmp": 1073741824
+  },
+  "globalMemoryReserveBytes": 2147483648,
+  "exit": 0,
+  "seconds": 5.286521505011478,
+  "stopReason": null,
+  "nodeHeapMiB": 1536,
+  "ownedDescendantRssLimitBytes": 8589934592,
+  "observedPeakOwnedDescendantRssBytes": 771297280,
+  "processRssAtObservedPeak": [
+    {
+      "pid": 375372,
+      "parentPid": 375310,
+      "executable": "node",
+      "rssBytes": 485220352,
+      "nodeOptions": "--max-old-space-size=1536"
+    },
+    {
+      "pid": 375396,
+      "parentPid": 375372,
+      "executable": "node",
+      "rssBytes": 235286528,
+      "nodeOptions": "--max-old-space-size=1536"
+    },
+    {
+      "pid": 375418,
+      "parentPid": 375417,
+      "executable": "postgres",
+      "rssBytes": 44515328
+    },
+    {
+      "pid": 375408,
+      "parentPid": 375396,
+      "executable": "initdb",
+      "rssBytes": 5619712
+    },
+    {
+      "pid": 375417,
+      "parentPid": 375408,
+      "executable": "dash",
+      "rssBytes": 655360
+    }
+  ],
+  "rssAccounting": "sum of per-process RSS, including shared pages in each mapped process; sampled observation, not unique physical memory",
+  "trackedPidCount": 9,
+  "observedPostgresRelatedPids": [
+    375408,
+    375416,
+    375418
+  ],
+  "uniqueTempRoot": "/var/tmp/mpg-z92wckhs",
+  "samplingIntervalSeconds": 0.2,
+  "samples": 24,
+  "memoryBefore": "low 0\nhigh 0\nmax 0\noom 0\noom_kill 0\noom_group_kill 0\n",
+  "memoryAfter": "low 0\nhigh 0\nmax 0\noom 0\noom_kill 0\noom_group_kill 0\n",
+  "qualification": "software fixture with actual embedded PostgreSQL; no external provider/SDK/host proof"
+}

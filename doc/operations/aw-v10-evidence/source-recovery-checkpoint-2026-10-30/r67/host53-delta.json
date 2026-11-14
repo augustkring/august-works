@@ -1,0 +1,28 @@
+{
+  "baseCheckpoint": "R66",
+  "baseHost50SourcePinsSha256": "443ed46ca65f9dd6fb621dea18c9cb869fe62d0058b9a2ea731609ce88ee889c",
+  "candidateHost53SourcePinsSha256": "94b075fdda7788ed9d907d9678d7ca9d83c82ac6a4cba87c18957d7f994184e1",
+  "pathCounts": {
+    "base": 104,
+    "candidate": 104,
+    "added": 0,
+    "deleted": 0,
+    "changed": 2
+  },
+  "added": [],
+  "deleted": [],
+  "changed": [
+    {
+      "path": "deploy/v6/host-agent/openshell.mjs",
+      "baseSha256": "189881a59e03cb8a56c0c4ad06bb00810b380e76c61179d9975552d67efe1349",
+      "candidateSha256": "4d849b448f95c26853cc25a05ea3cd740c3a9194b031f5d4dea8f061719cebc8",
+      "bytes": 223003
+    },
+    {
+      "path": "deploy/v6/host-agent/openshell.test.mjs",
+      "baseSha256": "ff7b80d5470a60aeff591985b27eabf74f423c0e6c0342adc7f2060d2c5b76d0",
+      "candidateSha256": "ef9953341bcfdfedce18ea478949e40295f17902a9a1fd50d3b2630cb31ee0ba",
+      "bytes": 188674
+    }
+  ]
+}

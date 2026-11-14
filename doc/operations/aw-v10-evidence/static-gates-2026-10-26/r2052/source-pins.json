@@ -1,0 +1,49 @@
+{
+  "head": "523617d4338a92372054ec6bc9b33308d2cd4422",
+  "files": [
+    {
+      "path": "scripts/check-docker-deps-stage.mjs",
+      "sha256": "376bdfdbf1408c9c4cc8d8b3a338ea3fce00d0fb353da62009546657c195eff8"
+    },
+    {
+      "path": "scripts/check-forbidden-tokens.mjs",
+      "sha256": "f74b0afac1638eb1f6ea60fa6b5278c294b9c0d9113eec9bc60b20ede20be5fc"
+    },
+    {
+      "path": "scripts/check-help-docs.mjs",
+      "sha256": "98673de6edc795239a38729fe0f4319e03a37f4a6436f96db12d7bf5670b4273"
+    },
+    {
+      "path": "scripts/check-module-boundaries.mjs",
+      "sha256": "08014b58d6158a0374f25a20ff689edb3678a3743971a1bc9d3e89d03e1f9e05"
+    },
+    {
+      "path": "scripts/check-no-git-push.mjs",
+      "sha256": "02b21f463019b6243e0e3a3895f508844b066e823b5b5a0776af2f8934b77d45"
+    },
+    {
+      "path": "scripts/check-node-version-policy.mjs",
+      "sha256": "1c355bddeea072ecc2201b44ce3f0ce74555dbd6d89a2b3afe06e73287495205"
+    },
+    {
+      "path": "scripts/check-token-gates.mjs",
+      "sha256": "c885050d42984bef39264a83127d15df793d6b5bf5b5a51af95d2cf6b1f4d825"
+    },
+    {
+      "path": "scripts/release-package-map.mjs",
+      "sha256": "8d7d2348d910162da20cc4de4259fc127a1b3bce9aae7bd23db33e244a6905d9"
+    },
+    {
+      "path": "scripts/sync-agent-palette-tokens.mjs",
+      "sha256": "de40449ae544831f6262259f9e7bbdb4a94b51e572dba5ed3435a9fa257a42a5"
+    },
+    {
+      "path": "scripts/sync-cliplab-character.mjs",
+      "sha256": "ed29d28b7063689c2ba6e0b4baa9cf384520454ca7d4180c94b6aaa68b6a604e"
+    },
+    {
+      "path": "server/scripts/generate-company-search-help.mjs",
+      "sha256": "c6ed5bc38dde4f6a0fc845d89d41ffa0ed3964fac7596f21ad5d26bd9a879df9"
+    }
+  ]
+}

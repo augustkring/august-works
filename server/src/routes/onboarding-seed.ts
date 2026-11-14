@@ -9,6 +9,10 @@ import { assertCompanyAccess, getActorInfo } from "./authz.js";
  * Receiver for the onboarding seed Paperclip Cloud collects at signup and
  * pushes into the stack at activation.
  *
+ * The normal Cloud seed contains only the mission. Optional first-task input
+ * additionally requires the original current Human session; the Cloud envelope
+ * cannot manufacture a Human-authored Task or Project.
+ *
  * Authentication is the trusted Cloud envelope, resolved exactly as it is for
  * `POST /api/companies/:companyId/logo`: the `x-paperclip-cloud-*` headers
  * produce a company-scoped actor and `assertCompanyAccess` fails closed for
@@ -47,7 +51,7 @@ export function onboardingSeedRoutes(db: Db) {
       // and re-logs. Handling it here instead, as this route used to, could only
       // pick which half to lose: 500 and the retry reports `changed: false` and
       // never logs; 200 and Cloud stops retrying with the entry still absent.
-      const result = await svc.apply(companyId, req.body, getActorInfo(req));
+      const result = await svc.apply(companyId, req.body, getActorInfo(req), req.actor);
 
       res.status(200).json({
         companyId,

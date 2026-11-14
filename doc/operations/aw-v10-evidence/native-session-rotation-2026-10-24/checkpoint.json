@@ -1,0 +1,29 @@
+{
+  "parentCommit": "a25ba33ca17f96cec7ba0bb2d58cecfa90b71ab4",
+  "sourcePins": {
+    "server/src/auth/native-authentication-transaction.ts": "44c43cfc3b8087613a67c5c386661e3c41df5ac33a51272badba268bdf3ea56f",
+    "server/src/auth/native-authentication-assurance.ts": "02af34a0d38f9074e1e5a48f167285a1fb89a9f5c6c6112be15811bc78cf9301",
+    "server/src/auth/better-auth.ts": "2bf0b15483d8ca80b0b9828db265365618b7559c5eca063ddfe2a013302ad237",
+    "server/src/__tests__/better-auth-credential-signup.integration.test.ts": "aa846643c272b44b74c6714468a1f48e08bc3d6803017e2dff7733480b447451"
+  },
+  "checks": {
+    "credentialPostgresHttp": {
+      "exit": 0,
+      "passed": 14,
+      "logSha256": "e2cee77c8ed71fafa548f35b9f0d63498d4f8c8961b966422cb5e80afc4f351a"
+    },
+    "serverCompiler": {
+      "exit": 0
+    }
+  },
+  "observations": [
+    "The actual maintained password verifier precedes the captured-generation fence and native session rotation. Only actual password proof and database time transfer to the generated replacement.",
+    "An aged session cannot list native sessions before reauthentication. After rotation the old ID is denied and the new native cookie passes fresh-session middleware.",
+    "Failure after actual native replacement creation, cookie staging and old-session deletion rolls back both session writes and cookies; the independently committed attempt remains.",
+    "An official queued hook reads the committed replacement through an independent database connection only after the physical transaction commits."
+  ],
+  "limits": [
+    "This does not activate or qualify native MFA/passkey ceremonies, operator admission or enterprise recovery.",
+    "The compiler excludes tests. This is a targeted integration pass, not a full workspace or V10 release qualification."
+  ]
+}

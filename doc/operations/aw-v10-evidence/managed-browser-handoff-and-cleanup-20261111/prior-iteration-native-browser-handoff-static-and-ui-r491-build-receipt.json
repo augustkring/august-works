@@ -1,0 +1,36 @@
+{
+  "cacheAdvice": [
+    {
+      "elapsedSeconds": 3.972891192010138,
+      "filesAdvised": 622436,
+      "memoryAfter": 6141894656,
+      "contentChanged": false
+    }
+  ],
+  "steps": [
+    {
+      "command": [
+        "node",
+        "/workspace/v10-preparation/combined-source-20261109/parse-browser-handoff-r491.mjs"
+      ],
+      "exit": 0,
+      "seconds": 0.4586959890148137,
+      "peakGroupRssBytes": 97218560,
+      "stopped": null
+    },
+    {
+      "command": [
+        "node",
+        "--test",
+        "scripts/__tests__/run-vitest-stable-shard.test.mjs",
+        "scripts/__tests__/e2e-shard.test.mjs"
+      ],
+      "exit": 1,
+      "seconds": 22.103282758005662,
+      "peakGroupRssBytes": 183418880,
+      "stopped": null
+    }
+  ],
+  "memoryBefore": "low 0\nhigh 0\nmax 0\noom 0\noom_kill 0\noom_group_kill 0\n",
+  "memoryAfter": "low 0\nhigh 0\nmax 0\noom 0\noom_kill 0\noom_group_kill 0\n"
+}

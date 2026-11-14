@@ -1,5 +1,6 @@
 import {
   CustomerSupport,
+  CustomerSupportCases,
   MaintenanceHistoryEntry,
   MemoryMaintenanceHistoryEntry,
   ExperienceMeasuresEntry,
@@ -13,13 +14,20 @@ import {
   SaasWelcomeEntry,
   ActivationPage,
 } from "./pages/V9RouteEntries";
+import { CustomerHelpCenter } from "./pages/CustomerHelpCenter";
+import { CompanyImportHistory } from "./pages/CompanyImportHistory";
 import { OrgUnits, CompanyRelationships } from "./pages/OrganizationV5";
 import { V5Gate } from "./components/V5Gate";
 import { ProjectRoadmap } from "./pages/ProjectRoadmap";
-import { lazy, Suspense, type ReactNode } from "react";
+import { Activity, lazy, Suspense, useLayoutEffect, useRef, type ReactNode } from "react";
 import type { ToolConnectionCredentialSource } from "@paperclipai/shared";
-import { Navigate, Outlet, Route, Routes, useActiveCompanyPrefix, useLocation, useParams } from "@/lib/router";
+import { Navigate, Outlet, Route, Routes, useActiveCompanyPrefix, useLocation, useNavigate, useParams, type Location } from "@/lib/router";
 import { Button } from "@/components/ui/button";
+import { AccountExperienceLanguageSelect } from "./components/AccountExperienceLanguageSelect";
+import { XIcon } from "lucide-react";
+import { useV9CurrentAccount } from "./hooks/useV9CurrentAccount";
+import { getCompanyPathSegments } from "./lib/shell-navigation";
+import { HELP_CENTER_UTILITY_ENTRY_ID, isHelpCenterEntryId } from "./lib/help-navigation";
 import { useTranslation } from "@/i18n";
 import { Layout } from "./components/Layout";
 import { Layout as ProductionLayout } from "./components/Layout.production";
@@ -252,6 +260,9 @@ function boardRoutes(streamlinedUiEnabled: boolean) {
       <Route path="company/settings/billing" element={<SaasBillingPage />} />
       <Route path="company/settings/runtime" element={<SaasRuntimesPage />} />
       <Route path="company/settings/support" element={<SaasSupportPage />} />
+      <Route path="company/help" element={<CustomerHelpCenter />} />
+      <Route path="company/imports" element={<DeferredRouteSurface><CompanyImportHistory /></DeferredRouteSurface>} />
+      <Route path="company/support" element={<DeferredRouteSurface><CustomerSupportCases /></DeferredRouteSurface>} />
       <Route path="company/support-access" element={<CustomerSupport />} />
       <Route path="company/settings/deletion" element={<SaasDeletionPage />} />
       <Route path="company/settings/security" element={<SaasAccountPage />} />
@@ -782,7 +793,7 @@ export function OnboardingRoutePage() {
             <p className="text-sm text-muted-foreground">
               {t("app.cloudCreateUnavailable", {
                 defaultValue:
-                  "Organizations are created in Paperclip Cloud. This instance can't reach it right now — try again from your Cloud portfolio.",
+                  "Organizations are created in legacy Paperclip Cloud. This instance can't reach it right now — try again from your Cloud portfolio.",
               })}
             </p>
           ) : (
@@ -911,7 +922,7 @@ function NoCompaniesStartPage() {
             <p className="text-sm text-muted-foreground">
               {t("app.cloudCreateUnavailable", {
                 defaultValue:
-                  "Organizations are created in Paperclip Cloud. This instance can't reach it right now — try again from your Cloud portfolio.",
+                  "Organizations are created in legacy Paperclip Cloud. This instance can't reach it right now — try again from your Cloud portfolio.",
               })}
             </p>
           ) : (
@@ -933,10 +944,75 @@ function NoCompaniesStartPage() {
 
 export function App() {
   const { enabled: streamlinedUiEnabled, loaded: streamlinedUiLoaded } = useStreamlinedUiEnabled();
+  const location = useLocation(), navigate = useNavigate();
+  const account = useV9CurrentAccount();
+  const { selectedCompanyId, selectedCompany } = useCompany();
+  const { t } = useTranslation("experience");
+  // Retain the actual mounted route, never a caller-supplied location/state or
+  // a copy of its draft. This reference grants no access to the underlying work.
+  const origin = useRef<{ location: Location; companyId: string; userId: string; sessionId: string | null } | null>(null);
+  const returnFocusId = useRef<string | null>(null);
+  const companySegments = getCompanyPathSegments(location.pathname, selectedCompany?.issuePrefix);
+  const companySurface = companySegments.join("/").toLowerCase();
+  const isSupport = companySurface === "company/support";
+  const isHelpCenter = companySurface === "company/help";
+  const isImportHistory = companySurface === "company/imports";
+  const isHelpSurface = isSupport || isHelpCenter || isImportHistory;
+  if (origin.current && (origin.current.companyId !== selectedCompanyId || origin.current.userId !== account.userId || origin.current.sessionId !== account.sessionId)) origin.current = null;
+  if (!isHelpSurface) origin.current = companySegments.length > 0 && selectedCompanyId && account.userId && !account.localImplicit
+    ? { location, companyId: selectedCompanyId, userId: account.userId, sessionId: account.sessionId } : null;
+  const carried = location.state as { companyId?: unknown; expectedUserId?: unknown; returnPathname?: unknown; backgroundKey?: unknown; returnFocusId?: unknown } | null;
+  if (isHelpSurface && isHelpCenterEntryId(carried?.returnFocusId)) returnFocusId.current = carried.returnFocusId;
+  const background = isHelpSurface && origin.current && !account.localImplicit &&
+    origin.current.companyId === selectedCompanyId && origin.current.userId === account.userId &&
+    origin.current.sessionId === account.sessionId
+    ? origin.current.location : null;
+  const supportScope = selectedCompanyId && account.userId && account.sessionId && !account.localImplicit
+    ? `${selectedCompanyId}:${account.userId}:${account.sessionId}` : null;
+  if (!supportScope) returnFocusId.current = null;
+  const retainedSupportScope = useRef<string | null>(null);
+  const helpDialog = useRef<HTMLDialogElement>(null);
+  if (retainedSupportScope.current !== supportScope || (isHelpSurface && !background)) retainedSupportScope.current = null;
+  if (background) retainedSupportScope.current = supportScope;
+  function returnToWork() { navigate(-1); }
+  function restoreHelpFocus() {
+    const id = isHelpCenterEntryId(returnFocusId.current) ? returnFocusId.current : HELP_CENTER_UTILITY_ENTRY_ID;
+    const target = document.getElementById(id);
+    if (!target?.isConnected || target.closest("[hidden], [aria-hidden='true'], .hidden")) return;
+    if (window.getComputedStyle(target).display === "none" || window.getComputedStyle(target).visibility === "hidden") return;
+    target.focus();
+  }
+  const helpNavigationState = background && origin.current ? {
+    companyId: selectedCompanyId,
+    expectedUserId: account.userId,
+    returnPathname: origin.current.location.pathname,
+    backgroundKey: origin.current.location.key,
+    returnFocusId: isHelpCenterEntryId(returnFocusId.current) ? returnFocusId.current : HELP_CENTER_UTILITY_ENTRY_ID,
+  } : location.state;
+  useLayoutEffect(() => {
+    const dialog = helpDialog.current;
+    if (!dialog) return;
+    if (background && !dialog.open) {
+      if (typeof dialog.showModal === "function") dialog.showModal();
+      else dialog.setAttribute("open", "");
+    } else if (!background && dialog.open) {
+      if (typeof dialog.close === "function") dialog.close();
+      else dialog.removeAttribute("open");
+    }
+    if (!background) window.setTimeout(restoreHelpFocus, 0);
+    if (background && typeof dialog.showModal !== "function") {
+      const onKeyDown = (event: KeyboardEvent) => {
+        if (event.key === "Escape") { event.preventDefault(); returnToWork(); }
+      };
+      document.addEventListener("keydown", onKeyDown);
+      return () => document.removeEventListener("keydown", onKeyDown);
+    }
+  }, [background]);
 
   return (
     <>
-      <Routes>
+      <div className={background && !account.settled ? "hidden" : "contents"}>
+      <Routes location={background ?? location}>
         <Route path="oauth-handoff" element={<PaperclipCloudOAuthHandoffPage />} />
         <Route path="auth" element={<AuthPage />} />
         <Route path="saas/operations" element={<SaasOperationsPage />} />
@@ -1071,6 +1147,34 @@ export function App() {
           <Route path="*" element={<NotFoundPage scope="global" />} />
         </Route>
       </Routes>
+      </div>
+      {supportScope && retainedSupportScope.current === supportScope && <Activity mode="visible">
+      <dialog ref={helpDialog} role="dialog" aria-modal={background ? "true" : undefined}
+        aria-labelledby="customer-help-dialog-title" aria-describedby="customer-help-dialog-description"
+        className="fixed inset-0 z-50 m-auto max-h-(--sz-calc-18) w-full max-w-(--sz-calc-25) overflow-y-auto rounded-lg border bg-background p-6 shadow-lg outline-none sm:max-w-3xl backdrop:bg-dialog-backdrop"
+        style={{ display: background ? "block" : "none" }}
+        onCancel={event => { event.preventDefault(); returnToWork(); }}>
+          <div className="flex justify-end pr-8"><AccountExperienceLanguageSelect /></div>
+          <h2 id="customer-help-dialog-title" className="sr-only">{isImportHistory ? t("helpCenter.imports") : isHelpCenter ? t("helpCenter.title") : t("help")}</h2>
+          <p id="customer-help-dialog-description" className="sr-only">{isHelpCenter ? t("helpCenter.description") : isImportHistory ? t("helpCenter.importsDescription") : t("supportCases.intro")}</p>
+          <Button variant="ghost" type="button" data-slot="dialog-close" aria-label={t("supportCases.backToWork")}
+            className="absolute right-4 top-4 h-8 w-8 p-0" onClick={returnToWork}>
+            <XIcon className="h-4 w-4" aria-hidden="true" />
+            <span className="sr-only">{t("supportCases.backToWork")}</span>
+          </Button>
+          <DeferredRouteSurface>
+            <div hidden={!isSupport}>
+              <CustomerSupportCases onReturn={returnToWork} active={isSupport} />
+            </div>
+            <div hidden={!isHelpCenter}>
+              <CustomerHelpCenter navigationState={helpNavigationState} />
+            </div>
+            <div hidden={!isImportHistory}>
+              <CompanyImportHistory active={!!background && isImportHistory} />
+            </div>
+          </DeferredRouteSurface>
+      </dialog>
+      </Activity>}
       <OnboardingWizardVariant />
     </>
   );

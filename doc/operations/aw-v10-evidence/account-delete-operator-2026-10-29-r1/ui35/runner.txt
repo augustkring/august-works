@@ -1,0 +1,5 @@
+UI Vitest selection:
+  src/pages/SaasAccount.test.tsx
+  src/components/NativeAuthenticationSettings.test.tsx
+
+Result in test.log: 2 test files passed, 35 tests passed, 0 failed, 0 skipped.

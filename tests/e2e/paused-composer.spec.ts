@@ -1,4 +1,7 @@
 import { test, expect, type APIResponse } from "@playwright/test";
+import { registerEnglishAccountLocaleIsolation } from "./account-locale-isolation";
+
+registerEnglishAccountLocaleIsolation(test);
 
 async function json(response: APIResponse) {
   const body = await response.json();
@@ -24,8 +27,24 @@ for (const classic of [false, true]) {
       await page.goto(`/${company.issuePrefix}/issues/${task.identifier}`);
       const editor = (classic ? page.getByTestId("issue-chat-composer") : page).getByRole("textbox", { name: "editable markdown" });
       await editor.fill("Keep this draft until I resume.");
-      await page.getByRole("button", { name: "More task actions", exact: true }).click();
-      await page.getByRole("button", { name: "Pause work", exact: true }).click();
+      const moreActions = page.getByRole("button", { name: "More task actions", exact: true });
+      const pauseAction = page.getByRole("button", { name: "Pause work", exact: true });
+      await moreActions.click();
+      await expect(pauseAction).toBeVisible();
+      await page.keyboard.press("Escape");
+      await expect(pauseAction).toBeHidden();
+      await moreActions.click();
+      await expect(pauseAction).toBeVisible();
+      await moreActions.click();
+      await expect(pauseAction).toBeHidden();
+      await moreActions.click();
+      await expect(pauseAction).toBeVisible();
+      await moreActions.press("Escape");
+      await expect(pauseAction).toBeHidden();
+      await moreActions.focus();
+      await page.keyboard.press("Enter");
+      await expect(pauseAction).toBeVisible();
+      await pauseAction.click();
       const takeover = page.getByTestId("paused-composer-takeover");
       await expect(takeover).toBeVisible();
       await expect(takeover).toContainText("Your draft is saved.");
@@ -46,8 +65,20 @@ for (const classic of [false, true]) {
       await dialog.getByRole("button", { name: "Resume work", exact: true }).click();
       await expect(takeover).toHaveCount(0);
       await expect(editor).toHaveText("Keep this draft until I resume.");
+      const submittedComment = page.waitForResponse((response) =>
+        response.request().method() === "POST" &&
+        new URL(response.url()).pathname.endsWith("/comments"),
+      );
       await page.getByRole("button", { name: "Send", exact: true }).click();
-      await expect.poll(async () => (await json(await request.get(`/api/issues/${task.id}/comments`))).map((comment: { body: string }) => comment.body)).toEqual(["Keep this draft until I resume."]);
+      const commentResponse = await submittedComment;
+      expect(commentResponse.status()).toBe(201);
+      expect((await commentResponse.json()).body).toBe(
+        "Keep this draft until I resume.",
+      );
+      await expect(
+        page.getByText("Keep this draft until I resume.", { exact: true }),
+      ).toBeVisible();
+      await expect(editor).toBeEmpty();
 
       // Ancestor pause is effective even when this child was created after it.
       await page.getByRole("button", { name: "More task actions", exact: true }).click();
@@ -64,7 +95,9 @@ for (const classic of [false, true]) {
       await expect(page).toHaveURL(new RegExp(task.identifier));
       await takeover.getByRole("button", { name: "Resume subtree" }).click();
       await page.getByRole("dialog").getByRole("checkbox").uncheck();
-      await page.getByRole("dialog").getByRole("button", { name: "Resume subtree", exact: true }).click();
+      const resumeDialog = page.getByRole("dialog");
+      await resumeDialog.getByRole("button", { name: "Resume subtree", exact: true }).click();
+      await expect(resumeDialog).toHaveCount(0);
       await page.goto(`/${company.issuePrefix}/issues/${child.identifier}`);
       await expect(takeover).toHaveCount(0);
       await expect(editor).toBeVisible();

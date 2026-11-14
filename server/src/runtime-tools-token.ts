@@ -1,14 +1,20 @@
 import { createHmac, timingSafeEqual } from "node:crypto";
 import { resolvePaperclipInstanceId } from "./home-paths.js";
-import { workerModelBindingSchema, type WorkerModelBinding } from "@paperclipai/shared";
+import { conversationModelBindingSchema, workerModelBindingSchema, reviewModelBindingSchema,
+  type ConversationModelBinding, type WorkerModelBinding, type ReviewModelBinding } from "@paperclipai/shared";
+import { parseProviderConformanceRuntimeToolsBinding, providerConformanceTokenExpiry,
+  type ProviderConformanceRuntimeToolsBinding } from "./provider-conformance-runtime-tools-claim.js";
 
 export interface RuntimeToolsTokenClaims {
   sub: string;
   company_id: string;
   run_id: string;
   responsible_user_id: string;
-  scope: "connection_intents" | "github_credentials" | "worker_model";
+  scope: "connection_intents" | "github_credentials" | "worker_model" | "review_model" | "conversation_model" | "provider_conformance";
   worker_model?: WorkerModelBinding;
+  review_model?: ReviewModelBinding;
+  conversation_model?: ConversationModelBinding;
+  provider_conformance?: ProviderConformanceRuntimeToolsBinding;
   iat: number;
   exp: number;
   instance_id: string;
@@ -48,12 +54,28 @@ export function createRuntimeToolsToken(input: {
   responsibleUserId: string;
   scope?: RuntimeToolsTokenClaims["scope"];
   workerModelBinding?: WorkerModelBinding;
+  reviewModelBinding?: ReviewModelBinding;
+  conversationModelBinding?: ConversationModelBinding;
+  providerConformanceBinding?: ProviderConformanceRuntimeToolsBinding;
+  /** Derived from current Sandbox policy, model session, and environment lease. */
+  providerConformanceDeadlineAt?: Date;
 }) {
   if (!secret()) return null;
   const binding = workerModelBindingSchema.safeParse(input.workerModelBinding);
+  const conversationBinding = conversationModelBindingSchema.safeParse(input.conversationModelBinding);
+  const reviewBinding = reviewModelBindingSchema.safeParse(input.reviewModelBinding);
+  const providerConformanceBinding = parseProviderConformanceRuntimeToolsBinding(input.providerConformanceBinding);
   if (input.scope === "worker_model" && !binding.success) return null;
+  if (input.scope === "conversation_model" && !conversationBinding.success) return null;
+  if (input.scope === "review_model" && (!reviewBinding.success || reviewBinding.data.reviewerRunId !== input.runId || reviewBinding.data.reviewerAgentId !== input.agentId)) return null;
+  if (input.scope === "provider_conformance" && (!providerConformanceBinding ||
+    providerConformanceBinding.probeRunId !== input.runId)) return null;
   const now = Math.floor(Date.now() / 1000);
   const instanceId = resolvePaperclipInstanceId();
+  const providerConformanceExpiry = input.scope === "provider_conformance" && providerConformanceBinding &&
+    input.providerConformanceDeadlineAt instanceof Date && Number.isFinite(input.providerConformanceDeadlineAt.getTime())
+    ? providerConformanceTokenExpiry(now, Math.floor(input.providerConformanceDeadlineAt.getTime() / 1000)) : null;
+  if (input.scope === "provider_conformance" && !providerConformanceExpiry) return null;
   const claims: RuntimeToolsTokenClaims = {
     sub: input.agentId,
     company_id: input.companyId,
@@ -61,9 +83,16 @@ export function createRuntimeToolsToken(input: {
     responsible_user_id: input.responsibleUserId,
     scope: input.scope ?? "connection_intents",
     ...(input.scope === "worker_model" && binding.success ? { worker_model: binding.data } : {}),
+    ...(input.scope === "conversation_model" && conversationBinding.success
+      ? { conversation_model: conversationBinding.data } : {}),
+    ...(input.scope === "review_model" && reviewBinding.success ? { review_model: reviewBinding.data } : {}),
+    ...(input.scope === "provider_conformance" && providerConformanceBinding
+      ? { provider_conformance: providerConformanceBinding } : {}),
     iat: now,
     // Broker tokens remain scoped to a live run, which is rechecked on every use.
-    exp: now + (input.scope === "worker_model" ? 300 : input.scope === "github_credentials" ? 30 * 24 * 60 * 60 : TOKEN_TTL_SECONDS),
+    exp: input.scope === "provider_conformance" ? providerConformanceExpiry! :
+      now + (input.scope === "worker_model" || input.scope === "review_model" || input.scope === "conversation_model" ? 300 :
+      input.scope === "github_credentials" ? 30 * 24 * 60 * 60 : TOKEN_TTL_SECONDS),
     instance_id: instanceId,
   };
   const signingInput = `${encode({ alg: "HS256", typ: "JWT" })}.${encode(claims)}`;
@@ -106,5 +135,29 @@ export function verifyRuntimeToolsToken(token: string, scope: RuntimeToolsTokenC
     || (claims.exp as number) <= (claims.iat as number)
     || (claims.exp as number) - (claims.iat as number) > 300
   )) return null;
+  if (scope === "review_model" && (
+    !reviewModelBindingSchema.safeParse(claims.review_model).success
+    || (claims.review_model as ReviewModelBinding).reviewerRunId !== claims.run_id
+    || (claims.review_model as ReviewModelBinding).reviewerAgentId !== claims.sub
+    || !Number.isInteger(claims.iat) || !Number.isInteger(claims.exp)
+    || (claims.iat as number) > Math.floor(Date.now() / 1000)
+    || (claims.exp as number) <= (claims.iat as number)
+    || (claims.exp as number) - (claims.iat as number) > 300
+  )) return null;
+  if (scope === "conversation_model" && (
+    !conversationModelBindingSchema.safeParse(claims.conversation_model).success
+    || !Number.isInteger(claims.iat) || !Number.isInteger(claims.exp)
+    || (claims.iat as number) > Math.floor(Date.now() / 1000)
+    || (claims.exp as number) <= (claims.iat as number)
+    || (claims.exp as number) - (claims.iat as number) > 300
+  )) return null;
+  if (scope === "provider_conformance") {
+    const binding = parseProviderConformanceRuntimeToolsBinding(claims.provider_conformance);
+    if (!binding || binding.probeRunId !== claims.run_id ||
+      !Number.isInteger(claims.iat) || !Number.isInteger(claims.exp) ||
+      (claims.iat as number) > Math.floor(Date.now() / 1000) ||
+      (claims.exp as number) <= (claims.iat as number) ||
+      (claims.exp as number) - (claims.iat as number) > 60) return null;
+  }
   return claims as unknown as RuntimeToolsTokenClaims;
 }

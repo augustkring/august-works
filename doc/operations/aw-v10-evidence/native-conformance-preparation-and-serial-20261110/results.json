@@ -1,0 +1,40 @@
+{
+  "windows": [
+    {
+      "label": "native-managed-serial-full-r9",
+      "passed": 1,
+      "skipped": 0,
+      "seconds": 266.3849067650008,
+      "sourceManifest": "native-managed-serial-full-r9-source-manifest.json",
+      "scope": "Exact recorded source window; later edits are not retroactively qualified."
+    },
+    {
+      "label": "native-managed-project-create-wait-r3",
+      "passed": 1,
+      "skipped": 0,
+      "seconds": 132.61818811499688,
+      "sourceManifest": "native-managed-project-create-wait-r3-source-manifest.json",
+      "scope": "Exact recorded source window; later edits are not retroactively qualified."
+    },
+    {
+      "label": "conformance-new-owners-focused-r26",
+      "passed": 3,
+      "skipped": 482,
+      "seconds": 18.675712459007627,
+      "sourceManifest": "conformance-new-owners-focused-r26-source-manifest.json",
+      "scope": "Exact recorded source window; later edits are not retroactively qualified."
+    },
+    {
+      "label": "native-cold-owner-host-full-r27",
+      "passed": 54,
+      "skipped": 0,
+      "seconds": 65.5529233369889,
+      "sourceManifest": "native-cold-owner-host-full-r27-source-manifest.json",
+      "scope": "Exact recorded source window; later edits are not retroactively qualified."
+    }
+  ],
+  "passedAcrossSeparateWindows": 59,
+  "currentServerTypecheck": "r35 passed; exact TS/source pins in archive",
+  "sixProbeConformance": "NOT QUALIFIED: r34 refused hidden Task at existing database policy guard (SQLSTATE23514); strict forward migration and actual six-probe pass remain pending.",
+  "releaseQualified": false
+}

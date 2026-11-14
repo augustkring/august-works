@@ -1,0 +1,125 @@
+{
+  "date": "2026-10-22T20:32:22.365718+00:00",
+  "requirement": "UP03 partial core storage/shared contracts/current source privacy narrowing",
+  "sourceHashesObservedAtCheckpoint": {
+    "packages/db/src/schema/issues.ts": "b176f427af12e5b0b403e6ac29051fbda78b068c0c1084663d4e090e7b5b855e",
+    "packages/db/src/schema/projects.ts": "b58a24ceb08214a57c62322e47d07410fd70f29c50a8974655ff08554b71af89",
+    "packages/db/src/schema/heartbeat_runs.ts": "dfc63f7543a16a56885fe7c26754b240ac00bca5757610a73a8dced01190a19c",
+    "packages/db/src/schema/index.ts": "50b46ee1ec7f382f401f6b1916618a5b9841b117e99aebce2ae1f1c271b01d93",
+    "packages/db/src/schema/issue_access_grants.ts": "3402c713a28cdd662650c239bf1bfb65d89e1465f87002fdcdb89a752331d4cb",
+    "packages/db/src/schema/issue_privacy_sources.ts": "5890ffe82a4eb54ddbe3a85742d341c7972ddb02a60be088db68e75af44997c2",
+    "packages/db/src/schema/project_access_members.ts": "a0f980daa4101e75d51bb9d7dbd5f6363604c388cc2bddf61ad6e99dd6e29523",
+    "packages/db/src/migrations/0503_furry_norman_osborn.sql": "9f41bc0b885e6aed121bf5aca49f6aac67d5cd953392a66205ebf968b54a806e",
+    "packages/db/src/migrations/meta/0503_snapshot.json": "b9a57641a456140d7f423a750ec285f6798bc9dbb07c482bd954f20b7ee05699",
+    "packages/db/src/migrations/meta/_journal.json": "9db5984b7fe27cf4adb3680ebb7f578d687f489f72a37ce7cd22e07fba04014a",
+    "packages/shared/src/index.ts": "8a648bfa6bf2a9bff53ad39c94363950efaa96ca936e69905d8d76e66eab22e7",
+    "packages/shared/src/types/issue.ts": "922d3275235211c7e95002f0105c30a6281717ca14cdff37e75b285dc9a2c6df",
+    "packages/shared/src/types/project.ts": "ad077c0660a532610fdb5343218c7944791c5c40aa08a4133a689fad1a1ee51d",
+    "packages/shared/src/types/heartbeat.ts": "1c71e1153bd4cff70407e9f4f799beae64a9431e3cf6b49c61a4badb3e692c03",
+    "packages/shared/src/types/index.ts": "202c12630c5bec3c842a80c0c8e425bb4b2e3f937696501a52c542cccdeadbde",
+    "packages/shared/src/validators/issue.ts": "fd78bdd0062ba35dd24edeb5cd97ec43ff5f7e0ef8aa2afec8290fa187095ccf",
+    "packages/shared/src/validators/project.ts": "3d726ff7e0dfdfcde73f985c7037f26f59c6ce5310ac26162017f7bb23330ea2",
+    "packages/shared/src/validators/index.ts": "90d2645997cb0e56d0651497e6e20bbd0fb46354d0119dfe263804e359fdcebb",
+    "packages/shared/src/validators/private-access.test.ts": "7fc035ba7489fa96631f0f17510685fbf04562445eb644437ad3587699acb917",
+    "server/src/services/authorization.ts": "e86f2e3bd0271418bcbdc49f50fe270d7ab3849a9d35b623692e4db1abe338d6",
+    "server/src/__tests__/authorization-service.test.ts": "10e726d08d47688f6ca4c0a48cd5164b2dd82828f76d3df4bd8ef0316c51bb9f"
+  },
+  "runs": [
+    {
+      "log": "up03-core-db-generate.log",
+      "exitCode": 0,
+      "result": "normal pnpm db:generate generated0503; unrelated historical snapshot pruning restored exactly from HEAD"
+    },
+    {
+      "log": "up03-core-migration-check.log",
+      "exitCode": 0,
+      "result": "ordinary migration numbering/safety checks passed;20 historical findings baseline-covered,1stale baseline ignored"
+    },
+    {
+      "log": "up03-core-authorization-green-1.log",
+      "exitCode": 0,
+      "testsPassed": 78,
+      "durationSeconds": 35.35,
+      "note": "Full existing actual PostgreSQL authorization suite, including6new core cases. Up-front hashes in log. Final later test-only setup timeout changed from20seconds to canonical90000ms; production auth unchanged."
+    },
+    {
+      "log": "up03-core-auth-old-source-red.log",
+      "exitCode": 1,
+      "testsFailed": 1,
+      "testsSkipped": 77,
+      "durationSeconds": 31.79,
+      "note": "Only canonical authorization.ts replaced by HEAD baseline. Real assertion: expected private denial, actual allowed:true/allow_instance_admin. Original current source exactly restored via EXIT trap."
+    },
+    {
+      "log": "up03-core-auth-restored-green.log",
+      "exitCode": 1,
+      "testsSkipped": 78,
+      "note": "Restored-source attempt beforeAll20second startup timeout; no assertion verdict. Owned process absent and leftover owned directory removed; cleanup receipt retained."
+    },
+    {
+      "log": "up03-core-auth-restored-green-2.log",
+      "exitCode": 0,
+      "testsPassed": 1,
+      "testsSkipped": 77,
+      "durationSeconds": 37.51,
+      "note": "Restored current source plus canonical fixture timeout. Same selected regression passes; original full78not needlessly repeated."
+    },
+    {
+      "log": "up03-core-contract-green.log",
+      "exitCode": 0,
+      "testsPassed": 2,
+      "durationSeconds": 1.55,
+      "note": "Shared visibility omission/default and project subject contract regressions."
+    }
+  ],
+  "logs": [
+    {
+      "path": "doc/operations/aw-v10-evidence/recovery-2026-10-22/up03-core-db-generate.log.txt",
+      "sha256": "fea6570b17f8b89ddd325c2cbd9026203ede3ca196ffa44f904b4b689834a570"
+    },
+    {
+      "path": "doc/operations/aw-v10-evidence/recovery-2026-10-22/up03-core-migration-check.log.txt",
+      "sha256": "142d22a4401bbc5f65ffe90cd630da9032e3baf2bebe7b288d9c6eba1b5d1532"
+    },
+    {
+      "path": "doc/operations/aw-v10-evidence/recovery-2026-10-22/up03-core-authorization-green-1.log.txt",
+      "sha256": "f10edbd5a9f93390a572f7d6b146aa59fbbc62078bb0a8c47617300e7e0378ec"
+    },
+    {
+      "path": "doc/operations/aw-v10-evidence/recovery-2026-10-22/up03-core-auth-old-source-red.log.txt",
+      "sha256": "643dc23f12bdbd8214b763ff6c6fe6258bc2532366d7251c016f94fca8b2d885"
+    },
+    {
+      "path": "doc/operations/aw-v10-evidence/recovery-2026-10-22/up03-core-auth-restoration.log.txt",
+      "sha256": "41852b105c554234bdcd1c7d251d91b5d2146e154818f1f2c1f4b30316dea9d9"
+    },
+    {
+      "path": "doc/operations/aw-v10-evidence/recovery-2026-10-22/up03-core-auth-restored-green.log.txt",
+      "sha256": "31f4e6edab84d9f9a05618f6552d31b4abe6cd92836d8861815df533834307e7"
+    },
+    {
+      "path": "doc/operations/aw-v10-evidence/recovery-2026-10-22/up03-core-auth-restored-green-2.log.txt",
+      "sha256": "794a1e0c5e307f3aea45cbf8d4c3ea5b1e9f6953b924a6762baffe2833a43306"
+    },
+    {
+      "path": "doc/operations/aw-v10-evidence/recovery-2026-10-22/up03-core-contract-green.log.txt",
+      "sha256": "4bfc4bfbe0b5e75ead760ed466eedf1f61ff7a192411bbdb491d5e105d6dc8b5"
+    },
+    {
+      "path": "doc/operations/aw-v10-evidence/recovery-2026-10-22/up03-core-timeout-cleanup.json.txt",
+      "sha256": "e6883da128d84be667fc355d61e60dd6ceff495885c4909023571162c5a0347c"
+    }
+  ],
+  "pinningLimitation": "Listed captures include up-front named owner hashes; checkpoint hashes observed afterward. No entire immutable source-graph pin claimed; B and Root edited disjoint domain/derivative owners during current captures. Auth source e86f2e3bd0271418bcbdc49f50fe270d7ab3849a9d35b623692e4db1abe338d6 stayed frozen during full78 and restored targeted runs.",
+  "limitations": [
+    "Not UP03 complete, full V10 complete, PR ready, or deployment qualification",
+    "No UI/private-work admission enabled or claimed; mixed-version readers and rollback must be fenced by original startup/release owners before private writes are offered",
+    "Project-derived provenance and Memory/Context/Foundation/Learning and remaining derivative consumers are separate pending integration",
+    "Migration uses original transactional migrator and full fresh PostgreSQL fixtures; no large-tenant online migration or prior-production upgrade qualification claimed",
+    "Normal final shared/DB/server/UI/CLI typechecks and whole-repository required checks remain pending after this core change",
+    "Bounded graph population257 sentinel/256accepted, cycle closure at most256squared pairs; no production latency or all-graph completeness claim",
+    "Publication that bypasses unreadable retained sources remains unsupported; ordinary moves retain sources and deleted sources deny"
+  ],
+  "sourceComplete": false,
+  "prReady": false
+}

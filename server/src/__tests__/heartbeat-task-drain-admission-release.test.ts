@@ -1,17 +1,19 @@
 import { randomUUID } from "node:crypto";
 import { eq, sql } from "drizzle-orm";
-import { afterAll, afterEach, beforeAll, describe, expect, it } from "vitest";
+import { afterAll, afterEach, beforeAll, beforeEach, describe, expect, it, vi } from "vitest";
 import {
   activityLog,
   agents,
   agentRuntimeState,
   agentWakeupRequests,
   companies,
+  companyMemberships,
   companySkills,
   createDb,
   heartbeatRunEvents,
   heartbeatRuns,
   issues,
+  principalPermissionGrants,
 } from "@paperclipai/db";
 import {
   getEmbeddedPostgresTestSupport,
@@ -19,6 +21,15 @@ import {
 } from "./helpers/embedded-postgres.js";
 import { heartbeatService, getTaskDrainStatus, startTaskDrain, stopTaskDrain } from "../services/heartbeat.ts";
 import { subscribeCompanyLiveEvents } from "../services/live-events.ts";
+import { installHeartbeatApiUrlFixture, seedHeartbeatResponsibleHuman } from "./helpers/heartbeat-runtime-fixtures.js";
+import { admitMockedLegacyDispatch, resetMockedLegacyDispatch } from "./helpers/mocked-legacy-paid-dispatch.js";
+
+// The drain fixtures run the legacy `process` adapter as a stand-in executor;
+// no test here asserts the V10 paid-transport refusal. Only `process` model
+// dispatch is admitted (see helpers/mocked-legacy-paid-dispatch.ts); every other
+// call reaches the real guard.
+vi.mock("../services/native-runtime/paid-transport-admission.js", async (importOriginal) =>
+  (await import("./helpers/mocked-legacy-paid-dispatch.js")).withMockedLegacyDispatchAdmission(await importOriginal()));
 
 const embeddedPostgresSupport = await getEmbeddedPostgresTestSupport();
 const describeEmbeddedPostgres = embeddedPostgresSupport.supported ? describe : describe.skip;
@@ -30,10 +41,14 @@ if (!embeddedPostgresSupport.supported) {
 }
 
 describeEmbeddedPostgres("heartbeat task-drain admission release", () => {
+  beforeEach(() => admitMockedLegacyDispatch(["process"]));
+  afterEach(() => resetMockedLegacyDispatch());
   let db!: ReturnType<typeof createDb>;
   let tempDb: Awaited<ReturnType<typeof startEmbeddedPostgresTestDatabase>> | null = null;
+  let restoreApiUrl: (() => void) | null = null;
 
   beforeAll(async () => {
+    restoreApiUrl = installHeartbeatApiUrlFixture();
     tempDb = await startEmbeddedPostgresTestDatabase("heartbeat-task-drain-admission-release-");
     db = createDb(tempDb.connectionString);
   }, 60_000);
@@ -68,11 +83,14 @@ describeEmbeddedPostgres("heartbeat task-drain admission release", () => {
     await db.delete(agentRuntimeState);
     await db.delete(agents);
     await db.delete(companySkills);
+    await db.delete(companyMemberships);
+    await db.delete(principalPermissionGrants);
     await db.delete(companies);
   });
 
   afterAll(async () => {
     await tempDb?.cleanup();
+    restoreApiUrl?.();
   });
 
   async function seedAgentAndIssue() {
@@ -86,6 +104,7 @@ describeEmbeddedPostgres("heartbeat task-drain admission release", () => {
       issuePrefix: `T${companyId.replace(/-/g, "").slice(0, 6).toUpperCase()}`,
       requireBoardApprovalForNewAgents: false,
     });
+    await seedHeartbeatResponsibleHuman(db, companyId, "responsible-user", "owner");
 
     await db.insert(agents).values({
       id: agentId,

@@ -1,0 +1,106 @@
+
+ RUN  v4.1.11 /workspace/v10-dep-qualification/server
+
+Complete native metric query and Context retention {"populationSize":5000,"queryAndRetentionMs":9876,"fixture":"explicit_bulk_software_prerequisites"}
+Complete native metric query and Context retention {"populationSize":10000,"queryAndRetentionMs":17037,"fixture":"explicit_bulk_software_prerequisites"}
+[15:17:24] [33mWARN[39m: [36mMemory job failed[39m [90m{"jobId":"4fde1970-8000-4bce-8a02-e89cf9282e60","operationType":"retention"}[39m
+    err: {
+      "type": "Error",
+      "location": {
+        "line": 176,
+        "column": 17
+      }
+    }
+[15:17:24] [33mWARN[39m: [36mMemory job failed[39m [90m{"jobId":"3e1db2d9-ac1b-4230-8efa-f7f6fa796c28","operationType":"retention"}[39m
+    err: {
+      "type": "Error",
+      "location": {
+        "line": 176,
+        "column": 17
+      }
+    }
+[15:17:25] [33mWARN[39m: [36mMemory job failed[39m [90m{"jobId":"4fde1970-8000-4bce-8a02-e89cf9282e60","operationType":"retention"}[39m
+    err: {
+      "type": "Error",
+      "location": {
+        "line": 69,
+        "column": 61
+      }
+    }
+[15:17:25] [33mWARN[39m: [36mMemory job failed[39m [90m{"jobId":"3e1db2d9-ac1b-4230-8efa-f7f6fa796c28","operationType":"retention"}[39m
+    err: {
+      "type": "Error",
+      "location": {
+        "line": 69,
+        "column": 61
+      }
+    }
+[15:17:25] [33mWARN[39m: [36mMemory job failed[39m [90m{"jobId":"4fde1970-8000-4bce-8a02-e89cf9282e60","operationType":"retention"}[39m
+    err: {
+      "type": "Error",
+      "location": {
+        "line": 69,
+        "column": 61
+      }
+    }
+[15:17:25] [33mWARN[39m: [36mMemory job failed[39m [90m{"jobId":"3e1db2d9-ac1b-4230-8efa-f7f6fa796c28","operationType":"retention"}[39m
+    err: {
+      "type": "Error",
+      "location": {
+        "line": 69,
+        "column": 61
+      }
+    }
+[15:18:45] [33mWARN[39m: [36mMemory job failed[39m [90m{"jobId":"e9cbf9f9-deeb-45a9-b53c-ea3ffde23173","operationType":"retention"}[39m
+    err: {
+      "type": "Error",
+      "location": {
+        "line": 1127,
+        "column": 10
+      }
+    }
+ ❯ src/__tests__/analytical-context-privacy.integration.test.ts (57 tests | 2 failed) 295641ms
+     × retains all eight actual SDK proposal Sources and rejects an oversized source set before adding a root 30022ms
+     × recovers the same person's erased conversation atomically without reviving its history or Task outcome 2442ms
+
+⎯⎯⎯⎯⎯⎯⎯ Failed Tests 2 ⎯⎯⎯⎯⎯⎯⎯
+
+ FAIL  src/__tests__/analytical-context-privacy.integration.test.ts > Native analytical Context retention on PostgreSQL > retains all eight actual SDK proposal Sources and rejects an oversized source set before adding a root
+Error: Test timed out in 30000ms.
+If this is a long-running test, pass a timeout value as the last argument or configure it globally with "testTimeout".
+ ❯ src/__tests__/analytical-context-privacy.integration.test.ts:274:2
+    272|   expect(await facts()).toEqual(before);
+    273|  });
+    274|  it("retains all eight actual SDK proposal Sources and rejects an over…
+       |  ^
+    275|   const f=await fixture(),tools=toolAuthority(),sources=[];
+    276|   for(let index=0;index<8;index++){
+
+⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯[1/2]⎯
+
+ FAIL  src/__tests__/analytical-context-privacy.integration.test.ts > Native analytical Context retention on PostgreSQL > recovers the same person's erased conversation atomically without reviving its history or Task outcome
+Error: Context source access is unavailable
+ ❯ forbidden src/errors.ts:21:10
+     19|
+     20| export function forbidden(message = "Forbidden", details?: unknown) {
+     21|   return new HttpError(403, message, details);
+       |          ^
+     22| }
+     23|
+ ❯ assertScopePrivacy src/services/context/context-manifest.ts:647:19
+ ❯ src/services/context/context-manifest.ts:835:9
+ ❯ ../packages/db/src/work-signals.ts:38:22
+ ❯ scope ../node_modules/.pnpm/postgres@3.4.9_patch_hash=sryle6qd5qfmnxvoebal4gashi/node_modules/postgres/src/index.js:279:18
+ ❯ sql.begin ../node_modules/.pnpm/postgres@3.4.9_patch_hash=sryle6qd5qfmnxvoebal4gashi/node_modules/postgres/src/index.js:257:14
+ ❯ PostgresJsDatabase.connection.transaction ../packages/db/src/work-signals.ts:35:22
+ ❯ Object.create src/services/context/context-manifest.ts:533:14
+ ❯ src/__tests__/analytical-context-privacy.integration.test.ts:728:3
+
+⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯[2/2]⎯
+
+
+ Test Files  1 failed (1)
+      Tests  2 failed | 55 passed (57)
+   Start at  15:13:35
+   Duration  313.18s (transform 12.51s, setup 79ms, import 17.34s, tests 295.64s, environment 0ms)
+

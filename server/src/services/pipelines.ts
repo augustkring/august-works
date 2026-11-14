@@ -1,11 +1,12 @@
 import { randomUUID } from "node:crypto";
 import { workflowDelegationForActor } from "./workflows/workflow-delegation.js";
 import { isDeepStrictEqual } from "node:util";
-import { and, asc, desc, eq, inArray, isNotNull, isNull, ne, or, sql } from "drizzle-orm";
+import { and, asc, desc, eq, ilike, inArray, isNotNull, isNull, ne, or, sql } from "drizzle-orm";
 import { alias } from "drizzle-orm/pg-core";
 import type { Db } from "@paperclipai/db";
 import {
   agents,
+  companies,
   documents,
   documentRevisions,
   heartbeatRuns,
@@ -46,7 +47,7 @@ import {
   type RoutineVariable,
   type RoutineRevisionSnapshotV1,
 } from "@paperclipai/shared";
-import { conflict, HttpError, notFound, unprocessable } from "../errors.js";
+import { conflict, forbidden, HttpError, notFound, unprocessable } from "../errors.js";
 import { routineService } from "./routines.js";
 import { secretService } from "./secrets.js";
 import type { IssueAssignmentWakeupDeps } from "./issue-assignment-wakeup.js";
@@ -62,7 +63,7 @@ import {
   type WorkflowRunActor,
 } from "./workflows/workflow-executor.js";
 import { assertAssignableAgent } from "./agent-assignability.js";
-import { authorizationService } from "./authorization.js";
+import { authorizationService, canActorReadHeartbeatRunPrivacy, canActorReadIssuePrivacy, type AuthorizationActor } from "./authorization.js";
 import { instanceSettingsService } from "./instance-settings.js";
 import { visibleIssueCondition } from "./issue-visibility.js";
 import type { IssuePostCommitAction } from "./issues.js";
@@ -1267,8 +1268,6 @@ function routineRevisionSnapshotRoutine(routine: typeof routines.$inferSelect): 
     catchUpPolicy: routine.catchUpPolicy as RoutineRevisionSnapshotV1["routine"]["catchUpPolicy"],
     activityGatePolicy: routine.activityGatePolicy as RoutineRevisionSnapshotV1["routine"]["activityGatePolicy"],
     activityGateScope: routine.activityGateScope as RoutineRevisionSnapshotV1["routine"]["activityGateScope"],
-    originKind: routine.originKind,
-    originId: routine.originId,
     variables: routine.variables ?? [],
     env: routine.env ?? null,
     responsibleUserId: routine.responsibleUserId ?? null,
@@ -1390,6 +1389,10 @@ function buildPipelineCaseContextPack(input: {
   case: typeof pipelineCases.$inferSelect;
   stage: typeof pipelineStages.$inferSelect;
   outputSummaries?: ReturnType<typeof summarizePipelineCaseOutputsForContext> | null;
+  taskSourceIssueIds?: string[];
+  sourceCaseProducerRunIds?: string[];
+  sourceCaseProducerUserIds?: string[];
+  sourceCaseCapturedAt?: string;
 }) {
   return {
     pipeline: {
@@ -1400,6 +1403,12 @@ function buildPipelineCaseContextPack(input: {
     case: {
       id: input.case.id,
       caseKey: input.case.caseKey,
+      sourceUserId: input.case.createdByUserId,
+      sourceAgentId: input.case.createdByAgentId,
+      sourceRunId: input.case.originRunId,
+      producerRunIds: input.sourceCaseProducerRunIds ?? (input.case.originRunId ? [input.case.originRunId] : []),
+      producerUserIds: input.sourceCaseProducerUserIds ?? (input.case.createdByUserId ? [input.case.createdByUserId] : []),
+      capturedAt: input.sourceCaseCapturedAt ?? null,
       title: input.case.title,
       version: input.case.version,
       deepLink: buildCaseDeepLink({ pipelineId: input.pipeline.id, caseId: input.case.id }),
@@ -1414,6 +1423,7 @@ function buildPipelineCaseContextPack(input: {
       name: input.stage.name,
       kind: input.stage.kind,
     },
+    taskSourceIssueIds: input.taskSourceIssueIds ?? [],
     outputSummaries: input.outputSummaries ?? null,
   };
 }
@@ -2977,7 +2987,8 @@ export function pipelineService(db: Db, deps: { heartbeat?: IssueAssignmentWakeu
       : null;
     const canReusePrevious =
       previousRoutine &&
-      (previousRoutine.originKind === "pipeline_automation" || previousRoutine.originKind === "manual");
+      previousRoutine.originKind === "pipeline_automation" &&
+      previousRoutine.originId === input.pipelineId;
     const title = resolvePipelineAutomationTitleTemplate({
       requestedTitleTemplate: input.titleTemplate,
       previousRoutine: canReusePrevious ? previousRoutine : null,
@@ -2999,8 +3010,6 @@ export function pipelineService(db: Db, deps: { heartbeat?: IssueAssignmentWakeu
           executionTargetKind: "agent_task",
           executionTargetRef: input.assigneeAgentId,
           status: "active",
-          originKind: "pipeline_automation",
-          originId: input.pipelineId,
           variables,
           updatedByAgentId: actorPatch.agentId,
           updatedByUserId: actorPatch.userId,
@@ -3025,6 +3034,13 @@ export function pipelineService(db: Db, deps: { heartbeat?: IssueAssignmentWakeu
     }
 
     const now = nowDate();
+    const responsibleUserId = input.actor.type === "user"
+      ? input.actor.userId
+      : await dbOrTx
+          .select({ responsibleUserId: companies.defaultResponsibleUserId })
+          .from(companies)
+          .where(eq(companies.id, input.companyId))
+          .then((rows) => rows[0]?.responsibleUserId ?? null);
     const [created] = await dbOrTx
       .insert(routines)
       .values({
@@ -3038,6 +3054,7 @@ export function pipelineService(db: Db, deps: { heartbeat?: IssueAssignmentWakeu
         priority: "medium",
         concurrencyPolicy: "coalesce_if_active",
         catchUpPolicy: "skip_missed",
+        responsibleUserId,
         originKind: "pipeline_automation",
         originId: input.pipelineId,
         variables,
@@ -3065,91 +3082,6 @@ export function pipelineService(db: Db, deps: { heartbeat?: IssueAssignmentWakeu
     };
   }
 
-  async function stampPipelineAutomationRoutine(
-    dbOrTx: PipelineDb,
-    input: { companyId: string; pipelineId: string; routineId: string; actor: PipelineActor },
-  ) {
-    const updated = await dbOrTx
-      .update(routines)
-      .set({ originKind: "pipeline_automation", originId: input.pipelineId, updatedAt: nowDate() })
-      .where(and(
-        eq(routines.id, input.routineId),
-        eq(routines.companyId, input.companyId),
-        eq(routines.originKind, "manual"),
-      ))
-      .returning({ id: routines.id });
-    if (updated.length === 0) return;
-    const actorPatch = activityActorPatch(input.actor);
-    await logActivity(dbOrTx as Db, {
-      companyId: input.companyId,
-      ...actorPatch,
-      action: "routine.origin_stamped",
-      entityType: "routine",
-      entityId: input.routineId,
-      details: {
-        originKind: "pipeline_automation",
-        originId: input.pipelineId,
-      },
-    });
-  }
-
-  async function routineStillReferencedByAnyPipeline(
-    dbOrTx: PipelineDb,
-    input: { companyId: string; routineId: string; exceptStageId?: string | null },
-  ) {
-    const referencing = await dbOrTx
-      .select({ id: pipelineStages.id })
-      .from(pipelineStages)
-      .innerJoin(pipelines, eq(pipelineStages.pipelineId, pipelines.id))
-      .where(and(
-        eq(pipelines.companyId, input.companyId),
-        or(
-          and(
-            sql`${pipelineStages.config}->'onEnter'->>'type' = 'run_routine'`,
-            sql`${pipelineStages.config}->'onEnter'->>'routineId' = ${input.routineId}`,
-          ),
-          and(
-            sql`${pipelineStages.config}->'onEnter'->>'type' = 'run_target'`,
-            sql`${pipelineStages.config}->'onEnter'->'target'->>'kind' = 'routine'`,
-            sql`${pipelineStages.config}->'onEnter'->'target'->>'routineId' = ${input.routineId}`,
-          ),
-        ),
-        input.exceptStageId ? ne(pipelineStages.id, input.exceptStageId) : undefined,
-      ))
-      .limit(1);
-    return referencing.length > 0;
-  }
-
-  async function clearPipelineAutomationRoutineIfUnreferenced(
-    dbOrTx: PipelineDb,
-    input: { companyId: string; pipelineId: string; routineId: string; exceptStageId?: string | null; actor: PipelineActor },
-  ) {
-    const stillReferenced = await routineStillReferencedByAnyPipeline(dbOrTx, input);
-    if (stillReferenced) return;
-    const updated = await dbOrTx
-      .update(routines)
-      .set({ originKind: "manual", originId: null, updatedAt: nowDate() })
-      .where(and(
-        eq(routines.id, input.routineId),
-        eq(routines.companyId, input.companyId),
-        eq(routines.originKind, "pipeline_automation"),
-      ))
-      .returning({ id: routines.id, originId: routines.originId });
-    if (updated.length === 0) return;
-    const actorPatch = activityActorPatch(input.actor);
-    await logActivity(dbOrTx as Db, {
-      companyId: input.companyId,
-      ...actorPatch,
-      action: "routine.origin_cleared",
-      entityType: "routine",
-      entityId: input.routineId,
-      details: {
-        previousOriginKind: "pipeline_automation",
-        previousOriginId: updated[0]?.originId ?? null,
-      },
-    });
-  }
-
   async function validateStageTargets(companyId: string, pipelineId: string, kind: PipelineStageKind | string, config: PipelineStageConfig) {
     if (kind !== "review") return;
     const rows = await db
@@ -3163,6 +3095,7 @@ export function pipelineService(db: Db, deps: { heartbeat?: IssueAssignmentWakeu
   async function executeAutomationLedger(
     executionId: string,
     actor: PipelineActor = { type: "system" },
+    privacyActor?: AuthorizationActor,
   ): Promise<PipelineAutomationExecutionResult> {
     const execution = await db
       .select()
@@ -3192,6 +3125,7 @@ export function pipelineService(db: Db, deps: { heartbeat?: IssueAssignmentWakeu
     }
 
     const detail = await getCaseWithStageOrThrow(db, execution.companyId, execution.caseId);
+    const sourceCaseCapturedAt = nowDate();
     const automation = stageAutomation(detail.stage);
     if (!automation || automation.id !== execution.automationId || automation.target.kind !== executionTarget.kind ||
       (automation.target.kind === "workflow" && executionTarget.kind === "workflow" && automation.target.workflowId !== executionTarget.workflowId) ||
@@ -3214,9 +3148,41 @@ export function pipelineService(db: Db, deps: { heartbeat?: IssueAssignmentWakeu
 
     try {
       const outputSummaries = summarizePipelineCaseOutputsForContext(
-        await outputsSvc.listCaseOutputs(execution.companyId, execution.caseId),
+        await outputsSvc.listCaseOutputs(execution.companyId, execution.caseId, async (issueId, sourceRunId) => {
+          if (!privacyActor || !await canActorReadIssuePrivacy(db, privacyActor, { id: issueId, companyId: execution.companyId })) return false;
+          return sourceRunId ? canActorReadHeartbeatRunPrivacy(db, privacyActor, { id: sourceRunId, companyId: execution.companyId }) : true;
+        }),
       );
-      const contextPack = buildPipelineCaseContextPack({ ...detail, outputSummaries });
+      const linkedTaskIssueIds = await db.selectDistinct({ issueId: pipelineCaseIssueLinks.issueId })
+        .from(pipelineCaseIssueLinks)
+        .where(and(eq(pipelineCaseIssueLinks.companyId, execution.companyId), eq(pipelineCaseIssueLinks.caseId, execution.caseId)))
+        .then(rows => rows.map(row => row.issueId));
+      const taskSourceIssueIds = [...new Set([
+        ...linkedTaskIssueIds,
+        ...outputSummaries.items.map(item => item.sourceIssue.id),
+      ])].sort();
+      const producerEvents = await db.select({ actorType: pipelineCaseEvents.actorType,
+        actorUserId: pipelineCaseEvents.actorUserId, runId: pipelineCaseEvents.runId })
+        .from(pipelineCaseEvents).where(and(eq(pipelineCaseEvents.companyId, execution.companyId),
+          eq(pipelineCaseEvents.caseId, execution.caseId), eq(pipelineCaseEvents.type, "updated"),
+          sql`${pipelineCaseEvents.payload}->>'materialChanged' = 'true'`,
+          sql`${pipelineCaseEvents.createdAt} <= ${sourceCaseCapturedAt.toISOString()}::timestamptz`));
+      if (producerEvents.length > 256 || producerEvents.some(event => event.actorType === "agent" && !event.runId)) {
+        throw forbidden("Pipeline case producer history is incomplete.");
+      }
+      const sourceCaseProducerRunIds = [...new Set([
+        ...(detail.case.originRunId ? [detail.case.originRunId] : []),
+        ...producerEvents.filter(event => event.actorType === "agent" && event.runId).map(event => event.runId!),
+      ])].sort();
+      const sourceCaseProducerUserIds = [...new Set([
+        ...(detail.case.createdByUserId ? [detail.case.createdByUserId] : []),
+        ...producerEvents.filter(event => event.actorType === "user" && event.actorUserId).map(event => event.actorUserId!),
+      ])].sort();
+      if (producerEvents.some(event => event.actorType === "system") || sourceCaseProducerRunIds.length > 256) {
+        throw forbidden("Pipeline case producer history is not accountable.");
+      }
+      const contextPack = buildPipelineCaseContextPack({ ...detail, outputSummaries, taskSourceIssueIds,
+        sourceCaseProducerRunIds, sourceCaseProducerUserIds, sourceCaseCapturedAt: sourceCaseCapturedAt.toISOString() });
       const variables = buildPipelineCaseVariables(detail);
       const breakdownConfig = readBreakdownConfig(stageConfig(detail.stage));
 
@@ -3364,6 +3330,11 @@ export function pipelineService(db: Db, deps: { heartbeat?: IssueAssignmentWakeu
           case: contextPack.case,
           stage: contextPack.stage,
           triggeringEventId: execution.triggeringEventId,
+          automation: {
+            automationId: execution.automationId,
+            automationExecutionId: execution.id,
+            generation: execution.generation,
+          },
           contextPack,
           variables,
         },
@@ -3378,6 +3349,7 @@ export function pipelineService(db: Db, deps: { heartbeat?: IssueAssignmentWakeu
             outputSummaries,
           }),
         ].filter(Boolean).join("\n\n"),
+        privacyActor,
       });
       if (!run.linkedIssueId) {
         const failureReason = typeof run.failureReason === "string" && run.failureReason.trim().length > 0
@@ -3474,13 +3446,14 @@ export function pipelineService(db: Db, deps: { heartbeat?: IssueAssignmentWakeu
   async function executeAutomationLedgers(
     ledgers: Array<typeof pipelineAutomationExecutions.$inferSelect>,
     actor: PipelineActor = { type: "system" },
+    privacyActor?: AuthorizationActor,
   ) {
     const results = new Map<string, PipelineAutomationExecutionResult>();
     const seen = new Set<string>();
     for (const ledger of ledgers) {
       if (seen.has(ledger.id)) continue;
       seen.add(ledger.id);
-      results.set(ledger.id, await executeAutomationLedger(ledger.id, actor));
+      results.set(ledger.id, await executeAutomationLedger(ledger.id, actor, privacyActor));
     }
     return results;
   }
@@ -3848,6 +3821,23 @@ export function pipelineService(db: Db, deps: { heartbeat?: IssueAssignmentWakeu
   const service = {
     resolveBreakdownTarget,
 
+    async search(companyId: string, actor: AuthorizationActor, query: string, limit = 20) {
+      const decision = await authorization.decide({ actor, action: "company_scope:read", resource: { type: "company", companyId } });
+      if (!decision.allowed) return { items: [], partial: false };
+      const tokens = query.trim().split(/\s+/).filter(Boolean).slice(0, 8);
+      const tokenConditions = tokens.map((token) => {
+        const escaped = token.replace(/[\\%_]/g, (value) => `\\${value}`);
+        const pattern = `%${escaped}%`;
+        return or(ilike(pipelines.key, pattern), ilike(pipelines.name, pattern), ilike(pipelines.description, pattern));
+      });
+      const rows = await db.select({ id: pipelines.id, key: pipelines.key, name: pipelines.name,
+        description: pipelines.description, updatedAt: pipelines.updatedAt }).from(pipelines).where(and(
+        eq(pipelines.companyId, companyId), isNull(pipelines.archivedAt),
+        ...tokenConditions,
+      )).orderBy(desc(pipelines.updatedAt), desc(pipelines.id)).limit(Math.min(100, Math.max(1, limit)) + 1);
+      return { items: rows.slice(0, limit), partial: rows.length > limit };
+    },
+
     async createPipeline(input: {
       companyId: string;
       key: string;
@@ -3916,18 +3906,6 @@ export function pipelineService(db: Db, deps: { heartbeat?: IssueAssignmentWakeu
               ? await workflowDelegationForActor(tx as unknown as Db, input.companyId, documentActorFields(input.actor)) : null,
           }))))
           .returning();
-        for (const stage of insertedStages) {
-          const routineId = stageAutomationRoutineIdFromConfig((stage.config ?? {}) as PipelineStageConfig);
-          if (routineId) {
-            await stampPipelineAutomationRoutine(tx, {
-              companyId: input.companyId,
-              pipelineId: pipeline!.id,
-              routineId,
-              actor: input.actor,
-            });
-          }
-        }
-
         if (!insertedStages.some((stage) => stage.kind === "done") || !insertedStages.some((stage) => stage.kind === "cancelled")) {
           throw unprocessable("Pipeline must include at least one done stage and one cancelled stage", { code: "validation" });
         }
@@ -4015,15 +3993,6 @@ export function pipelineService(db: Db, deps: { heartbeat?: IssueAssignmentWakeu
               ? await workflowDelegationForActor(tx as unknown as Db, input.companyId, documentActorFields(input.actor ?? { type: "system" })) : null,
           })
           .returning();
-        const routineId = stageAutomationRoutineIdFromConfig(nextConfig);
-        if (routineId) {
-          await stampPipelineAutomationRoutine(tx, {
-            companyId: input.companyId,
-            pipelineId: input.pipelineId,
-            routineId,
-            actor: input.actor ?? { type: "system" },
-          });
-        }
         return stage!;
       });
     },
@@ -4083,7 +4052,6 @@ export function pipelineService(db: Db, deps: { heartbeat?: IssueAssignmentWakeu
                   actor: input.actor ?? { type: "system" },
                 })
               : config;
-        const nextRoutineId = stageAutomationRoutineIdFromConfig(nextConfig);
         const [updated] = await tx
           .update(pipelineStages)
           .set({
@@ -4098,23 +4066,6 @@ export function pipelineService(db: Db, deps: { heartbeat?: IssueAssignmentWakeu
           .where(and(eq(pipelineStages.id, input.stageId), eq(pipelineStages.pipelineId, input.pipelineId)))
           .returning();
         if (!updated) throw notFound("Pipeline stage not found");
-        if (nextRoutineId) {
-          await stampPipelineAutomationRoutine(tx, {
-            companyId: input.companyId,
-            pipelineId: input.pipelineId,
-            routineId: nextRoutineId,
-            actor: input.actor ?? { type: "system" },
-          });
-        }
-        if (previousRoutineId && previousRoutineId !== nextRoutineId) {
-          await clearPipelineAutomationRoutineIfUnreferenced(tx, {
-            companyId: input.companyId,
-            pipelineId: input.pipelineId,
-            routineId: previousRoutineId,
-            exceptStageId: input.stageId,
-            actor: input.actor ?? { type: "system" },
-          });
-        }
         return updated;
       });
     },
@@ -4279,16 +4230,6 @@ export function pipelineService(db: Db, deps: { heartbeat?: IssueAssignmentWakeu
         }
         await tx.delete(pipelineTransitions).where(or(eq(pipelineTransitions.fromStageId, stage.id), eq(pipelineTransitions.toStageId, stage.id)));
         await tx.delete(pipelineStages).where(eq(pipelineStages.id, stage.id));
-        const routineId = stageAutomationRoutineIdFromConfig(stageConfig(stage));
-        if (routineId) {
-          await clearPipelineAutomationRoutineIfUnreferenced(tx, {
-            companyId: input.companyId,
-            pipelineId: input.pipelineId,
-            routineId,
-            exceptStageId: stage.id,
-            actor: input.actor ?? { type: "system" },
-          });
-        }
         return { deleted: true };
       });
     },
@@ -4867,10 +4808,11 @@ export function pipelineService(db: Db, deps: { heartbeat?: IssueAssignmentWakeu
       reason?: string | null;
       force?: boolean;
       skipChildrenTerminalGate?: boolean;
+      privacyActor?: AuthorizationActor;
     }) {
       const automationLedgers: Array<typeof pipelineAutomationExecutions.$inferSelect> = [];
       const result = await db.transaction((tx) => transitionCaseInTransaction(tx, { ...input, automationLedgers }));
-      const automationExecutions = await executeAutomationLedgers(automationLedgers, { type: "system" });
+      const automationExecutions = await executeAutomationLedgers(automationLedgers, { type: "system" }, input.privacyActor);
       if (result.automationLedger) {
         return {
           ...result,
@@ -4886,6 +4828,7 @@ export function pipelineService(db: Db, deps: { heartbeat?: IssueAssignmentWakeu
       caseId: string;
       automationId: string;
       actor: PipelineActor;
+      privacyActor?: AuthorizationActor;
     }) {
       const execution = await db
         .select()
@@ -4899,7 +4842,7 @@ export function pipelineService(db: Db, deps: { heartbeat?: IssueAssignmentWakeu
         .limit(1)
         .then((rows) => rows[0] ?? null);
       if (!execution) throw notFound("Pipeline automation execution not found");
-      return executeAutomationLedger(execution.id, input.actor);
+      return executeAutomationLedger(execution.id, input.actor, input.privacyActor);
     },
 
     async getAutomationRetryPlan(input: {
@@ -4925,6 +4868,7 @@ export function pipelineService(db: Db, deps: { heartbeat?: IssueAssignmentWakeu
       expectedVersion: number;
       cleanup: PipelineAutomationRetryCleanupOptions;
       actor: PipelineActor;
+      privacyActor?: AuthorizationActor;
     }) {
       const postCommitIssueActions: IssuePostCommitAction[] = [];
       const { executeIssuePostCommitActions, issueService } = await import("./issues.js");
@@ -5156,7 +5100,7 @@ export function pipelineService(db: Db, deps: { heartbeat?: IssueAssignmentWakeu
         };
       });
       await executeIssuePostCommitActions(db, postCommitIssueActions);
-      const automationExecution = await executeAutomationLedger(result.ledger.id, input.actor);
+      const automationExecution = await executeAutomationLedger(result.ledger.id, input.actor, input.privacyActor);
       const {
         targetStageRow: _targetStageRow,
         automationTarget: _automationTarget,
@@ -5176,6 +5120,7 @@ export function pipelineService(db: Db, deps: { heartbeat?: IssueAssignmentWakeu
       companyId: string;
       caseId: string;
       actor: PipelineActor;
+      privacyActor?: AuthorizationActor;
     }) {
       const ledger = await db.transaction(async (tx) => {
         const detail = await getCaseWithStageForUpdateOrThrow(tx, input.companyId, input.caseId);
@@ -5219,7 +5164,7 @@ export function pipelineService(db: Db, deps: { heartbeat?: IssueAssignmentWakeu
         }
         return nextLedger;
       });
-      const automationExecution = await executeAutomationLedger(ledger.id, input.actor);
+      const automationExecution = await executeAutomationLedger(ledger.id, input.actor, input.privacyActor);
       return { automationLedger: ledger, automationExecution };
     },
 
@@ -5499,19 +5444,20 @@ export function pipelineService(db: Db, deps: { heartbeat?: IssueAssignmentWakeu
     async listCaseEventsPage(
       companyId: string,
       caseId: string,
-      options?: { limit?: number; offset?: number; order?: "asc" | "desc" },
+      options?: { limit?: number; offset?: number; order?: "asc" | "desc"; eventIds?: string[]; queryDb?: Db },
     ) {
+      const queryDb = options?.queryDb ?? db;
       const limit = Math.min(
         PIPELINE_CASE_EVENTS_MAX_LIMIT,
         Math.max(1, Math.floor(options?.limit ?? PIPELINE_CASE_EVENTS_DEFAULT_LIMIT)),
       );
       const offset = Math.max(0, Math.floor(options?.offset ?? 0));
       const order = options?.order ?? "asc";
-      const detail = await getCaseWithStageOrThrow(db, companyId, caseId);
+      const detail = await getCaseWithStageOrThrow(queryDb, companyId, caseId);
       const fromStage = alias(pipelineStages, "from_stage");
       const toStage = alias(pipelineStages, "to_stage");
       const actorAgent = alias(agents, "actor_agent");
-      const rows = await db
+      const rows = await queryDb
         .select({
           event: pipelineCaseEvents,
           fromStage: { id: fromStage.id, key: fromStage.key, name: fromStage.name, kind: fromStage.kind },
@@ -5522,7 +5468,8 @@ export function pipelineService(db: Db, deps: { heartbeat?: IssueAssignmentWakeu
         .leftJoin(fromStage, eq(pipelineCaseEvents.fromStageId, fromStage.id))
         .leftJoin(toStage, eq(pipelineCaseEvents.toStageId, toStage.id))
         .leftJoin(actorAgent, eq(pipelineCaseEvents.actorAgentId, actorAgent.id))
-        .where(and(eq(pipelineCaseEvents.companyId, companyId), eq(pipelineCaseEvents.caseId, caseId)))
+        .where(and(eq(pipelineCaseEvents.companyId, companyId), eq(pipelineCaseEvents.caseId, caseId),
+          options?.eventIds ? inArray(pipelineCaseEvents.id, options.eventIds) : undefined))
         .orderBy(order === "desc" ? desc(pipelineCaseEvents.createdAt) : asc(pipelineCaseEvents.createdAt))
         .limit(limit + 1)
         .offset(offset);
@@ -5547,25 +5494,25 @@ export function pipelineService(db: Db, deps: { heartbeat?: IssueAssignmentWakeu
         .filter((id): id is string => Boolean(id)))];
       const [routineRows, workflowRows, issueRowsForEvents, pipelineStageRows] = await Promise.all([
         routineIds.length > 0
-          ? db
+          ? queryDb
             .select({ id: routines.id, title: routines.title })
             .from(routines)
             .where(and(eq(routines.companyId, companyId), inArray(routines.id, routineIds)))
           : Promise.resolve([]),
         workflowIds.length > 0
-          ? db
+          ? queryDb
             .select({ id: workflows.id, name: workflows.name })
             .from(workflows)
             .where(and(eq(workflows.companyId, companyId), inArray(workflows.id, workflowIds)))
           : Promise.resolve([]),
         issueIds.length > 0
-          ? db
+          ? queryDb
             .select({ id: issues.id, identifier: issues.identifier, title: issues.title, status: issues.status })
             .from(issues)
             .where(and(eq(issues.companyId, companyId), inArray(issues.id, issueIds)))
           : Promise.resolve([]),
         automationEvents.length > 0
-          ? db
+          ? queryDb
             .select()
             .from(pipelineStages)
             .where(eq(pipelineStages.pipelineId, detail.case.pipelineId))

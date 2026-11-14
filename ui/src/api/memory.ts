@@ -33,10 +33,10 @@ export const createMemoryApi = (api: typeof defaultApi = defaultApi) => ({
   getRecord: (companyId: string, recordId: string) =>
     api.get<MemoryRecordDetail>(`/companies/${companyId}/memory/records/${recordId}`),
 
-  accept: (companyId: string, recordId: string, reason?: string) =>
+  accept: (companyId: string, recordId: string, reason?: string, publishPrivateShare?: true) =>
     api.post<MemoryRecordDetail>(
       `/companies/${companyId}/memory/records/${recordId}/accept`,
-      reason?.trim() ? { reason: reason.trim() } : {},
+      { ...(reason?.trim() ? { reason: reason.trim() } : {}), ...(publishPrivateShare ? { publishPrivateShare } : {}) },
     ),
 
   reject: (companyId: string, recordId: string, reason: string) =>

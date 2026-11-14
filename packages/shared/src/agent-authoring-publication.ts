@@ -35,6 +35,7 @@ export const agentDraftPublicationReviewSchema = z.strictObject({
     name: z.string().min(1).max(200), bodyHash: digest })).max(32).optional(),
   maximumPerModelCallMinor: z.number().int().nonnegative().nullable(), currency: z.literal("USD"),
   provider: z.literal("anthropic").nullable(), model: z.string().min(1).max(200).nullable(),
+  modelMigration: z.strictObject({ required: z.boolean(), action: z.enum(["none", "migration", "rollback"]), stage: z.literal("single_agent") }),
   runtimeBindingId: z.uuid().nullable(), reviewHash: digest,
   modelCalled: z.literal(false), authorityGranted: z.literal(false), executionStarted: z.literal(false),
 }).superRefine((value, context) => {
@@ -45,6 +46,7 @@ export const agentDraftPublicationReceiptSchema = z.strictObject({
   companyId: z.uuid(), draftId: z.uuid(), requestId: z.uuid(), agentId: z.uuid(), revisionId: z.uuid(),
   publishedVersion: z.number().int().positive(), publishedAt: z.iso.datetime(), activatedAtPublication: z.boolean(),
   publishedContent: agentAuthoringContentSchema,
+  modelMigration: z.strictObject({ required: z.boolean(), action: z.enum(["none", "migration", "rollback"]), stage: z.literal("single_agent") }),
   packageInstallation: agentPublicationPackageSchema.nullable().optional(),
   authorityGranted: z.literal(false), executionStarted: z.literal(false),
 });

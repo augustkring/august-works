@@ -1,0 +1,43 @@
+{
+  "cacheAdvice": [
+    {
+      "elapsedSeconds": 4.047852874995442,
+      "filesAdvised": 620081,
+      "memoryAfter": 6083395584,
+      "contentChanged": false
+    }
+  ],
+  "steps": [
+    {
+      "command": [
+        "node",
+        "--test",
+        "scripts/__tests__/run-vitest-stable-shard.test.mjs"
+      ],
+      "exit": 0,
+      "seconds": 25.585120158997597,
+      "peakGroupRssBytes": 119451648,
+      "stopped": null
+    },
+    {
+      "command": [
+        "node",
+        "node_modules/vitest/vitest.mjs",
+        "run",
+        "--config",
+        "packages/paperclip-runner/vitest.config.ts",
+        "--root",
+        "packages/paperclip-runner",
+        "--maxWorkers=1",
+        "src/tools/capability-semantic-tools.test.ts",
+        "src/catalog/protocol-action-contracts.test.ts"
+      ],
+      "exit": 1,
+      "seconds": 0.4581773210084066,
+      "peakGroupRssBytes": 79740928,
+      "stopped": null
+    }
+  ],
+  "memoryBefore": "low 0\nhigh 0\nmax 0\noom 0\noom_kill 0\noom_group_kill 0\n",
+  "memoryAfter": "low 0\nhigh 0\nmax 0\noom 0\noom_kill 0\noom_group_kill 0\n"
+}

@@ -1,5 +1,5 @@
-import type { AgentAdapterType, JoinRequest, PermissionKey } from "@paperclipai/shared";
-import { api } from "./client";
+import type { AgentAdapterType, JoinRequest, PermissionKey, HumanWorkflowCoverage, CreateHumanWorkflowCoverage, ArchiveCompanyMemberResponse as SharedArchiveCompanyMemberResponse, SecuritySuspendCompanyMember, SecuritySuspendCompanyMemberResponse } from "@paperclipai/shared";
+import { api, detachInflightGet, type RequestOptions } from "./client";
 
 export type HumanCompanyRole = "owner" | "admin" | "operator" | "viewer";
 
@@ -73,6 +73,8 @@ type BoardClaimStatus = {
 };
 
 type CliAuthChallengeStatus = {
+  keyName?: string;
+  keyExpiresAt?: string | null;
   id: string;
   status: "pending" | "approved" | "cancelled" | "expired";
   command: string;
@@ -131,9 +133,8 @@ export type CompanyMember = {
   };
 };
 
-export type ArchiveCompanyMemberResponse = {
+export type ArchiveCompanyMemberResponse = Omit<SharedArchiveCompanyMemberResponse, "member"> & {
   member: CompanyMember;
-  reassignedIssueCount: number;
 };
 
 export type CompanyMembersResponse = {
@@ -154,6 +155,19 @@ export type CompanyUserDirectoryEntry = {
 
 export type CompanyUserDirectoryResponse = {
   users: CompanyUserDirectoryEntry[];
+};
+
+export type MemberContinuityPreflight = {
+  generatedAt: string;
+  freshness: "current" | "unknown";
+  coverage: "currently_authorized_subset";
+  items: Array<{
+    kind: string;
+    classification: "MUST_REASSIGN" | "CAN_FALL_BACK_TO_AUTHORIZED_GROUP" | "CAN_BE_UNOWNED_TEMPORARILY" | "MUST_REVOKE";
+    count: number;
+    sourceVersion: string;
+    freshness: "current";
+  }>;
 };
 
 export type CompanyInviteRecord = {
@@ -318,8 +332,49 @@ export const accessApi = {
   listMembers: (companyId: string) =>
     api.get<CompanyMembersResponse>(`/companies/${companyId}/members`),
 
+  listWorkflowCoverages: (companyId: string, expectedUserId: string, expectedSessionId: string, options?: RequestOptions) => {
+    const path = `/companies/${companyId}/workflow-coverages`;
+    // GET coalescing is keyed by path. Detach before reading private data so a
+    // request issued under another Human session cannot supply this response.
+    detachInflightGet(path);
+    return api.get<{ coverages: HumanWorkflowCoverage[] }>(path, {
+      ...options,
+      cache: "no-store",
+      headers: {
+        ...(options?.headers ?? {}),
+        "X-Blentera-Expected-User": expectedUserId,
+        "X-Blentera-Expected-Session": expectedSessionId,
+      },
+    });
+  },
+
+  createWorkflowCoverage: (companyId: string, input: CreateHumanWorkflowCoverage, expectedUserId: string, expectedSessionId: string) =>
+    api.post<HumanWorkflowCoverage>(`/companies/${companyId}/workflow-coverages`, input, {
+      headers: { "X-Blentera-Expected-User": expectedUserId, "X-Blentera-Expected-Session": expectedSessionId },
+    }),
+
+  revokeWorkflowCoverage: (companyId: string, coverageId: string, expectedUserId: string, expectedSessionId: string) =>
+    api.delete<HumanWorkflowCoverage>(`/companies/${companyId}/workflow-coverages/${coverageId}`, undefined, {
+      headers: { "X-Blentera-Expected-User": expectedUserId, "X-Blentera-Expected-Session": expectedSessionId },
+    }),
+
   listUserDirectory: (companyId: string) =>
     api.get<CompanyUserDirectoryResponse>(`/companies/${companyId}/user-directory`),
+
+  getMemberResponsibilityPreflight: (companyId: string, memberId: string, expectedUserId: string,
+    expectedSessionId: string, options?: RequestOptions) => {
+    const path = `/companies/${companyId}/members/${memberId}/responsibility-preflight`;
+    detachInflightGet(path);
+    return api.get<MemberContinuityPreflight>(path, {
+      ...options,
+      cache: "no-store",
+      headers: {
+        ...(options?.headers ?? {}),
+        "X-Blentera-Expected-User": expectedUserId,
+        "X-Blentera-Expected-Session": expectedSessionId,
+      },
+    });
+  },
 
   updateMember: (
     companyId: string,
@@ -362,8 +417,21 @@ export const accessApi = {
         assigneeAgentId?: string | null;
         assigneeUserId?: string | null;
       } | null;
+      routineResponsibleUserId?: string | null;
     } = {},
   ) => api.post<ArchiveCompanyMemberResponse>(`/companies/${companyId}/members/${memberId}/archive`, input),
+
+  securitySuspendMember: (
+    companyId: string,
+    memberId: string,
+    input: SecuritySuspendCompanyMember,
+    expectedUserId: string,
+    expectedSessionId: string,
+  ) => api.post<SecuritySuspendCompanyMemberResponse>(
+    `/companies/${companyId}/members/${memberId}/security-suspend`,
+    input,
+    { headers: { "X-Blentera-Expected-User": expectedUserId, "X-Blentera-Expected-Session": expectedSessionId } },
+  ),
 
   approveJoinRequest: (companyId: string, requestId: string) =>
     api.post<JoinRequest>(`/companies/${companyId}/join-requests/${requestId}/approve`, {}),
@@ -386,13 +454,22 @@ export const accessApi = {
   claimBootstrapAdmin: () =>
     api.post<{ claimed: true; userId: string }>("/bootstrap/claim", {}),
 
-  getCliAuthChallenge: (id: string, token: string) =>
-    api.get<CliAuthChallengeStatus>(`/cli-auth/challenges/${id}?token=${encodeURIComponent(token)}`),
+  getCliAuthChallenge: (id: string, token: string) => {
+    const path = `/cli-auth/challenges/${id}?token=${encodeURIComponent(token)}`;
+    // React Query deduplicates within the current account/session. A new key
+    // must not join a request issued under a previous cookie identity.
+    detachInflightGet(path);
+    return api.get<CliAuthChallengeStatus>(path, { cache: "no-store" });
+  },
 
-  approveCliAuthChallenge: (id: string, token: string) =>
+  approveCliAuthChallenge: (id: string, token: string, expectedUserId?: string, expectedSessionId?: string) =>
     api.post<{ approved: boolean; status: string; userId: string; keyId: string | null; expiresAt: string }>(
       `/cli-auth/challenges/${id}/approve`,
       { token },
+      { headers: {
+        ...(expectedUserId ? { "X-Blentera-Expected-User": expectedUserId } : {}),
+        ...(expectedSessionId ? { "X-Blentera-Expected-Session": expectedSessionId } : {}),
+      } },
     ),
 
   cancelCliAuthChallenge: (id: string, token: string) =>

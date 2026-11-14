@@ -1,0 +1,14 @@
+{
+  "server/src/services/native-runtime/child-review-outcomes.ts": "053648d4dc685a9ea98eac20e8311356bc590ef38474b36632913c0b2432ca6a",
+  "server/src/services/native-runtime/child-review-outcomes-privacy.integration.test.ts": "77d65fb5a74b93318e632dfc0567ddbb27dbac611ead237666acc039c19dd042",
+  "server/src/services/native-runtime/paperclip-runner-tool-authority.ts": "a06aa754348ba6b7cb37600a0ffbba9206d406fb9aa1d2d989adad0d73fc2d51",
+  "server/src/services/execution-continuation.ts": "678f0d78f1994ea946834474b22bfe778170d1c508ecfa693b890e56f02de8d8",
+  "server/src/services/execution-continuation.test.ts": "5c882bba3eaaaf3d3101e3a37eef99bc97023c015c191031415c58d55de77dfa",
+  "server/src/services/native-runtime/paperclip-runner-tool-authority.test.ts": "aa6d21feddc6e5ded3d614f21d8771b205b22d934f64e8a2db8814b6baceaa28",
+  "server/src/services/explicit-native-continuation.test.ts": "ef26459b3d3ed6cc62a9df96a3502fd022d5e0ae2d4a947bedcc096fd1cde802",
+  "server/src/services/native-runtime/native-safe-replacement.test.ts": "3882318956966a6cbba719024cc26d2e96b48a5d2f416c04d761d6b9f9250258",
+  "server/src/services/native-runtime/paperclip-control-plane-port.test.ts": "b39323df3791e462b8725f1e4b07b4b6c16207f94e90e42b2bf0b4d8a70aa423",
+  "server/src/services/authorization.ts": "3e2b0bbf78061ddb5fe97007d3fb756b5f3b92fba225cb78ff5c0ae4fdabb91d",
+  "server/src/services/issue-thread-interactions.ts": "f8148495a9a0ff284e76ec27a475bc293b831f9b4c98297c9690f6d6768e0a7c",
+  "pnpm-lock.yaml": "8a36edd8ee2893e7b29b4f99d4c590611aac1c6c133db45169dd8bf89fc737d9"
+}

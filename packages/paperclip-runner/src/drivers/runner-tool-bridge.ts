@@ -6,7 +6,8 @@ import {
   type ServerResponse,
 } from "node:http";
 
-import { Ajv2020, type ValidateFunction } from "ajv/dist/2020.js";
+import type { ValidateFunction } from "ajv/dist/2020.js";
+import { createToolInputSchemaCompiler } from "./tool-input-schema-validator.js";
 
 import {
   PRP_BLOCK_RESULT_PROVIDER_INPUT_SCHEMA,
@@ -389,9 +390,9 @@ function normalizeTools(
 function compileValidators(
   tools: readonly RunnerToolDefinition[],
 ): Map<string, ValidateFunction> {
-  const ajv = new Ajv2020({ allErrors: true, strict: false });
+  const compile = createToolInputSchemaCompiler();
   return new Map(
-    tools.map((tool) => [tool.name, ajv.compile(tool.inputSchema)]),
+    tools.map((tool) => [tool.name, compile(tool.inputSchema)]),
   );
 }
 

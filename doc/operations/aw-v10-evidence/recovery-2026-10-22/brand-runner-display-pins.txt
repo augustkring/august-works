@@ -1,0 +1,2 @@
+8145546bf4bea0fe041f8c192f86df1ef934129ed24d8b58cc9e4321dec30df8  ui/src/adapters/adapter-display-registry.ts
+1bc45b05ebb37996a0da4a8a98d996008a33638a54e6ef891b21f4e0d71622f5  packages/adapter-utils/src/paperclip-runner-permissions.ts

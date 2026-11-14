@@ -1,0 +1,14 @@
+{
+  "files": {
+    "package.json": "631b595ef1b57251c2d6f8218ad1a367705072b3d2ec14a6f2010fc9abb9b6f7",
+    "pnpm-lock.yaml": "b70210ed554c63d425e34e4c075f0984309f74f0836d82d85f714b1c4deeb5b2",
+    "server/package.json": "08b8faa2b2b9c69530928aa0b283cf9e53e70e27a692a8cb9fdbee6dec3fb0f4",
+    "server/src/__tests__/durable-chat-wakeup.test.ts": "c3f83513003484e741929467d902bb2fe861049c5b41012cf7c9d4be8efe5854",
+    "server/src/__tests__/helpers/managed-native-conversation-sandbox-host.ts": "c277c43df02b292d57cedc672f82d7d1baafc43086ccf4f43c77d41df78a53a4",
+    "server/src/services/native-runtime/native-workspace-sync.ts": "c2bb8fe997f47bfaca3ed5c18bc4f98811b1013658c8748daca7a12e175de27e",
+    "server/src/services/runtime/control.ts": "2f2d476d103a21129fd6fda9ba427d0a6cefa08637cd083aa0f133c0b869d1f7",
+    "server/src/services/runtime/native-runtime-context-preparation.test.ts": "0298a815c7b5dbc39a6809f437b0acedb021ed43a710d1582d22e1d97907f87b",
+    "server/tsconfig.json": "41b38f5d62b35e02f2b15c294baf39d196a8e6af125bd4a4d7b5e30d9334d150"
+  },
+  "allPinsUnchanged": true
+}

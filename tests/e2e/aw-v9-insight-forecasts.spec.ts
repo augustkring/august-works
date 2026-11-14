@@ -1,3 +1,5 @@
+import { registerEnglishAccountLocaleIsolation } from "./account-locale-isolation";
+registerEnglishAccountLocaleIsolation(test);
 import { createRequire } from "node:module";
 import { readFile } from "node:fs/promises";
 import { tmpdir } from "node:os";
@@ -25,16 +27,22 @@ test("Insights reads a retained Native baseline forecast without another run or 
   expect(path.resolve(config.database.embeddedPostgresDataDir)).toBe(path.join(path.dirname(configPath), "db"));
   const pid = await readFile(path.join(config.database.embeddedPostgresDataDir, "postmaster.pid"), "utf8");
   const databaseUrl = `postgres://paperclip:paperclip@127.0.0.1:${pid.split("\n")[3]}/paperclip`, db = createDb(databaseUrl);
-  const actor = { type: "board" as const, source: "local_implicit" as const };
+  const session = await json(await request.get("/api/auth/get-session"));
+  const currentUserId = session.user.id as string;
+  const actor = { type: "board" as const, source: "session" as const, userId: currentUserId,
+    sessionId: session.session.id as string, companyIds: [company.id] };
   let writes = 0; page.on("request", req => { if (req.method() !== "GET" && /\/business-forecasts/.test(req.url())) writes++; });
   try {
     await json(await request.patch("/api/instance/settings/experimental", { data: { experience_projection_v9: true, progressive_shell_v9: true,
       analytical_lineage_v8: true, business_metrics_v8: true, business_forecasting_v8: true, ai_use_cases_v7: true, governance_evidence_v7: true } }));
     const purpose = analyticalPurpose(); purpose.analyticalPurpose!.capabilities = ["metrics", "forecast"];
     const policy = await aiGovernanceService(db).obligation(actor, company.id, purpose);
-    const [project] = await db.insert(projects).values({ companyId: company.id, name: "Synthetic retained history", createdAt: new Date(Date.now() - 20 * 86400000) }).returning();
-    const history = await businessForecastHistoryFixture(db, company.id, project.id, policy.id), owner = businessForecastService(db);
-    const definition = businessForecastDefinitionSchema.parse({ name: "Recorded baseline workload estimate", businessQuestion: "What could this declared baseline estimate?", decisionUse: "Human review without changing commitments", ownerUserId: "local-board", metricId: history.metricId, metricVersionId: history.versionId,
+    const project = await json(await request.post(`/api/companies/${company.id}/projects`, {
+      data: { name: "Synthetic retained history" },
+    }));
+    await db.update(projects).set({ createdAt: new Date(Date.now() - 20 * 86400000) }).where(eq(projects.id, project.id));
+    const history = await businessForecastHistoryFixture(db, company.id, project.id, policy.id, undefined, currentUserId), owner = businessForecastService(db);
+    const definition = businessForecastDefinitionSchema.parse({ name: "Recorded baseline workload estimate", businessQuestion: "What could this declared baseline estimate?", decisionUse: "Human review without changing commitments", ownerUserId: currentUserId, metricId: history.metricId, metricVersionId: history.versionId,
       scope: { type: "project", id: project.id }, frequency: "daily_utc", horizon: 1, provider: "aw_native", candidate: { kind: "naive" }, baselines: [{ kind: "naive" }], minimumHistory: 8, captureLatencySeconds: 60,
       backtest: { minimumTrainingPoints: 3, minimumOrigins: 3, gapPeriods: 1, maximumMAE: 1, minimumRelativeMAEImprovement: 0 }, knownFailureModes: ["Synthetic fixtures do not qualify production history"], sensitivity: "internal", purpose: "management_intelligence", governanceObligationRefs: [policy.id], retentionDays: 20 });
     const created = await owner.create(company.id, actor, { key: "retained_baseline", definition });
@@ -47,7 +55,12 @@ test("Insights reads a retained Native baseline forecast without another run or 
     await page.route(`**/api/companies/${company.id}/experience?*`, route => route.fulfill({ headers: { "Cache-Control": "private, no-store" }, json: {
       companyId: company.id, profile: "manager", availableProfiles: ["member", "manager", "admin"], advancedLinks: [], generatedAt: new Date().toISOString(), dependencies: [], needsYou: [], inProgress: [], done: [], watch: [],
     } }));
+    const retainedRunsRead = page.waitForResponse(response => new URL(response.url()).pathname ===
+      `/api/companies/${company.id}/business-forecasts/${published.id}/runs` && response.request().method() === "GET");
     await page.goto(`/${company.issuePrefix}/insights`); const main = page.getByRole("main");
+    const retainedResponse = await retainedRunsRead;
+    expect(retainedResponse.status()).toBe(200);
+    await retainedResponse.finished();
     await expect(main.getByRole("heading", { name: definition.name, exact: true })).toBeVisible(); await expect(main).toContainText("Estimate: 1 (objects)");
     await expect(main).toContainText("already begun when this calculation was recorded");
     await expect(main).toContainText("No prediction interval is available"); await expect(main).toContainText("does not establish future accuracy"); await expect(main).not.toContainText("PRIVATE synthetic");

@@ -3,10 +3,12 @@ import { agentService } from "../agents.js";
 import { agentAuthoringContentSchema, AUTHORED_AGENT_DEFINITION_KEY } from "@paperclipai/shared";
 import { createHash, randomUUID } from "node:crypto";
 import { afterAll, afterEach, beforeAll, describe, expect, it } from "vitest";
-import { eq } from "drizzle-orm";
+import { eq, sql } from "drizzle-orm";
 import {
   activityLog,
   agents,
+  authUsers,
+  EMBEDDED_POSTGRES_TEST_TIMEOUT_MS,
   companies,
   companyMemberships,
   createDb,
@@ -17,6 +19,7 @@ import {
   memoryBindingTargets,
   memoryEvidence,
   memoryRecords,
+  memoryJobs,
   projects,
 } from "@paperclipai/db";
 import {
@@ -25,6 +28,9 @@ import {
 } from "../../__tests__/helpers/embedded-postgres.js";
 import { instanceSettingsService } from "../instance-settings.js";
 import { memoryService } from "./memory-service.js";
+import { lockAnalyticalCompany } from "../analytical-privacy.js";
+import { lockMemoryPrivacy } from "./memory-privacy.js";
+import { publishActivity, type ActivityPublication } from "../activity-log.js";
 import { memoryPostRunExtractionService } from "./memory-post-run-extraction.js";
 
 const support = await getEmbeddedPostgresTestSupport();
@@ -51,8 +57,8 @@ describePg("Memory post-run extraction", () => {
 
   beforeAll(async () => {
     tempDb = await startEmbeddedPostgresTestDatabase("paperclip-memory-post-run-");
-    db = createDb(tempDb.connectionString);
-  }, 20_000);
+    db = createDb(tempDb.connectionString, {maxConnections:3});
+  }, EMBEDDED_POSTGRES_TEST_TIMEOUT_MS);
 
   afterEach(async () => {
     await db.delete(activityLog);
@@ -60,6 +66,7 @@ describePg("Memory post-run extraction", () => {
     await db.delete(memoryRecords);
     await db.delete(memoryBindingTargets);
     await db.delete(memoryBindings);
+    await db.delete(memoryJobs);
     await db.delete(heartbeatRuns);
     await db.delete(issues);
     await db.delete(projects);
@@ -67,11 +74,32 @@ describePg("Memory post-run extraction", () => {
     await db.delete(agents);
     await db.delete(companies);
     await db.delete(instanceSettings);
+    await db.delete(authUsers);
   });
 
   afterAll(async () => {
     await tempDb?.cleanup();
   });
+
+  // This fixture exercises extraction inside an actual leased physical
+  // transaction. The native enqueue/claim/settle owner is covered in memory-jobs.test.ts.
+  function extraction() {
+    return {extract:async(run:typeof heartbeatRuns.$inferSelect)=>{
+      const publications:ActivityPublication[]=[];
+      const result=await db.transaction(async tx=>{
+        await lockAnalyticalCompany(tx,run.companyId);await lockMemoryPrivacy(tx,run.companyId);
+        const ownerId=randomUUID();
+        const [job]=await tx.insert(memoryJobs).values({companyId:run.companyId,operationType:"capture",status:"running",jobKey:randomUUID(),
+          sourceHeartbeatRunId:run.id,executionOwnerId:ownerId,leaseExpiresAt:new Date(Date.now()+300000)}).returning();
+        const [identity]=await tx.execute<{backendPid:number;transactionId:string}>(sql`select pg_backend_pid() as "backendPid",pg_current_xact_id()::text as "transactionId"`);
+        const output=await memoryPostRunExtractionService(tx,{nativeCaptureReceipt:{jobId:job!.id,executionOwnerId:ownerId,...identity!},postCommitPublications:publications}).extract(run);
+        await tx.update(memoryJobs).set({status:"succeeded",executionOwnerId:null,leaseExpiresAt:null,finishedAt:new Date()}).where(eq(memoryJobs.id,job!.id));
+        return output;
+      });
+      publications.forEach(publishActivity);
+      return result;
+    }};
+  }
 
   async function seed(input: {
     candidates?: unknown[];
@@ -89,6 +117,7 @@ describePg("Memory post-run extraction", () => {
       requireBoardApprovalForNewAgents: false,
       defaultResponsibleUserId: userId,
     });
+    await db.insert(authUsers).values({id:userId,name:"Actual extraction Human",email:`${userId}@example.test`,createdAt:new Date(),updatedAt:new Date()});
     await db.insert(companyMemberships).values({
       companyId,
       principalType: "user",
@@ -115,6 +144,7 @@ describePg("Memory post-run extraction", () => {
     const [project] = await db.insert(projects).values({
       companyId,
       name: "Extraction Project",
+      sourceProvenanceQualified: true,
     }).returning();
     const [issue] = await db.insert(issues).values({
       companyId,
@@ -159,6 +189,8 @@ describePg("Memory post-run extraction", () => {
       companyId,
       agentId: agent!.id,
       status: input.runStatus ?? "succeeded",
+      nativeIssueId: issue!.id,
+      runtimeMode: "native",
       responsibleUserId: userId,
       startedAt: new Date(now.getTime() - 60_000),
       finishedAt: input.runStatus === "running" ? null : now,
@@ -203,13 +235,22 @@ describePg("Memory post-run extraction", () => {
       ownerUserId: seeded.userId, capabilities: [{ operation: "create_internal_draft", autonomy: "automatic" }] }), randomUUID(), "a".repeat(64));
     await agentService(db).update(seeded.agent.id, { runtimeConfig: { [AUTHORED_AGENT_DEFINITION_KEY]: definition } },
       { authoredPublication: definition, recordRevision: { id: definition.revisionId, source: "agent_authoring_publish", createdByUserId: seeded.userId } });
-    expect(await memoryPostRunExtractionService(db).extract(seeded.run)).toMatchObject({ persisted: 0, skipped: 1,
+    expect(await extraction().extract(seeded.run)).toMatchObject({ persisted: 0, skipped: 1,
       skipReasons: { authored_memory_write_denied: 1 } });
     expect(await db.select().from(memoryRecords).where(eq(memoryRecords.companyId, seeded.companyId))).toEqual([]);
   });
+  it("does not grant completed producers extraction writes without an actual native transaction receipt",async()=>{
+    const seeded=await seed();
+    const auditsBefore=await db.select().from(activityLog);
+    await expect(memoryPostRunExtractionService(db).extract(seeded.run)).rejects.toMatchObject({status:403});
+    expect(await db.select().from(memoryRecords)).toEqual([]);
+    expect(await db.select().from(memoryEvidence)).toEqual([]);
+    expect(await db.select().from(activityLog)).toEqual(auditsBefore);
+  });
+
   it("creates one evidence-backed pending candidate and replays idempotently", async () => {
     const seeded = await seed();
-    const svc = memoryPostRunExtractionService(db);
+    const svc = extraction();
 
     const first = await svc.extract(seeded.run);
     expect(first).toMatchObject({
@@ -266,7 +307,7 @@ describePg("Memory post-run extraction", () => {
 
   it("deduplicates concurrent extraction of the same run", async () => {
     const seeded = await seed();
-    const svc = memoryPostRunExtractionService(db);
+    const svc = extraction();
 
     const results = await Promise.all([
       svc.extract(seeded.run),
@@ -304,13 +345,14 @@ describePg("Memory post-run extraction", () => {
 
     const foreignScopedRun = {
       ...seeded.run,
+      nativeIssueId: foreignIssue!.id,
       contextSnapshot: {
         issueId: foreignIssue!.id,
         taskId: foreignIssue!.id,
       },
     };
 
-    const result = await memoryPostRunExtractionService(db).extract(
+    const result = await extraction().extract(
       foreignScopedRun,
     );
 
@@ -327,7 +369,7 @@ describePg("Memory post-run extraction", () => {
 
   it("treats zero candidates as a healthy no-op", async () => {
     const seeded = await seed({ candidates: [] });
-    const result = await memoryPostRunExtractionService(db).extract(seeded.run);
+    const result = await extraction().extract(seeded.run);
 
     expect(result).toMatchObject({
       proposed: 0,
@@ -343,7 +385,7 @@ describePg("Memory post-run extraction", () => {
       candidates: [{ ...BASE_CANDIDATE, content: "" }],
     });
 
-    const result = await memoryPostRunExtractionService(db).extract(seeded.run);
+    const result = await extraction().extract(seeded.run);
 
     expect(result).toMatchObject({
       proposed: 0,
@@ -373,11 +415,12 @@ describePg("Memory post-run extraction", () => {
 
   it("does not capture from failed or yielded runs", async () => {
     const failed = await seed({ runStatus: "failed" });
-    const failedResult = await memoryPostRunExtractionService(db).extract(failed.run);
+    const failedResult = await extraction().extract(failed.run);
     expect(failedResult.skipReasons).toMatchObject({ run_not_succeeded: 1 });
     expect(await db.select().from(memoryRecords)).toHaveLength(0);
 
     await db.delete(activityLog);
+    await db.delete(memoryJobs);
     await db.delete(heartbeatRuns);
     await db.delete(issues);
     await db.delete(memoryEvidence);
@@ -389,9 +432,10 @@ describePg("Memory post-run extraction", () => {
     await db.delete(agents);
     await db.delete(companies);
     await db.delete(instanceSettings);
+    await db.delete(authUsers);
 
     const yielded = await seed({ disposition: "yielded" });
-    const yieldedResult = await memoryPostRunExtractionService(db).extract(yielded.run);
+    const yieldedResult = await extraction().extract(yielded.run);
     expect(yieldedResult.skipReasons).toMatchObject({ semantic_result_yielded: 1 });
     expect(await db.select().from(memoryRecords)).toHaveLength(0);
   });
@@ -451,7 +495,7 @@ describePg("Memory post-run extraction", () => {
       .where(eq(heartbeatRuns.id, seeded.run.id))
       .then((rows) => rows[0]!);
 
-    const result = await memoryPostRunExtractionService(db).extract(refreshed);
+    const result = await extraction().extract(refreshed);
     expect(result).toMatchObject({
       proposed: 0,
       persisted: 0,
@@ -492,7 +536,7 @@ describePg("Memory post-run extraction", () => {
       { principal: { type: "user", userId: seeded.userId } },
     );
 
-    const result = await memoryPostRunExtractionService(db).extract(seeded.run);
+    const result = await extraction().extract(seeded.run);
 
     expect(result).toMatchObject({
       proposed: 2,
@@ -553,7 +597,7 @@ describePg("Memory post-run extraction", () => {
       ],
     });
 
-    const result = await memoryPostRunExtractionService(db).extract(seeded.run);
+    const result = await extraction().extract(seeded.run);
     expect(result).toMatchObject({
       proposed: 7,
       persisted: 0,
@@ -585,7 +629,7 @@ describePg("Memory post-run extraction", () => {
       }],
     });
 
-    const result = await memoryPostRunExtractionService(db).extract(seeded.run);
+    const result = await extraction().extract(seeded.run);
     expect(result).toMatchObject({
       proposed: 1,
       persisted: 0,
@@ -606,7 +650,7 @@ describePg("Memory post-run extraction", () => {
       }],
     });
 
-    const result = await memoryPostRunExtractionService(db).extract(seeded.run);
+    const result = await extraction().extract(seeded.run);
     expect(result).toMatchObject({ proposed: 1, persisted: 1, skipped: 0 });
   });
 
@@ -632,7 +676,7 @@ describePg("Memory post-run extraction", () => {
       ],
     });
 
-    const result = await memoryPostRunExtractionService(db).extract(seeded.run);
+    const result = await extraction().extract(seeded.run);
 
     expect(result).toMatchObject({
       proposed: 2,
@@ -657,7 +701,7 @@ describePg("Memory post-run extraction", () => {
       }],
     });
 
-    const result = await memoryPostRunExtractionService(db).extract(seeded.run);
+    const result = await extraction().extract(seeded.run);
 
     expect(result).toMatchObject({
       proposed: 1,
@@ -676,7 +720,7 @@ describePg("Memory post-run extraction", () => {
       ],
     });
 
-    const result = await memoryPostRunExtractionService(db).extract(seeded.run);
+    const result = await extraction().extract(seeded.run);
     expect(result).toMatchObject({
       proposed: 1,
       persisted: 0,
@@ -691,17 +735,18 @@ describePg("Memory post-run extraction", () => {
       candidates: [{ ...BASE_CANDIDATE, evidenceRefs: ["task"] }],
     });
 
-    const result = await memoryPostRunExtractionService(db).extract(seeded.run);
+    const result = await extraction().extract(seeded.run);
     expect(result).toMatchObject({ proposed: 1, persisted: 1, skipped: 0 });
   });
 
   it("stays off behind its dedicated kill switch and fails closed without a binding", async () => {
     const disabled = await seed({ enableExtraction: false });
-    const disabledResult = await memoryPostRunExtractionService(db).extract(disabled.run);
+    const disabledResult = await extraction().extract(disabled.run);
     expect(disabledResult.skipReasons).toMatchObject({ feature_disabled: 1 });
     expect(await db.select().from(memoryRecords)).toHaveLength(0);
 
     await db.delete(activityLog);
+    await db.delete(memoryJobs);
     await db.delete(heartbeatRuns);
     await db.delete(issues);
     await db.delete(memoryEvidence);
@@ -713,9 +758,10 @@ describePg("Memory post-run extraction", () => {
     await db.delete(agents);
     await db.delete(companies);
     await db.delete(instanceSettings);
+    await db.delete(authUsers);
 
     const noBinding = await seed({ createBinding: false });
-    const noBindingResult = await memoryPostRunExtractionService(db).extract(noBinding.run);
+    const noBindingResult = await extraction().extract(noBinding.run);
     expect(noBindingResult.skipReasons).toMatchObject({ binding_unavailable: 1 });
     expect(await db.select().from(memoryRecords)).toHaveLength(0);
   });

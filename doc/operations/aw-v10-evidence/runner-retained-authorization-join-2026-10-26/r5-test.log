@@ -1,0 +1,33 @@
+
+ RUN  v4.1.11 /workspace/v10-dep-qualification/packages/paperclip-runner
+
+ ❯ src/live/runnerd-codex-transport-settlement.test.ts (19 tests | 1 failed | 18 skipped) 1708ms
+   × settles only retained control authority without starting another provider turn (true/false/undefined/undefined/undefined/undefined/undefined/undefined/undefined) startup-failure-proof=undefined completed-ack='completed' retired-revocation=undefined 1707ms
+
+⎯⎯⎯⎯⎯⎯⎯ Failed Tests 1 ⎯⎯⎯⎯⎯⎯⎯
+
+ FAIL  src/live/runnerd-codex-transport-settlement.test.ts > settles only retained control authority without starting another provider turn (true/false/undefined/undefined/undefined/undefined/undefined/undefined/undefined) startup-failure-proof=undefined completed-ack='completed' retired-revocation=undefined
+AssertionError: expected false to be true // Object.is equality
+
+- Expected
++ Received
+
+- true
++ false
+
+ ❯ src/live/runnerd-codex-transport-settlement.test.ts:253:50
+    251|           if ((error as NodeJS.ErrnoException).code !== "ESRCH") throw…
+    252|         }
+    253|         await vi.waitFor(() => expect(dead(pid)).toBe(true));
+       |                                                  ^
+    254|       }
+    255|       await vi.waitFor(() => {
+
+⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯[1/1]⎯
+
+
+ Test Files  1 failed (1)
+      Tests  1 failed | 18 skipped (19)
+   Start at  10:21:47
+   Duration  2.79s (transform 783ms, setup 0ms, import 940ms, tests 1.71s, environment 0ms)
+

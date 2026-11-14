@@ -1,0 +1,9 @@
+{
+  "revision": "R115",
+  "localValidation": "PASS actual existing producer/receiver functions; wrong-root/target/limit negatives",
+  "sourceBytes": 786449,
+  "frames": 6,
+  "scope": "local producer/receiver only; no Host/model or Native9 acceptance",
+  "coherentHost68Unit": "2/2 PASS zero skips; Oxc/shared/db pass; exact source/dist/tsbuildinfo restore",
+  "isolatedFirstUnit": "import-failed due missing required paid guard; no tests ran; restore cleanly; preserved without pass claim"
+}

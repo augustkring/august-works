@@ -1,11 +1,13 @@
 import { randomUUID } from "node:crypto";
 import express from "express";
 import request from "supertest";
-import { eq } from "drizzle-orm";
+import { and, eq } from "drizzle-orm";
 import { afterAll, afterEach, beforeAll, describe, expect, it } from "vitest";
 import {
   agents,
+  authUsers,
   companies,
+  companyMemberships,
   createDb,
   heartbeatRuns,
   issueRelations,
@@ -55,8 +57,8 @@ function boardActor(company: CompanyRow): Express.Request["actor"] {
     userId: "board-user",
     companyIds: [company.id],
     memberships: [{ companyId: company.id, membershipRole: "operator", status: "active" }],
-    isInstanceAdmin: true,
-    source: "local_implicit",
+    isInstanceAdmin: false,
+    source: "cloud_tenant",
   };
 }
 
@@ -72,11 +74,35 @@ function agentActor(company: CompanyRow, agent: AgentRow, runId: string): Expres
 
 async function seedCompany(db: Db, label = "Diagnostics") {
   const nonce = randomUUID().slice(0, 8);
+  const now = new Date();
+  await db.insert(authUsers).values({
+    id: "board-user",
+    name: "Board User",
+    email: "board-user@blocker-diagnostics.test",
+    emailVerified: true,
+    createdAt: now,
+    updatedAt: now,
+  }).onConflictDoNothing();
   const [company] = await db.insert(companies).values({
     name: `${label} ${nonce}`,
     issuePrefix: `DG${nonce.slice(0, 4).toUpperCase()}`,
     defaultResponsibleUserId: "board-user",
   }).returning();
+  await db.insert(companyMemberships).values({
+    companyId: company!.id,
+    principalType: "user",
+    principalId: "board-user",
+    status: "active",
+    membershipRole: "operator",
+  });
+  const [user] = await db.select({ id: authUsers.id }).from(authUsers).where(eq(authUsers.id, "board-user"));
+  const [membership] = await db.select({ id: companyMemberships.id }).from(companyMemberships).where(and(
+    eq(companyMemberships.companyId, company!.id),
+    eq(companyMemberships.principalType, "user"),
+    eq(companyMemberships.principalId, "board-user"),
+    eq(companyMemberships.status, "active"),
+  ));
+  if (!user || !membership) throw new Error("Blocker diagnostic fixture must seed its current board member.");
   return company!;
 }
 
@@ -98,6 +124,7 @@ async function seedProject(db: Db, companyId: string, name: string) {
     companyId,
     name,
     status: "in_progress",
+    sourceProvenanceQualified: true,
   }).returning();
   return project!;
 }
@@ -198,6 +225,8 @@ describeEmbeddedPostgres("issue blocker diagnostics route", () => {
     await db.delete(issues);
     await db.delete(agents);
     await db.delete(projects);
+    await db.delete(companyMemberships);
+    await db.delete(authUsers);
     await db.delete(companies);
   });
 
@@ -223,8 +252,9 @@ describeEmbeddedPostgres("issue blocker diagnostics route", () => {
       status: "done",
     });
     await blockIssue(db, company.id, blocker.id, root.id);
+    const actor = boardActor(company);
 
-    const res = await request(createApp(db, boardActor(company)))
+    const res = await request(createApp(db, actor))
       .get(`/api/issues/${root.id}/diagnostics/blockers`);
 
     expect(res.status, JSON.stringify(res.body)).toBe(200);

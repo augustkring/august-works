@@ -1,0 +1,85 @@
+
+ RUN  v4.1.11 /workspace/v10-dep-qualification/server
+
+ ✓ src/__tests__/v7-worker-model-gateway.integration.test.ts > Native bounded worker model gateway > qualifies only the explicit private Native draft selector without decrypting or spending 2351ms
+ ✓ src/__tests__/v7-worker-model-gateway.integration.test.ts > Native bounded worker model gateway > rejects native draft qualification after current configuration drift 1753ms
+ ✓ src/__tests__/v7-worker-model-gateway.integration.test.ts > Native bounded worker model gateway > rejects native draft qualification after current runtime_binding drift 1775ms
+ ✓ src/__tests__/v7-worker-model-gateway.integration.test.ts > Native bounded worker model gateway > rejects native draft qualification after current membership drift 2018ms
+ ✓ src/__tests__/v7-worker-model-gateway.integration.test.ts > Native bounded worker model gateway > rejects native draft qualification after current grant drift 1909ms
+ ✓ src/__tests__/v7-worker-model-gateway.integration.test.ts > Native bounded worker model gateway > rejects native draft qualification after current price drift 1866ms
+ ✓ src/__tests__/v7-worker-model-gateway.integration.test.ts > Native bounded worker model gateway > refuses plan start when the actual one-call draft cannot fit remaining budgets: {"maxModelCostMinor":2,"maxToolActions":2} 3142ms
+ ✓ src/__tests__/v7-worker-model-gateway.integration.test.ts > Native bounded worker model gateway > refuses plan start when the actual one-call draft cannot fit remaining budgets: {"maxModelCostMinor":6,"maxToolActions":1} 3047ms
+ ✓ src/__tests__/v7-worker-model-gateway.integration.test.ts > Native bounded worker model gateway > forces the real heartbeat through native admission and the budget gateway, saves one draft and retains human review 16301ms
+[23:29:35] [31mERROR[39m: [36mheartbeat execution setup failed[39m [90m{"runId":"b2729551-222b-4669-b994-ceeef1d56f63","failureCode":"setup_failed"}[39m
+ ✓ src/__tests__/v7-worker-model-gateway.integration.test.ts > Native bounded worker model gateway > rejects actual Native admission after a private grant is revoked, before a worker attempt or model dispatch 5476ms
+[23:29:48] [33mWARN[39m: [36mnative result could not be marked workspace_failed; the reconciliation loop will retry persisted results[39m [90m{"runId":"3da4e075-de64-4a56-89a1-107d1e289f20"}[39m
+    err: {
+      "type": "Error",
+      "location": {
+        "line": 204,
+        "column": 39
+      }
+    }
+[23:29:48] [31mERROR[39m: [36mheartbeat execution failed[39m [90m{"runId":"3da4e075-de64-4a56-89a1-107d1e289f20","failureCode":"native_provider_terminal_failed"}[39m
+ ✓ src/__tests__/v7-worker-model-gateway.integration.test.ts > Native bounded worker model gateway > withholds draft publication after human Pause during the actual heartbeat model call and retains its reservation 13296ms
+ ✓ src/__tests__/v7-worker-model-gateway.integration.test.ts > Native bounded worker model gateway > reviewed proposal: saves bounded data and requests Human approval before any backlog task exists 10340ms
+ ✓ src/__tests__/v7-worker-model-gateway.integration.test.ts > Native bounded worker model gateway > reviewed proposal: explicit absence saves a draft without requesting task approval 7156ms
+ ✓ src/__tests__/v7-worker-model-gateway.integration.test.ts > Native bounded worker model gateway > reviewed proposal: erased run Source prevents Human task creation and rolls back the verdict 9093ms
+ ✓ src/__tests__/v7-worker-model-gateway.integration.test.ts > Native bounded worker model gateway > reviewed proposal: current Human membership withdrawal prevents separate task creation 8969ms
+ ✓ src/__tests__/v7-worker-model-gateway.integration.test.ts > Native bounded worker model gateway > reviewed proposal: an unverified Human cannot approve a separate task 9954ms
+ ✓ src/__tests__/v7-worker-model-gateway.integration.test.ts > Native bounded worker model gateway > reviewed proposal: refuses an insufficient retained tool budget before any model dispatch 1618ms
+ ✓ src/__tests__/v7-worker-model-gateway.integration.test.ts > Native bounded worker model gateway > reviewed proposal: refuses model-selected assignees before saving output or an interaction 6460ms
+ ✓ src/__tests__/v7-worker-model-gateway.integration.test.ts > Native bounded worker model gateway > reviewed proposal: withdraws publication when the Original Agent version changes during inference 5290ms
+ ✓ src/__tests__/v7-worker-model-gateway.integration.test.ts > Native bounded worker model gateway > runs the real one-call Native draft backend, saves its declared Task output and proposes only review 7446ms
+ ✓ src/__tests__/v7-worker-model-gateway.integration.test.ts > Native bounded worker model gateway > rejects changed draft session and undeclared output bindings before a tool or model dispatch 1793ms
+ ✓ src/__tests__/v7-worker-model-gateway.integration.test.ts > Native bounded worker model gateway > cannot resume, replace, open another session or silently repeat a completed draft model call 7530ms
+ ✓ src/__tests__/v7-worker-model-gateway.integration.test.ts > Native bounded worker model gateway > refuses continuation and plan turns before spending for a draft 3468ms
+ ✓ src/__tests__/v7-worker-model-gateway.integration.test.ts > Native bounded worker model gateway > withholds draft output on ambiguous provider failure and emits only a fixed Native error 5300ms
+ ✓ src/__tests__/v7-worker-model-gateway.integration.test.ts > Native bounded worker model gateway > fences an empty provider draft while retaining the completed financial receipt 5375ms
+ ✓ src/__tests__/v7-worker-model-gateway.integration.test.ts > Native bounded worker model gateway > revokes a pending Native draft synchronously, settles iterators and retains the ambiguous debit without writing output 5164ms
+ ✓ src/__tests__/v7-worker-model-gateway.integration.test.ts > Native bounded worker model gateway > retains the model debit and fences if authority changes before a canonical draft can be returned 5045ms
+ ✓ src/__tests__/v7-worker-model-gateway.integration.test.ts > Native bounded worker model gateway > charges assigned-tool catalog search and keeps actual MCP invocation charging at its existing gateway 4327ms
+ ✓ src/__tests__/v7-worker-model-gateway.integration.test.ts > Native bounded worker model gateway > shares one tool ceiling across both Native protocol authority paths 4225ms
+ ✓ src/__tests__/v7-worker-model-gateway.integration.test.ts > Native bounded worker model gateway > charges actual Native Task read/write dispatch before effect and stops at the shared tool ceiling 5214ms
+ ✓ src/__tests__/v7-worker-model-gateway.integration.test.ts > Native bounded worker model gateway > deduplicates concurrent Native protocol calls and refuses changed or completed dispatch identities 3593ms
+ ✓ src/__tests__/v7-worker-model-gateway.integration.test.ts > Native bounded worker model gateway > keeps unknown/material Native API paths and undeclared document keys outside the draft qualification 2276ms
+ ✓ src/__tests__/v7-worker-model-gateway.integration.test.ts > Native bounded worker model gateway > fences Native Task tools before dispatch after pause changes 1780ms
+ ✓ src/__tests__/v7-worker-model-gateway.integration.test.ts > Native bounded worker model gateway > fences Native Task tools before dispatch after membership changes 1833ms
+ ✓ src/__tests__/v7-worker-model-gateway.integration.test.ts > Native bounded worker model gateway > fences Native Task tools before dispatch after stop changes 1787ms
+ ✓ src/__tests__/v7-worker-model-gateway.integration.test.ts > Native bounded worker model gateway > fences Native Task tools before dispatch after flag changes 1828ms
+ ✓ src/__tests__/v7-worker-model-gateway.integration.test.ts > Native bounded worker model gateway > fences Native Task tools before dispatch after identity changes 1785ms
+ ✓ src/__tests__/v7-worker-model-gateway.integration.test.ts > Native bounded worker model gateway > fences Native Task tools before dispatch after company changes 2001ms
+ ✓ src/__tests__/v7-worker-model-gateway.integration.test.ts > Native bounded worker model gateway > fences Native Task tools before dispatch after attempt changes 2599ms
+ ✓ src/__tests__/v7-worker-model-gateway.integration.test.ts > Native bounded worker model gateway > retains a Native tool debit and does not resend an ambiguous side effect 2672ms
+ ✓ src/__tests__/v7-worker-model-gateway.integration.test.ts > Native bounded worker model gateway > limits plan-created Tasks to C0 backlog drafts without delegation 9171ms
+ ✓ src/__tests__/v7-worker-model-gateway.integration.test.ts > Native bounded worker model gateway > withholds Native read output after membership changes during dispatch without retaining source bodies 2381ms
+ ✓ src/__tests__/v7-worker-model-gateway.integration.test.ts > Native bounded worker model gateway > reserves before actual transport, keeps the encrypted key private and leaves completion to Native verification 5083ms
+ ✓ src/__tests__/v7-worker-model-gateway.integration.test.ts > Native bounded worker model gateway > permits one durable dispatch winner under concurrent duplicate calls 4604ms
+ ✓ src/__tests__/v7-worker-model-gateway.integration.test.ts > Native bounded worker model gateway > refuses cost overrun before any further model request 7152ms
+ ✓ src/__tests__/v7-worker-model-gateway.integration.test.ts > Native bounded worker model gateway > blocks membership changes before spend 1701ms
+ ✓ src/__tests__/v7-worker-model-gateway.integration.test.ts > Native bounded worker model gateway > blocks grant changes before spend 2007ms
+ ✓ src/__tests__/v7-worker-model-gateway.integration.test.ts > Native bounded worker model gateway > blocks assignment changes before spend 2390ms
+ ✓ src/__tests__/v7-worker-model-gateway.integration.test.ts > Native bounded worker model gateway > blocks Stop changes before spend 2399ms
+ ✓ src/__tests__/v7-worker-model-gateway.integration.test.ts > Native bounded worker model gateway > blocks flag changes before spend 2072ms
+ ✓ src/__tests__/v7-worker-model-gateway.integration.test.ts > Native bounded worker model gateway > blocks plan version changes before spend 2003ms
+ ✓ src/__tests__/v7-worker-model-gateway.integration.test.ts > Native bounded worker model gateway > blocks identity changes before spend 1893ms
+ ✓ src/__tests__/v7-worker-model-gateway.integration.test.ts > Native bounded worker model gateway > blocks company changes before spend 1836ms
+ ✓ src/__tests__/v7-worker-model-gateway.integration.test.ts > Native bounded worker model gateway > settles known usage without disclosure and requests Native Stop on membership during inference 3799ms
+ ✓ src/__tests__/v7-worker-model-gateway.integration.test.ts > Native bounded worker model gateway > settles known usage without disclosure and requests Native Stop on grant during inference 3875ms
+ ✓ src/__tests__/v7-worker-model-gateway.integration.test.ts > Native bounded worker model gateway > settles known usage without disclosure and requests Native Stop on assignment during inference 3495ms
+ ✓ src/__tests__/v7-worker-model-gateway.integration.test.ts > Native bounded worker model gateway > settles known usage without disclosure and requests Native Stop on Stop during inference 4117ms
+ ✓ src/__tests__/v7-worker-model-gateway.integration.test.ts > Native bounded worker model gateway > settles known usage without disclosure and requests Native Stop on flag during inference 3661ms
+ ✓ src/__tests__/v7-worker-model-gateway.integration.test.ts > Native bounded worker model gateway > settles known usage without disclosure and requests Native Stop on identity during inference 3696ms
+ ✓ src/__tests__/v7-worker-model-gateway.integration.test.ts > Native bounded worker model gateway > settles known usage without disclosure and requests Native Stop on company during inference 3476ms
+ ✓ src/__tests__/v7-worker-model-gateway.integration.test.ts > Native bounded worker model gateway > settles known usage without disclosure and requests Native Stop on Task source during inference 4024ms
+ ✓ src/__tests__/v7-worker-model-gateway.integration.test.ts > Native bounded worker model gateway > rejects qualified token overflow and keeps the full conservative charge 3701ms
+ ✓ src/__tests__/v7-worker-model-gateway.integration.test.ts > Native bounded worker model gateway > binds company, run, attempt, manifest and current source instead of accepting caller prices or destinations 2428ms
+ ✓ src/__tests__/v7-worker-model-gateway.integration.test.ts > Native bounded worker model gateway > uses a distinct five-minute capability and cannot widen another runtime scope 2104ms
+ ✓ src/__tests__/v7-worker-model-gateway.integration.test.ts > Native bounded worker model gateway > scrubs admitted source material during dispatch without releasing its financial debit or replaying the model call 3685ms
+ ✓ src/__tests__/v7-worker-model-gateway.integration.test.ts > Native bounded worker model gateway > mounts only the scoped runtime transport, rejects browser and ordinary credentials, and returns no provider key 4169ms
+
+ Test Files  1 passed (1)
+      Tests  66 passed (66)
+   Start at  23:28:37
+   Duration  298.54s (transform 10.59s, setup 92ms, import 14.76s, tests 283.56s, environment 0ms)
+

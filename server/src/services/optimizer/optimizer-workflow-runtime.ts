@@ -25,21 +25,23 @@ export async function executeOptimizedWorkflowTransform(db: Db, run: typeof work
   if (run.source === "test") throw conflict("Internal workflow tests cannot execute production optimization bindings", {
     code: "workflow_test_not_production_evidence",
   });
+  let trustedResult: Promise<unknown> | undefined;
+  const executeTrusted = () => trustedResult ??= Promise.resolve().then(trusted);
   const [binding] = await db.select({ id: workflowOptimizerEvaluations.id, artifactVersionId: workflowOptimizerEvaluations.artifactVersionId, artifactId: workflowOptimizerEvaluations.artifactId,
     status: workflowOptimizerEvaluations.status, canaryTrafficPercent: workflowOptimizerEvaluations.canaryTrafficPercent,
     knownInputShapes: workflowOptimizerEvaluations.knownInputShapes, memoryRecordIds: workflowOptimizerEvaluations.memoryRecordIds })
     .from(workflowOptimizerEvaluations).where(and(eq(workflowOptimizerEvaluations.companyId, run.companyId),
     eq(workflowOptimizerEvaluations.workflowRevisionId, run.workflowRevisionId), eq(workflowOptimizerEvaluations.nodeId, nodeId),
     inArray(workflowOptimizerEvaluations.status, ["shadow", "canary", "active"]))).orderBy(desc(workflowOptimizerEvaluations.createdAt)).limit(1);
-  if (!binding) return trusted();
+  if (!binding) return executeTrusted();
   const drift = await evaluateLiveOptimizerDrift(db, run.companyId, binding.id);
-  if (drift && ["degraded", "review_required"].includes(drift.status)) return trusted();
+  if (drift && ["degraded", "review_required"].includes(drift.status)) return executeTrusted();
   const flags = await instanceSettingsService(db).getExperimental();
-  if (!flags.enableAutomationArtifactsV1 || (binding.status === "shadow" ? !flags.enableWorkflowOptimizerShadow : !flags.enableWorkflowOptimizerPromotion)) return trusted();
+  if (!flags.enableAutomationArtifactsV1 || (binding.status === "shadow" ? !flags.enableWorkflowOptimizerShadow : !flags.enableWorkflowOptimizerPromotion)) return executeTrusted();
   const mode = binding.status as "shadow" | "canary" | "active";
   let candidateUsed = mode === "active" || (mode === "canary" && selectOptimizerCanaryRoute({ companyId: run.companyId,
     promotionKey: binding.id, routingKey: run.id, candidateTrafficPercent: binding.canaryTrafficPercent }).route === "candidate");
-  if (mode === "canary" && !candidateUsed) return trusted();
+  if (mode === "canary" && !candidateUsed) return executeTrusted();
   return db.transaction(async rawTx => {
     const tx = rawTx as unknown as Db;
     await lockAnalyticalCompany(tx, run.companyId); await lockMemoryPrivacy(tx, run.companyId);
@@ -63,7 +65,7 @@ export async function executeOptimizedWorkflowTransform(db: Db, run: typeof work
             eq(workflowOptimizerEvaluations.companyId,run.companyId),eq(workflowOptimizerEvaluations.id,binding.id),
             inArray(workflowOptimizerEvaluations.status,["shadow","canary","active"])));
         }
-        return trusted();
+        return executeTrusted();
       }
       throw error;
     }
@@ -97,7 +99,7 @@ export async function executeOptimizedWorkflowTransform(db: Db, run: typeof work
     const compiler = evaluation.compilerResult!;
     const candidate = compiler.candidate!;
     if (mode === "shadow") {
-      const trustedOutput = await trusted();
+      const trustedOutput = await executeTrusted();
       const shadow = await evaluateOptimizerShadow({ compilerResult: compiler, replayEvaluation: evaluation.replayEvaluation,
         observations: [{ id: `run:${run.id}:${nodeId}`, sourceRunId: run.id, input, trustedOutput }], executionMode: "pure" }, {
         execute: async () => ({ output: await executeCompiledOptimizerCandidate(candidate, input, codeOwner), durationMs: performance.now() - started, costEstimate: 0 }),
@@ -118,14 +120,14 @@ export async function executeOptimizedWorkflowTransform(db: Db, run: typeof work
           throw new Error("optimizer_invariant_failed");
         }
       }
-      if (mode === "canary" && !isDeepStrictEqual(output, await trusted())) throw new Error("optimizer_canary_output_mismatch");
+      if (mode === "canary" && !isDeepStrictEqual(output, await executeTrusted())) throw new Error("optimizer_canary_output_mismatch");
       passed = true;
     }
   } catch (error) {
     errorCode = error instanceof Error && error.message.startsWith("optimizer_") ? error.message : "optimizer_candidate_execution_failed";
     fallback = mode !== "shadow";
     candidateUsed = false;
-    output = await trusted();
+    output = await executeTrusted();
   }
   const durationMs = Math.max(0, Math.round(performance.now() - started));
   let publication: Awaited<ReturnType<typeof persistActivity>>["publication"] | null = null;
@@ -138,7 +140,7 @@ export async function executeOptimizedWorkflowTransform(db: Db, run: typeof work
       throw new Error("workflow_run_claim_lost");
     }
     const [current] = await tx.select().from(workflowOptimizerEvaluations).where(eq(workflowOptimizerEvaluations.id, binding.id)).for("update");
-    if (current?.status !== mode) { candidateUsed = false; output = await trusted(); return; }
+    if (current?.status !== mode) { candidateUsed = false; output = await executeTrusted(); return; }
     const [observation] = await tx.insert(workflowOptimizerObservations).values({ companyId: run.companyId,
       evaluationId: binding.id, workflowRunId: run.id, nodeId, mode, candidateUsed, passed, fallback, inputShapeHash: shapeHash,
       newInputShape, invariantFailure, shadowResult, errorCode, durationMs }).onConflictDoNothing().returning();

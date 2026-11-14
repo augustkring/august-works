@@ -3,7 +3,7 @@ import { mkdtemp, readFile } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { and, eq, sql } from "drizzle-orm";
-import { afterAll, afterEach, beforeAll, describe, expect, it } from "vitest";
+import { afterAll, afterEach, beforeAll, beforeEach, describe, expect, it, vi } from "vitest";
 import {
   agents,
   companies,
@@ -16,6 +16,15 @@ import {
   startEmbeddedPostgresTestDatabase,
 } from "./helpers/embedded-postgres.js";
 import { heartbeatService } from "../services/heartbeat.ts";
+import { installHeartbeatApiUrlFixture, seedHeartbeatResponsibleHuman } from "./helpers/heartbeat-runtime-fixtures.js";
+import { admitMockedLegacyDispatch, resetMockedLegacyDispatch } from "./helpers/mocked-legacy-paid-dispatch.js";
+
+// These lifecycle fixtures run the legacy `process` adapter as a stand-in
+// executor; no test here asserts the V10 paid-transport refusal. Only `process`
+// model dispatch is admitted (see helpers/mocked-legacy-paid-dispatch.ts); every
+// other call reaches the real guard.
+vi.mock("../services/native-runtime/paid-transport-admission.js", async (importOriginal) =>
+  (await import("./helpers/mocked-legacy-paid-dispatch.js")).withMockedLegacyDispatchAdmission(await importOriginal()));
 
 const embeddedPostgresSupport = await getEmbeddedPostgresTestSupport();
 const describeEmbeddedPostgres = embeddedPostgresSupport.supported ? describe : describe.skip;
@@ -61,12 +70,16 @@ async function waitForRunLeasesToRelease(
 }
 
 describeEmbeddedPostgres("heartbeat local environment lifecycle", () => {
+  beforeEach(() => admitMockedLegacyDispatch(["process"]));
+  afterEach(() => resetMockedLegacyDispatch());
   let db!: ReturnType<typeof createDb>;
   let heartbeat!: ReturnType<typeof heartbeatService>;
   let tempDb: Awaited<ReturnType<typeof startEmbeddedPostgresTestDatabase>> | null = null;
   let previousAgentJwtSecret: string | undefined;
+  let restoreApiUrl: (() => void) | null = null;
 
   beforeAll(async () => {
+    restoreApiUrl = installHeartbeatApiUrlFixture();
     previousAgentJwtSecret = process.env.PAPERCLIP_AGENT_JWT_SECRET;
     process.env.PAPERCLIP_AGENT_JWT_SECRET = "heartbeat-local-environment-test-secret";
     tempDb = await startEmbeddedPostgresTestDatabase("heartbeat-local-environment-");
@@ -108,6 +121,7 @@ describeEmbeddedPostgres("heartbeat local environment lifecycle", () => {
     } else {
       process.env.PAPERCLIP_AGENT_JWT_SECRET = previousAgentJwtSecret;
     }
+    restoreApiUrl?.();
   });
 
   it("runs work through the default Local environment lease", async () => {
@@ -122,6 +136,7 @@ describeEmbeddedPostgres("heartbeat local environment lifecycle", () => {
       requireBoardApprovalForNewAgents: false,
       defaultResponsibleUserId: "responsible-user",
     });
+    await seedHeartbeatResponsibleHuman(db, companyId, "responsible-user", "owner");
 
     await db.insert(agents).values({
       id: agentId,
@@ -181,6 +196,7 @@ describeEmbeddedPostgres("heartbeat local environment lifecycle", () => {
       requireBoardApprovalForNewAgents: false,
       defaultResponsibleUserId: "responsible-user",
     });
+    await seedHeartbeatResponsibleHuman(db, companyId, "responsible-user", "owner");
 
     await db.insert(agents).values({
       id: agentId,

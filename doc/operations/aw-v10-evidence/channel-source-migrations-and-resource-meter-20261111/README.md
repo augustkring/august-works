@@ -1,0 +1,21 @@
+# R84 channel source identity, fixture setup and resource accounting
+
+This checkpoint repairs exact source ownership through GitHub and Telegram provider migrations, Teams route encodings, and server-published GitHub finding threads. Finding lineage uses the earliest provider-owned child-row/URL commit and exact parent scope, without waiting for a later review projection. Ordinary child-origin tasks keep their own exact-origin path. Closed historical reads use the existing server-owned retained-source option and current linked Human; default live reads still deny closed tasks. Unknown or ambiguous parent mappings fail closed.
+
+Manual Discord/Slack fixtures now establish their linked Human before original input, preserve conversation generation, and keep revocation/deletion checks. Actual Native Host fixtures pass the persisted wake comment to the existing canonical workspace owner. Both the shared connection-review fixture and governed-entry Native browser fixture perform the actual first-admin UI claim. These latter Native/browser repairs still require their new current-source CI journeys; source or compiler success is not runtime qualification. The Native and Skill settlement diagnostics select bounded earliest error/turn-failed events, hash unknown codes, unknown payload keys and messages, and emit only closed allowlisted per-run facts. Unknown-key lists use canonical JSON before hashing.
+
+The existing operator report now exposes optional v1 counts of retained Tool Gateway invocation records for current report tenants in the half-open report month. Idempotent reuse and status changes do not add records. The aggregate includes every stored status, carries no arguments/results/tool/provider/person identifiers, and keeps price and provider request volume unavailable. Existing stored v1 receipts remain readable. No new invoice, usage writer, price, admission policy or fairness claim is added.
+
+Verification:
+
+- R548: 19 focused tests passed across three files, including real embedded PostgreSQL. Covers provider migrations, 12 Discord/Slack lifecycle cases, exact Teams endpoint/generation/identity denial, finding URL/root denial, closed default denial versus historical linked-Human read, cost month/company/idempotency bounds, legacy receipt replay and OpenAPI. Normal cleanup left zero owned processes. This is software evidence, not external provider/SDK/Host proof.
+- R547: three operator UI tests and token gates passed. Exact recorded hashes and times remained stable.
+- R549: recursive workspace typecheck and full build passed. Exact recorded source hashes and modification times stayed unchanged; original file modes were restored. This full-workspace run preceded the later governed browser claim and final diagnostic changes; the following server checks cover those final edits.
+- R550: server typecheck and build passed after the governed-entry browser claim.
+- R552: final server typecheck and build passed after the three diagnostic-file changes, with unchanged source pins and restored modes.
+- R553: both focused diagnostic privacy tests passed against the final canonical unknown-key hashing. No PostgreSQL or external SDK/provider process was used.
+- The capability projection refresh changes only the previously stale operation-inventory source hash. Product availability and qualification fields are unchanged.
+
+CI83 at source head 4e719f91d41a349f32b775abe832e64a69447368 confirmed the digest-pinned component browser lane succeeds and sandbox setup reaches actual tests. It also exposed the Host source-comment omission and first-admin review-fixture blocker repaired here. These old-head observations do not qualify the new checkpoint.
+
+Full pnpm test:run and current-head CI, Native Skills/channel/browser execution, legacy-positive causal equivalents, process recovery, historical pre-migration GitHub/Telegram delivery aliases, and the remaining operator/restore/Human acceptance remain open. Earlier failed negative test R546 is retained privately: it demonstrated a child-as-root bypass and was repaired rather than weakening the assertion. No requirement, migration phase, alias lifecycle or release qualification state is promoted. PR42 remains draft and unmerged.

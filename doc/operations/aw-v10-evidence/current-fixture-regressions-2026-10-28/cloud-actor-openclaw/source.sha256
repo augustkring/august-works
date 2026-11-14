@@ -1,0 +1,4 @@
+9e8f62cf1aa5db3a3f2bc155b28a5a1eeaf0856788a73dc58fc1858b01c8a71d  server/src/middleware/cloud-tenant-actor.test.ts
+15b5c8af0cd16d13ddd67fbf6e6b0864ae22b5f9f27913f4896e6d64fea6bfa0  packages/adapters/openclaw-gateway/package.json
+16d36c420a1fe0021c1bd120cd7b0e221595a0546a81fa5840fd8070566678b5  pnpm-lock.yaml
+0a237a2624f2e85e1481cdcf8e785837fd09dccf81dbb662a240fa9debbc03e5  packages/adapters/openclaw-gateway/openclaw-extension/index.ts

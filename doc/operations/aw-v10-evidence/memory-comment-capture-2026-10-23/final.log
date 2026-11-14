@@ -1,0 +1,28 @@
+(!) Your Vite config uses features that are unsupported by `configLoader: 'native'`, which is planned to become the default in a future major version of Vite:
+  - `__dirname` (vitest.config.ts:7:25). Use `import.meta.dirname` instead
+Set `VITE_CONFIG_NATIVE_IGNORE_WARNING=true` to suppress this warning.
+
+ RUN  v4.1.11 /workspace/blentera-v10
+
+[22:40:10] [33mWARN[39m: [36mMemory job failed[39m [90m{"jobId":"49554130-1aba-45e6-a49e-f186bf04c36a","operationType":"compaction"}[39m
+    err: {
+      "type": "HttpError",
+      "message": "Memory job lease expired during maintenance",
+      "stack":
+          Error: Memory job lease expired during maintenance
+              at conflict (/workspace/blentera-v10/server/src/errors.ts:29:10)
+              at /workspace/blentera-v10/server/src/services/memory/memory-jobs.ts:767:57
+              at processTicksAndRejections (node:internal/process/task_queues:104:5)
+              at scope (file:///workspace/blentera-v10/node_modules/.pnpm/postgres@3.4.9_patch_hash=sryle6qd5qfmnxvoebal4gashi/node_modules/postgres/src/index.js:279:18)
+              at sql.begin (file:///workspace/blentera-v10/node_modules/.pnpm/postgres@3.4.9_patch_hash=sryle6qd5qfmnxvoebal4gashi/node_modules/postgres/src/index.js:257:14)
+              at Object.executeClaimed (/workspace/blentera-v10/server/src/services/memory/memory-jobs.ts:758:30)
+              at /workspace/blentera-v10/server/src/__tests__/memory-maintenance-publication.integration.test.ts:60:7
+              at file:///workspace/blentera-v10/node_modules/.pnpm/@vitest+runner@4.1.11/node_modules/@vitest/runner/dist/chunk-artifact.js:1903:20
+      "status": 409
+    }
+
+ Test Files  2 passed (2)
+      Tests  27 passed (27)
+   Start at  22:39:07
+   Duration  63.34s (transform 24.25s, setup 207ms, import 41.32s, tests 21.34s, environment 0ms)
+

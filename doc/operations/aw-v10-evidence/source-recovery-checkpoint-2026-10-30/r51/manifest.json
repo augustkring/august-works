@@ -1,0 +1,658 @@
+{
+  "purpose": "recovery_only_not_qualification",
+  "savedAtUtc": "2026-10-30T12:57:30.385636+00:00",
+  "baseCommit": "2969c06feaffbea83e753947dcb84a9481de73c3",
+  "priorRecoveryCommit": "b6ec7b24e5a0638d6e8d229d574b246c8c94bd08",
+  "patchBytes": 1943734,
+  "patchSha256": "150562c5bd0c05c7db1f8bd516c3cce5805f365676b7e96ad8143593f845123a",
+  "archiveSha256": "5aa41f8194d14ca786716dcbfdafb980f7fab951e77215a17dd5e864d6a75cf8",
+  "untrackedSourceFiles": [],
+  "privateCandidateFiles": [
+    {
+      "path": "preparation/build-v10-safe-change-inventory-draft-current.py",
+      "bytes": 17353,
+      "sha256": "99b12b23013ae3df86896e7e410027adbbb29ce5e56caf4a8ed58bb254abb802"
+    },
+    {
+      "path": "preparation/merge-safe-change-inventory-current.py",
+      "bytes": 4915,
+      "sha256": "6841b7dffd7537d8aa86e43dcb346f9f3298ad9c16cf4fcf1caaa735c5b83220"
+    },
+    {
+      "path": "preparation/native-pending-task-r65-candidate/authorization.ts.diff",
+      "bytes": 1275,
+      "sha256": "d7acbb5ce84e9c153ee836cf2aa90ce5c4a0a2564bbe4f6410326ce6fb262a20"
+    },
+    {
+      "path": "preparation/native-pending-task-r65-candidate/manifest.json",
+      "bytes": 722,
+      "sha256": "9ada990914b431c2ca456492629aacca2cd0dc872a022eb2023db3f50426e433"
+    },
+    {
+      "path": "preparation/native-pending-task-r65-candidate/native-direct-input.ts.diff",
+      "bytes": 41208,
+      "sha256": "0ef1bced2fb5524f39bcf43c45dc507ed6476441845264a0e7c903e425d4947d"
+    },
+    {
+      "path": "preparation/native-pending-task-r65-candidate/native-payload-temporal-sources.integration.test.ts.diff",
+      "bytes": 8845,
+      "sha256": "1fda7c1f38cebb1fbdb78c4eb644d4267e32a55faf7554731dc5868153ea94f6"
+    },
+    {
+      "path": "preparation/native-pending-task-r65-candidate/pending-only.diff",
+      "bytes": 22966,
+      "sha256": "150c9ad416c99db958fddb51080779f5a9959a214ed7ae324c34e14d5b34ddb2"
+    },
+    {
+      "path": "preparation/native-pending-task-r65-candidate/pending-regression.diff",
+      "bytes": 3712,
+      "sha256": "c3201c35290a6364b97cecd5f0272cf99e20a16c05c8485a3eca33e522fea52f"
+    },
+    {
+      "path": "preparation/native-pending-task-r65-candidate/syntax-pins.json",
+      "bytes": 357,
+      "sha256": "472c6eaebbd99f59e8c695d3687ae9b7f1182957fac551ca3e7259892578ac20"
+    },
+    {
+      "path": "preparation/openshell-r4-preserved-relocation-20261030.json",
+      "bytes": 536,
+      "sha256": "0494379a8c7697b7d2b75aff17c27c83ca1758a9961abdc946901c23bbe105e1"
+    },
+    {
+      "path": "preparation/openshell-r5-preserved-relocation-20261030.json",
+      "bytes": 536,
+      "sha256": "99aa91acdfb4a8c33d50a73a5ac6dbe9a693148723ccc52ca7d0ea06ac713979"
+    },
+    {
+      "path": "preparation/pr42-body-current-20261030-1025.md",
+      "bytes": 8762,
+      "sha256": "7168f01ab0f1cfad7e8c090baa94cecccc7b7402798d2d0e88eb935ec5d95eef"
+    },
+    {
+      "path": "preparation/pr42-body-current-20261030-continued.md",
+      "bytes": 10112,
+      "sha256": "83167d5437f213f21cb857cc758d575315c57a580fb96de899a8887450e80a00"
+    },
+    {
+      "path": "preparation/prepare-native-ambient-prefix-r61.py",
+      "bytes": 2415,
+      "sha256": "7eb32811579952baa5d6267c31d1bd53195b071876633bbc87ba11a151d76c86"
+    },
+    {
+      "path": "preparation/prepare-native-node-work-r60.py",
+      "bytes": 6026,
+      "sha256": "cc550db71de72857506961e90a058d58d7207a8602f3e24560a7a72ce7f43767"
+    },
+    {
+      "path": "preparation/prepare-native-pending-task-r65.py",
+      "bytes": 16547,
+      "sha256": "e13f1556d315ad685015e50e6759fc246630354d21f8c1ca80682e9a39572da8"
+    },
+    {
+      "path": "preparation/prepare-native-pending-task-regression-r65.py",
+      "bytes": 3879,
+      "sha256": "d2c106f88d6de364c1a1bba256fc68df6cd5965cf6c813d44f57c80c4d976918"
+    },
+    {
+      "path": "preparation/prepare-native-predicate-certificate-r64.py",
+      "bytes": 15492,
+      "sha256": "1d02461532a14e990fabcff206285533eada41b539943b7b9b55830fcbc99bc5"
+    },
+    {
+      "path": "preparation/prepare-native-predicate-regression-r64.py",
+      "bytes": 4931,
+      "sha256": "6f64b613b180325f7a42dabc0b729c0a8d1ff7d4b64603901458636d0af23751"
+    },
+    {
+      "path": "preparation/prepare-native-scoped-task-actor-r63.py",
+      "bytes": 1444,
+      "sha256": "3d30a5c1ed0b3b5edcfd5a3d9a32b855baf878fa5a081266c0170ca8394ef399"
+    },
+    {
+      "path": "preparation/prepare-native-task-prefix-regression-r62.py",
+      "bytes": 2324,
+      "sha256": "2d69bd5eb4ed393c4471859877acabdd62873e810f7e2fe005e6576f883a1646"
+    },
+    {
+      "path": "preparation/prepare-native-task-prefix-scope-r62.py",
+      "bytes": 11438,
+      "sha256": "b10e3b9a797eff86b5a8f1b1ed00d17d2e5054b4dbaa12334555ab7301616194"
+    },
+    {
+      "path": "preparation/prepare-v10-169-phase-pins-after-freeze.py",
+      "bytes": 5277,
+      "sha256": "bedf35936e03ba382b5b3fb8f40b60a3735d0cf220951229630b5fa8dbee8e8c"
+    },
+    {
+      "path": "preparation/preserve-r49.py",
+      "bytes": 3641,
+      "sha256": "178433b6f63ba8853c35e80283c096bfd446010e96cfa3f6c3c7b5ff415821e2"
+    },
+    {
+      "path": "preparation/preserve-r51.py",
+      "bytes": 3886,
+      "sha256": "7df17eaa2e05aaa48383c811bb36288b8ac0dfc7471fb1785330bbafbc584dcf"
+    },
+    {
+      "path": "preparation/publish-openshell-r5.py",
+      "bytes": 1624,
+      "sha256": "26afe8750c0d92e7561383cc95d891383ab6985cd5da2294a8622e05b22a968a"
+    },
+    {
+      "path": "preparation/publish-openshell-r6.1-qualified-evidence.py",
+      "bytes": 2893,
+      "sha256": "8ce49f3deeaa70edc8191628d331eac9f36fce3556f4ba227c19434e55ff6ad6"
+    },
+    {
+      "path": "preparation/publish-openshell-r6.1.py",
+      "bytes": 1531,
+      "sha256": "2f28e052871457e48ae911e504925ff8e16305fb3d2e1bbb3481c6817fe0498f"
+    },
+    {
+      "path": "preparation/publish-openshell-r6.py",
+      "bytes": 1771,
+      "sha256": "4a31560e4b8ca6ad21fbac98d86440527a3f8af17490a87d7fccb8f8a1691eb1"
+    },
+    {
+      "path": "preparation/relocate-completed-openshell-r4.py",
+      "bytes": 1615,
+      "sha256": "831337416058edabd596accde7c6b5febad6b11ed88fde2407f89a3d679ee2d3"
+    },
+    {
+      "path": "preparation/relocate-completed-openshell-r5.py",
+      "bytes": 1620,
+      "sha256": "9f929f08b3259899f6464c024b0a194903e0cc75ecb1f9e2ca5ddafce7619e6e"
+    },
+    {
+      "path": "preparation/root-continuation-20261030-1045.md",
+      "bytes": 20861,
+      "sha256": "9f38d684177872bccf636d450eb7e5327ffb370af67a2ab996005cf78e779829"
+    },
+    {
+      "path": "preparation/root-continuation-latest.md",
+      "bytes": 62,
+      "sha256": "0bdebb1404389140627cf97914fce2aab45a850143a28659ff6263f420ce09ae"
+    },
+    {
+      "path": "preparation/run-final-workspace-aggregate-20261030.sh",
+      "bytes": 11037,
+      "sha256": "b6e67d94e4b704ef9cc1ba531d874987a17b06966f3fe308ed8089923b79a369"
+    },
+    {
+      "path": "preparation/snapshot-current-source-for-dependency-check.py",
+      "bytes": 7027,
+      "sha256": "df80e1647511fef43169a05eac7447309bc41223aadbbd9647e8ab246dec0003"
+    },
+    {
+      "path": "preparation/temporal9-node-work-r60-20261030-primary-accounting.txt",
+      "bytes": 32837,
+      "sha256": "3002a8a856bf7ca9fdec184df6df169006265906e907cf611c2f24754fa8f5af"
+    },
+    {
+      "path": "preparation/v10-149-memory-host-probe-r1/files/deploy/v6/host-agent/openshell.mjs",
+      "bytes": 167494,
+      "sha256": "349bbe9fe476f10dc5f9a16f4fa3c0f7441067c841b29daab9f81c0b9b6fb094"
+    },
+    {
+      "path": "preparation/v10-149-memory-host-probe-r1/memory-host-probe.patch",
+      "bytes": 4229,
+      "sha256": "4a905ce298108372c14e8ec8a30aa77d404db0d5059d1ef7f3098f83740a0b5e"
+    },
+    {
+      "path": "preparation/v10-149-probe-policy-r1/baseline-r145/packages/shared/src/execution-sandbox.ts",
+      "bytes": 9546,
+      "sha256": "18019fef8ec57d32192db451e58fe98ef3adfe28c66c2209a7f6e412b7a97f20"
+    },
+    {
+      "path": "preparation/v10-149-probe-policy-r1/baseline-r145/packages/shared/src/sandbox-host-contracts.ts",
+      "bytes": 10873,
+      "sha256": "5b921acabd5b6b9310afb2769443751e2c0833bf313b6e33f1746dd7172a465a"
+    },
+    {
+      "path": "preparation/v10-149-probe-policy-r1/baseline-r145/server/src/__tests__/v7-openshell-backend.test.ts",
+      "bytes": 7640,
+      "sha256": "07fb442a1c86f3678070922da568b6d0ba9c8d414b9989c8eccaf6760320affc"
+    },
+    {
+      "path": "preparation/v10-149-probe-policy-r1/baseline-r145/server/src/services/execution-sandbox/openshell-backend.ts",
+      "bytes": 18553,
+      "sha256": "13a8262f3a636f3f79d6bdb0db9f52bbbdeab3f48923b2025180fc52845bb924"
+    },
+    {
+      "path": "preparation/v10-149-probe-policy-r1/baseline-r145/server/src/services/execution-sandbox/openshell-policy.ts",
+      "bytes": 4990,
+      "sha256": "f569638ba6ac9c3d3b40f08885f7cb1ce9d24319a3e80baffe23a3f07df64dae"
+    },
+    {
+      "path": "preparation/v10-149-probe-policy-r1/candidate-r145/packages/shared/src/execution-sandbox.ts",
+      "bytes": 13676,
+      "sha256": "3e6d9f04417aa91a55002a9f6c193ea037eab4ffcab5388a0bdea3a9b015284d"
+    },
+    {
+      "path": "preparation/v10-149-probe-policy-r1/candidate-r145/packages/shared/src/sandbox-host-contracts.ts",
+      "bytes": 11646,
+      "sha256": "a7bd0ed3098e43620f42d34639aab2474a0e0c5d05ef67d803ebdb45eb266fca"
+    },
+    {
+      "path": "preparation/v10-149-probe-policy-r1/candidate-r145/server/src/__tests__/fixtures/openshell-qualification-policy-golden.json",
+      "bytes": 3712,
+      "sha256": "54774d03334447f87072893c4c2fe6c702ef16a339042a1051bb96a0703f7303"
+    },
+    {
+      "path": "preparation/v10-149-probe-policy-r1/candidate-r145/server/src/__tests__/openshell-qualification-policy.test.ts",
+      "bytes": 13533,
+      "sha256": "2c057306d6f1f0504b21050189484651caa5f1baa420416d354f1f4a9999f1e6"
+    },
+    {
+      "path": "preparation/v10-149-probe-policy-r1/candidate-r145/server/src/__tests__/v7-openshell-backend.test.ts",
+      "bytes": 7640,
+      "sha256": "07fb442a1c86f3678070922da568b6d0ba9c8d414b9989c8eccaf6760320affc"
+    },
+    {
+      "path": "preparation/v10-149-probe-policy-r1/candidate-r145/server/src/services/execution-sandbox/openshell-backend.ts",
+      "bytes": 20770,
+      "sha256": "5f288b7224fa110440046fa2ccd209ce1e84b810f68bfda76aa3768544ff4b5d"
+    },
+    {
+      "path": "preparation/v10-149-probe-policy-r1/candidate-r145/server/src/services/execution-sandbox/openshell-policy.ts",
+      "bytes": 11064,
+      "sha256": "f9c71227a31cbab5ec3eea2644a54f5e84e4d2584c857b019d96998ff03b3f72"
+    },
+    {
+      "path": "preparation/v10-149-probe-policy-r1/exact-stage-paths.txt",
+      "bytes": 337,
+      "sha256": "57f0c783e8d7b78a28f781ddf4286480660c7505c61dcebf70a1d7ef889777bc"
+    },
+    {
+      "path": "preparation/v10-149-probe-policy-r1/files/packages/shared/src/execution-sandbox.ts",
+      "bytes": 13676,
+      "sha256": "3e6d9f04417aa91a55002a9f6c193ea037eab4ffcab5388a0bdea3a9b015284d"
+    },
+    {
+      "path": "preparation/v10-149-probe-policy-r1/files/packages/shared/src/sandbox-host-contracts.ts",
+      "bytes": 11646,
+      "sha256": "a7bd0ed3098e43620f42d34639aab2474a0e0c5d05ef67d803ebdb45eb266fca"
+    },
+    {
+      "path": "preparation/v10-149-probe-policy-r1/files/server/src/__tests__/fixtures/openshell-qualification-policy-golden.json",
+      "bytes": 3712,
+      "sha256": "54774d03334447f87072893c4c2fe6c702ef16a339042a1051bb96a0703f7303"
+    },
+    {
+      "path": "preparation/v10-149-probe-policy-r1/files/server/src/__tests__/openshell-qualification-policy.test.ts",
+      "bytes": 13533,
+      "sha256": "2c057306d6f1f0504b21050189484651caa5f1baa420416d354f1f4a9999f1e6"
+    },
+    {
+      "path": "preparation/v10-149-probe-policy-r1/files/server/src/__tests__/v7-openshell-backend.test.ts",
+      "bytes": 7640,
+      "sha256": "07fb442a1c86f3678070922da568b6d0ba9c8d414b9989c8eccaf6760320affc"
+    },
+    {
+      "path": "preparation/v10-149-probe-policy-r1/files/server/src/services/execution-sandbox/openshell-backend.ts",
+      "bytes": 20770,
+      "sha256": "5f288b7224fa110440046fa2ccd209ce1e84b810f68bfda76aa3768544ff4b5d"
+    },
+    {
+      "path": "preparation/v10-149-probe-policy-r1/files/server/src/services/execution-sandbox/openshell-policy.ts",
+      "bytes": 11064,
+      "sha256": "f9c71227a31cbab5ec3eea2644a54f5e84e4d2584c857b019d96998ff03b3f72"
+    },
+    {
+      "path": "preparation/v10-149-probe-policy-r1/patch-check/packages/shared/src/execution-sandbox.ts",
+      "bytes": 13676,
+      "sha256": "3e6d9f04417aa91a55002a9f6c193ea037eab4ffcab5388a0bdea3a9b015284d"
+    },
+    {
+      "path": "preparation/v10-149-probe-policy-r1/patch-check/packages/shared/src/sandbox-host-contracts.ts",
+      "bytes": 11646,
+      "sha256": "a7bd0ed3098e43620f42d34639aab2474a0e0c5d05ef67d803ebdb45eb266fca"
+    },
+    {
+      "path": "preparation/v10-149-probe-policy-r1/patch-check/server/src/__tests__/fixtures/openshell-qualification-policy-golden.json",
+      "bytes": 3712,
+      "sha256": "54774d03334447f87072893c4c2fe6c702ef16a339042a1051bb96a0703f7303"
+    },
+    {
+      "path": "preparation/v10-149-probe-policy-r1/patch-check/server/src/__tests__/openshell-qualification-policy.test.ts",
+      "bytes": 13533,
+      "sha256": "2c057306d6f1f0504b21050189484651caa5f1baa420416d354f1f4a9999f1e6"
+    },
+    {
+      "path": "preparation/v10-149-probe-policy-r1/patch-check/server/src/__tests__/v7-openshell-backend.test.ts",
+      "bytes": 7640,
+      "sha256": "07fb442a1c86f3678070922da568b6d0ba9c8d414b9989c8eccaf6760320affc"
+    },
+    {
+      "path": "preparation/v10-149-probe-policy-r1/patch-check/server/src/services/execution-sandbox/openshell-backend.ts",
+      "bytes": 20770,
+      "sha256": "5f288b7224fa110440046fa2ccd209ce1e84b810f68bfda76aa3768544ff4b5d"
+    },
+    {
+      "path": "preparation/v10-149-probe-policy-r1/patch-check/server/src/services/execution-sandbox/openshell-policy.ts",
+      "bytes": 11064,
+      "sha256": "f9c71227a31cbab5ec3eea2644a54f5e84e4d2584c857b019d96998ff03b3f72"
+    },
+    {
+      "path": "preparation/v10-149-probe-policy-r1/probe-policy.patch",
+      "bytes": 42036,
+      "sha256": "d793069505949579b946deb8bd17f934b8f82be46d68ea258b069125342c87b0"
+    },
+    {
+      "path": "preparation/v10-149-probe-policy-r1/source-pins.json",
+      "bytes": 4046,
+      "sha256": "b6a9d9f60b68d4dc8cf6cf7a7dd86d985edc7aefae2558028395802a253b2e81"
+    },
+    {
+      "path": "preparation/v10-149-quality-r2.3-response-sanitization/files/server/src/services/tool-gateway.ts",
+      "bytes": 541283,
+      "sha256": "0f82e125cae62ad65c8c34b8f334fb0e32239408b9c7fb82940a7f6ac706c72f"
+    },
+    {
+      "path": "preparation/v10-149-r14.5-probe-policy-private/files/deploy/v6/host-agent/journal.mjs",
+      "bytes": 1017,
+      "sha256": "7d67063084c9865c3b6fdcf00201cff85a2f54dd75c8caed31bd363361f9fe46"
+    },
+    {
+      "path": "preparation/v10-149-r14.5-probe-policy-private/files/deploy/v6/host-agent/openshell.mjs",
+      "bytes": 165279,
+      "sha256": "617e58204c43d3ecbfe05f7dd0579f4f1aafdcbb59bdae7fd202d24327bde4e9"
+    },
+    {
+      "path": "preparation/v10-149-r14.5-probe-policy-private/files/deploy/v6/host-agent/openshell.test.mjs",
+      "bytes": 117110,
+      "sha256": "9c0a76a445ce5787adc35658314c72bb30c86d6896f7376fe90dff3fe853384b"
+    },
+    {
+      "path": "preparation/v10-149-r14.5-probe-policy-private/files/packages/db/src/schema/execution_sandbox.ts",
+      "bytes": 5754,
+      "sha256": "5c6df7469351be5acbba9c9840af654aca3ecdc30ed387e5318d3da780365669"
+    },
+    {
+      "path": "preparation/v10-149-r14.5-probe-policy-private/files/packages/shared/src/execution-sandbox.ts",
+      "bytes": 9546,
+      "sha256": "18019fef8ec57d32192db451e58fe98ef3adfe28c66c2209a7f6e412b7a97f20"
+    },
+    {
+      "path": "preparation/v10-149-r14.5-probe-policy-private/files/packages/shared/src/sandbox-host-contracts.ts",
+      "bytes": 10873,
+      "sha256": "5b921acabd5b6b9310afb2769443751e2c0833bf313b6e33f1746dd7172a465a"
+    },
+    {
+      "path": "preparation/v10-149-r14.5-probe-policy-private/files/server/src/__tests__/agent-auth-jwt.test.ts",
+      "bytes": 27697,
+      "sha256": "b3cdda9c855aaad058bd7cda3b0ab0f00d6fe6730c348a063e27f9d17371e9ee"
+    },
+    {
+      "path": "preparation/v10-149-r14.5-probe-policy-private/files/server/src/__tests__/helpers/managed-native-conversation-sandbox-host.ts",
+      "bytes": 68121,
+      "sha256": "e881addf55c39f165573df0349a869c03a11fbce3a02f853fffa6dc7729dda88"
+    },
+    {
+      "path": "preparation/v10-149-r14.5-probe-policy-private/files/server/src/__tests__/v7-openshell-backend.test.ts",
+      "bytes": 7640,
+      "sha256": "07fb442a1c86f3678070922da568b6d0ba9c8d414b9989c8eccaf6760320affc"
+    },
+    {
+      "path": "preparation/v10-149-r14.5-probe-policy-private/files/server/src/__tests__/v7-sandbox-host-bridge.integration.test.ts",
+      "bytes": 111827,
+      "sha256": "25e76f865d448cef71ad2f5bc226584e184f14d24ff291461c36c04a157e0ae0"
+    },
+    {
+      "path": "preparation/v10-149-r14.5-probe-policy-private/files/server/src/__tests__/v7-sandbox-policy.test.ts",
+      "bytes": 21612,
+      "sha256": "534228734adcb73313657f07a04d59ec9c3f19a65f5e10ebd3f28e2f93cc1853"
+    },
+    {
+      "path": "preparation/v10-149-r14.5-probe-policy-private/files/server/src/__tests__/v7-sandbox-qualification-faults.test.ts",
+      "bytes": 8289,
+      "sha256": "cc57241b0809b9f973b53c3619e5262fe508ef008a068df61366c1d38dc20a0f"
+    },
+    {
+      "path": "preparation/v10-149-r14.5-probe-policy-private/files/server/src/agent-auth-jwt.ts",
+      "bytes": 39679,
+      "sha256": "1d375340646d32666a41e2b50fc390311f78183696525b878d0710a76dfe66b8"
+    },
+    {
+      "path": "preparation/v10-149-r14.5-probe-policy-private/files/server/src/app.ts",
+      "bytes": 70328,
+      "sha256": "bed91376c4323741603ec11577765e6137b165f5e12c5de378c51902e1070ce0"
+    },
+    {
+      "path": "preparation/v10-149-r14.5-probe-policy-private/files/server/src/routes/tool-gateway.ts",
+      "bytes": 46548,
+      "sha256": "89791df155f3e01546f307f6ec7917a819175893e18470bd1bb5513796bf664a"
+    },
+    {
+      "path": "preparation/v10-149-r14.5-probe-policy-private/files/server/src/services/execution-sandbox/backend.ts",
+      "bytes": 5442,
+      "sha256": "0b9eac794f397cf214ff7608850fb1be75b10e1421d7d8a315648b91d5d6914e"
+    },
+    {
+      "path": "preparation/v10-149-r14.5-probe-policy-private/files/server/src/services/execution-sandbox/native-host-bridge.ts",
+      "bytes": 52219,
+      "sha256": "8298049855ebc6fb7a6cb937631aa34ad93a20dc0b07f741c37fbb7590d8b165"
+    },
+    {
+      "path": "preparation/v10-149-r14.5-probe-policy-private/files/server/src/services/execution-sandbox/openshell-backend.ts",
+      "bytes": 18553,
+      "sha256": "13a8262f3a636f3f79d6bdb0db9f52bbbdeab3f48923b2025180fc52845bb924"
+    },
+    {
+      "path": "preparation/v10-149-r14.5-probe-policy-private/files/server/src/services/execution-sandbox/qualification.ts",
+      "bytes": 9556,
+      "sha256": "f5b249ef5809d61b36dffbf93be0cced9f88759aa4b8d6028a1a7702a45851c5"
+    },
+    {
+      "path": "preparation/v10-149-r14.5-probe-policy-private/files/server/src/services/execution-sandbox/sandbox-service.ts",
+      "bytes": 84124,
+      "sha256": "9e9658f54203ff5ebafb9be397d70eea038f6ad08d4d1ebf609cfb57e7510594"
+    },
+    {
+      "path": "preparation/v10-149-r14.5-probe-policy-private/files/server/src/services/tool-gateway.ts",
+      "bytes": 539680,
+      "sha256": "a163e48d914c3fd391b5f9cccc582868769b23574268e418a9b78999ab55149e"
+    },
+    {
+      "path": "preparation/v10-149-r14.5-probe-policy-private/host-tests/credential-main.log",
+      "bytes": 225,
+      "sha256": "1d19cc9e6bbe23b23f5f22e6f4648ce6563bd77e3dea62ccd9f7802810231f94"
+    },
+    {
+      "path": "preparation/v10-149-r14.5-probe-policy-private/host-tests/credential-target.log",
+      "bytes": 222,
+      "sha256": "c41b78f495a78e465113f6ed18d16430d9a011a01284a420776b45ed9032e0e2"
+    },
+    {
+      "path": "preparation/v10-149-r14.5-probe-policy-private/host-tests/node-test-debug.log",
+      "bytes": 12763,
+      "sha256": "0f6274779f36c10bc500c9c4bbaa26d5e3b0c7d620317d7ea3ad9dde77ccd5d2"
+    },
+    {
+      "path": "preparation/v10-149-r14.5-probe-policy-private/host-tests/node-test-debug2.log",
+      "bytes": 12744,
+      "sha256": "6672e490a55095928a99990b5ea37dcb7ed3aca1a82677ae6c856d0c680525ad"
+    },
+    {
+      "path": "preparation/v10-149-r14.5-probe-policy-private/host-tests/node-test-debug3.log",
+      "bytes": 12762,
+      "sha256": "3e262120badea8964ceda3396506c0b6dcb53e31958900108baa2202444741f2"
+    },
+    {
+      "path": "preparation/v10-149-r14.5-probe-policy-private/host-tests/node-test.exit",
+      "bytes": 2,
+      "sha256": "4355a46b19d348dc2f57c046f8ef63d4538ebb936000f3c9ee954a27460dd865"
+    },
+    {
+      "path": "preparation/v10-149-r14.5-probe-policy-private/host-tests/node-test.log",
+      "bytes": 11233,
+      "sha256": "87f6ca522fdcea27469e7f450cdaef32664407b0b2cf60feb890b71679947b19"
+    },
+    {
+      "path": "preparation/v10-149-r14.5-probe-policy-private/parent-source-pins.json",
+      "bytes": 6497,
+      "sha256": "da4011a1c05193a81e07569a89795639ac1a4a24981231c23e535175af00b255"
+    },
+    {
+      "path": "preparation/v10-149-r14.5-probe-policy-private/parent-stage-paths.txt",
+      "bytes": 942,
+      "sha256": "94bfa027c433cd944cc22bb2328932af87cf990f6978b2cd0a32019a34864f6f"
+    },
+    {
+      "path": "preparation/v10-149-r14.6-host-golden-private/files/deploy/v6/host-agent/journal.mjs",
+      "bytes": 1017,
+      "sha256": "7d67063084c9865c3b6fdcf00201cff85a2f54dd75c8caed31bd363361f9fe46"
+    },
+    {
+      "path": "preparation/v10-149-r14.6-host-golden-private/files/deploy/v6/host-agent/openshell.mjs",
+      "bytes": 168205,
+      "sha256": "11adacbec8e66d24021ef95c118a53e14c5dc715386e324fedf460befebd986b"
+    },
+    {
+      "path": "preparation/v10-149-r14.6-host-golden-private/files/deploy/v6/host-agent/openshell.test.mjs",
+      "bytes": 118022,
+      "sha256": "eea0a931a40c86bc4855591df6981a4ca937fa0afe9926a3c13fb531f28f9369"
+    },
+    {
+      "path": "preparation/v10-149-r14.6-host-golden-private/files/packages/db/src/schema/execution_sandbox.ts",
+      "bytes": 5754,
+      "sha256": "5c6df7469351be5acbba9c9840af654aca3ecdc30ed387e5318d3da780365669"
+    },
+    {
+      "path": "preparation/v10-149-r14.6-host-golden-private/files/packages/shared/src/execution-sandbox.ts",
+      "bytes": 9546,
+      "sha256": "18019fef8ec57d32192db451e58fe98ef3adfe28c66c2209a7f6e412b7a97f20"
+    },
+    {
+      "path": "preparation/v10-149-r14.6-host-golden-private/files/packages/shared/src/sandbox-host-contracts.ts",
+      "bytes": 10873,
+      "sha256": "5b921acabd5b6b9310afb2769443751e2c0833bf313b6e33f1746dd7172a465a"
+    },
+    {
+      "path": "preparation/v10-149-r14.6-host-golden-private/files/server/src/__tests__/agent-auth-jwt.test.ts",
+      "bytes": 27697,
+      "sha256": "b3cdda9c855aaad058bd7cda3b0ab0f00d6fe6730c348a063e27f9d17371e9ee"
+    },
+    {
+      "path": "preparation/v10-149-r14.6-host-golden-private/files/server/src/__tests__/fixtures/openshell-qualification-policy-golden.json",
+      "bytes": 3712,
+      "sha256": "54774d03334447f87072893c4c2fe6c702ef16a339042a1051bb96a0703f7303"
+    },
+    {
+      "path": "preparation/v10-149-r14.6-host-golden-private/files/server/src/__tests__/helpers/managed-native-conversation-sandbox-host.ts",
+      "bytes": 68121,
+      "sha256": "e881addf55c39f165573df0349a869c03a11fbce3a02f853fffa6dc7729dda88"
+    },
+    {
+      "path": "preparation/v10-149-r14.6-host-golden-private/files/server/src/__tests__/v7-openshell-backend.test.ts",
+      "bytes": 7640,
+      "sha256": "07fb442a1c86f3678070922da568b6d0ba9c8d414b9989c8eccaf6760320affc"
+    },
+    {
+      "path": "preparation/v10-149-r14.6-host-golden-private/files/server/src/__tests__/v7-sandbox-host-bridge.integration.test.ts",
+      "bytes": 111827,
+      "sha256": "25e76f865d448cef71ad2f5bc226584e184f14d24ff291461c36c04a157e0ae0"
+    },
+    {
+      "path": "preparation/v10-149-r14.6-host-golden-private/files/server/src/__tests__/v7-sandbox-policy.test.ts",
+      "bytes": 21612,
+      "sha256": "534228734adcb73313657f07a04d59ec9c3f19a65f5e10ebd3f28e2f93cc1853"
+    },
+    {
+      "path": "preparation/v10-149-r14.6-host-golden-private/files/server/src/__tests__/v7-sandbox-qualification-faults.test.ts",
+      "bytes": 8289,
+      "sha256": "cc57241b0809b9f973b53c3619e5262fe508ef008a068df61366c1d38dc20a0f"
+    },
+    {
+      "path": "preparation/v10-149-r14.6-host-golden-private/files/server/src/agent-auth-jwt.ts",
+      "bytes": 39679,
+      "sha256": "1d375340646d32666a41e2b50fc390311f78183696525b878d0710a76dfe66b8"
+    },
+    {
+      "path": "preparation/v10-149-r14.6-host-golden-private/files/server/src/app.ts",
+      "bytes": 70328,
+      "sha256": "bed91376c4323741603ec11577765e6137b165f5e12c5de378c51902e1070ce0"
+    },
+    {
+      "path": "preparation/v10-149-r14.6-host-golden-private/files/server/src/routes/tool-gateway.ts",
+      "bytes": 46548,
+      "sha256": "89791df155f3e01546f307f6ec7917a819175893e18470bd1bb5513796bf664a"
+    },
+    {
+      "path": "preparation/v10-149-r14.6-host-golden-private/files/server/src/services/execution-sandbox/backend.ts",
+      "bytes": 5442,
+      "sha256": "0b9eac794f397cf214ff7608850fb1be75b10e1421d7d8a315648b91d5d6914e"
+    },
+    {
+      "path": "preparation/v10-149-r14.6-host-golden-private/files/server/src/services/execution-sandbox/native-host-bridge.ts",
+      "bytes": 52219,
+      "sha256": "8298049855ebc6fb7a6cb937631aa34ad93a20dc0b07f741c37fbb7590d8b165"
+    },
+    {
+      "path": "preparation/v10-149-r14.6-host-golden-private/files/server/src/services/execution-sandbox/openshell-backend.ts",
+      "bytes": 18553,
+      "sha256": "13a8262f3a636f3f79d6bdb0db9f52bbbdeab3f48923b2025180fc52845bb924"
+    },
+    {
+      "path": "preparation/v10-149-r14.6-host-golden-private/files/server/src/services/execution-sandbox/qualification.ts",
+      "bytes": 9556,
+      "sha256": "f5b249ef5809d61b36dffbf93be0cced9f88759aa4b8d6028a1a7702a45851c5"
+    },
+    {
+      "path": "preparation/v10-149-r14.6-host-golden-private/files/server/src/services/execution-sandbox/sandbox-service.ts",
+      "bytes": 84124,
+      "sha256": "9e9658f54203ff5ebafb9be397d70eea038f6ad08d4d1ebf609cfb57e7510594"
+    },
+    {
+      "path": "preparation/v10-149-r14.6-host-golden-private/files/server/src/services/tool-gateway.ts",
+      "bytes": 539680,
+      "sha256": "a163e48d914c3fd391b5f9cccc582868769b23574268e418a9b78999ab55149e"
+    },
+    {
+      "path": "preparation/v10-149-r14.6-host-golden-private/host-tests/credential-main.log",
+      "bytes": 225,
+      "sha256": "1d19cc9e6bbe23b23f5f22e6f4648ce6563bd77e3dea62ccd9f7802810231f94"
+    },
+    {
+      "path": "preparation/v10-149-r14.6-host-golden-private/host-tests/credential-target.log",
+      "bytes": 222,
+      "sha256": "c41b78f495a78e465113f6ed18d16430d9a011a01284a420776b45ed9032e0e2"
+    },
+    {
+      "path": "preparation/v10-149-r14.6-host-golden-private/host-tests/node-test-debug.log",
+      "bytes": 12763,
+      "sha256": "0f6274779f36c10bc500c9c4bbaa26d5e3b0c7d620317d7ea3ad9dde77ccd5d2"
+    },
+    {
+      "path": "preparation/v10-149-r14.6-host-golden-private/host-tests/node-test-debug2.log",
+      "bytes": 12744,
+      "sha256": "6672e490a55095928a99990b5ea37dcb7ed3aca1a82677ae6c856d0c680525ad"
+    },
+    {
+      "path": "preparation/v10-149-r14.6-host-golden-private/host-tests/node-test-debug3.log",
+      "bytes": 12762,
+      "sha256": "3e262120badea8964ceda3396506c0b6dcb53e31958900108baa2202444741f2"
+    },
+    {
+      "path": "preparation/v10-149-r14.6-host-golden-private/host-tests/node-test.exit",
+      "bytes": 2,
+      "sha256": "4355a46b19d348dc2f57c046f8ef63d4538ebb936000f3c9ee954a27460dd865"
+    },
+    {
+      "path": "preparation/v10-149-r14.6-host-golden-private/host-tests/node-test.log",
+      "bytes": 11233,
+      "sha256": "87f6ca522fdcea27469e7f450cdaef32664407b0b2cf60feb890b71679947b19"
+    },
+    {
+      "path": "preparation/v10-149-r14.6-host-golden-private/parent-source-pins.json",
+      "bytes": 6497,
+      "sha256": "da4011a1c05193a81e07569a89795639ac1a4a24981231c23e535175af00b255"
+    },
+    {
+      "path": "preparation/v10-149-r14.6-host-golden-private/parent-stage-paths.txt",
+      "bytes": 942,
+      "sha256": "94bfa027c433cd944cc22bb2328932af87cf990f6978b2cd0a32019a34864f6f"
+    }
+  ],
+  "privateCandidateArchiveSha256": "c0f2daef0373c2421f79183ef8b0b34588b63e1aca85e03c256c829978a1c594"
+}

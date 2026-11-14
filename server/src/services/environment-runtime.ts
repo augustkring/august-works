@@ -1,9 +1,11 @@
 import { readEnvironmentCreationCleanupError } from "@paperclipai/plugin-sdk";
-import { remoteTerminationReceipt } from "./remote-execution-termination.js";
+import { verifyNativeCleanupRuntimeState } from "./execution-sandbox/run-lease-cleanup.js";
+import { isNativeBootstrapPrelaunchCleanupCandidate, verifyNativeBootstrapPrelaunchRuntimeState } from "./execution-sandbox/native-prelaunch-cleanup.js";
+import { remoteTerminationReceipt, recordNativeRemoteWorkloadStopped } from "./remote-execution-termination.js";
 import { createHash, randomUUID } from "node:crypto";
 import { and, eq, inArray, sql } from "drizzle-orm";
 import type { Db } from "@paperclipai/db";
-import { companySecrets, companySecretVersions, environmentLeases, heartbeatRuns } from "@paperclipai/db";
+import { companySecrets, companySecretVersions, environmentLeases, heartbeatRuns, nativeRunFinalizations } from "@paperclipai/db";
 import type {
   Environment,
   EnvironmentLease,
@@ -347,6 +349,91 @@ export function buildSandboxCapabilityNarrowing(input: {
   return narrowing;
 }
 
+/**
+ * A scheduled Native same-run retry keeps its original sandbox lease active.
+ * Reattach that exact durable lease instead of asking a per-turn provider to
+ * allocate a second sandbox. The current coordinator owner and lease are read
+ * together under row locks; this does not enable cross-run or warm reuse.
+ */
+async function reattachNativeSameRunSandboxLease(input: {
+  db: Db;
+  companyId: string;
+  environment: Environment;
+  issueId: string;
+  heartbeatRunId: string;
+  agentId: string | null;
+  executionWorkspaceId: string | null;
+  leaseOwner: string;
+}): Promise<EnvironmentLease> {
+  const storedEnvironmentConfig = parseEnvironmentDriverConfig(input.environment);
+  if (storedEnvironmentConfig.driver !== "sandbox") {
+    throw new Error("Native same-run lease reattachment requires a sandbox environment.");
+  }
+  return await input.db.transaction(async (tx) => {
+    const [run] = await tx.select({
+      agentId: heartbeatRuns.agentId,
+      status: heartbeatRuns.status,
+      runtimeMode: heartbeatRuns.runtimeMode,
+      nativeIssueId: heartbeatRuns.nativeIssueId,
+    }).from(heartbeatRuns).where(and(
+      eq(heartbeatRuns.companyId, input.companyId),
+      eq(heartbeatRuns.id, input.heartbeatRunId),
+    )).for("update");
+    if (!run || run.status !== "running" || run.runtimeMode !== "native" ||
+        run.nativeIssueId !== input.issueId || run.agentId !== input.agentId) {
+      throw new Error("Native same-run sandbox lease reattachment lost its run owner.");
+    }
+    const [coordinator] = await tx.select({
+      phase: nativeRunFinalizations.phase,
+      leaseOwner: nativeRunFinalizations.leaseOwner,
+      leaseExpiresAt: nativeRunFinalizations.leaseExpiresAt,
+      resultId: nativeRunFinalizations.resultId,
+    }).from(nativeRunFinalizations).where(and(
+      eq(nativeRunFinalizations.companyId, input.companyId),
+      eq(nativeRunFinalizations.issueId, input.issueId),
+      eq(nativeRunFinalizations.runId, input.heartbeatRunId),
+    )).for("update");
+    if (!coordinator || coordinator.phase !== "observed" || coordinator.resultId !== null ||
+        coordinator.leaseOwner !== input.leaseOwner || !coordinator.leaseExpiresAt || coordinator.leaseExpiresAt.getTime() <= Date.now()) {
+      throw new Error("Native same-run sandbox lease reattachment lost its coordinator owner.");
+    }
+    const candidates = await tx.select().from(environmentLeases).where(and(
+      eq(environmentLeases.companyId, input.companyId),
+      eq(environmentLeases.heartbeatRunId, input.heartbeatRunId),
+      eq(environmentLeases.status, "active"),
+    )).for("update");
+    if (candidates.length !== 1) {
+      throw new Error("Native same-run sandbox lease is missing or ambiguous.");
+    }
+    const row = candidates[0]!;
+    const metadata = row.metadata ?? {};
+    // Use the provider's canonical lease-metadata reconstruction contract; do
+    // not assume every provider stores every default/config key verbatim.
+    const leaseConfig = sandboxConfigFromLeaseMetadataLoose({ metadata });
+    const leaseConfigFields = new Map<string, unknown>(Object.entries(leaseConfig ?? {}));
+    const configMatches = leaseConfig !== null &&
+      Object.entries(storedEnvironmentConfig.config).every(([key, value]) =>
+        stableStringify(leaseConfigFields.get(key)) === stableStringify(value),
+      );
+    if (
+      row.environmentId !== input.environment.id ||
+      row.issueId !== input.issueId ||
+      row.executionWorkspaceId !== input.executionWorkspaceId ||
+      row.leasePolicy !== "ephemeral" ||
+      !row.providerLeaseId ||
+      row.provider !== storedEnvironmentConfig.config.provider ||
+      !row.expiresAt || row.expiresAt.getTime() <= Date.now() ||
+      metadata.driver !== input.environment.driver ||
+      metadata.provider !== storedEnvironmentConfig.config.provider ||
+      metadata.agentId !== input.agentId ||
+      !configMatches
+    ) {
+      throw new Error("Native same-run sandbox lease no longer matches its originating run configuration.");
+    }
+    return toEnvironmentLeaseSnapshot(row);
+  });
+}
+
 export function buildEnvironmentLeaseContext(input: {
   persistedExecutionWorkspace: Pick<ExecutionWorkspace, "id" | "mode"> | null;
 }) {
@@ -532,6 +619,7 @@ export interface EnvironmentDriverExecuteInput extends EnvironmentDriverLeaseInp
   env?: Record<string, string>;
   stdin?: string;
   timeoutMs?: number;
+  signal?: AbortSignal;
   /**
    * Run this command outside the lease's persistent session. The run
    * orchestrator sets this on the workspace provision command, which runs before
@@ -541,6 +629,10 @@ export interface EnvironmentDriverExecuteInput extends EnvironmentDriverLeaseInp
    * span parents to the run trace. The default keeps the session path.
    */
   bypassSession?: boolean;
+  /** Private Native setup phase for pinned artifacts, exact run-owned harness
+   * state access, immutable runtime context staging, or the conversation Runnerd launch. Never user/model-supplied. */
+  nativePreparationPurpose?: "provider_artifact" | "native_session_start" | "native_harness_state" | "native_workspace_prepare" | "native_runtime_context_prepare" | "native_provider_data_erasure_probe" | "native_attachment_stage" | "native_attachment_cleanup";
+  modelBrokerSessionPhase?: "start" | "refresh" | "stop";
   /**
    * Force the command onto the lease's persistent session even when no run step
    * is active. The ACP process session bridge sets this so the long-lived agent
@@ -1283,6 +1375,22 @@ function createSandboxEnvironmentDriver(
   db: Db,
   options: {
     pluginWorkerManager?: PluginWorkerManager;
+    stopSandboxRunLease?: (input: { companyId: string; runId: string; leaseId: string }) => Promise<unknown>;
+    executeSandboxTask?: (input: {
+      companyId: string;
+      runId: string | null;
+      leaseId: string;
+      command: string;
+      args?: string[];
+      cwd?: string;
+      env?: Record<string, string>;
+      stdin?: string;
+      timeoutMs?: number;
+      signal?: AbortSignal;
+      nativePreparationPurpose?: "provider_artifact" | "native_session_start" | "native_harness_state" | "native_workspace_prepare" | "native_runtime_context_prepare" | "native_provider_data_erasure_probe" | "native_attachment_stage" | "native_attachment_cleanup";
+      modelBrokerSessionPhase?: "start" | "refresh" | "stop";
+      onOutput?: (stream: "stdout" | "stderr", chunk: string) => void | Promise<void>;
+    }) => Promise<PluginEnvironmentExecuteResult | null>;
     pluginWorkerReadyTimeoutMs?: number;
     pluginWorkerReadyPollMs?: number;
     pendingCleanupWriteAttempts?: number;
@@ -1312,6 +1420,25 @@ function createSandboxEnvironmentDriver(
     options.deferredOrphanCleanupBufferLimit ?? DEFAULT_DEFERRED_ORPHAN_CLEANUP_BUFFER_LIMIT,
   );
   const environmentsSvc = environmentService(db);
+  const stopNativeLease = async (lease: EnvironmentLease): Promise<Record<string, unknown> | undefined> => {
+    const [run] = lease.heartbeatRunId ? await db.select().from(heartbeatRuns).where(and(
+      eq(heartbeatRuns.companyId, lease.companyId), eq(heartbeatRuns.id, lease.heartbeatRunId),
+    )) : [];
+    if (!run?.runnerProfileJson || typeof run.runnerProfileJson !== "object" || Array.isArray(run.runnerProfileJson) ||
+      run.runnerProfileJson.nativeRemoteRuntimeAssetLocator === undefined) return undefined;
+    const scope = { companyId: run.companyId, runId: run.id, leaseId: lease.id };
+    if (!options.stopSandboxRunLease) throw new Error("The canonical Native Sandbox cleanup state owner is unavailable");
+    if (await isNativeBootstrapPrelaunchCleanupCandidate(db, { companyId: run.companyId, runId: run.id })) {
+      // This exact terminal prelaunch lane has no Native session-start binding;
+      // its separate owner proves setup admission Stop/Inspect and never falls
+      // through to the started-session receipt verifier.
+      const receipt = await options.stopSandboxRunLease(scope);
+      return await verifyNativeBootstrapPrelaunchRuntimeState(db, scope, receipt);
+    }
+    const receipt = await options.stopSandboxRunLease(scope);
+    return await verifyNativeCleanupRuntimeState(db, scope, receipt);
+  };
+
 
   // A live sandbox whose teardown failed needs a durable `pending_cleanup` row,
   // so a sweep can find and release it. When every synchronous write attempt
@@ -2510,7 +2637,12 @@ function createSandboxEnvironmentDriver(
     },
 
     async releaseRunLease(input) {
-      if (input.status === "expired" && input.lease.leasePolicy === "reuse_by_environment") {
+      const [run] = input.lease.heartbeatRunId ? await db.select().from(heartbeatRuns).where(and(
+        eq(heartbeatRuns.companyId, input.lease.companyId), eq(heartbeatRuns.id, input.lease.heartbeatRunId),
+      )) : [];
+      const nativeRemote = run?.runnerProfileJson && typeof run.runnerProfileJson === "object" &&
+        !Array.isArray(run.runnerProfileJson) && run.runnerProfileJson.nativeRemoteRuntimeAssetLocator !== undefined;
+      if (!nativeRemote && input.status === "expired" && input.lease.leasePolicy === "reuse_by_environment") {
         return await destroyReusableSandboxLease({
           environment: input.environment,
           lease: input.lease,
@@ -2545,7 +2677,9 @@ function createSandboxEnvironmentDriver(
       }
 
       let cleanupStatus: "success" | "failed" = "success";
+      let termination: Record<string, unknown> | undefined;
       try {
+        if (nativeRemote) termination = await stopNativeLease(input.lease);
         await releaseSandboxProviderLease({
           config: parsed.config,
           providerLeaseId: input.lease.providerLeaseId,
@@ -2554,13 +2688,17 @@ function createSandboxEnvironmentDriver(
       } catch {
         cleanupStatus = "failed";
       }
-      const releaseStatus = input.lease.leasePolicy === "retain_on_failure" && input.status === "failed"
-        ? "retained" as const
-        : input.status;
-      return await environmentsSvc.releaseLease(input.lease.id, releaseStatus, {
-        failureReason: input.status === "failed" ? "adapter_or_run_failure" : undefined,
+      const releaseStatus = cleanupStatus === "failed" ? "pending_cleanup" as const
+        : input.lease.leasePolicy === "retain_on_failure" && input.status === "failed"
+          ? "retained" as const : input.status;
+      const released = await environmentsSvc.releaseLease(input.lease.id, releaseStatus, {
+        failureReason: input.status === "failed" ? "adapter_or_run_failure" : cleanupStatus === "failed" ? "release_cleanup_failed" : undefined,
         cleanupStatus,
+        ...(cleanupStatus === "success" && termination ? { remoteExecutionTermination: termination } : {}),
       });
+      if (released && cleanupStatus === "success" && termination && input.lease.heartbeatRunId)
+        await recordNativeRemoteWorkloadStopped(db, { companyId: input.lease.companyId, runId: input.lease.heartbeatRunId });
+      return released;
     },
 
     async retryPendingSandboxTeardown(input) {
@@ -2655,10 +2793,12 @@ function createSandboxEnvironmentDriver(
         metadataConfig,
         { issueId: input.lease.issueId, heartbeatRunId: input.lease.heartbeatRunId },
       );
+      const termination = await stopNativeLease(input.lease);
       await destroySandboxProviderLease({
         config: cleanupConfig,
         providerLeaseId: input.lease.providerLeaseId,
       });
+      return termination;
     },
 
     async isPendingCleanupWorkerReady(input) {
@@ -2779,6 +2919,24 @@ function createSandboxEnvironmentDriver(
     },
 
     async execute(input) {
+      if (!input.lease.metadata?.sandboxProviderPlugin && options.executeSandboxTask) {
+        const nativeResult = await options.executeSandboxTask({
+          companyId: input.lease.companyId,
+          runId: input.lease.heartbeatRunId,
+          leaseId: input.lease.id,
+          command: input.command,
+          args: input.args,
+          cwd: input.cwd,
+          env: input.env,
+          stdin: input.stdin,
+          timeoutMs: input.timeoutMs,
+          signal: input.signal,
+          nativePreparationPurpose: input.nativePreparationPurpose,
+          modelBrokerSessionPhase: input.modelBrokerSessionPhase,
+          onOutput: input.onLog,
+        });
+        if (nativeResult) return nativeResult;
+      }
       // Plugin-backed sandbox providers: delegate command execution.
       if (input.lease.metadata?.sandboxProviderPlugin && pluginWorkerManager) {
         // Read the active run-parent context once. The host mints the plugin
@@ -3207,7 +3365,7 @@ function createSandboxEnvironmentDriver(
     failureReason: string;
   }): Promise<EnvironmentLease | null> {
     let cleanupStatus: "success" | "failed" = "success";
-    let termination: ReturnType<typeof remoteTerminationReceipt>;
+    let termination: Record<string, unknown> | undefined;
     const metadata = input.lease.metadata ?? {};
 
     try {
@@ -3252,6 +3410,7 @@ function createSandboxEnvironmentDriver(
         if (parsed.driver !== "sandbox") {
           cleanupStatus = "failed";
         } else {
+          termination = await stopNativeLease(input.lease);
           await destroySandboxProviderLease({
             config: parsed.config,
             providerLeaseId: input.lease.providerLeaseId,
@@ -3262,7 +3421,7 @@ function createSandboxEnvironmentDriver(
       cleanupStatus = "failed";
     }
 
-    return await environmentsSvc.releaseLease(
+    const released = await environmentsSvc.releaseLease(
       input.lease.id,
       cleanupStatus === "success" ? "expired" : "pending_cleanup",
       {
@@ -3273,6 +3432,9 @@ function createSandboxEnvironmentDriver(
         ...(cleanupStatus === "success" && termination ? { remoteExecutionTermination: termination } : {}),
       },
     );
+    if (released && cleanupStatus === "success" && termination && input.lease.heartbeatRunId)
+      await recordNativeRemoteWorkloadStopped(db, { companyId: input.lease.companyId, runId: input.lease.heartbeatRunId });
+    return released;
   }
 }
 
@@ -3527,7 +3689,7 @@ function createPluginEnvironmentDriver(
         providerLeaseId: input.lease.providerLeaseId,
         leaseMetadata: input.lease.metadata ?? undefined,
       });
-      return await environmentsSvc.releaseLease(input.lease.id, input.status);
+      return await environmentsSvc.releaseLease(input.lease.id, input.status, { cleanupStatus: "success" });
     },
 
     async resumeRunLease(input) {
@@ -3575,6 +3737,9 @@ function createPluginEnvironmentDriver(
       });
       return await environmentsSvc.releaseLease(input.lease.id, "failed", {
         failureReason: input.failureReason ?? "lease_destroyed",
+        cleanupStatus: "success",
+        ...(input.lease.status === "pending_cleanup" && typeof input.lease.metadata?.pendingCleanupAttemptId === "string"
+          ? { expectedPendingCleanupAttemptId: input.lease.metadata.pendingCleanupAttemptId } : {}),
       });
     },
 
@@ -3703,6 +3868,22 @@ export function environmentRuntimeService(
   options: {
     drivers?: EnvironmentRuntimeDriver[];
     pluginWorkerManager?: PluginWorkerManager;
+    stopSandboxRunLease?: (input: { companyId: string; runId: string; leaseId: string }) => Promise<unknown>;
+    executeSandboxTask?: (input: {
+      companyId: string;
+      runId: string | null;
+      leaseId: string;
+      command: string;
+      args?: string[];
+      cwd?: string;
+      env?: Record<string, string>;
+      stdin?: string;
+      timeoutMs?: number;
+      signal?: AbortSignal;
+      nativePreparationPurpose?: "provider_artifact" | "native_session_start" | "native_harness_state" | "native_workspace_prepare" | "native_runtime_context_prepare" | "native_provider_data_erasure_probe" | "native_attachment_stage" | "native_attachment_cleanup";
+      modelBrokerSessionPhase?: "start" | "refresh" | "stop";
+      onOutput?: (stream: "stdout" | "stderr", chunk: string) => void | Promise<void>;
+    }) => Promise<PluginEnvironmentExecuteResult | null>;
     pluginWorkerReadyTimeoutMs?: number;
     pluginWorkerReadyPollMs?: number;
     pendingCleanupWriteAttempts?: number;
@@ -3720,6 +3901,8 @@ export function environmentRuntimeService(
     createSshEnvironmentDriver(db),
     createSandboxEnvironmentDriver(db, {
       pluginWorkerManager: options.pluginWorkerManager,
+      executeSandboxTask: options.executeSandboxTask,
+      stopSandboxRunLease: options.stopSandboxRunLease,
       pluginWorkerReadyTimeoutMs: options.pluginWorkerReadyTimeoutMs,
       pluginWorkerReadyPollMs: options.pluginWorkerReadyPollMs,
       pendingCleanupWriteAttempts: options.pendingCleanupWriteAttempts,
@@ -3804,6 +3987,8 @@ export function environmentRuntimeService(
        * environment with the 403 `environment_company_mismatch`.
        */
       assertCompanyBinding?: boolean;
+      /** Current Native coordinator capability for same-run lease reattachment. */
+      nativeLeaseOwner?: string;
     }): Promise<EnvironmentRuntimeLeaseRecord> {
       if (input.environment.status !== "active") {
         throw new Error(`Environment "${input.environment.name}" is not active.`);
@@ -3813,6 +3998,19 @@ export function environmentRuntimeService(
         persistedExecutionWorkspace: input.persistedExecutionWorkspace,
       });
       const driver = requireDriver(input.environment);
+      if (input.nativeLeaseOwner && input.heartbeatRunId && input.issueId && input.environment.driver === "sandbox") {
+        const lease = await reattachNativeSameRunSandboxLease({
+          db,
+          companyId: input.companyId,
+          environment: input.environment,
+          issueId: input.issueId,
+          heartbeatRunId: input.heartbeatRunId,
+          agentId: input.agentId ?? null,
+          executionWorkspaceId: leaseContext.executionWorkspaceId,
+          leaseOwner: input.nativeLeaseOwner,
+        });
+        return { environment: input.environment, lease, leaseContext };
+      }
       const lease = await driver.acquireRunLease({
         companyId: input.companyId,
         environment: input.environment,

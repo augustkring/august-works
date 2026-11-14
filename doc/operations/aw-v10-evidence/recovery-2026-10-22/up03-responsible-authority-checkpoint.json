@@ -1,0 +1,52 @@
+{
+  "date": "2026-10-22T20:59:03.756276+00:00",
+  "requirement": "UP03 original responsible-Human current account/membership authority on repeated native decisions",
+  "changes": [
+    "Removed actor.__responsibleUserSnapshotMemo mutation and positive/negative snapshot reuse.",
+    "Removed onBehalfOfMemberships DTO shortcut that asserted userExists without a native account read.",
+    "Existing responsible intersection and inbox target checks now call original DB snapshot loader for each decision; original prepared and transaction-scoped locked Source owners remain intact."
+  ],
+  "sourceHashesVerifiedBeforeAfterFinalGreen": {
+    "server/src/services/authorization.ts": "26b105a8ed3b4f7a32c98d8547fb81c625ae9d3617e0a34559421aa450c45d12",
+    "server/src/__tests__/authorization-service.test.ts": "448607791d746ce6b4f2c1c84438dee6b9f7cbf791fdf80aff38b8813093da5a",
+    "packages/db/src/schema/projects.ts": "3ab9ce78c835b3fd0bc0127dab5ab9231cb4e935e832cfdf8502e1f79068cc00",
+    "packages/db/src/schema/memory.ts": "93f70411a294f323b66fc413a9882e834eec208b6b210a631be7365f77d8d51a",
+    "packages/db/src/migrations/0504_conscious_sleepwalker.sql": "5a9e21fac154e2ff5bfb3dd8be9c5d200b7e2eca48e3f67924d5377bf38f6b6a"
+  },
+  "runs": [
+    {
+      "log": "up03-responsible-authority-red.log.txt",
+      "sha256": "1f6b22024087f6579d4a5e1f1ae0e952ef835bf4eaf8e30324d75dc08ced93fa",
+      "exitCode": 1,
+      "result": "actual PostgreSQL: three failures/80 skipped; withdrawn-Human skill effect, forged membership DTO missing account, same-actor erased account with retained membership each returned allowed:true"
+    },
+    {
+      "log": "up03-responsible-authority-green.log.txt",
+      "sha256": "4a0ac0d5a7f5b09922140de5aa48dd92c6aa81e4123aeae408fbf81dfde2763a",
+      "exitCode": 1,
+      "result": "actual PostgreSQL:82 passed/1 failed; new cases passed; retained compiled Source case still denied but diagnostic changed from stale UNAUTHORIZED to accurate UNAVAILABLE"
+    },
+    {
+      "log": "up03-responsible-authority-green-2.log.txt",
+      "sha256": "7f4a016033525a3079306c4a841068572d54e124f5b4f5b2620fba956b266154",
+      "exitCode": 0,
+      "result": "actual PostgreSQL:83 passed; corrected diagnostic expectation preserves denial and prepared/ordinary owner equality"
+    }
+  ],
+  "commands": {
+    "red": "NODE_OPTIONS=--max-old-space-size=2048 node node_modules/vitest/vitest.mjs run server/src/__tests__/authorization-service.test.ts --maxWorkers=1 -t 'responsible authority freshness'",
+    "green": "NODE_OPTIONS=--max-old-space-size=2048 node node_modules/vitest/vitest.mjs run server/src/__tests__/authorization-service.test.ts --maxWorkers=1"
+  },
+  "qualification": [
+    "Actual PostgreSQL existing canonical full migrator; service software fixtures, no authentication transport/provider claim.",
+    "Same actor and service instance reused across actual membership/account mutation; retained membership explicitly asserted after account deletion; restored membership permits the original granted effect again.",
+    "No production source changes during any recorded capture. Only the diagnostic expectation changed between full Green attempts."
+  ],
+  "limits": [
+    "Fresh decisions do not pin authority through subsequent waits; callers still need the original final admission after their last wait and native transaction/source locking.",
+    "Normal downstream type checks and all derivatives/mixed-writer/rollback admission remain parent-coordinated open qualification; no whole-UP03/V10 completion claim."
+  ],
+  "cleanupObserved": {
+    "activeOwnedAuthorizationPostgresProcesses": []
+  }
+}

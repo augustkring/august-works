@@ -1,0 +1,85 @@
+{
+  "parentCommit": "eeb702d0cee1ae21edaaee24b7bee6cb8f619333",
+  "requirements": [
+    "KRN-01"
+  ],
+  "sourcePinsFile": "source-pins.json",
+  "checks": {
+    "finalNativeCommentOwner": {
+      "exit": 0,
+      "passed": 9,
+      "suites": 1,
+      "log": "native-manual-comment-audit-checked.log"
+    },
+    "finalBuiltCookieAndAuthenticatorBrowser": {
+      "exit": 0,
+      "passed": 1,
+      "log": "native-manual-comment-audit-browser.log"
+    },
+    "finalServerCompiler": {
+      "exit": 0,
+      "log": "native-manual-comment-audit-types.log"
+    },
+    "currentPublicProjectionSuite": {
+      "passed": 6,
+      "suites": 1,
+      "log": "native-manual-comment-audit-final.log",
+      "gateExit": 1,
+      "limit": "The public projection suite passed; the separate comment test expected HTTP private-work admission incorrectly. The unchanged product422 guard remains closed and the corrected9-case comment suite passes."
+    },
+    "earlierSiblingOwnerStage": {
+      "passed": 26,
+      "suites": 2,
+      "log": "native-manual-comment-owners.log",
+      "gateExit": 1,
+      "limit": "Task13 and Project13 passed after the shared SQL extension. The whole gate failed one comment metadata fixture, with32 total passes. A misnamed public-test CLI path matched no suite; no public-suite coverage is claimed from this invocation. Later production changes only link the comment source audit to its Task."
+    },
+    "earlierCommentAndPublicStage": {
+      "exit": 0,
+      "passed": 14,
+      "suites": 2,
+      "log": "native-manual-comment-final.log",
+      "limit": "Before the comment audit parent-link change and added private-event control."
+    },
+    "earlierBuiltBrowser": {
+      "exit": 0,
+      "passed": 1,
+      "log": "native-manual-comment-browser.log",
+      "limit": "Before the comment audit parent-link change; superseded by the final browser."
+    },
+    "earlierServerCompiler": {
+      "exit": 0,
+      "log": "native-manual-comment-types.log",
+      "limit": "Before the comment audit parent-link change; superseded by the final compiler."
+    },
+    "initialFixture": {
+      "exit": 1,
+      "failed": 1,
+      "passed": 6,
+      "log": "native-manual-comment-initial.log",
+      "limit": "The test metadata omitted required version/sections. The second fixture still supplied an empty sections array, rejected by the maintained min1 contract. Final fixture uses the existing valid structured-text shape without weakening the schema."
+    },
+    "privateHttpFixture": {
+      "exit": 1,
+      "failed": 1,
+      "passed": 14,
+      "log": "native-manual-comment-audit-final.log",
+      "limit": "An initial private live-event control expected201 from the original HTTP owner. It correctly returned422 under the existing closed private-work admission. The corrected test asserts422 and uses only the native domain owner to qualify private event narrowing."
+    }
+  },
+  "observations": [
+    "Only the ordinary original HTTP comment branch supplies the actual native Board/session actor. The original service admits independent direct user body input, excluding run/agent attribution, structured metadata/presentation, attachments, imported timestamps and specialized authorizations. Other comment constructors remain unknown.",
+    "Native User/session and current non-viewer membership or actual recent passkey-qualified instance role are pinned before privacy-tree and Task row locks. Canonical current issue:comment and Task-source privacy checks narrow authority; successful writes and replay recheck source-session expiry and operator recency against actual DB wall time.",
+    "Exact user/request-ID freshness is checked under the actual Task UPDATE lock. Only a fresh INSERT chooses protocol1; its actual stored body/presentation/metadata bind to the canonical DB body hash and digest. The Task UUID is retained as a current policy anchor, not as a claim that its body was copied. The private INSERT protocol argument alone creates no known source proof.",
+    "Historical protocol0 and unknown protocol1 rows are not restamped. Service-only author attribution and structured input remain unknown. Existing actual tombstoning invalidates proof monotonically, while queued body and metadata/erasure writers already invalidate changed hashed bytes.",
+    "The actual Human source audit is persisted with the comment in the same transaction. It uses the native parent issue entity and identifies the exact comment in details, so existing native live-event readers enforce the Task source boundary. Source notifications follow commit and publication failure cannot undo an acknowledged commit. Audit failure rolls back the comment.",
+    "A real private-domain comment and its actual emitted source event verify that the owner can receive it and another current member cannot. The product HTTP private-work guard is separately asserted422 and remains closed. The event control is a native domain fixture, not private HTTP/product acceptance.",
+    "The final built UI/localhost maintained native cookie/password/TOTP/recovery/software virtual-UV passkey lifecycle passes. It also verifies actual original HTTP Task, Project and comment body hashes/digests, hidden DTO fields and actual Human source audits, including the comment-to-Task audit link."
+  ],
+  "limits": [
+    "Domain fixtures use actual PostgreSQL User/session/membership/Task/comment/audit owners with a structural HTTP actor carrier. They do not qualify a cookie or physical authenticator. The separate browser supplies real maintained cookie and virtual-authenticator evidence only.",
+    "Current final source pins identify current files; earlier successful, failed and superseded check stages are retained with their explicit limits. A passed suite inside a failed fixture gate is identified as such, not a passed whole gate.",
+    "The existing company HTTP activity/audit read families still require current source-aware pre-limit privacy/lifetime work. The new audit parent link qualifies the existing native live-event narrowing only; it is not complete activity, export or streaming acceptance.",
+    "Other payload producers/mutations, six typed/private-Memory/temporal cases, full Native input receipt construction and source-aware read lifetimes remain open. No run protocol, private-work admission, full V10/PR-ready, release, compliance, merge or deployment acceptance is claimed."
+  ]
+}

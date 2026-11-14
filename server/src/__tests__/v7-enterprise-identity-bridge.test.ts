@@ -15,6 +15,7 @@ const policy = {
     sourceRevision: "a".repeat(40),
     expiresAt: new Date(Date.now() + 86400000).toISOString(),
   },
+  updatedAt: new Date(),
   scimTokenHash: null,
   scimCredentialId: null,
   scimExpiresAt: null,

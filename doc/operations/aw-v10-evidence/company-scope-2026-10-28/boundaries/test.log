@@ -1,0 +1,15 @@
+
+ RUN  v4.1.11 /workspace/v10-dep-qualification/server
+
+ ✓ src/__tests__/v5-scope-organization-provider.test.ts > V5 company boundaries > isolated bindings cannot be attached to two presences; shared state requires each company's acknowledgement 189ms
+ ✓ src/__tests__/v5-scope-organization-provider.test.ts > V5 company boundaries > explicit read delegation needs matching active presences, local policy and current human authority; it cannot mutate 222ms
+ ✓ src/__tests__/v5-scope-organization-provider.test.ts > V5 company boundaries > requires target acceptance of relationships and relationships confer no data access 32ms
+ ✓ src/__tests__/v5-scope-organization-provider.test.ts > V5 company boundaries > units reject cycles, cross-company principals and invented company access 75ms
+ ✓ src/__tests__/v5-scope-organization-provider.test.ts > V5 company boundaries > provider configuration changes invalidate proof and repeated discovery cannot clear drift 89ms
+ ✓ src/__tests__/v5-scope-organization-provider.test.ts > private memory and sensitive source restrictions survive cross-company normalization 1ms
+
+ Test Files  1 passed (1)
+      Tests  6 passed (6)
+   Start at  07:37:12
+   Duration  18.08s (transform 9.18s, setup 76ms, import 13.35s, tests 4.52s, environment 0ms)
+

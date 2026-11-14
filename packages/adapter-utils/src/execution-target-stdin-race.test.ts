@@ -1,5 +1,5 @@
 import { execFile as execFileCallback, spawn } from "node:child_process";
-import { symlinkSync } from "node:fs";
+import { existsSync, symlinkSync } from "node:fs";
 import { chmod, lstat, mkdir, mkdtemp, readFile, readdir, readlink, rename, rm, writeFile } from "node:fs/promises";
 import net from "node:net";
 import os from "node:os";
@@ -666,6 +666,30 @@ describe("deterministic remote process-session wrapper shutdown (PAP-5316)", () 
   // path) is still running. Production host code never does this — it never
   // matches or signals a process by name or command line.
   async function findLivePidsByArgvSubstring(substring: string): Promise<number[]> {
+    // The isolated test worker intentionally omits procps, so `ps` is not a
+    // reliable harness dependency there. Linux /proc provides the same
+    // read-only identity check without requiring a package in the worker.
+    if (process.platform === "linux" && existsSync("/proc")) {
+      const pids: number[] = [];
+      for (const entry of await readdir("/proc").catch(() => [])) {
+        if (!/^\d+$/.test(entry)) continue;
+        try {
+          const [stat, commandLine] = await Promise.all([
+            readFile(`/proc/${entry}/stat`, "utf8"),
+            readFile(`/proc/${entry}/cmdline`),
+          ]);
+          const closingParen = stat.lastIndexOf(")");
+          if (closingParen < 0) continue;
+          const state = stat.slice(closingParen + 2).trim().split(/\s+/, 1)[0];
+          if (state === "Z" || state === "X") continue;
+          if (commandLine.toString("utf8").includes(substring)) pids.push(Number(entry));
+        } catch {
+          // The process may exit between enumeration and its /proc reads.
+        }
+      }
+      return pids;
+    }
+
     try {
       const { stdout } = await execFile("ps", ["-eo", "pid=,args="]);
       const pids: number[] = [];
@@ -744,6 +768,66 @@ describe("deterministic remote process-session wrapper shutdown (PAP-5316)", () 
       })();
     }
     return fakeBirthtimePreloadPath;
+  }
+
+  let probeLifetimePreloadDir: string | null = null;
+  afterAll(async () => {
+    if (probeLifetimePreloadDir) await rm(probeLifetimePreloadDir, { recursive: true, force: true }).catch(() => undefined);
+  });
+  let probeLifetimePreloadPath: Promise<string> | null = null;
+  async function getProbeLifetimePreloadPath(): Promise<string> {
+    probeLifetimePreloadPath ??= (async () => {
+      const dir = await mkdtemp(path.join(os.tmpdir(), "paperclip-probe-lifetime-preload-"));
+      probeLifetimePreloadDir = dir;
+      const preloadPath = path.join(dir, "probe-lifetime-preload.cjs");
+      await writeFile(preloadPath, [
+        `const fs = require("fs");`,
+        `const path = require("path");`,
+        `const mode = process.env.PAPERCLIP_TEST_PROBE_LIFETIME;`,
+        `const sessionDir = process.env.PAPERCLIP_PROCESS_SESSION_DIR;`,
+        `const probePath = path.join(sessionDir, ".paperclip-birthtime-probe-" + process.pid + "-1");`,
+        `const tracePath = path.join(sessionDir, ".probe-lifetime.json");`,
+        `const events = [];`,
+        `let probeHandle;`,
+        `const save = () => { fs.writeFileSync(tracePath + ".tmp", JSON.stringify(events)); fs.renameSync(tracePath + ".tmp", tracePath); };`,
+        `const originalOpen = fs.promises.open.bind(fs.promises);`,
+        `fs.promises.open = async (candidatePath, ...args) => {`,
+        `  const handle = await originalOpen(candidatePath, ...args);`,
+        `  if (String(candidatePath) === probePath) {`,
+        `    probeHandle = handle;`,
+        `    const originalClose = handle.close.bind(handle);`,
+        `    handle.close = async () => {`,
+        `      const fd = handle.fd;`,
+        `      await originalClose();`,
+        `      let descriptorClosed = false;`,
+        `      try { fs.fstatSync(fd); } catch (error) { descriptorClosed = error.code === "EBADF"; }`,
+        `      events.push({ kind: "closed", descriptorClosed });`,
+        `      save();`,
+        `    };`,
+        `    if (mode === "stat_failure") handle.stat = async () => { throw Object.assign(new Error("test probe fstat failure"), { code: "EIO" }); };`,
+        `  }`,
+        `  return handle;`,
+        `};`,
+        `const originalLstat = fs.promises.lstat.bind(fs.promises);`,
+        `fs.promises.lstat = async (candidatePath, ...args) => {`,
+        `  if (String(candidatePath) === probePath) {`,
+        `    let descriptorOpen = false;`,
+        `    try { fs.fstatSync(probeHandle.fd); descriptorOpen = true; } catch {}`,
+        `    events.push({ kind: "path", descriptorOpen });`,
+        `    save();`,
+        `    if (mode === "path_failure") throw Object.assign(new Error("test probe lstat failure"), { code: "EIO" });`,
+        `  }`,
+        `  return originalLstat(candidatePath, ...args);`,
+        `};`,
+        `const originalRm = fs.promises.rm.bind(fs.promises);`,
+        `fs.promises.rm = async (candidatePath, ...args) => {`,
+        `  if (String(candidatePath) === probePath && mode === "remove_failure") throw Object.assign(new Error("test probe remove failure"), { code: "EACCES" });`,
+        `  return originalRm(candidatePath, ...args);`,
+        `};`,
+      ].join("\n"), "utf8");
+      return preloadPath;
+    })();
+    return probeLifetimePreloadPath;
   }
 
   // A test-only preload for PAP-5355: it deterministically simulates a
@@ -879,6 +963,7 @@ describe("deterministic remote process-session wrapper shutdown (PAP-5316)", () 
     // (PAP-5374). seq 1 is sessionDir's probe (the first one
     // captureSessionIdentity() runs).
     fstatFailure?: { seq: 1 | 2 };
+    probeLifetime?: "success" | "stat_failure" | "path_failure" | "remove_failure";
   }) {
     const sessionDir = await mkdtemp(path.join(options?.parentDir ?? os.tmpdir(), "paperclip-wrapper-lifecycle-"));
     cleanupDirs.push(sessionDir);
@@ -912,6 +997,10 @@ describe("deterministic remote process-session wrapper shutdown (PAP-5316)", () 
       env.PAPERCLIP_TEST_PROBE_SWAP_MODE = options.probeSwap.mode;
       if (options.probeSwap.symlinkTarget) env.PAPERCLIP_TEST_PROBE_SWAP_SYMLINK_TARGET = options.probeSwap.symlinkTarget;
       execArgv.push("--require", await getProbeSwapPreloadPath());
+    }
+    if (options?.probeLifetime) {
+      env.PAPERCLIP_TEST_PROBE_LIFETIME = options.probeLifetime;
+      execArgv.push("--require", await getProbeLifetimePreloadPath());
     }
     if (options?.fstatFailure) {
       env.PAPERCLIP_TEST_FSTAT_FAILURE_SEQ = String(options.fstatFailure.seq);
@@ -2139,4 +2228,26 @@ describe("deterministic remote process-session wrapper shutdown (PAP-5316)", () 
     const probePath = path.join(wrapper.sessionDir, `.paperclip-birthtime-probe-${wrapper.pid}-1`);
     expect((await lstat(probePath)).isFile()).toBe(true);
   }, 15_000);
+
+  it.each(["success", "stat_failure", "path_failure", "remove_failure"] as const)(
+    "T26 retains the real probe descriptor through cleanup and closes it (%s)",
+    async (mode) => {
+      const wrapper = await startWrapperProcess({ outputToStdout: false, probeLifetime: mode });
+      const tracePath = path.join(wrapper.sessionDir, ".probe-lifetime.json");
+      type LifetimeEvent = { kind: "path" | "closed"; descriptorOpen?: boolean; descriptorClosed?: boolean };
+      const readTrace = async (): Promise<LifetimeEvent[]> => JSON.parse(await readFile(tracePath, "utf8").catch(() => "[]"));
+      await waitFor(async () => (await readTrace()).some((event) => event.kind === "closed"), 4_000);
+      const events = await readTrace();
+      const checks = events.filter((event) => event.kind === "path");
+      expect(checks).toEqual(mode === "stat_failure" ? [] : [{ kind: "path", descriptorOpen: true }]);
+      expect(events.filter((event) => event.kind === "closed")).toEqual([{ kind: "closed", descriptorClosed: true }]);
+      const probePath = path.join(wrapper.sessionDir, `.paperclip-birthtime-probe-${wrapper.pid}-1`);
+      if (mode === "success") {
+        await expect(lstat(probePath)).rejects.toThrow();
+      } else {
+        expect((await lstat(probePath)).isFile()).toBe(true);
+      }
+    },
+    15_000,
+  );
 });

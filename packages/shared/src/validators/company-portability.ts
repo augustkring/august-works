@@ -7,6 +7,7 @@ import {
   issueCommentPresentationSchema,
 } from "./issue.js";
 import { routineVariableSchema } from "./routine.js";
+import { companyLocaleSchema, companyTimeZoneSchema } from "./company.js";
 
 export const portabilityIncludeSchema = z
   .object({
@@ -15,6 +16,7 @@ export const portabilityIncludeSchema = z
     projects: z.boolean().optional(),
     issues: z.boolean().optional(),
     skills: z.boolean().optional(),
+    supportCases: z.boolean().optional(),
   })
   .partial();
 
@@ -47,6 +49,8 @@ export const portabilityCompanyManifestEntrySchema = z.object({
   name: z.string().min(1),
   description: z.string().nullable(),
   logoPath: z.string().nullable(),
+  locale: companyLocaleSchema.default("en"),
+  timezone: companyTimeZoneSchema.default("UTC"),
   requireBoardApprovalForNewAgents: z.boolean(),
   feedbackDataSharingEnabled: z.boolean().default(false),
   feedbackDataSharingConsentAt: z.string().datetime().nullable().default(null),
@@ -112,6 +116,14 @@ export const portabilitySkillManifestEntrySchema = z.object({
 });
 
 export const portabilityProjectManifestEntrySchema = z.object({
+  sourceCompanyId: z.string().uuid().optional(),
+  sourceProjectId: z.string().uuid().optional(),
+  visibility: z.enum(["open", "private"]).optional(),
+  privacyOwnerUserId: z.string().nullable().optional(),
+  personalOwnerUserId: z.string().nullable().optional(),
+  sourceIssueIds: z.array(z.string().uuid()).max(256).optional(),
+  sourceProjectIds: z.array(z.string().uuid()).max(256).optional(),
+  sourceProvenanceQualified: z.boolean().optional(),
   slug: z.string().min(1),
   name: z.string().min(1),
   path: z.string().min(1),
@@ -201,6 +213,14 @@ export const portabilityIssueAttachmentManifestEntrySchema = z.object({
 });
 
 export const portabilityIssueManifestEntrySchema = z.object({
+  sourceCompanyId: z.string().uuid().optional(),
+  sourceIssueId: z.string().uuid().optional(),
+  visibility: z.enum(["open", "private"]).optional(),
+  privacyRootIssueId: z.string().uuid().nullable().optional(),
+  privacyParentIssueId: z.string().uuid().nullable().optional(),
+  privacySources: z.array(z.object({ sourceKind: z.enum(["issue", "project", "run", "workflow_run", "routine_run"]), sourceId: z.string().uuid() }).strict()).max(256).optional(),
+  responsibleUserId: z.string().nullable().optional(),
+  createdByUserId: z.string().nullable().optional(),
   slug: z.string().min(1),
   identifier: z.string().min(1).nullable(),
   title: z.string().min(1),
@@ -249,6 +269,7 @@ export const portabilityManifestSchema = z.object({
     projects: z.boolean(),
     issues: z.boolean(),
     skills: z.boolean(),
+    supportCases: z.boolean().optional(),
   }),
   company: portabilityCompanyManifestEntrySchema.nullable(),
   sidebar: portabilitySidebarOrderSchema.nullable(),
@@ -331,6 +352,8 @@ export const portabilityAdapterOverrideSchema = z.object({
 });
 
 export const companyPortabilityImportSchema = companyPortabilityPreviewSchema.extend({
+  expectedSourceFingerprint: z.string().regex(/^[a-f0-9]{64}$/).optional(),
+  sourceReleaseReview: z.strictObject({ confirmed: z.literal(true), sourceFingerprint: z.string().regex(/^[a-f0-9]{64}$/) }).optional(),
   adapterOverrides: z.record(z.string().min(1), portabilityAdapterOverrideSchema).optional(),
   secretValues: z.record(z.string().min(1), z.string()).optional(),
   pauseAutomations: z.boolean().optional(),

@@ -1,0 +1,3 @@
+timeout_seconds=240
+test_file=src/__tests__/v6-costs.integration.test.ts
+test_pattern=V6 operator cost evidence and automatic spend admission

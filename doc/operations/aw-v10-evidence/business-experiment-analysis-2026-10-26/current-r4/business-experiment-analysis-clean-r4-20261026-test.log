@@ -1,0 +1,29 @@
+
+ RUN  v4.1.11 /workspace/v10-dep-qualification/server
+
+ ✓ src/__tests__/business-experiment-analysis.integration.test.ts > Native experiment final capture and human interpretation on migrated PostgreSQL > resolves stopped experiment evidence into a typed Native chat card without inventing an effect 3152ms
+ ✓ src/__tests__/business-experiment-analysis.integration.test.ts > Native experiment final capture and human interpretation on migrated PostgreSQL > binds exact interpreted experiment evidence before a separate canonical choice and erases dependent prose from final-capture ancestry 20154ms
+ ✓ src/__tests__/business-experiment-analysis.integration.test.ts > Native experiment final capture and human interpretation on migrated PostgreSQL > reads a separately interpreted exact Experiment through the actual SDK without upgrading its incomplete trial 8875ms
+ ✓ src/__tests__/business-experiment-analysis.integration.test.ts > Native experiment final capture and human interpretation on migrated PostgreSQL > rejects cross-tenant/altered interpretations and hidden enrolled sources without admitting a prospective context 6213ms
+ ✓ src/__tests__/business-experiment-analysis.integration.test.ts > Native experiment final capture and human interpretation on migrated PostgreSQL > inherits current project ancestry at downstream capture without rewriting recorded experiment facts 8294ms
+ ✓ src/__tests__/business-experiment-analysis.integration.test.ts > Native experiment final capture and human interpretation on migrated PostgreSQL > preserves exact captured experiment results after metric republication and blocks new preparation without rebinding 13218ms
+ ✓ src/__tests__/business-experiment-analysis.integration.test.ts > Native experiment final capture and human interpretation on migrated PostgreSQL > actual migrated owner admits registered effect only with balanced pretreatment invariants (false; DoWhy=false) 69278ms
+ ✓ src/__tests__/business-experiment-analysis.integration.test.ts > Native experiment final capture and human interpretation on migrated PostgreSQL > actual migrated owner admits registered effect only with balanced pretreatment invariants (true; DoWhy=false) 24225ms
+ ✓ src/__tests__/business-experiment-analysis.integration.test.ts > Native experiment final capture and human interpretation on migrated PostgreSQL > captures all assigned native outcomes at one actual time including unexposed units, signs immutable receipts and permits one advisory interpretation 4428ms
+ ✓ src/__tests__/business-experiment-analysis.integration.test.ts > Native experiment final capture and human interpretation on migrated PostgreSQL > replays the historical fully copied outcome lineage without changing signed facts and erases its final-only project ancestry 14021ms
+ ✓ src/__tests__/business-experiment-analysis.integration.test.ts > Native experiment final capture and human interpretation on migrated PostgreSQL > withholds inference for a missing exposure receipt and requires explicit human abstention 4236ms
+ ✓ src/__tests__/business-experiment-analysis.integration.test.ts > Native experiment final capture and human interpretation on migrated PostgreSQL > retains unknown/material concurrent changes as an invalid causal gate without invented effects 3676ms
+ ✓ src/__tests__/business-experiment-analysis.integration.test.ts > Native experiment final capture and human interpretation on migrated PostgreSQL > admits explicit safety-stop analysis without future outcomes or confirmatory effects 2488ms
+ ✓ src/__tests__/business-experiment-analysis.integration.test.ts > Native experiment final capture and human interpretation on migrated PostgreSQL > a missed preregistered final-capture deadline invalidates actual retained outcomes 5058ms
+ ✓ src/__tests__/business-experiment-analysis.integration.test.ts > Native experiment final capture and human interpretation on migrated PostgreSQL > erases protocol, result and human prose when the actual final-capture project is erased with flags off 16437ms
+ ✓ src/__tests__/business-experiment-analysis.integration.test.ts > Native experiment final capture and human interpretation on migrated PostgreSQL > actual native company purge includes saved analyses and interpretations with rollout disabled 4165ms
+ ✓ src/__tests__/business-experiment-analysis.integration.test.ts > Native experiment final capture and human interpretation on migrated PostgreSQL > rejects omitted final outcomes at deferred commit and blocks ordinary receipt deletion 7319ms
+ ✓ src/__tests__/business-experiment-analysis.integration.test.ts > Native experiment final capture and human interpretation on migrated PostgreSQL > projects a current analysis without participant registers or operator identities and rechecks its Source 2423ms
+ ✓ src/__tests__/business-experiment-analysis.integration.test.ts > Native experiment final capture and human interpretation on migrated PostgreSQL > public analysis routes reject pasted result/integrity fields and preserve current account/no-store 3734ms
+ ✓ src/__tests__/business-experiment-analysis.integration.test.ts > Native experiment final capture and human interpretation on migrated PostgreSQL > rejects one forged Source or binary value among otherwise identical inserted outcome inputs 3816ms
+
+ Test Files  1 passed (1)
+      Tests  20 passed (20)
+   Start at  21:24:12
+   Duration  247.14s (transform 11.68s, setup 76ms, import 16.45s, tests 230.49s, environment 0ms)
+

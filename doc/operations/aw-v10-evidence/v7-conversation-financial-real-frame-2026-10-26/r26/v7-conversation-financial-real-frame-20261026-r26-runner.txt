@@ -1,0 +1,1 @@
+timeout_seconds=240ntest_file=src/__tests__/v7-model-reservations.integration.test.tsntest_pattern=settles the actual qualified conversation usage once and preserves the exact debit in canonical purgen

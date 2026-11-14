@@ -29,6 +29,8 @@ interface CreateChallengeResponse {
   pollPath: string;
   expiresAt: string;
   suggestedPollIntervalMs: number;
+  keyName?: string;
+  keyExpiresAt?: string | null;
 }
 
 interface ChallengeStatusResponse {
@@ -43,6 +45,18 @@ interface ChallengeStatusResponse {
   cancelledAt: string | null;
   expiresAt: string;
   approvedByUser: { id: string; name: string; email: string } | null;
+  keyName?: string;
+  keyExpiresAt?: string | null;
+}
+
+export interface ApprovedBoardKeyMetadata {
+  id: string;
+  name: string;
+  createdAt: string;
+  lastUsedAt: string | null;
+  revokedAt: string | null;
+  expiresAt: string | null;
+  token: string;
 }
 
 function defaultBoardAuthStore(): BoardAuthStore {
@@ -148,6 +162,10 @@ function sleep(ms: number) {
   return new Promise((resolve) => setTimeout(resolve, ms));
 }
 
+class BoardAuthRequestError extends Error {
+  constructor(message: string, readonly status: number, readonly retryAfterMs: number | null) { super(message); }
+}
+
 async function requestJson<T>(url: string, init?: RequestInit): Promise<T> {
   const headers = new Headers(init?.headers ?? undefined);
   if (init?.body !== undefined && !headers.has("content-type")) {
@@ -168,7 +186,10 @@ async function requestJson<T>(url: string, init?: RequestInit): Promise<T> {
       body && typeof body === "object" && typeof (body as { error?: unknown }).error === "string"
         ? (body as { error: string }).error
         : `Request failed: ${response.status}`;
-    throw new Error(message);
+    const retryAfter = response.headers.get("retry-after")?.trim();
+    const seconds = retryAfter && /^\d+(?:\.\d+)?$/.test(retryAfter) ? Number(retryAfter) : null;
+    const delay = seconds === null ? Date.parse(retryAfter ?? "") - Date.now() : seconds * 1000;
+    throw new BoardAuthRequestError(message, response.status, Number.isFinite(delay) && delay > 0 ? delay : null);
   }
 
   return response.json() as Promise<T>;
@@ -208,7 +229,10 @@ export async function loginBoardCli(params: {
   print?: boolean;
   openBrowser?: boolean;
   publicBaseUrl?: string;
-}): Promise<{ token: string; approvalUrl: string; userId?: string | null }> {
+  keyName?: string;
+  keyExpiresAt?: Date | null;
+  includeKeyMetadata?: boolean;
+}): Promise<{ token: string; approvalUrl: string; userId?: string | null; key?: ApprovedBoardKeyMetadata }> {
   const apiBase = normalizeApiBase(params.apiBase);
   const createUrl = `${apiBase}/api/cli-auth/challenges`;
   const command = params.command?.trim() || buildCliCommandLabel();
@@ -220,8 +244,22 @@ export async function loginBoardCli(params: {
       clientName: params.clientName?.trim() || "paperclipai cli",
       requestedAccess: params.requestedAccess,
       requestedCompanyId: params.requestedCompanyId?.trim() || null,
+      ...(params.keyName?.trim() ? { keyName: params.keyName.trim() } : {}),
+      ...(params.keyExpiresAt !== undefined
+        ? { keyExpiresAt: params.keyExpiresAt === null ? null : params.keyExpiresAt.toISOString() }
+        : {}),
     }),
   });
+  const expectedKeyName = params.keyName?.trim() || undefined;
+  const expectedKeyExpiresAt = params.keyExpiresAt === undefined
+    ? undefined
+    : params.keyExpiresAt === null ? null : params.keyExpiresAt.toISOString();
+  if (expectedKeyName !== undefined && challenge.keyName !== expectedKeyName) {
+    throw new Error("CLI auth challenge did not preserve the requested key name.");
+  }
+  if (expectedKeyExpiresAt !== undefined && challenge.keyExpiresAt !== expectedKeyExpiresAt) {
+    throw new Error("CLI auth challenge did not preserve the requested key expiration.");
+  }
 
   const publicBase = params.publicBaseUrl?.trim() || process.env.PAPERCLIP_PUBLIC_URL?.trim();
   const approvalUrl = publicBase
@@ -246,14 +284,24 @@ export async function loginBoardCli(params: {
 
   const expiresAtMs = Date.parse(challenge.expiresAt);
   const pollMs = Math.max(500, challenge.suggestedPollIntervalMs || 1000);
+  if (!Number.isFinite(expiresAtMs)) throw new Error("CLI auth challenge returned an invalid expiry.");
 
-  while (Number.isFinite(expiresAtMs) ? Date.now() < expiresAtMs : true) {
-    const status = await requestJson<ChallengeStatusResponse>(
-      `${apiBase}/api${challenge.pollPath}?token=${encodeURIComponent(challenge.token)}`,
-    );
+  while (Date.now() < expiresAtMs) {
+    let status: ChallengeStatusResponse;
+    try {
+      status = await requestJson<ChallengeStatusResponse>(
+        `${apiBase}/api${challenge.pollPath}?token=${encodeURIComponent(challenge.token)}`,
+      );
+    } catch (error) {
+      if (!(error instanceof BoardAuthRequestError) || error.status !== 429) throw error;
+      const remainingMs = expiresAtMs - Date.now();
+      if (remainingMs <= 0) break;
+      await sleep(Math.min(Math.max(pollMs, error.retryAfterMs ?? pollMs), remainingMs));
+      continue;
+    }
 
     if (status.status === "approved") {
-      const me = await requestJson<{ userId: string; user?: { id: string } | null }>(
+      const me = await requestJson<{ userId: string; keyId?: string | null; user?: { id: string } | null }>(
         `${apiBase}/api/cli-auth/me`,
         {
           headers: {
@@ -261,6 +309,23 @@ export async function loginBoardCli(params: {
           },
         },
       );
+      let key: ApprovedBoardKeyMetadata | undefined;
+      if (params.includeKeyMetadata) {
+        if (!me.keyId) throw new Error("Approved CLI key metadata is unavailable.");
+        const keys = await requestJson<Array<Omit<ApprovedBoardKeyMetadata, "token">>>(
+          `${apiBase}/api/board-api-keys`,
+          { headers: { authorization: `Bearer ${challenge.boardApiToken}` } },
+        );
+        const approvedKey = keys.find((row) => row.id === me.keyId);
+        if (!approvedKey) throw new Error("Approved CLI key metadata is unavailable.");
+        if (expectedKeyName !== undefined && approvedKey.name !== expectedKeyName) {
+          throw new Error("Approved CLI key name did not match the requested name.");
+        }
+        if (expectedKeyExpiresAt !== undefined && approvedKey.expiresAt !== expectedKeyExpiresAt) {
+          throw new Error("Approved CLI key expiration did not match the requested expiration.");
+        }
+        key = { ...approvedKey, token: challenge.boardApiToken };
+      }
       setStoredBoardCredential({
         apiBase,
         token: challenge.boardApiToken,
@@ -271,6 +336,7 @@ export async function loginBoardCli(params: {
         token: challenge.boardApiToken,
         approvalUrl,
         userId: me.userId ?? me.user?.id ?? null,
+        ...(key ? { key } : {}),
       };
     }
 

@@ -1,0 +1,43 @@
+(!) Your Vite config uses features that are unsupported by `configLoader: 'native'`, which is planned to become the default in a future major version of Vite:
+  - `__dirname` (vitest.config.ts:7:25). Use `import.meta.dirname` instead
+Set `VITE_CONFIG_NATIVE_IGNORE_WARNING=true` to suppress this warning.
+
+ RUN  v4.1.11 /workspace/blentera-v10
+
+ ❯ |@paperclipai/server| src/__tests__/v10-private-live-events.integration.test.ts (12 tests | 3 failed | 9 skipped) 13510ms
+     × ends a session deleted during an actual native source-lock wait before sending 820ms
+     × ends a session expired during an actual native source-lock wait before sending 641ms
+     × ends a session replaced during an actual native source-lock wait before sending 479ms
+
+⎯⎯⎯⎯⎯⎯⎯ Failed Tests 3 ⎯⎯⎯⎯⎯⎯⎯
+
+ FAIL  |@paperclipai/server| src/__tests__/v10-private-live-events.integration.test.ts > Private source identities at native live delivery > ends a session deleted during an actual native source-lock wait before sending
+ FAIL  |@paperclipai/server| src/__tests__/v10-private-live-events.integration.test.ts > Private source identities at native live delivery > ends a session expired during an actual native source-lock wait before sending
+ FAIL  |@paperclipai/server| src/__tests__/v10-private-live-events.integration.test.ts > Private source identities at native live delivery > ends a session replaced during an actual native source-lock wait before sending
+AssertionError: expected { kind: 'message' } to deeply equal { kind: 'closed', code: 1008 }
+
+- Expected
++ Received
+
+  {
+-   "code": 1008,
+-   "kind": "closed",
++   "kind": "message",
+  }
+
+ ❯ src/__tests__/v10-private-live-events.integration.test.ts:160:29
+    158|         }
+    159|       });
+    160|       expect(await outcome).toEqual({ kind: "closed", code: 1008 });
+       |                             ^
+    161|     } finally {
+    162|       if (socket.readyState !== WebSocket.CLOSED) { const closed = onc…
+
+⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯[1/3]⎯
+
+
+ Test Files  1 failed (1)
+      Tests  3 failed | 9 skipped (12)
+   Start at  00:08:22
+   Duration  56.74s (transform 28.85s, setup 583ms, import 42.29s, tests 13.51s, environment 0ms)
+

@@ -1,7 +1,8 @@
 import { afterAll, beforeAll, describe, expect, it } from "vitest";
 import { eq } from "drizzle-orm";
 import { createDb, rolePackItems, rolePacks, rolePackVersions } from "@paperclipai/db";
-import { mergeRolePackItems, rolePackItemSchema, rolePackVersionInputSchema } from "@paperclipai/shared";
+import { mergeRolePackItems, rolePackItemSchema, rolePackVersionInputSchema, type NativePayloadSourceInput } from "@paperclipai/shared";
+import { nativeSha256 } from "../services/native-runtime/canonical.js";
 import { getEmbeddedPostgresTestSupport, startEmbeddedPostgresTestDatabase } from "./helpers/embedded-postgres.js";
 import { enableV5ForTest, seedV5Presences } from "./helpers/v5-fixtures.js";
 import { rolePackService } from "../services/role-packs.js";
@@ -38,9 +39,16 @@ describe.skipIf(!support.supported)("V5 immutable local Role Packs", () => {
     const next = await svc.createVersion(f.actor, f.home, pack.id, rolePackVersionInputSchema.parse({ items: [{ type: "recommended_skill", ref: "changed" }] }));
     await expect(svc.publish(f.actor, f.home, pack.id, next.id, null)).rejects.toMatchObject({ status: 409 });
     await svc.publish(f.actor, f.home, pack.id, next.id, draft.id);
-    const resolved = await svc.resolve(f.actor, f.home, f.presence.id);
+    const unrelated = await svc.create(f.actor, f.home, { key: "unselected-overlay", name: "Unselected", description: "" });
+    const unrelatedVersion = await svc.createVersion(f.actor, f.home, unrelated.id, rolePackVersionInputSchema.parse({ items: [] }));
+    await svc.publish(f.actor, f.home, unrelated.id, unrelatedVersion.id, null);
+    let captured: NativePayloadSourceInput[] = [];
+    const resolved = await svc.resolve(f.actor, f.home, f.presence.id, undefined, "task", inputs => { captured = inputs; });
+    expect(captured).toEqual([{ kind: "role_pack_version", rolePackId: pack.id, versionId: draft.id,
+      contentHash: nativeSha256({ summary: draft.summary, items: draft.items }) }]);
     expect(resolved.pins[0]!.versionId).toBe(draft.id);
     expect(resolved.items).toEqual(expect.arrayContaining([expect.objectContaining({ ref: "budget_hard_stop" }), expect.objectContaining({ ref: "source_provenance" }), expect.objectContaining({ ref: "local-context" })]));
+    expect(captured.some(input => input.kind === "role_pack_version" && [next.id, unrelatedVersion.id].includes(input.versionId))).toBe(false);
     await expect(db.update(rolePackVersions).set({ summary: "rewrite" }).where(eq(rolePackVersions.id, draft.id))).rejects.toThrow();
     await expect(db.update(rolePackItems).set({ item: rolePackItemSchema.parse({ type: "required_policy", ref: "budget_hard_stop" }) }).where(eq(rolePackItems.versionId, draft.id))).rejects.toThrow();
     await expect(db.insert(rolePackItems).values({ companyId: f.home, versionId: draft.id, ordinal: 9, item: rolePackItemSchema.parse({ type: "required_skill", ref: "injected" }) })).rejects.toThrow();

@@ -1,0 +1,67 @@
+{
+  "purpose": "RECOVERY ONLY; no activation, integration or broad qualification claim",
+  "capturedAtUtc": "2026-11-01T18:43:38.011200+00:00",
+  "mainHead": "eab0aad6872c873e53461d0ba2beda6d9692d3fb",
+  "mainDirtyPatchSha256": "d54ecc657147be02958b154994a755b0d6fbb42c5008572f84a9118708c0605d",
+  "sourceFileCount": 23,
+  "archive": {
+    "path": "private-candidates.tar.gz",
+    "bytes": 154853,
+    "sha256": "239412180fba2b71d8dd9abf181f1703027e519eccc08460912908f75dc629dd",
+    "verifiedEntries": 23
+  },
+  "host61Delta": {
+    "baseCheckpoint": "R68 / Host60",
+    "baseHost60SourcePinsSha256": "5c3aa8eb95c8eb351bb2cb00aa9f16b9b568fcd0f92f9c9b3384ade1518134c4",
+    "candidateHost61SourcePinsSha256": "ba86bef12c35883826529b8164812de1ea6f06b8942074ff32215b9fd4a8dcc8",
+    "sourcePathCounts": {
+      "base": 105,
+      "candidate": 107,
+      "added": 2,
+      "deleted": 0,
+      "changed": 1
+    },
+    "added": [
+      {
+        "path": "server/src/__tests__/native-selected-provider-preparation.integration.test.ts",
+        "candidateSha256": "23e209dc9a703f91cc8bcf8dce17238174d6c965a0ca00badf9d689318cce1db"
+      },
+      {
+        "path": "server/src/services/native-runtime/prepare-native-run.ts",
+        "candidateSha256": "4f86a9d81eb048a87fe9da387a9192ad738550ec47791eed4218d6e8daf6145e"
+      }
+    ],
+    "deleted": [],
+    "changed": [
+      {
+        "path": "server/src/__tests__/helpers/managed-native-opencode-e2e-fixture.ts",
+        "baseSha256": "6b46bf4b78a81d4ee05dda192e6ad522de40617487c26ab597231653895621fa",
+        "candidateSha256": "61035078d069a2df31df00289417db7038f9b30c0f1c6990c9e6b92a78ecf87e",
+        "bytes": 223146
+      }
+    ]
+  },
+  "r1102PostgresQualification": {
+    "status": "PASS",
+    "actualPostgres": true,
+    "tests": 8,
+    "skipped": 0,
+    "durationSeconds": 20.29,
+    "receiptSha256": "9a02851482971a82092ef80766fa14a441e0d212328c07d0313fe778959ce40c"
+  },
+  "references": {
+    "R68ManifestSha256": "427ffbde3f20db8e019f5b9167b732e8bcbed72583a21493b53a2d22bcdea000",
+    "R68ArchiveSha256": "0b08edc795f0c05f9a2c84769fdde3761b992ad7c0a1325d82a3d74c486068b3",
+    "Host61PinsSha256": "ba86bef12c35883826529b8164812de1ea6f06b8942074ff32215b9fd4a8dcc8",
+    "Host61RunnerSha256": "23ed5d417215a03dd33691713c9afcda7a6b4144eca63d9f5e54199ed47e229a",
+    "NativeR1102PinsSha256": "325e6ba0a7890a278fc10f96e3bf36e94abaae3fa7f7650737430ec7a78dd951",
+    "NativeR1102PatchSha256": "c0070b1759197e75a7dee4f33f7203b9e2317cfc047b7261a9ee5a9fb494ebde",
+    "R4InventoryPinsSha256": "a68127f5ac0b3c212d7ba03814563cc13ed15b09885fe112ebbc3c44638807e4",
+    "R4InventoryPlanSha256": "c2ad968d4f6e458ab81166b122fa8ed7fe302d4ccff7dc95cb2391a2eb102edb",
+    "R4InventoryAuditSha256": "6ed6cc9f2218be68761338aaed804f89f112c9166c27723c6131cdf2f8ebe09c",
+    "R4ReadmeSha256": "0cbd5b93edc728654f242a9532a780460f4b65ea8efa6e5690010abef6e087ec",
+    "FinalFreezePlanSha256": "284966709ba57ee1d8d016ecac371ec86ed5d8454be0ac74abfdf0d79e60d225",
+    "R2HelperSha256": "9f0619291221763b1e1d59e94af791d266672a7e5276d21bbda0414625135d29"
+  },
+  "qualificationStatus": "Host61 is frozen and its active qualification output is excluded. R1102 has scoped actual PostgreSQL preparation-owner coverage 8/8; no complete Host61/Worker, Native9 or final aggregate pass is claimed."
+}

@@ -1,0 +1,5 @@
+# Authenticated recovery attempt 080
+
+This one-test Playwright run used the authenticated/private/lan config, listed exactly one recovery test, and executed it. It failed after 60 seconds waiting for an idle chat: the issue was `blocked`, conversation state `active`, one agent reply existed, and no live run remained. The bounded semantic diagnostics reported no semantic denial or caught semantic binding/context exception. The content-free provider trace shows successful context/history/metric tool results followed by final items and `turn_completed` events. At 18:20:37 the server logged `native_session_cleanup_quarantined` while trying to mark the result `workspace_failed`; no underlying exception details were emitted. This is evidence of a runtime/finalization failure, not a semantic bridge denial.
+
+The archive retains the exact source pins, preflights and exits, sanitized server/test log, screenshot/trace, and content-free provider event trace. It does not establish a passing recovery flow.

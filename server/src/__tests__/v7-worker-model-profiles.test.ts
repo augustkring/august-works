@@ -10,6 +10,7 @@ import {
   workerModelProfileSchema,
   type WorkerModelProfile,
 } from "../services/orchestration/worker-model-profiles.js";
+import { assertModelMigrationCompatible } from "../services/orchestration/read-only-model-profiles.js";
 const sourceSha = "a".repeat(40),
   origin = "https://qualification.test.invalid";
 const fixture = (): WorkerModelProfile => ({
@@ -47,7 +48,31 @@ const fixture = (): WorkerModelProfile => ({
   qualificationEvidenceRef: `${origin}/qualification/worker-fixture-only.json`,
   qualificationArtifactSha256: "e".repeat(64),
 });
-describe("private worker text transport qualifications", () => {
+describe("private worker model transport qualifications", () => {
+  const lifecycle = (status: "active" | "candidate" | "deprecated" | "migration_required" | "retired" = "active") => ({
+    status, owner: "model operations", retirementAt: status === "deprecated" ? "2026-10-28T00:00:00.000Z" : null,
+    replacementProfileId: status === "migration_required" ? randomUUID() : null,
+    regionOrRoutingProfile: "anthropic-us-east-v1", dataUseProfile: "no-training-zero-retention",
+    supportedInputOutput: ["text"] as const, toolUseCapability: false,
+    rateLimits: { requestsPerMinute: 100, tokensPerMinute: 100000 },
+  });
+  it("keeps the general tool-capable Messages profile distinct from the text-only contract", () => {
+    const p = fixture();
+    const managed = {
+      ...p,
+      transport: "server-anthropic-messages-v1" as const,
+      contract: "anthropic-messages-tools-2023-06-01" as const,
+    };
+    expect(workerModelProfileSchema.parse(managed)).toEqual(managed);
+    expect(() => workerModelProfileSchema.parse({
+      ...managed,
+      contract: "anthropic-text-messages-2023-06-01",
+    })).toThrow();
+    expect(() => workerModelProfileSchema.parse({
+      ...managed,
+      transport: "server-text-only-v1",
+    })).toThrow();
+  });
   it("selects only the explicit owned profile and never falls back to another installed alternative", () => {
     const p = fixture(), alternative = { ...p, id: randomUUID(), qualifiedConfigurationHash: "f".repeat(64),
       tariff: { ...p.tariff, model: "alternative-fixture-model" } };
@@ -135,6 +160,34 @@ describe("private worker text transport qualifications", () => {
       expect(() =>
         assertWorkerModelProfileCurrent(altered, sourceSha, origin),
       ).toThrow();
+  });
+  it("enforces owner-declared retirement dates at the exact admission boundary and reserves candidate status for evaluation", () => {
+    const p = fixture(), retiredAt = "2026-10-28T00:00:00.000Z";
+    const deprecated = { ...p, tariff: { ...p.tariff, testedAt: "2026-10-27T23:59:58.000Z", expiresAt: "2026-10-28T00:00:00.001Z" },
+      lifecycle: { ...lifecycle("deprecated"), retirementAt: retiredAt } };
+    expect(assertWorkerModelProfileCurrent(deprecated, sourceSha, origin, "runtime", new Date("2026-10-27T23:59:59.999Z"))).toEqual(deprecated);
+    expect(() => assertWorkerModelProfileCurrent(deprecated, sourceSha, origin, "runtime", new Date(retiredAt))).toThrow("model_lifecycle_profile_unavailable");
+    const candidate = { ...p, lifecycle: lifecycle("candidate") };
+    expect(() => assertWorkerModelProfileCurrent(candidate, sourceSha, origin)).toThrow("candidate_not_runtime_qualified");
+    expect(assertWorkerModelProfileCurrent(candidate, sourceSha, origin, "candidate_evaluation")).toEqual(candidate);
+    for (const status of ["migration_required", "retired"] as const)
+      expect(() => assertWorkerModelProfileCurrent({ ...p, lifecycle: lifecycle(status) }, sourceSha, origin, "candidate_evaluation")).toThrow("model_lifecycle_profile_unavailable");
+    expect(assertWorkerModelProfileCurrent(p, sourceSha, origin)).toEqual(p); // Old pinned profiles remain exact-qualified but untracked.
+  });
+  it("allows migration only when declared data/region, tool, rate, context and cost ceilings are preserved", () => {
+    const from = { ...fixture(), lifecycle: { ...lifecycle("deprecated"), toolUseCapability: true } };
+    const next = { ...from, id: randomUUID(), lifecycle: { ...lifecycle("candidate"), toolUseCapability: true }, tariff: { ...from.tariff, model: "fixture-model-next" } };
+    expect(() => assertModelMigrationCompatible(from, next)).not.toThrow();
+    for (const changed of [
+      { lifecycle: { ...next.lifecycle!, regionOrRoutingProfile: "anthropic-eu-west-v1" } },
+      { lifecycle: { ...next.lifecycle!, dataUseProfile: "provider-training" } },
+      { lifecycle: { ...next.lifecycle!, toolUseCapability: false } },
+      { transport: "server-anthropic-messages-v1" as const, contract: "anthropic-messages-tools-2023-06-01" as const },
+      { lifecycle: { ...next.lifecycle!, rateLimits: { requestsPerMinute: 10, tokensPerMinute: 10000 } } },
+      { inputTokensUpperBound: 99999 },
+      { tariff: { ...next.tariff, outputMinorPerMillion: from.tariff.outputMinorPerMillion + 1 } },
+    ]) expect(() => assertModelMigrationCompatible(from, { ...next, ...changed })).toThrow("model_lifecycle_candidate_incompatible");
+    expect(() => assertModelMigrationCompatible(from, { ...next, lifecycle: undefined })).toThrow("model_lifecycle_compatibility_unavailable");
   });
   it("refuses raw keys, sessions, unknown model destinations, subscriptions and ambiguous presence qualification", async () => {
     const p = fixture();

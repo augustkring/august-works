@@ -3,6 +3,7 @@
 import { act } from "react";
 import { createRoot } from "react-dom/client";
 import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
+import { PRODUCT_IDENTITY } from "@paperclipai/shared/product-identity";
 import type {
   CompanySecret,
   CompanySecretProviderConfig,
@@ -347,7 +348,7 @@ describe("ImportFromVaultDialog", () => {
     await flush();
 
     // Review step: error message visible, Import button disabled.
-    expect(document.body.textContent?.toLowerCase()).toContain("a paperclip secret already uses this");
+    expect(document.body.textContent?.toLowerCase()).toContain(`a ${PRODUCT_IDENTITY.productName.toLowerCase()} secret already uses this`);
 
     const importBtn = Array.from(document.querySelectorAll("button")).find(
       (btn) => btn.textContent?.startsWith("Import "),

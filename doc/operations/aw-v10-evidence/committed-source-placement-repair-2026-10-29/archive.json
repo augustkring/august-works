@@ -1,0 +1,71 @@
+{
+  "scope": "Independent software snapshot; not final unchanged-head qualification",
+  "archives": [
+    {
+      "file": "adapter-routes-current-r1-20261029-test.log.gz",
+      "rawSha256": "1d9236bbec0ff091e54a33f8ecfd0edfe973387392a31c486ac71b485b7183f1",
+      "storedSha256": "79e725b16c1433c36a036ae4548e0a6609b2f138511dff70821f6945ea8f07f1",
+      "rawBytes": 4118
+    },
+    {
+      "file": "adapter-routes-current-r1-20261029-test.exit",
+      "rawSha256": "9a271f2a916b0b6ee6cecb2426f0b3206ef074578be55d9bc94f6f3fe3ab86aa",
+      "storedSha256": "9a271f2a916b0b6ee6cecb2426f0b3206ef074578be55d9bc94f6f3fe3ab86aa",
+      "rawBytes": 2
+    },
+    {
+      "file": "adapter-routes-current-r1-20261029.exit",
+      "rawSha256": "9a271f2a916b0b6ee6cecb2426f0b3206ef074578be55d9bc94f6f3fe3ab86aa",
+      "storedSha256": "9a271f2a916b0b6ee6cecb2426f0b3206ef074578be55d9bc94f6f3fe3ab86aa",
+      "rawBytes": 2
+    },
+    {
+      "file": "adapter-routes-current-r1-20261029-runner.txt",
+      "rawSha256": "ecb2c60dd3dd076a7c5bb649df56172c762da7b3a056f8ac8df6f7d4e4eee4a4",
+      "storedSha256": "ecb2c60dd3dd076a7c5bb649df56172c762da7b3a056f8ac8df6f7d4e4eee4a4",
+      "rawBytes": 95
+    },
+    {
+      "file": "adapter-routes-current-r1-20261029-source-pins.json.gz",
+      "rawSha256": "5b7b13d44f5a9c5e57f63d79c28b81d7afdb3e429dceb727c7b71a93f5f73bf4",
+      "storedSha256": "29962f524e18d0ba8b0e9c7d541256a931c6f42e4fae86e6f9a2293c34c6c38f",
+      "rawBytes": 178995
+    },
+    {
+      "file": "adapter-routes-current-r1-20261029-source-pins.source.patch.gz",
+      "rawSha256": "573df5fb6e3d21e8b115f99a39ace5755c8cc7ef1cc586d577ae8e272cf0e72f",
+      "storedSha256": "6571ab99e103652ea637cd1801d1f34830b0bd1449fe4b51c5346017b18107e5",
+      "rawBytes": 469732
+    },
+    {
+      "file": "adapter-routes-current-r1-20261029-syntax.log.gz",
+      "rawSha256": "c4c30838f2fed302510cb5b195f9cdd0d33c1c6a236498280aedebdece9300c8",
+      "storedSha256": "36a40a042239518a4824477ec5f06a928d93eedee409ae2b7f35f8e45ea7f980",
+      "rawBytes": 61
+    },
+    {
+      "file": "adapter-routes-current-r1-20261029-syntax.exit",
+      "rawSha256": "9a271f2a916b0b6ee6cecb2426f0b3206ef074578be55d9bc94f6f3fe3ab86aa",
+      "storedSha256": "9a271f2a916b0b6ee6cecb2426f0b3206ef074578be55d9bc94f6f3fe3ab86aa",
+      "rawBytes": 2
+    },
+    {
+      "file": "adapter-routes-current-r1-20261029-snapshot.log.gz",
+      "rawSha256": "7f4fe07726fe8d6b501492f80e78b302e36216c54dc60fda3fafebe530ca719f",
+      "storedSha256": "4af9958a79791237635f627611cb9f315556885e444b98051a14a1fb6faa6a3b",
+      "rawBytes": 38
+    },
+    {
+      "file": "adapter-routes-current-r1-20261029-snapshot.exit",
+      "rawSha256": "9a271f2a916b0b6ee6cecb2426f0b3206ef074578be55d9bc94f6f3fe3ab86aa",
+      "storedSha256": "9a271f2a916b0b6ee6cecb2426f0b3206ef074578be55d9bc94f6f3fe3ab86aa",
+      "rawBytes": 2
+    },
+    {
+      "file": "adapter-routes-current-r1-20261029-binary.sha256",
+      "rawSha256": "dcac393b6edf8f0341f95b5a83f0031acdf2ae2df82e686ffd50a6f6de575d62",
+      "storedSha256": "dcac393b6edf8f0341f95b5a83f0031acdf2ae2df82e686ffd50a6f6de575d62",
+      "rawBytes": 65
+    }
+  ]
+}

@@ -10,6 +10,7 @@ export interface CompanyPortabilityInclude {
   projects: boolean;
   issues: boolean;
   skills: boolean;
+  supportCases?: boolean;
 }
 
 export interface CompanyPortabilityEnvInput {
@@ -36,6 +37,10 @@ export interface CompanyPortabilityCompanyManifestEntry {
   name: string;
   description: string | null;
   logoPath: string | null;
+  /** Company fallback language; absent in older packages and defaults to English. */
+  locale: "en" | "da";
+  /** Company fallback timezone; absent in older packages and defaults to UTC. */
+  timezone: string;
   requireBoardApprovalForNewAgents: boolean;
   feedbackDataSharingEnabled: boolean;
   feedbackDataSharingConsentAt: string | null;
@@ -82,6 +87,14 @@ export interface CompanyPortabilityEmbeddedAssetManifestEntry {
 }
 
 export interface CompanyPortabilityProjectManifestEntry {
+  sourceCompanyId?: string;
+  sourceProjectId?: string;
+  visibility?: "open" | "private";
+  privacyOwnerUserId?: string | null;
+  personalOwnerUserId?: string | null;
+  sourceIssueIds?: string[];
+  sourceProjectIds?: string[];
+  sourceProvenanceQualified?: boolean;
   slug: string;
   name: string;
   path: string;
@@ -175,6 +188,14 @@ export interface CompanyPortabilityIssueAttachmentManifestEntry {
 }
 
 export interface CompanyPortabilityIssueManifestEntry {
+  sourceCompanyId?: string;
+  sourceIssueId?: string;
+  visibility?: "open" | "private";
+  privacyRootIssueId?: string | null;
+  privacyParentIssueId?: string | null;
+  privacySources?: Array<{ sourceKind: "issue" | "project" | "run" | "workflow_run" | "routine_run"; sourceId: string }>;
+  responsibleUserId?: string | null;
+  createdByUserId?: string | null;
   slug: string;
   identifier: string | null;
   title: string;
@@ -368,6 +389,10 @@ export interface CompanyPortabilityPreviewIssuePlan {
 }
 
 export interface CompanyPortabilityPreviewResult {
+  /** Hash of normalized files and, for GitHub, the resolved immutable commit. */
+  sourceFingerprint?: string;
+  /** Verified GitHub commit SHA used to resolve this preview. */
+  sourceRevision?: string | null;
   include: CompanyPortabilityInclude;
   targetCompanyId: string | null;
   targetCompanyName: string | null;
@@ -392,6 +417,11 @@ export interface CompanyPortabilityAdapterOverride {
 }
 
 export interface CompanyPortabilityImportRequest extends CompanyPortabilityPreviewRequest {
+  expectedSourceFingerprint?: string;
+  /** Explicit, current Human review of the exact package before releasing
+   * open source work into a new company. The importer rechecks every native
+   * source row and original owner before any write. */
+  sourceReleaseReview?: { confirmed: true; sourceFingerprint: string };
   adapterOverrides?: Record<string, CompanyPortabilityAdapterOverride>;
   secretValues?: Record<string, string>;
   pauseAutomations?: boolean;

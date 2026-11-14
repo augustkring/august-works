@@ -1,0 +1,445 @@
+{
+  "recordedAt": "2026-10-30T01:24:45.157159+00:00",
+  "runs": [
+    {
+      "prefix": "connector-github-repository-access-lifecycle-r2-20261030",
+      "passed": 15,
+      "unselected": 0,
+      "currentOwnedSourcesMatch": {
+        "packages/db/src/schema/tool_access.ts": false,
+        "packages/shared/src/types/tool-access.ts": true,
+        "packages/shared/src/validators/tool-access.ts": true,
+        "server/src/services/tool-connection-lifecycle.ts": true,
+        "server/src/services/tool-access.ts": false,
+        "server/src/__tests__/github-connection-events.test.ts": false,
+        "server/src/__tests__/tool-access-service.test.ts": true,
+        "server/src/services/tool-connection-lifecycle.test.ts": true
+      },
+      "qualificationBaseCommit": "886014cae5a7d6ed5a9ab99d62613ec7646308cb",
+      "sourceHead": "c080bfffb84350db24cd8a354fa5f5c58b4be11d"
+    },
+    {
+      "prefix": "connector-github-repository-access-owner-r4-20261030",
+      "passed": 6,
+      "unselected": 348,
+      "currentOwnedSourcesMatch": {
+        "packages/db/src/schema/tool_access.ts": true,
+        "packages/shared/src/types/tool-access.ts": true,
+        "packages/shared/src/validators/tool-access.ts": true,
+        "server/src/services/tool-connection-lifecycle.ts": true,
+        "server/src/services/tool-access.ts": true,
+        "server/src/__tests__/github-connection-events.test.ts": true,
+        "server/src/__tests__/tool-access-service.test.ts": true,
+        "server/src/services/tool-connection-lifecycle.test.ts": true
+      },
+      "qualificationBaseCommit": "886014cae5a7d6ed5a9ab99d62613ec7646308cb",
+      "sourceHead": "c080bfffb84350db24cd8a354fa5f5c58b4be11d"
+    },
+    {
+      "prefix": "connector-github-repository-access-events-r2-20261030",
+      "passed": 2,
+      "unselected": 1,
+      "currentOwnedSourcesMatch": {
+        "packages/db/src/schema/tool_access.ts": false,
+        "packages/shared/src/types/tool-access.ts": true,
+        "packages/shared/src/validators/tool-access.ts": true,
+        "server/src/services/tool-connection-lifecycle.ts": true,
+        "server/src/services/tool-access.ts": false,
+        "server/src/__tests__/github-connection-events.test.ts": true,
+        "server/src/__tests__/tool-access-service.test.ts": true,
+        "server/src/services/tool-connection-lifecycle.test.ts": true
+      },
+      "qualificationBaseCommit": "886014cae5a7d6ed5a9ab99d62613ec7646308cb",
+      "sourceHead": "c080bfffb84350db24cd8a354fa5f5c58b4be11d"
+    }
+  ],
+  "files": [
+    {
+      "path": "connector-github-repository-access-events-r2-20261030-binary.path",
+      "bytes": 124,
+      "sha256": "f9de8f8c28ee85cc6cd346d81a952ff0792e0098ac97168000211cf99995cb99"
+    },
+    {
+      "path": "connector-github-repository-access-events-r2-20261030-binary.sha256",
+      "bytes": 65,
+      "sha256": "dcac393b6edf8f0341f95b5a83f0031acdf2ae2df82e686ffd50a6f6de575d62"
+    },
+    {
+      "path": "connector-github-repository-access-events-r2-20261030-runner.txt",
+      "bytes": 123,
+      "sha256": "d908aa774b2d3fea1e3c5eed2b21b5c0eebaf7db11e5e6f8521ccf2c1ec9b858"
+    },
+    {
+      "path": "connector-github-repository-access-events-r2-20261030-snapshot.exit",
+      "bytes": 2,
+      "sha256": "9a271f2a916b0b6ee6cecb2426f0b3206ef074578be55d9bc94f6f3fe3ab86aa"
+    },
+    {
+      "path": "connector-github-repository-access-events-r2-20261030-snapshot.log",
+      "bytes": 38,
+      "sha256": "c65fc297e10580b4883ee0a31d442b8498d60ac73a268ba14a57dc934bd589a5"
+    },
+    {
+      "path": "connector-github-repository-access-events-r2-20261030-source-pins.json",
+      "bytes": 188292,
+      "sha256": "96ffbd7dff303d9c53c957b135018c2ced40b2cc0312ca38ff11769d9ef903d5"
+    },
+    {
+      "path": "connector-github-repository-access-events-r2-20261030-source-pins.source-files/evals/platform-skill/README.md",
+      "bytes": 2751,
+      "sha256": "e82cba4d9b9a8a8d828f59a4c1057f50356b414f3aa647d2a645f8c4e74b8c59"
+    },
+    {
+      "path": "connector-github-repository-access-events-r2-20261030-source-pins.source-files/evals/platform-skill/cases.json",
+      "bytes": 3541,
+      "sha256": "996f58a6131c2e92e3568e6938756a6717bc24ce800e5ab07d08ab538865404b"
+    },
+    {
+      "path": "connector-github-repository-access-events-r2-20261030-source-pins.source-files/evals/platform-skill/operating-knowledge.json",
+      "bytes": 4458,
+      "sha256": "536a03a0ff95b6105cb504cc1a34285c879c0cc3288aa547df75905a532c71a4"
+    },
+    {
+      "path": "connector-github-repository-access-events-r2-20261030-source-pins.source-files/packages/shared/src/resource-governance.test.ts",
+      "bytes": 2495,
+      "sha256": "484ff87ecbd16b0c0e7897be4939ea63dc63e8d0337a6422623ce35f329232e8"
+    },
+    {
+      "path": "connector-github-repository-access-events-r2-20261030-source-pins.source-files/packages/shared/src/resource-governance.ts",
+      "bytes": 2483,
+      "sha256": "7dfa3d66fe0562b6c5e093da516f130f8e42bffd54889ca92e8381f9a2f885c6"
+    },
+    {
+      "path": "connector-github-repository-access-events-r2-20261030-source-pins.source-files/scripts/check-platform-skill-operating-knowledge.mjs",
+      "bytes": 677,
+      "sha256": "b2a0da45e3986b86546e37740173a798d4f46d3b223a8495b3361be9ea04a227"
+    },
+    {
+      "path": "connector-github-repository-access-events-r2-20261030-source-pins.source-files/scripts/platform-skill-operating-knowledge.mjs",
+      "bytes": 20828,
+      "sha256": "200916494687c0d79a634be92a80e3ed91579e13d37b335f57bb57183c535ddf"
+    },
+    {
+      "path": "connector-github-repository-access-events-r2-20261030-source-pins.source-files/scripts/platform-skill-operating-knowledge.test.mjs",
+      "bytes": 3871,
+      "sha256": "7aa45b84616742ae82839daf80795b4717c3b0b032c0038ffb591d93d834ffce"
+    },
+    {
+      "path": "connector-github-repository-access-events-r2-20261030-source-pins.source-files/scripts/run-platform-skill-evals.mjs",
+      "bytes": 4384,
+      "sha256": "908efdbab66fcb584307a739f86e38cc1c6767e196a2f6e2c48e4bcb6a945eb3"
+    },
+    {
+      "path": "connector-github-repository-access-events-r2-20261030-source-pins.source-files/server/src/__tests__/company-responsibility-attention.integration.test.ts",
+      "bytes": 5637,
+      "sha256": "5828ee284b7c760044f0913b8cc7df7e5cdc90d791358cf3e44adbb02772a5bd"
+    },
+    {
+      "path": "connector-github-repository-access-events-r2-20261030-source-pins.source-files/server/src/__tests__/resource-governance.integration.test.ts",
+      "bytes": 39931,
+      "sha256": "239fdd2e3e2a355a676f6a0be3d201d09ff309647f59a3f56bd131f8156215d9"
+    },
+    {
+      "path": "connector-github-repository-access-events-r2-20261030-source-pins.source-files/server/src/services/experience/company-responsibility-attention.ts",
+      "bytes": 15809,
+      "sha256": "cec8ea59bdf966cb42ebe5afe77abbd6f80a6d655c8b79c1e233ee2ab8256890"
+    },
+    {
+      "path": "connector-github-repository-access-events-r2-20261030-source-pins.source-files/server/src/services/resource-governance.ts",
+      "bytes": 4436,
+      "sha256": "03c26a8e4108a11c3b6559dc458206fc61f6b7b64e1e585071b10906fe9f93b6"
+    },
+    {
+      "path": "connector-github-repository-access-events-r2-20261030-source-pins.source.patch",
+      "bytes": 686816,
+      "sha256": "aa42b02a1da9fe53e1a51e7000df77ccac4c8c0395e35580c0e4812bdee4934c"
+    },
+    {
+      "path": "connector-github-repository-access-events-r2-20261030-syntax.exit",
+      "bytes": 2,
+      "sha256": "9a271f2a916b0b6ee6cecb2426f0b3206ef074578be55d9bc94f6f3fe3ab86aa"
+    },
+    {
+      "path": "connector-github-repository-access-events-r2-20261030-syntax.log",
+      "bytes": 61,
+      "sha256": "6031b29d068210e22d39d5816508d5e8366772621bb39c63bfa7fc2d1d1cae3a"
+    },
+    {
+      "path": "connector-github-repository-access-events-r2-20261030-test.exit",
+      "bytes": 2,
+      "sha256": "9a271f2a916b0b6ee6cecb2426f0b3206ef074578be55d9bc94f6f3fe3ab86aa"
+    },
+    {
+      "path": "connector-github-repository-access-events-r2-20261030-test.log",
+      "bytes": 1424,
+      "sha256": "b185b9641f754d80d48d11309f82f24b6ee93ec29ba4caaacc95464b388df9a2"
+    },
+    {
+      "path": "connector-github-repository-access-events-r2-20261030.exit",
+      "bytes": 2,
+      "sha256": "9a271f2a916b0b6ee6cecb2426f0b3206ef074578be55d9bc94f6f3fe3ab86aa"
+    },
+    {
+      "path": "connector-github-repository-access-lifecycle-r2-20261030-binary.path",
+      "bytes": 124,
+      "sha256": "f9de8f8c28ee85cc6cd346d81a952ff0792e0098ac97168000211cf99995cb99"
+    },
+    {
+      "path": "connector-github-repository-access-lifecycle-r2-20261030-binary.sha256",
+      "bytes": 65,
+      "sha256": "dcac393b6edf8f0341f95b5a83f0031acdf2ae2df82e686ffd50a6f6de575d62"
+    },
+    {
+      "path": "connector-github-repository-access-lifecycle-r2-20261030-runner.txt",
+      "bytes": 127,
+      "sha256": "d150b472c9fb9d062a54483e68bfe41c8448eb0742969191fb2d197bc57902b4"
+    },
+    {
+      "path": "connector-github-repository-access-lifecycle-r2-20261030-snapshot.exit",
+      "bytes": 2,
+      "sha256": "9a271f2a916b0b6ee6cecb2426f0b3206ef074578be55d9bc94f6f3fe3ab86aa"
+    },
+    {
+      "path": "connector-github-repository-access-lifecycle-r2-20261030-snapshot.log",
+      "bytes": 38,
+      "sha256": "c65fc297e10580b4883ee0a31d442b8498d60ac73a268ba14a57dc934bd589a5"
+    },
+    {
+      "path": "connector-github-repository-access-lifecycle-r2-20261030-source-pins.json",
+      "bytes": 188334,
+      "sha256": "4f905194659f4a973b535f89bf99773da4b02f3732d446a8fabc1098c848a533"
+    },
+    {
+      "path": "connector-github-repository-access-lifecycle-r2-20261030-source-pins.source-files/evals/platform-skill/README.md",
+      "bytes": 2751,
+      "sha256": "e82cba4d9b9a8a8d828f59a4c1057f50356b414f3aa647d2a645f8c4e74b8c59"
+    },
+    {
+      "path": "connector-github-repository-access-lifecycle-r2-20261030-source-pins.source-files/evals/platform-skill/cases.json",
+      "bytes": 3541,
+      "sha256": "996f58a6131c2e92e3568e6938756a6717bc24ce800e5ab07d08ab538865404b"
+    },
+    {
+      "path": "connector-github-repository-access-lifecycle-r2-20261030-source-pins.source-files/evals/platform-skill/operating-knowledge.json",
+      "bytes": 4458,
+      "sha256": "536a03a0ff95b6105cb504cc1a34285c879c0cc3288aa547df75905a532c71a4"
+    },
+    {
+      "path": "connector-github-repository-access-lifecycle-r2-20261030-source-pins.source-files/packages/shared/src/resource-governance.test.ts",
+      "bytes": 2495,
+      "sha256": "484ff87ecbd16b0c0e7897be4939ea63dc63e8d0337a6422623ce35f329232e8"
+    },
+    {
+      "path": "connector-github-repository-access-lifecycle-r2-20261030-source-pins.source-files/packages/shared/src/resource-governance.ts",
+      "bytes": 2483,
+      "sha256": "7dfa3d66fe0562b6c5e093da516f130f8e42bffd54889ca92e8381f9a2f885c6"
+    },
+    {
+      "path": "connector-github-repository-access-lifecycle-r2-20261030-source-pins.source-files/scripts/check-platform-skill-operating-knowledge.mjs",
+      "bytes": 677,
+      "sha256": "b2a0da45e3986b86546e37740173a798d4f46d3b223a8495b3361be9ea04a227"
+    },
+    {
+      "path": "connector-github-repository-access-lifecycle-r2-20261030-source-pins.source-files/scripts/platform-skill-operating-knowledge.mjs",
+      "bytes": 20828,
+      "sha256": "200916494687c0d79a634be92a80e3ed91579e13d37b335f57bb57183c535ddf"
+    },
+    {
+      "path": "connector-github-repository-access-lifecycle-r2-20261030-source-pins.source-files/scripts/platform-skill-operating-knowledge.test.mjs",
+      "bytes": 3871,
+      "sha256": "7aa45b84616742ae82839daf80795b4717c3b0b032c0038ffb591d93d834ffce"
+    },
+    {
+      "path": "connector-github-repository-access-lifecycle-r2-20261030-source-pins.source-files/scripts/run-platform-skill-evals.mjs",
+      "bytes": 4384,
+      "sha256": "908efdbab66fcb584307a739f86e38cc1c6767e196a2f6e2c48e4bcb6a945eb3"
+    },
+    {
+      "path": "connector-github-repository-access-lifecycle-r2-20261030-source-pins.source-files/server/src/__tests__/company-responsibility-attention.integration.test.ts",
+      "bytes": 5637,
+      "sha256": "5828ee284b7c760044f0913b8cc7df7e5cdc90d791358cf3e44adbb02772a5bd"
+    },
+    {
+      "path": "connector-github-repository-access-lifecycle-r2-20261030-source-pins.source-files/server/src/__tests__/resource-governance.integration.test.ts",
+      "bytes": 39931,
+      "sha256": "239fdd2e3e2a355a676f6a0be3d201d09ff309647f59a3f56bd131f8156215d9"
+    },
+    {
+      "path": "connector-github-repository-access-lifecycle-r2-20261030-source-pins.source-files/server/src/services/experience/company-responsibility-attention.ts",
+      "bytes": 15809,
+      "sha256": "cec8ea59bdf966cb42ebe5afe77abbd6f80a6d655c8b79c1e233ee2ab8256890"
+    },
+    {
+      "path": "connector-github-repository-access-lifecycle-r2-20261030-source-pins.source-files/server/src/services/resource-governance.ts",
+      "bytes": 4436,
+      "sha256": "03c26a8e4108a11c3b6559dc458206fc61f6b7b64e1e585071b10906fe9f93b6"
+    },
+    {
+      "path": "connector-github-repository-access-lifecycle-r2-20261030-source-pins.source.patch",
+      "bytes": 684233,
+      "sha256": "82594eb124883c262dbb6c725f7d5172deb075d1d36b8c9a22127e11e3b9b4c1"
+    },
+    {
+      "path": "connector-github-repository-access-lifecycle-r2-20261030-syntax.exit",
+      "bytes": 2,
+      "sha256": "9a271f2a916b0b6ee6cecb2426f0b3206ef074578be55d9bc94f6f3fe3ab86aa"
+    },
+    {
+      "path": "connector-github-repository-access-lifecycle-r2-20261030-syntax.log",
+      "bytes": 61,
+      "sha256": "6031b29d068210e22d39d5816508d5e8366772621bb39c63bfa7fc2d1d1cae3a"
+    },
+    {
+      "path": "connector-github-repository-access-lifecycle-r2-20261030-test.exit",
+      "bytes": 2,
+      "sha256": "9a271f2a916b0b6ee6cecb2426f0b3206ef074578be55d9bc94f6f3fe3ab86aa"
+    },
+    {
+      "path": "connector-github-repository-access-lifecycle-r2-20261030-test.log",
+      "bytes": 2946,
+      "sha256": "c3e0da9802989c7febd794d954ddd3f94bb47491a532ab06ce3436fa429639f9"
+    },
+    {
+      "path": "connector-github-repository-access-lifecycle-r2-20261030.exit",
+      "bytes": 2,
+      "sha256": "9a271f2a916b0b6ee6cecb2426f0b3206ef074578be55d9bc94f6f3fe3ab86aa"
+    },
+    {
+      "path": "connector-github-repository-access-owner-r4-20261030-binary.path",
+      "bytes": 124,
+      "sha256": "f9de8f8c28ee85cc6cd346d81a952ff0792e0098ac97168000211cf99995cb99"
+    },
+    {
+      "path": "connector-github-repository-access-owner-r4-20261030-binary.sha256",
+      "bytes": 65,
+      "sha256": "dcac393b6edf8f0341f95b5a83f0031acdf2ae2df82e686ffd50a6f6de575d62"
+    },
+    {
+      "path": "connector-github-repository-access-owner-r4-20261030-runner.txt",
+      "bytes": 217,
+      "sha256": "9afb946d2857e3634ab2cf9437733fa1662195b3e939a5510fd62ca3f6fe80b0"
+    },
+    {
+      "path": "connector-github-repository-access-owner-r4-20261030-snapshot.exit",
+      "bytes": 2,
+      "sha256": "9a271f2a916b0b6ee6cecb2426f0b3206ef074578be55d9bc94f6f3fe3ab86aa"
+    },
+    {
+      "path": "connector-github-repository-access-owner-r4-20261030-snapshot.log",
+      "bytes": 38,
+      "sha256": "263346d2da9b48d8a167f1cf14c979881d4b17348294f9bd9ae89e2ab947f806"
+    },
+    {
+      "path": "connector-github-repository-access-owner-r4-20261030-source-pins.json",
+      "bytes": 189487,
+      "sha256": "e1b1f348db91df1a43f131cc46e683107b38fac0246af92fbbeb54fd2926e6c1"
+    },
+    {
+      "path": "connector-github-repository-access-owner-r4-20261030-source-pins.source-files/evals/platform-skill/README.md",
+      "bytes": 2751,
+      "sha256": "e82cba4d9b9a8a8d828f59a4c1057f50356b414f3aa647d2a645f8c4e74b8c59"
+    },
+    {
+      "path": "connector-github-repository-access-owner-r4-20261030-source-pins.source-files/evals/platform-skill/cases.json",
+      "bytes": 3541,
+      "sha256": "996f58a6131c2e92e3568e6938756a6717bc24ce800e5ab07d08ab538865404b"
+    },
+    {
+      "path": "connector-github-repository-access-owner-r4-20261030-source-pins.source-files/evals/platform-skill/operating-knowledge.json",
+      "bytes": 4458,
+      "sha256": "536a03a0ff95b6105cb504cc1a34285c879c0cc3288aa547df75905a532c71a4"
+    },
+    {
+      "path": "connector-github-repository-access-owner-r4-20261030-source-pins.source-files/packages/shared/src/resource-governance.test.ts",
+      "bytes": 2495,
+      "sha256": "484ff87ecbd16b0c0e7897be4939ea63dc63e8d0337a6422623ce35f329232e8"
+    },
+    {
+      "path": "connector-github-repository-access-owner-r4-20261030-source-pins.source-files/packages/shared/src/resource-governance.ts",
+      "bytes": 2483,
+      "sha256": "7dfa3d66fe0562b6c5e093da516f130f8e42bffd54889ca92e8381f9a2f885c6"
+    },
+    {
+      "path": "connector-github-repository-access-owner-r4-20261030-source-pins.source-files/scripts/check-platform-skill-operating-knowledge.mjs",
+      "bytes": 677,
+      "sha256": "b2a0da45e3986b86546e37740173a798d4f46d3b223a8495b3361be9ea04a227"
+    },
+    {
+      "path": "connector-github-repository-access-owner-r4-20261030-source-pins.source-files/scripts/platform-skill-operating-knowledge.mjs",
+      "bytes": 20828,
+      "sha256": "200916494687c0d79a634be92a80e3ed91579e13d37b335f57bb57183c535ddf"
+    },
+    {
+      "path": "connector-github-repository-access-owner-r4-20261030-source-pins.source-files/scripts/platform-skill-operating-knowledge.test.mjs",
+      "bytes": 3871,
+      "sha256": "7aa45b84616742ae82839daf80795b4717c3b0b032c0038ffb591d93d834ffce"
+    },
+    {
+      "path": "connector-github-repository-access-owner-r4-20261030-source-pins.source-files/scripts/run-platform-skill-evals.mjs",
+      "bytes": 4384,
+      "sha256": "908efdbab66fcb584307a739f86e38cc1c6767e196a2f6e2c48e4bcb6a945eb3"
+    },
+    {
+      "path": "connector-github-repository-access-owner-r4-20261030-source-pins.source-files/server/src/__tests__/company-responsibility-attention.integration.test.ts",
+      "bytes": 5637,
+      "sha256": "5828ee284b7c760044f0913b8cc7df7e5cdc90d791358cf3e44adbb02772a5bd"
+    },
+    {
+      "path": "connector-github-repository-access-owner-r4-20261030-source-pins.source-files/server/src/__tests__/resource-governance.integration.test.ts",
+      "bytes": 39931,
+      "sha256": "239fdd2e3e2a355a676f6a0be3d201d09ff309647f59a3f56bd131f8156215d9"
+    },
+    {
+      "path": "connector-github-repository-access-owner-r4-20261030-source-pins.source-files/server/src/services/authorization.mutableproofs.tmp.ts",
+      "bytes": 298460,
+      "sha256": "04ba87abca957b5848689742d30e19e6a284d79c38938ee8686cf77457a78eff"
+    },
+    {
+      "path": "connector-github-repository-access-owner-r4-20261030-source-pins.source-files/server/src/services/experience/company-responsibility-attention.ts",
+      "bytes": 15809,
+      "sha256": "cec8ea59bdf966cb42ebe5afe77abbd6f80a6d655c8b79c1e233ee2ab8256890"
+    },
+    {
+      "path": "connector-github-repository-access-owner-r4-20261030-source-pins.source-files/server/src/services/native-direct-input.mutableproofs.tmp.ts",
+      "bytes": 337537,
+      "sha256": "490d8249bb7e08047cfa86ea6662d066552cd5a0003258e6aac2fe77bd27ecbf"
+    },
+    {
+      "path": "connector-github-repository-access-owner-r4-20261030-source-pins.source-files/server/src/services/resource-governance.ts",
+      "bytes": 4436,
+      "sha256": "03c26a8e4108a11c3b6559dc458206fc61f6b7b64e1e585071b10906fe9f93b6"
+    },
+    {
+      "path": "connector-github-repository-access-owner-r4-20261030-source-pins.source.patch",
+      "bytes": 689495,
+      "sha256": "5ec94cffaac45d59d2caa28cb4e20fe1a483ed1cc9425bbb01495d8bf05d879f"
+    },
+    {
+      "path": "connector-github-repository-access-owner-r4-20261030-syntax.exit",
+      "bytes": 2,
+      "sha256": "9a271f2a916b0b6ee6cecb2426f0b3206ef074578be55d9bc94f6f3fe3ab86aa"
+    },
+    {
+      "path": "connector-github-repository-access-owner-r4-20261030-syntax.log",
+      "bytes": 61,
+      "sha256": "13a3b2efe4bf46b1c9b4018cdab92d9a683d93b66b4d00a825ebaecfaba6e98f"
+    },
+    {
+      "path": "connector-github-repository-access-owner-r4-20261030-test.exit",
+      "bytes": 2,
+      "sha256": "9a271f2a916b0b6ee6cecb2426f0b3206ef074578be55d9bc94f6f3fe3ab86aa"
+    },
+    {
+      "path": "connector-github-repository-access-owner-r4-20261030-test.log",
+      "bytes": 53670,
+      "sha256": "cd2dc7ef10e83db6e1d3d3f225703abd618f5e742798ef8864337b5a429a088d"
+    },
+    {
+      "path": "connector-github-repository-access-owner-r4-20261030.exit",
+      "bytes": 2,
+      "sha256": "9a271f2a916b0b6ee6cecb2426f0b3206ef074578be55d9bc94f6f3fe3ab86aa"
+    }
+  ],
+  "archiveSha256": "f14b1c685953df50ff68c23850c07074d98a548f4daf0dd57ec586adfd8fd217",
+  "limits": "Controlled software fixtures; not live GitHub/provider qualification. Lifecycle/event early pins differ by later DB JSON type annotation and unrelated Project witness changes; owner-r4 matches all eight current paths. Only exact selected cases count."
+}

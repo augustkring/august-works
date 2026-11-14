@@ -1,0 +1,38 @@
+(!) Your Vite config uses features that are unsupported by `configLoader: 'native'`, which is planned to become the default in a future major version of Vite:
+  - `__dirname` (vitest.config.ts:7:25). Use `import.meta.dirname` instead
+Set `VITE_CONFIG_NATIVE_IGNORE_WARNING=true` to suppress this warning.
+
+ RUN  v4.1.11 /workspace/blentera-v10
+
+ ❯ |@paperclipai/server| src/__tests__/native-payload-source-binding.integration.test.ts (4 tests | 1 failed | 3 skipped) 12265ms
+     × rejects dropping previously retained policy roots or captured inputs 232ms
+
+⎯⎯⎯⎯⎯⎯⎯ Failed Tests 1 ⎯⎯⎯⎯⎯⎯⎯
+
+ FAIL  |@paperclipai/server| src/__tests__/native-payload-source-binding.integration.test.ts > Native payload source snapshot binds its original payload owner > rejects dropping previously retained policy roots or captured inputs
+AssertionError: promise resolved "[]" instead of rejecting
+
+- Expected:
+Error {
+  "message": "rejected promise",
+}
+
++ Received:
+[]
+
+ ❯ src/__tests__/native-payload-source-binding.integration.test.ts:74:133
+     72|     await db.update(issues).set({ payloadSourceSnapshot: captured }).w…
+     73|     for (const retained of [{ inputs }, { policy }]) {
+     74|       await expect(db.update(issues).set({ payloadSourceSnapshot: awai…
+       |                                                                                                                                     ^
+     75|         .rejects.toMatchObject({ cause: { code: "23514" } });
+     76|     }
+
+⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯[1/1]⎯
+
+
+ Test Files  1 failed (1)
+      Tests  1 failed | 3 skipped (4)
+   Start at  05:26:52
+   Duration  22.97s (transform 5.53s, setup 170ms, import 10.19s, tests 12.27s, environment 0ms)
+

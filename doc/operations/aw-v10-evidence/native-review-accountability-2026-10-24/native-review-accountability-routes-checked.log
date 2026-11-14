@@ -1,0 +1,166 @@
+(!) Your Vite config uses features that are unsupported by `configLoader: 'native'`, which is planned to become the default in a future major version of Vite:
+  - `__dirname` (vitest.config.ts:7:25). Use `import.meta.dirname` instead
+Set `VITE_CONFIG_NATIVE_IGNORE_WARNING=true` to suppress this warning.
+
+ RUN  v4.1.11 /workspace/blentera-v10
+
+[15:00:44] [33mWARN[39m: [36mnative question withdrawal cancellation deferred to recovery sweep[39m [90m{"runId":"d1111111-1111-4111-8111-111111111111","interactionId":"interaction-withdraw"}[39m
+    err: {
+      "type": "Error",
+      "message": "process unavailable",
+      "stack":
+          Error: process unavailable
+              at /workspace/blentera-v10/server/src/__tests__/issue-thread-interaction-routes.test.ts:1017:58
+              at file:///workspace/blentera-v10/node_modules/.pnpm/@vitest+runner@4.1.11/node_modules/@vitest/runner/dist/chunk-artifact.js:302:11
+              at file:///workspace/blentera-v10/node_modules/.pnpm/@vitest+runner@4.1.11/node_modules/@vitest/runner/dist/chunk-artifact.js:1903:26
+              at file:///workspace/blentera-v10/node_modules/.pnpm/@vitest+runner@4.1.11/node_modules/@vitest/runner/dist/chunk-artifact.js:2326:20
+              at new Promise (<anonymous>)
+              at runWithCancel (file:///workspace/blentera-v10/node_modules/.pnpm/@vitest+runner@4.1.11/node_modules/@vitest/runner/dist/chunk-artifact.js:2323:10)
+              at file:///workspace/blentera-v10/node_modules/.pnpm/@vitest+runner@4.1.11/node_modules/@vitest/runner/dist/chunk-artifact.js:2305:20
+              at new Promise (<anonymous>)
+              at runWithTimeout (file:///workspace/blentera-v10/node_modules/.pnpm/@vitest+runner@4.1.11/node_modules/@vitest/runner/dist/chunk-artifact.js:2272:10)
+              at file:///workspace/blentera-v10/node_modules/.pnpm/@vitest+runner@4.1.11/node_modules/@vitest/runner/dist/chunk-artifact.js:2956:64
+    }
+[15:03:19] [33mWARN[39m: [36mcross-issue influence cap exceeded[39m [90m{"event":"cross_issue_influence_cap","companyId":"company-1","runId":"d2222222-2222-4222-8222-222222222222","agentId":"11111111-1111-4111-8111-111111111111","sourceIssueId":"bbbbbbbb-bbbb-4bbb-8bbb-bbbbbbbbbbbb","targetIssueId":"aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaaa","kind":"interaction_resolution","count":21,"cap":20,"mode":"enforce","enforceAt":"2026-08-11T00:00:00.000Z","allowed":false}[39m
+[15:03:21] [33mWARN[39m: [36mcross-issue influence cap exceeded[39m [90m{"event":"cross_issue_influence_cap","companyId":"company-1","runId":"d2222222-2222-4222-8222-222222222222","agentId":"11111111-1111-4111-8111-111111111111","sourceIssueId":"bbbbbbbb-bbbb-4bbb-8bbb-bbbbbbbbbbbb","targetIssueId":"aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaaa","kind":"interaction_resolution","count":21,"cap":20,"mode":"enforce","enforceAt":"2026-08-11T00:00:00.000Z","allowed":false}[39m
+[15:03:23] [33mWARN[39m: [36mcross-issue influence cap exceeded[39m [90m{"event":"cross_issue_influence_cap","companyId":"company-1","runId":"d2222222-2222-4222-8222-222222222222","agentId":"11111111-1111-4111-8111-111111111111","sourceIssueId":"bbbbbbbb-bbbb-4bbb-8bbb-bbbbbbbbbbbb","targetIssueId":"aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaaa","kind":"interaction_resolution","count":21,"cap":20,"mode":"enforce","enforceAt":"2026-08-11T00:00:00.000Z","allowed":false}[39m
+[15:03:25] [33mWARN[39m: [36mcross-issue influence cap exceeded[39m [90m{"event":"cross_issue_influence_cap","companyId":"company-1","runId":"d2222222-2222-4222-8222-222222222222","agentId":"11111111-1111-4111-8111-111111111111","sourceIssueId":"bbbbbbbb-bbbb-4bbb-8bbb-bbbbbbbbbbbb","targetIssueId":"aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaaa","kind":"interaction_resolution","count":21,"cap":20,"mode":"enforce","enforceAt":"2026-08-11T00:00:00.000Z","allowed":false}[39m
+[15:03:27] [32mINFO[39m: [36mcross-issue influence observed[39m [90m{"event":"cross_issue_influence_cap","companyId":"company-1","runId":"d2222222-2222-4222-8222-222222222222","agentId":"11111111-1111-4111-8111-111111111111","sourceIssueId":"bbbbbbbb-bbbb-4bbb-8bbb-bbbbbbbbbbbb","targetIssueId":"aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaaa","kind":"interaction_resolution","count":1,"cap":20,"mode":"enforce","enforceAt":"2026-08-11T00:00:00.000Z","allowed":true}[39m
+[15:03:29] [32mINFO[39m: [36mcross-issue influence observed[39m [90m{"event":"cross_issue_influence_cap","companyId":"company-1","runId":"d2222222-2222-4222-8222-222222222222","agentId":"11111111-1111-4111-8111-111111111111","sourceIssueId":"bbbbbbbb-bbbb-4bbb-8bbb-bbbbbbbbbbbb","targetIssueId":"aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaaa","kind":"interaction_resolution","count":1,"cap":20,"mode":"enforce","enforceAt":"2026-08-11T00:00:00.000Z","allowed":true}[39m
+[15:03:31] [32mINFO[39m: [36mcross-issue influence observed[39m [90m{"event":"cross_issue_influence_cap","companyId":"company-1","runId":"d2222222-2222-4222-8222-222222222222","agentId":"11111111-1111-4111-8111-111111111111","sourceIssueId":"bbbbbbbb-bbbb-4bbb-8bbb-bbbbbbbbbbbb","targetIssueId":"aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaaa","kind":"interaction_resolution","count":1,"cap":20,"mode":"enforce","enforceAt":"2026-08-11T00:00:00.000Z","allowed":true}[39m
+[15:03:33] [32mINFO[39m: [36mcross-issue influence observed[39m [90m{"event":"cross_issue_influence_cap","companyId":"company-1","runId":"d2222222-2222-4222-8222-222222222222","agentId":"11111111-1111-4111-8111-111111111111","sourceIssueId":"bbbbbbbb-bbbb-4bbb-8bbb-bbbbbbbbbbbb","targetIssueId":"aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaaa","kind":"interaction_resolution","count":1,"cap":20,"mode":"enforce","enforceAt":"2026-08-11T00:00:00.000Z","allowed":true}[39m
+ ❯ |@paperclipai/server| src/__tests__/issue-thread-interaction-routes.test.ts (82 tests | 2 failed) 254509ms
+     × allows an agent to accept another agent's pending review confirmation by default 7732ms
+     × allows an agent to reject a pending review confirmation by default 2091ms
+
+⎯⎯⎯⎯⎯⎯⎯ Failed Tests 2 ⎯⎯⎯⎯⎯⎯⎯
+
+ FAIL  |@paperclipai/server| src/__tests__/issue-thread-interaction-routes.test.ts > issue thread interaction routes > allows an agent to accept another agent's pending review confirmation by default
+AssertionError: expected "vi.fn()" to be called with arguments: [ Anything, …(3) ]
+
+Received:
+
+  1st vi.fn() call:
+
+  [
+-   Anything,
++   {
++     "assigneeAgentId": "11111111-1111-4111-8111-111111111111",
++     "assigneeUserId": null,
++     "companyId": "company-1",
++     "createdByAgentId": "22222222-2222-4222-8222-222222222222",
++     "createdByUserId": null,
++     "executionPolicy": null,
++     "executionState": null,
++     "goalId": null,
++     "hiddenAt": null,
++     "id": "aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaaa",
++     "identifier": "PAP-1714",
++     "parentId": null,
++     "priority": "medium",
++     "projectId": null,
++     "reviewPolicy": null,
++     "status": "in_review",
++     "title": "Persist interactions",
++     "workMode": "standard",
++   },
+    "interaction-agent-review",
+    {},
+    {
+      "agentId": "11111111-1111-4111-8111-111111111111",
+      "requestActor": {
+        "agentId": "11111111-1111-4111-8111-111111111111",
+        "companyId": "company-1",
+        "runId": "d2222222-2222-4222-8222-222222222222",
+        "type": "agent",
+      },
+-     "resolverPolicyRestriction": null,
++     "resolverPolicyRestriction": "anyone",
+      "runId": "d2222222-2222-4222-8222-222222222222",
+      "suggestedTaskEffectsAuthorized": true,
+      "userId": null,
+    },
+  ]
+
+
+Number of calls: 1
+
+ ❯ src/__tests__/issue-thread-interaction-routes.test.ts:2441:54
+    2439|
+    2440|     expect(res.status).toBe(200);
+    2441|     expect(mockInteractionService.acceptInteraction).toHaveBeenCalledW…
+       |                                                      ^
+    2442|       expect.anything(),
+    2443|       "interaction-agent-review",
+
+⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯[1/2]⎯
+
+ FAIL  |@paperclipai/server| src/__tests__/issue-thread-interaction-routes.test.ts > issue thread interaction routes > allows an agent to reject a pending review confirmation by default
+AssertionError: expected "vi.fn()" to be called with arguments: [ Anything, …(3) ]
+
+Received:
+
+  1st vi.fn() call:
+
+  [
+-   Anything,
++   {
++     "assigneeAgentId": "11111111-1111-4111-8111-111111111111",
++     "assigneeUserId": null,
++     "companyId": "company-1",
++     "createdByAgentId": "22222222-2222-4222-8222-222222222222",
++     "createdByUserId": null,
++     "executionPolicy": null,
++     "executionState": null,
++     "goalId": null,
++     "hiddenAt": null,
++     "id": "aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaaa",
++     "identifier": "PAP-1714",
++     "parentId": null,
++     "priority": "medium",
++     "projectId": null,
++     "reviewPolicy": null,
++     "status": "in_review",
++     "title": "Persist interactions",
++     "workMode": "standard",
++   },
+    "interaction-agent-reject",
+    {
+      "reason": "Needs changes",
+    },
+-   ObjectContaining {
++   {
+      "agentId": "11111111-1111-4111-8111-111111111111",
+-     "requestActor": ObjectContaining {
++     "requestActor": {
+        "agentId": "11111111-1111-4111-8111-111111111111",
++       "companyId": "company-1",
+        "runId": "d2222222-2222-4222-8222-222222222222",
+        "type": "agent",
+      },
+-     "resolverPolicyRestriction": null,
++     "resolverPolicyRestriction": "anyone",
++     "runId": "d2222222-2222-4222-8222-222222222222",
++     "userId": null,
+    },
+  ]
+
+
+Number of calls: 1
+
+ ❯ src/__tests__/issue-thread-interaction-routes.test.ts:2495:54
+    2493|
+    2494|     expect(res.status, String(app.locals.routeError?.stack ?? app.loca…
+    2495|     expect(mockInteractionService.rejectInteraction).toHaveBeenCalledW…
+       |                                                      ^
+    2496|       expect.anything(),
+    2497|       "interaction-agent-reject",
+
+⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯[2/2]⎯
+
+
+ Test Files  1 failed (1)
+      Tests  2 failed | 80 passed (82)
+   Start at  14:59:21
+   Duration  256.85s (transform 37.94s, setup 394ms, import 1.06s, tests 254.51s, environment 0ms)
+

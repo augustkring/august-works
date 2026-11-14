@@ -1,4 +1,5 @@
 import { randomUUID } from "node:crypto";
+import { seedNativePasskeySession } from "./helpers/native-authentication-fixtures.js";
 import express from "express";
 import request from "supertest";
 import { afterAll, afterEach, beforeAll, describe, expect, it } from "vitest";
@@ -9,6 +10,7 @@ import {
   companies,
   companyMemberships,
   createDb,
+  humanWorkflowCoverages,
   instanceSettings,
   issues,
   principalPermissionGrants,
@@ -22,9 +24,11 @@ import {
   startEmbeddedPostgresTestDatabase,
 } from "./helpers/embedded-postgres.js";
 import { errorHandler } from "../middleware/error-handler.js";
+import { accessRoutes } from "../routes/access.js";
 import { workflowRoutes } from "../routes/workflows.js";
 import { instanceSettingsService } from "../services/instance-settings.js";
-import { eq } from "drizzle-orm";
+import { enqueueWorkflowRunInTransaction, workflowExecutorService } from "../services/workflows/workflow-executor.js";
+import { eq, sql } from "drizzle-orm";
 
 const support = await getEmbeddedPostgresTestSupport();
 const describePg = support.supported ? describe.sequential : describe.skip;
@@ -67,6 +71,20 @@ describePg("Workflow routes", () => {
       next();
     });
     instance.use("/api", workflowRoutes(db));
+    instance.use(errorHandler);
+    return instance;
+  }
+
+  function accessApp(actor: Express.Request["actor"]) {
+    const instance = express();
+    instance.use(express.json());
+    instance.use((req, _res, next) => {
+      req.actor = actor;
+      next();
+    });
+    instance.use("/api", accessRoutes(db, {
+      deploymentMode: "authenticated", deploymentExposure: "private", bindHost: "127.0.0.1", allowedHostnames: [],
+    }));
     instance.use(errorHandler);
     return instance;
   }
@@ -231,6 +249,137 @@ describePg("Workflow routes", () => {
           error: "Viewer access is read-only",
         });
       });
+  });
+
+  it("admits a covered manual workflow run as the named delegatee and stores the coverage receipt", async () => {
+    const company = await seedCompany("Workflow coverage"), now = new Date();
+    await enableWorkflows();
+    const principalUserId = randomUUID(), delegateeUserId = randomUUID();
+    await db.insert(authUsers).values([principalUserId, delegateeUserId].map(id => ({
+      id, name: id, email: `${id}@test.invalid`, emailVerified: true, createdAt: now, updatedAt: now,
+    })));
+    await db.insert(companyMemberships).values([
+      { companyId: company.id, principalType: "user", principalId: principalUserId, membershipRole: "owner", status: "active" },
+      { companyId: company.id, principalType: "user", principalId: delegateeUserId, membershipRole: "operator", status: "active" },
+    ]);
+    await db.insert(principalPermissionGrants).values([principalUserId, delegateeUserId].map(userId => ({
+      companyId: company.id, principalType: "user" as const, principalId: userId, permissionKey: "workflows:run" as const,
+    })));
+
+    const local = request(app(localBoard));
+    const created = await local.post(`/api/companies/${company.id}/workflows`).send({ name: "Covered manual workflow" }).expect(201);
+    const updated = await local.patch(`/api/companies/${company.id}/workflows/${created.body.id}/draft`).send({
+      expectedRevisionId: created.body.draftRevisionId,
+      graph: { version: 1, nodes: [{ id: "start", type: "core.manual_trigger", name: "Start", position: { x: 0, y: 0 }, config: {} }], edges: [], variables: [], settings: {} },
+    }).expect(200);
+    const published = await local.post(`/api/companies/${company.id}/workflows/${created.body.id}/publish`).send({
+      expectedDraftRevisionId: updated.body.draftRevisionId, expectedPublishedRevisionId: null, approvalId: null,
+    }).expect(200);
+    const principalActor: Express.Request["actor"] = {
+      type: "board", userId: principalUserId, source: "session", isInstanceAdmin: false,
+      companyIds: [company.id], memberships: [{ companyId: company.id, membershipRole: "owner", status: "active" }],
+    };
+    const accessHttp = request(accessApp(principalActor));
+    const coverageResponse = await accessHttp.post(`/api/companies/${company.id}/workflow-coverages`).send({
+      requestId: randomUUID(), delegateeUserId, workflowId: created.body.id,
+      workflowRevisionId: published.body.publishedRevision.id, scopeType: "manual", taskId: null,
+      startsAt: new Date(Date.now() - 1_000), expiresAt: new Date(Date.now() + 60_000), reason: "Temporary Human absence",
+    }).expect(201);
+    const coverage = coverageResponse.body;
+    expect(coverageResponse.headers["cache-control"]).toBe("private, no-store");
+    expect((await accessHttp.get(`/api/companies/${company.id}/workflow-coverages`).expect(200)).body.coverages)
+      .toEqual([expect.objectContaining({ id: coverage.id, principalUserId, delegateeUserId })]);
+    await accessHttp.get(`/api/companies/${company.id}/workflow-coverages`)
+      .set("X-Blentera-Expected-User", principalUserId)
+      .set("X-Blentera-Expected-Session", "stale-session")
+      .expect(409)
+      .expect(response => expect(response.body.details.code).toBe("AUTHENTICATION_STATE_CHANGED"));
+    const delegatee: Express.Request["actor"] = {
+      type: "board", userId: delegateeUserId, source: "session", isInstanceAdmin: false,
+      companyIds: [company.id], memberships: [{ companyId: company.id, membershipRole: "operator", status: "active" }],
+    };
+    const response = await request(app(delegatee)).post(`/api/companies/${company.id}/workflows/${created.body.id}/run`)
+      .set("X-Human-Workflow-Coverage-Id", coverage.id).send({ input: {} }).expect(201);
+    expect(response.headers["cache-control"]).toBe("private, no-store");
+    expect(response.body.run).toMatchObject({
+      workflowId: created.body.id, workflowRevisionId: published.body.publishedRevision.id,
+      humanCoverageId: coverage.id, responsibleUserId: delegateeUserId,
+      executionPrincipal: { type: "user", userId: delegateeUserId },
+    });
+    expect((await db.select().from(workflowRuns)).at(-1)?.humanCoverageId).toBe(coverage.id);
+    const delegateeAccess: Express.Request["actor"] = {
+      type: "board", userId: delegateeUserId, source: "session", isInstanceAdmin: false,
+      companyIds: [company.id], memberships: [{ companyId: company.id, membershipRole: "operator", status: "active" }],
+    };
+    await request(accessApp(delegateeAccess)).get(`/api/companies/${company.id}/workflow-coverages`).expect(200)
+      .expect((result) => expect(result.body.coverages).toEqual([expect.objectContaining({ id: coverage.id })]));
+    await accessHttp.delete(`/api/companies/${company.id}/workflow-coverages/${coverage.id}`).expect(200)
+      .expect((result) => expect(result.body.revokedByUserId).toBe(principalUserId));
+
+    const queuedCoverage = await accessHttp.post(`/api/companies/${company.id}/workflow-coverages`).send({
+      requestId: randomUUID(), delegateeUserId, workflowId: created.body.id,
+      workflowRevisionId: published.body.publishedRevision.id, scopeType: "manual", taskId: null,
+      startsAt: new Date(Date.now() - 1_000), expiresAt: new Date(Date.now() + 60_000), reason: "Queued work during Human absence",
+    }).expect(201).then(result => result.body);
+    const runActor = { principal: { type: "user" as const, userId: delegateeUserId }, responsibleUserId: delegateeUserId,
+      authorizationActor: { ...delegatee } };
+    const expiringCoverage = await accessHttp.post(`/api/companies/${company.id}/workflow-coverages`).send({
+      requestId: randomUUID(), delegateeUserId, workflowId: created.body.id,
+      workflowRevisionId: published.body.publishedRevision.id, scopeType: "manual", taskId: null,
+      startsAt: new Date(Date.now() - 1_000), expiresAt: new Date(Date.now() + 60_000), reason: "Expiry lock race",
+    }).expect(201).then(result => result.body);
+    const expiringRun = await db.transaction(tx => enqueueWorkflowRunInTransaction(tx as unknown as typeof db, {
+      companyId: company.id, workflowId: created.body.id, revisionId: published.body.publishedRevision.id,
+      nodeId: "start", source: "manual", triggerPayload: {}, responsibleUserId: delegateeUserId,
+      idempotencyKey: randomUUID(), correlationId: randomUUID(), actor: runActor,
+      humanCoverageId: expiringCoverage.id, coverageScopeType: "manual", coverageTaskId: null,
+    }));
+    let releaseMembershipLock!: () => void;
+    let membershipLockReady!: (pid: number) => void;
+    let membershipLockFailed!: (error: unknown) => void;
+    const membershipLocked = new Promise<number>((resolve, reject) => { membershipLockReady = resolve; membershipLockFailed = reject; });
+    const membershipGate = new Promise<void>(resolve => { releaseMembershipLock = resolve; });
+    const membershipLock = db.transaction(async tx => {
+      const [backend] = await tx.execute<{ pid: number }>(sql`select pg_backend_pid() as pid`);
+      await tx.select().from(companyMemberships).where(eq(companyMemberships.principalId, principalUserId)).for("update");
+      membershipLockReady(backend!.pid);
+      await membershipGate;
+    }).catch(error => { membershipLockFailed(error); });
+    const lockPid = await membershipLocked;
+    const expiryClaim = workflowExecutorService(db).executeQueuedRun(company.id, expiringRun.run.id,
+      { principal: { type: "system", service: "workflow-recovery" } });
+    try {
+      const lockDeadline = Date.now() + 5_000;
+      for (;;) {
+        const [waiting] = await db.execute<{ blocked: boolean }>(sql`select exists(
+          select 1 from pg_stat_activity a where ${lockPid}=any(pg_blocking_pids(a.pid)) and a.wait_event_type='Lock'
+        ) as blocked`);
+        if (waiting?.blocked) break;
+        if (Date.now() >= lockDeadline) throw new Error("workflow coverage claim did not block on the Human membership lock");
+        await new Promise(resolve => setTimeout(resolve, 10));
+      }
+      await db.update(humanWorkflowCoverages).set({ expiresAt: new Date(Date.now() - 1_000) })
+        .where(eq(humanWorkflowCoverages.id, expiringCoverage.id));
+    } finally {
+      releaseMembershipLock();
+      await membershipLock;
+    }
+    await expect(expiryClaim).rejects.toMatchObject({ status: 403, details: { code: "workflow_coverage_unavailable" } });
+    const [stillQueuedAfterExpiry] = await db.select().from(workflowRuns).where(eq(workflowRuns.id, expiringRun.run.id));
+    expect(stillQueuedAfterExpiry).toMatchObject({ status: "queued", humanCoverageId: expiringCoverage.id });
+
+    const queued = await db.transaction(tx => enqueueWorkflowRunInTransaction(tx as unknown as typeof db, {
+      companyId: company.id, workflowId: created.body.id, revisionId: published.body.publishedRevision.id,
+      nodeId: "start", source: "manual", triggerPayload: {}, responsibleUserId: delegateeUserId,
+      idempotencyKey: randomUUID(), correlationId: randomUUID(), actor: runActor,
+      humanCoverageId: queuedCoverage.id, coverageScopeType: "manual", coverageTaskId: null,
+    }));
+    await accessHttp.delete(`/api/companies/${company.id}/workflow-coverages/${queuedCoverage.id}`).expect(200);
+    await expect(workflowExecutorService(db).executeQueuedRun(company.id, queued.run.id,
+      { principal: { type: "system", service: "workflow-recovery" } })).rejects.toMatchObject({ status: 403 });
+    const [stillQueued] = await db.select().from(workflowRuns).where(eq(workflowRuns.id, queued.run.id));
+    expect(stillQueued).toMatchObject({ status: "queued", humanCoverageId: queuedCoverage.id });
+    expect((await db.select().from(activityLog)).filter(row => row.entityId === queued.run.id && row.action === "workflow.run_started")).toHaveLength(0);
   });
 
   it("projects separate draft and active versions without configuration or mutation authority", async () => {
@@ -636,9 +785,12 @@ describePg("Workflow routes", () => {
     await http.get(`/api/companies/${other.id}/workflow-runs/${first.body.run.id}/experience?expectedUserId=local-board`).expect(404);
     await request(app({ type: "agent", agentId: randomUUID(), companyId: company.id, source: "agent_key" })).get(`${privateRead}?expectedUserId=local-board`).expect(403);
     const userId = "workflow-run-viewer";
+    await db.insert(authUsers).values({ id: userId, name: "Workflow viewer", email: `${userId}@fixture.invalid`,
+      emailVerified: true, createdAt: new Date(), updatedAt: new Date() });
+    const sessionId = await seedNativePasskeySession(db, userId);
     await db.insert(companyMemberships).values({ companyId: company.id, principalType: "user", principalId: userId, status: "active", membershipRole: "viewer" });
     await db.insert(principalPermissionGrants).values({ companyId: company.id, principalType: "user", principalId: userId, permissionKey: "workflows:read", scope: null });
-    const viewer = request(app({ type: "board", userId, source: "session", isInstanceAdmin: false, companyIds: [company.id] }));
+    const viewer = request(app({ type: "board", userId, sessionId, source: "session", isInstanceAdmin: false, companyIds: [company.id] }));
     await viewer.get(`${privateRead}?expectedUserId=${userId}`).expect(200);
     await db.delete(principalPermissionGrants).where(eq(principalPermissionGrants.principalId, userId));
     await viewer.get(`${privateRead}?expectedUserId=${userId}`).expect(403);

@@ -161,3 +161,31 @@ or network. The Docker asset-mode fix adds no Source owner or execution fallback
 These receipts do not establish a complete operator-owned historical/copy/restore
 inventory, claim manifest, PR/CI/Greptile review, named acceptance or hosted
 qualification. R0 and `sourceComplete: false` remain explicit.
+
+## Internal company export artifact — R93
+
+The internal durable company export publisher is
+`server/src/services/company-export-transfers.ts`, using the existing
+`company_transfer_runs` operation owner and company Storage namespace. Its
+private JSON copy retains the first export selection, company, original
+credential/Native identity lineage, accepted deadline, exact object key and
+storage-scope hash. Status responses disclose no object key, credential or
+provider URL. Download rechecks the original current actor and regenerates the
+selected source result to verify current access and equality before disclosure.
+Availability expires within the first accepted 24-hour window; this deadline is
+not evidence of physical erasure.
+
+Known artifacts require confirmed original-owner exact-key erasure, including
+S3 versions and delete markers. Unknown allocated writes remain pinned, and
+company deletion waits for them before original-scope prefix erasure. A storage
+configuration change cannot adopt or erase an older namespace. Restore must
+retain unresolved liabilities and suppression rather than treating current
+configuration or expired leases as cleanup proof. The software checks and
+limits are recorded in `doc/operations/company-export-transfers.md`.
+
+Source-specific correction/deletion propagation into retained export copies,
+complete copy-graph reconciliation, aggregate generation bounds and an actual
+restore/provider qualification remain open. Current-source download denial does
+not by itself prove physical removal of a retained copy. This register entry
+records the new surface and its limits; it grants no processing authority or
+whole-graph completion.

@@ -1,0 +1,62 @@
+(!) Your Vite config uses features that are unsupported by `configLoader: 'native'`, which is planned to become the default in a future major version of Vite:
+  - `__dirname` (vitest.config.ts:7:25). Use `import.meta.dirname` instead
+Set `VITE_CONFIG_NATIVE_IGNORE_WARNING=true` to suppress this warning.
+
+ RUN  v4.1.11 /workspace/blentera-v10
+
+[19:16:41] [33mWARN[39m: [36mFailed to publish committed CLI approval activity[39m 
+    err: {
+      "type": "Error",
+      "message": "Injected publication failure",
+      "stack":
+          Error: Injected publication failure
+              at EventEmitter.<anonymous> (/workspace/blentera-v10/server/src/services/board-auth.test.ts:260:67)
+              at EventEmitter.emit (node:events:514:28)
+              at publishLiveEvent (/workspace/blentera-v10/server/src/services/live-events.ts:34:11)
+              at publishActivity (/workspace/blentera-v10/server/src/services/activity-log.ts:152:3)
+              at Object.approveCliAuthChallenge (/workspace/blentera-v10/server/src/services/board-auth.ts:487:13)
+              at processTicksAndRejections (node:internal/process/task_queues:104:5)
+              at /workspace/blentera-v10/server/src/services/board-auth.test.ts:263:24
+              at file:///workspace/blentera-v10/node_modules/.pnpm/@vitest+runner@4.1.11/node_modules/@vitest/runner/dist/chunk-artifact.js:1903:20
+    }
+ ❯ |@paperclipai/server| src/services/board-auth.test.ts (17 tests | 2 failed) 42034ms
+     × authenticates the real pending, approved and revoked HTTP handshake without synthesizing an anonymous actor 30013ms
+     × creates a manual key and its audit atomically without exposing secrets in the audit 241ms
+
+⎯⎯⎯⎯⎯⎯⎯ Failed Tests 2 ⎯⎯⎯⎯⎯⎯⎯
+
+ FAIL  |@paperclipai/server| src/services/board-auth.test.ts > CLI challenge authority and transitions (real PostgreSQL) > authenticates the real pending, approved and revoked HTTP handshake without synthesizing an anonymous actor
+Error: Test timed out in 30000ms.
+If this is a long-running test, pass a timeout value as the last argument or configure it globally with "testTimeout".
+ ❯ src/services/board-auth.test.ts:294:3
+    292|     expect(revoked[0].companyId).toBe(f.companyId);
+    293|   });
+    294|   it("authenticates the real pending, approved and revoked HTTP handsh…
+       |   ^
+    295|     const f = await fixture();
+    296|     const [{ default: express }, { default: request }, { actorMiddlewa…
+
+⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯[1/2]⎯
+
+ FAIL  |@paperclipai/server| src/services/board-auth.test.ts > CLI challenge authority and transitions (real PostgreSQL) > creates a manual key and its audit atomically without exposing secrets in the audit
+AssertionError: expected '***REDACTED***' to be '9aedc0bc-d461-44ba-967d-43054ed38934' // Object.is equality
+
+Expected: "9aedc0bc-d461-44ba-967d-43054ed38934"
+Received: "***REDACTED***"
+
+ ❯ src/services/board-auth.test.ts:372:45
+    370|     const audit = await db.select().from(activityLog).where(eq(activit…
+    371|     expect(audit).toHaveLength(1);
+    372|     expect(audit[0].details?.boardApiKeyId).toBe(key.id);
+       |                                             ^
+    373|     expect(JSON.stringify(audit)).not.toContain(key.token);
+    374|   });
+
+⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯[2/2]⎯
+
+
+ Test Files  1 failed (1)
+      Tests  2 failed | 15 passed (17)
+   Start at  19:16:11
+   Duration  60.35s (transform 34.45s, setup 206ms, import 17.48s, tests 42.03s, environment 0ms)
+

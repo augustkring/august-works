@@ -1,0 +1,122 @@
+
+ RUN  v4.1.11 /workspace/v10-dep-qualification/server
+
+[22:33:47] [32mINFO[39m: [36mSetup-token login confidential transport startup assessment[39m [90m{"proxyForwardingEnabled":false,"reason":"no_proxy_allowlist_direct_tls_only","deploymentMode":"authenticated"}[39m
+[22:33:47] [32mINFO[39m: [36mplugin job coordinator started — listening to lifecycle events[39m [90m{"service":"plugin-job-coordinator"}[39m
+[22:33:47] [32mINFO[39m: [36mplugin job scheduler started[39m [90m{"service":"plugin-job-scheduler","tickIntervalMs":30000,"maxConcurrentJobs":10}[39m
+[22:33:47] [32mINFO[39m: [36minitializing plugin tool dispatcher[39m [90m{"service":"plugin-tool-dispatcher"}[39m
+[22:33:47] [32mINFO[39m: [36mplugin-dev-watcher: initialized[39m [90m{"service":"plugin-dev-watcher","resolvesInstalledPlugins":true}[39m
+[22:33:47] [32mINFO[39m: [36mplugin-loader: loading all ready plugins[39m [90m{"service":"plugin-loader"}[39m
+[22:33:47] [32mINFO[39m: [36mloaded tools from ready plugins[39m [90m{"service":"plugin-tool-dispatcher","readyPlugins":0,"registeredTools":0}[39m
+[22:33:47] [34mDEBUG[39m: [36msubscribed to lifecycle events[39m [90m{"service":"plugin-tool-dispatcher"}[39m
+[22:33:47] [32mINFO[39m: [36mplugin tool dispatcher initialized[39m [90m{"service":"plugin-tool-dispatcher","totalTools":0}[39m
+[22:33:47] [32mINFO[39m: [36mplugin-loader: no ready plugins to load[39m [90m{"service":"plugin-loader"}[39m
+[22:33:47] [33mWARN[39m: [36mPATCH /api/issues/e512c92d-7edd-4860-9022-0d8dbac0af65 422[39m [90m{"reqBody":{"status":"in_review","comment":"The plan is ready for our next discussion."}}[39m
+ ✓ src/__tests__/chat-project-tools.test.ts > chat project tool handoff > does not let an unqualified Agent API call mutate its private conversation 618ms
+ × src/__tests__/chat-project-tools.test.ts > chat project tool handoff > does not let an unqualified Agent direct-tool call create a private conversation Task 1720ms
+   → expected [Function] to throw error matching /Private tasks are not available/ but got 'Task privacy source is unavailable'
+ ✓ src/__tests__/chat-project-tools.test.ts > chat project tool handoff > rejects creation, child helpers, and reparenting under a chat, while retaining legacy children 488ms
+[22:33:50] [33mWARN[39m: [36mPOST /api/companies/64df742f-ed55-411c-8e90-644147882c86/issues 422[39m [90m{"reqBody":{"visibility":"open","projectId":"39fc33e1-b1c7-44d2-8415-cef638299afb","parentId":null,"title":"MCP handoff","status":"todo","workMode":"standard","priority":"medium","assigneeAgentId":"2b641017-913e-4635-b25e-2de4ec8828a1","requestDepth":0,"initialPlan":"# Plan\nImplement in the execution task.","idempotencyKey":"chat-handoff:cd745f23-b46b-47b6-901c-9ac096c4843f:mcp","allowDuplicate":false}}[39m
+ ✓ src/__tests__/chat-project-tools.test.ts > chat project tool handoff > hands off through the same API used by Claude/Codex MCP with the plan present on return 498ms
+ ✓ src/__tests__/chat-project-tools.test.ts > chat project tool handoff > retains ordinary child delegation and projectless task creation 1808ms
+[22:33:53] [33mWARN[39m: [36mPOST /api/companies/:companyId/projects/:operation 401[39m [90m{"reqBody":"[REDACTED]"}[39m
+ × src/__tests__/chat-project-tools.test.ts > chat project tool handoff > creates one Project through the authenticated Human API when an idempotency request is replayed 697ms
+   → expected 401 to be less than 300
+[22:33:53] [33mWARN[39m: [36mPOST /api/companies/:companyId/projects/:operation 401[39m [90m{"reqBody":"[REDACTED]"}[39m
+ × src/__tests__/chat-project-tools.test.ts > chat project tool handoff > includes an explicitly selected repository in a Human-created Project workspace 593ms
+   → expected 401 to be less than 300
+[22:33:54] [33mWARN[39m: [36mPOST /api/companies/:companyId/projects/:operation 401[39m [90m{"reqBody":"[REDACTED]"}[39m
+ × src/__tests__/chat-project-tools.test.ts > chat project tool handoff > registers and deduplicates repositories through the authenticated Human Project API 627ms
+   → expected 401 to be less than 300
+ ✓ src/__tests__/chat-project-tools.test.ts > chat project tool handoff > allows planning documents while denying project/task creation in Plan and Ask mode 2662ms
+[22:33:57] [33mWARN[39m: [36mPOST /api/companies/:companyId/projects/:operation 401[39m [90m{"reqBody":"[REDACTED]"}[39m
+[22:33:57] [32mINFO[39m: [36mplugin job scheduler stopped[39m [90m{"service":"plugin-job-scheduler","activeJobCount":0}[39m
+[22:33:57] [32mINFO[39m: [36mplugin job coordinator stopped[39m [90m{"service":"plugin-job-coordinator"}[39m
+ × src/__tests__/chat-project-tools.test.ts > chat project tool handoff > rejects invented repository IDs through Human admission and rejects a cancelled Agent run 524ms
+   → expected '{"error":"Unauthorized"}' to match /repository.*available/i
+
+⎯⎯⎯⎯⎯⎯⎯ Failed Tests 5 ⎯⎯⎯⎯⎯⎯⎯
+
+ FAIL  src/__tests__/chat-project-tools.test.ts > chat project tool handoff > does not let an unqualified Agent direct-tool call create a private conversation Task
+AssertionError: expected [Function] to throw error matching /Private tasks are not available/ but got 'Task privacy source is unavailable'
+
+- Expected:
+/Private tasks are not available/
+
++ Received:
+"Task privacy source is unavailable"
+
+ ❯ src/__tests__/chat-project-tools.test.ts:52:48
+     50|     const input = { title: "Implement the clarified outcome", projectI…
+     51|     const before = await f.snapshot();
+     52|     await expect(call(f, "create_task", input)).rejects.toThrow(/Priva…
+       |                                                ^
+     53|     const after = await f.snapshot();
+     54|     expect(after.issues).toEqual(before.issues);
+
+⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯[1/5]⎯
+
+ FAIL  src/__tests__/chat-project-tools.test.ts > chat project tool handoff > creates one Project through the authenticated Human API when an idempotency request is replayed
+AssertionError: expected 401 to be less than 300
+ ❯ createHumanProject src/__tests__/chat-project-tools.test.ts:29:29
+     27|     const result = await response.json();
+     28|     expect(response.status, JSON.stringify(result)).toBeGreaterThanOrE…
+     29|     expect(response.status).toBeLessThan(300);
+       |                             ^
+     30|     return result;
+     31|   };
+ ❯ src/__tests__/chat-project-tools.test.ts:99:21
+
+⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯[2/5]⎯
+
+ FAIL  src/__tests__/chat-project-tools.test.ts > chat project tool handoff > includes an explicitly selected repository in a Human-created Project workspace
+AssertionError: expected 401 to be less than 300
+ ❯ createHumanProject src/__tests__/chat-project-tools.test.ts:29:29
+     27|     const result = await response.json();
+     28|     expect(response.status, JSON.stringify(result)).toBeGreaterThanOrE…
+     29|     expect(response.status).toBeLessThan(300);
+       |                             ^
+     30|     return result;
+     31|   };
+ ❯ src/__tests__/chat-project-tools.test.ts:115:21
+
+⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯[3/5]⎯
+
+ FAIL  src/__tests__/chat-project-tools.test.ts > chat project tool handoff > registers and deduplicates repositories through the authenticated Human Project API
+AssertionError: expected 401 to be less than 300
+ ❯ createHumanProject src/__tests__/chat-project-tools.test.ts:29:29
+     27|     const result = await response.json();
+     28|     expect(response.status, JSON.stringify(result)).toBeGreaterThanOrE…
+     29|     expect(response.status).toBeLessThan(300);
+       |                             ^
+     30|     return result;
+     31|   };
+ ❯ src/__tests__/chat-project-tools.test.ts:121:21
+
+⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯[4/5]⎯
+
+ FAIL  src/__tests__/chat-project-tools.test.ts > chat project tool handoff > rejects invented repository IDs through Human admission and rejects a cancelled Agent run
+AssertionError: expected '{"error":"Unauthorized"}' to match /repository.*available/i
+
+- Expected:
+/repository.*available/i
+
++ Received:
+"{\"error\":\"Unauthorized\"}"
+
+ ❯ src/__tests__/chat-project-tools.test.ts:145:50
+    143|     const missing = await humanProjectRequest(f, { name: "Missing repo…
+    144|     expect(missing.status).toBeGreaterThanOrEqual(400);
+    145|     expect(JSON.stringify(await missing.json())).toMatch(/repository.*…
+       |                                                  ^
+    146|     await server.db.update(heartbeatRuns).set({ status: "cancelled" })…
+    147|     await expect(call(f, "create_project", { name: "Cancelled", idempo…
+
+⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯[5/5]⎯
+
+
+ Test Files  1 failed (1)
+      Tests  5 failed | 5 passed (10)
+   Start at  22:33:24
+   Duration  33.25s (transform 12.42s, setup 72ms, import 18.68s, tests 14.38s, environment 0ms)
+

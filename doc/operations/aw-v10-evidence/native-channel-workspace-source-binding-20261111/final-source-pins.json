@@ -1,0 +1,12 @@
+{
+  "headBaseline": "b273ad721a4a56b265708ba9c617e0ef6840d3da",
+  "qualification": "Scoped software evidence; actual SDK/Host/source selector cause remains open",
+  "sourcePaths": {
+    "server/src/__tests__/heartbeat-managed-chat-dispatch-boundaries.integration.test.ts": "fc6e0e8dd45d2c0757c6bff4ef3ba092e1a9776cca21ded437c801519c44b508",
+    "server/src/__tests__/helpers/managed-native-conversation-sandbox-host.ts": "ea180f828c6581459cef0ba367405f049363ec6b1448e67f34d1309d68e23c81",
+    "server/src/services/native-runtime/native-attachment-remote-stage-owner.ts": "d56e2ec4e20daf985318e157a62b3cf00dc891c04802d0ec573c891ea3fe0603",
+    "server/src/services/native-runtime/native-chat-workspace.test.ts": "7deafc2d6105594c3959deb7e094ff7fbbfa4892415baebd99b610f08c5ccfd2",
+    "server/src/services/native-runtime/native-chat-workspace.ts": "0deaf858f831e0e8dfcd2f1bde8c42d4ea80b0073827350703c28a118d634936",
+    "server/src/services/runtime/control.ts": "a3ff83a9a7834b9286d6b3e099e33eadeb52188290dfdb9048a15ac987bbb302"
+  }
+}

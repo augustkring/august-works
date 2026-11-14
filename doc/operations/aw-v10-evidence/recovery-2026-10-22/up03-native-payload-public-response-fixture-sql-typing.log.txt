@@ -1,0 +1,106 @@
+(!) Your Vite config uses features that are unsupported by `configLoader: 'native'`, which is planned to become the default in a future major version of Vite:
+  - `__dirname` (vitest.config.ts:7:25). Use `import.meta.dirname` instead
+Set `VITE_CONFIG_NATIVE_IGNORE_WARNING=true` to suppress this warning.
+
+ RUN  v4.1.11 /workspace/blentera-v10
+
+ ❯ |@paperclipai/server| src/__tests__/native-payload-public-response.integration.test.ts (3 tests | 3 failed) 13845ms
+     × keeps Task list and detail payloads public while retaining their actual DB proof 264ms
+     × omits Project proofs from list and detail without removing user-authored nested fields 27ms
+     × omits Memory proofs from detail, list and export and preserves arbitrary user metadata 43ms
+
+⎯⎯⎯⎯⎯⎯⎯ Failed Tests 3 ⎯⎯⎯⎯⎯⎯⎯
+
+ FAIL  |@paperclipai/server| src/__tests__/native-payload-public-response.integration.test.ts > Native payload proofs stay on the server at public response boundaries > keeps Task list and detail payloads public while retaining their actual DB proof
+Error: Failed query: update "issues" target set payload_source_snapshot=(
+      select content || jsonb_build_object('digest',encode(sha256(convert_to(content::text,'UTF8')),'hex')) from (
+        select jsonb_build_object('version',1,'owner',jsonb_build_object('kind',$1,'companyId',target.company_id,'id',target.id,
+          'contentHash',public.aw_native_payload_body_hash($2,to_jsonb(target))),
+          'policy',jsonb_build_object('issueIds','[]'::jsonb,'projectIds','[]'::jsonb,'runIds','[]'::jsonb,
+            'memoryIds','[]'::jsonb,'foundationRevisionIds','[]'::jsonb),'inputs','[]'::jsonb) as content
+      ) actual_body
+    ) where target.id=$3::uuid
+params: issue,issue,96e01c14-2334-4ab4-b679-d3d24b6489e6
+ ❯ PostgresJsPreparedQuery.queryWithCache ../node_modules/.pnpm/drizzle-orm@0.45.2_@opentelemetry+api@1.9.1_kysely@0.29.5_pg@8.18.0_postgres@3.4.9_patch_hash_uil4xuf7icnddjurbgy2qn5oo4/node_modules/src/pg-core/session.ts:73:10
+ ❯ bind src/__tests__/native-payload-public-response.integration.test.ts:38:5
+     36|   // supplies producer truth or authorization to any private input.
+     37|   async function bind(table: "issues" | "projects" | "memory_records",…
+     38|     await db.execute(sql`update ${sql.identifier(table)} target set pa…
+       |     ^
+     39|       select content || jsonb_build_object('digest',encode(sha256(conv…
+     40|         select jsonb_build_object('version',1,'owner',jsonb_build_obje…
+ ❯ src/__tests__/native-payload-public-response.integration.test.ts:57:5
+
+Caused by: PostgresError: could not determine data type of parameter $1
+ ❯ ErrorResponse ../node_modules/.pnpm/postgres@3.4.9_patch_hash=sryle6qd5qfmnxvoebal4gashi/node_modules/postgres/src/connection.js:819:30
+ ❯ handle ../node_modules/.pnpm/postgres@3.4.9_patch_hash=sryle6qd5qfmnxvoebal4gashi/node_modules/postgres/src/connection.js:493:6
+ ❯ Socket.data ../node_modules/.pnpm/postgres@3.4.9_patch_hash=sryle6qd5qfmnxvoebal4gashi/node_modules/postgres/src/connection.js:324:9
+
+⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯
+Serialized Error: { severity_local: 'ERROR', severity: 'ERROR', code: '42P18', file: 'postgres.c', routine: 'pg_analyze_and_rewrite_varparams', query: 'update "issues" target set payload_source_snapshot=(\n      select content || jsonb_build_object(\'digest\',encode(sha256(convert_to(content::text,\'UTF8\')),\'hex\')) from (\n        select jsonb_build_object(\'version\',1,\'owner\',jsonb_build_object(\'kind\',$1,\'companyId\',target.company_id,\'id\',target.id,\n          \'contentHash\',public.aw_native_payload_body_hash($2,to_jsonb(target))),\n          \'policy\',jsonb_build_object(\'issueIds\',\'[]\'::jsonb,\'projectIds\',\'[]\'::jsonb,\'runIds\',\'[]\'::jsonb,\n            \'memoryIds\',\'[]\'::jsonb,\'foundationRevisionIds\',\'[]\'::jsonb),\'inputs\',\'[]\'::jsonb) as content\n      ) actual_body\n    ) where target.id=$3::uuid', parameters: [ 'issue', 'issue', '96e01c14-2334-4ab4-b679-d3d24b6489e6' ], args: [ 'issue', 'issue', '96e01c14-2334-4ab4-b679-d3d24b6489e6' ], types: [ +0, +0, +0 ] }
+⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯[1/3]⎯
+
+ FAIL  |@paperclipai/server| src/__tests__/native-payload-public-response.integration.test.ts > Native payload proofs stay on the server at public response boundaries > omits Project proofs from list and detail without removing user-authored nested fields
+Error: Failed query: update "projects" target set payload_source_snapshot=(
+      select content || jsonb_build_object('digest',encode(sha256(convert_to(content::text,'UTF8')),'hex')) from (
+        select jsonb_build_object('version',1,'owner',jsonb_build_object('kind',$1,'companyId',target.company_id,'id',target.id,
+          'contentHash',public.aw_native_payload_body_hash($2,to_jsonb(target))),
+          'policy',jsonb_build_object('issueIds','[]'::jsonb,'projectIds','[]'::jsonb,'runIds','[]'::jsonb,
+            'memoryIds','[]'::jsonb,'foundationRevisionIds','[]'::jsonb),'inputs','[]'::jsonb) as content
+      ) actual_body
+    ) where target.id=$3::uuid
+params: project,project,d282ab05-c166-4e04-b861-0780735891b7
+ ❯ PostgresJsPreparedQuery.queryWithCache ../node_modules/.pnpm/drizzle-orm@0.45.2_@opentelemetry+api@1.9.1_kysely@0.29.5_pg@8.18.0_postgres@3.4.9_patch_hash_uil4xuf7icnddjurbgy2qn5oo4/node_modules/src/pg-core/session.ts:73:10
+ ❯ bind src/__tests__/native-payload-public-response.integration.test.ts:38:5
+     36|   // supplies producer truth or authorization to any private input.
+     37|   async function bind(table: "issues" | "projects" | "memory_records",…
+     38|     await db.execute(sql`update ${sql.identifier(table)} target set pa…
+       |     ^
+     39|       select content || jsonb_build_object('digest',encode(sha256(conv…
+     40|         select jsonb_build_object('version',1,'owner',jsonb_build_obje…
+ ❯ src/__tests__/native-payload-public-response.integration.test.ts:69:5
+
+Caused by: PostgresError: could not determine data type of parameter $1
+ ❯ ErrorResponse ../node_modules/.pnpm/postgres@3.4.9_patch_hash=sryle6qd5qfmnxvoebal4gashi/node_modules/postgres/src/connection.js:819:30
+ ❯ handle ../node_modules/.pnpm/postgres@3.4.9_patch_hash=sryle6qd5qfmnxvoebal4gashi/node_modules/postgres/src/connection.js:493:6
+ ❯ Socket.data ../node_modules/.pnpm/postgres@3.4.9_patch_hash=sryle6qd5qfmnxvoebal4gashi/node_modules/postgres/src/connection.js:324:9
+
+⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯
+Serialized Error: { severity_local: 'ERROR', severity: 'ERROR', code: '42P18', file: 'postgres.c', routine: 'pg_analyze_and_rewrite_varparams', query: 'update "projects" target set payload_source_snapshot=(\n      select content || jsonb_build_object(\'digest\',encode(sha256(convert_to(content::text,\'UTF8\')),\'hex\')) from (\n        select jsonb_build_object(\'version\',1,\'owner\',jsonb_build_object(\'kind\',$1,\'companyId\',target.company_id,\'id\',target.id,\n          \'contentHash\',public.aw_native_payload_body_hash($2,to_jsonb(target))),\n          \'policy\',jsonb_build_object(\'issueIds\',\'[]\'::jsonb,\'projectIds\',\'[]\'::jsonb,\'runIds\',\'[]\'::jsonb,\n            \'memoryIds\',\'[]\'::jsonb,\'foundationRevisionIds\',\'[]\'::jsonb),\'inputs\',\'[]\'::jsonb) as content\n      ) actual_body\n    ) where target.id=$3::uuid', parameters: [ 'project', 'project', 'd282ab05-c166-4e04-b861-0780735891b7' ], args: [ 'project', 'project', 'd282ab05-c166-4e04-b861-0780735891b7' ], types: [ +0, +0, +0 ] }
+⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯[2/3]⎯
+
+ FAIL  |@paperclipai/server| src/__tests__/native-payload-public-response.integration.test.ts > Native payload proofs stay on the server at public response boundaries > omits Memory proofs from detail, list and export and preserves arbitrary user metadata
+Error: Failed query: update "memory_records" target set payload_source_snapshot=(
+      select content || jsonb_build_object('digest',encode(sha256(convert_to(content::text,'UTF8')),'hex')) from (
+        select jsonb_build_object('version',1,'owner',jsonb_build_object('kind',$1,'companyId',target.company_id,'id',target.id,
+          'contentHash',public.aw_native_payload_body_hash($2,to_jsonb(target))),
+          'policy',jsonb_build_object('issueIds','[]'::jsonb,'projectIds','[]'::jsonb,'runIds','[]'::jsonb,
+            'memoryIds','[]'::jsonb,'foundationRevisionIds','[]'::jsonb),'inputs','[]'::jsonb) as content
+      ) actual_body
+    ) where target.id=$3::uuid
+params: memory_record,memory_record,9a231b10-e496-4c43-96e7-608049ffde46
+ ❯ PostgresJsPreparedQuery.queryWithCache ../node_modules/.pnpm/drizzle-orm@0.45.2_@opentelemetry+api@1.9.1_kysely@0.29.5_pg@8.18.0_postgres@3.4.9_patch_hash_uil4xuf7icnddjurbgy2qn5oo4/node_modules/src/pg-core/session.ts:73:10
+ ❯ bind src/__tests__/native-payload-public-response.integration.test.ts:38:5
+     36|   // supplies producer truth or authorization to any private input.
+     37|   async function bind(table: "issues" | "projects" | "memory_records",…
+     38|     await db.execute(sql`update ${sql.identifier(table)} target set pa…
+       |     ^
+     39|       select content || jsonb_build_object('digest',encode(sha256(conv…
+     40|         select jsonb_build_object('version',1,'owner',jsonb_build_obje…
+ ❯ src/__tests__/native-payload-public-response.integration.test.ts:83:5
+
+Caused by: PostgresError: could not determine data type of parameter $1
+ ❯ ErrorResponse ../node_modules/.pnpm/postgres@3.4.9_patch_hash=sryle6qd5qfmnxvoebal4gashi/node_modules/postgres/src/connection.js:819:30
+ ❯ handle ../node_modules/.pnpm/postgres@3.4.9_patch_hash=sryle6qd5qfmnxvoebal4gashi/node_modules/postgres/src/connection.js:493:6
+ ❯ Socket.data ../node_modules/.pnpm/postgres@3.4.9_patch_hash=sryle6qd5qfmnxvoebal4gashi/node_modules/postgres/src/connection.js:324:9
+
+⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯
+Serialized Error: { severity_local: 'ERROR', severity: 'ERROR', code: '42P18', file: 'postgres.c', routine: 'pg_analyze_and_rewrite_varparams', query: 'update "memory_records" target set payload_source_snapshot=(\n      select content || jsonb_build_object(\'digest\',encode(sha256(convert_to(content::text,\'UTF8\')),\'hex\')) from (\n        select jsonb_build_object(\'version\',1,\'owner\',jsonb_build_object(\'kind\',$1,\'companyId\',target.company_id,\'id\',target.id,\n          \'contentHash\',public.aw_native_payload_body_hash($2,to_jsonb(target))),\n          \'policy\',jsonb_build_object(\'issueIds\',\'[]\'::jsonb,\'projectIds\',\'[]\'::jsonb,\'runIds\',\'[]\'::jsonb,\n            \'memoryIds\',\'[]\'::jsonb,\'foundationRevisionIds\',\'[]\'::jsonb),\'inputs\',\'[]\'::jsonb) as content\n      ) actual_body\n    ) where target.id=$3::uuid', parameters: [ 'memory_record', 'memory_record', '9a231b10-e496-4c43-96e7-608049ffde46' ], args: [ 'memory_record', 'memory_record', '9a231b10-e496-4c43-96e7-608049ffde46' ], types: [ +0, +0, +0 ] }
+⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯[3/3]⎯
+
+
+ Test Files  1 failed (1)
+      Tests  3 failed (3)
+   Start at  05:45:15
+   Duration  114.85s (transform 62.25s, setup 417ms, import 99.53s, tests 13.84s, environment 2ms)
+

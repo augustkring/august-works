@@ -19,7 +19,7 @@ export async function seedApprovedAuthoringPreference(db: Db, companyId: string,
     subject: null, ownerAgentId: null, title: "Concise internal drafts", content: body, summary: null, sensitivity: "internal",
     importance: 50, confidenceScore: 1, validFrom: null, validUntil: null, observedAt, retentionPolicy: "approved_work_preference",
     expiresAt: new Date(Date.now()+86400000).toISOString(), createdByOperationId: randomUUID(), metadata: {}, evidence: [{
-      sourceClass: "task", sourceProvider: "august_works_issue", sourceType: "issue", sourceRef: `issue://${task.id}`,
+      sourceClass: "task", sourceProvider: "august_works_tasks", sourceType: "issue", sourceRef: `issue://${task.id}`,
       sourceVersion: task.updatedAt.toISOString(), sourceUpdatedAt: task.updatedAt.toISOString(), observedAt,
       excerptHash: nativeSha256(body), citation: { label: task.title }, trustLevel: "high", relation: "supports" }] }, actor);
   await owner.reviewCandidate(companyId, candidate.record.id, { decision: "accept", reason: "Human reviewed the organizational preference" }, actor);

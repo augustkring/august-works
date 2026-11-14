@@ -1,0 +1,12 @@
+{
+  "scope": "Host68 closed diagnostic run; exact source and build restoration verified",
+  "phaseExitCodes": {
+    "source-oxc": 0,
+    "shared-build": 0,
+    "db-build": 0,
+    "server-tsc": 0,
+    "targeted-worker-vitest": 1
+  },
+  "restore": "pinned sources restored to pre-snapshot source bytes and modes; compiled outputs and tsbuildinfo restored byte-for-byte",
+  "finding": "Actual Worker failed at relay schema validation for unchunked provider_artifact stdin; this is a diagnostic failure, not a pass."
+}

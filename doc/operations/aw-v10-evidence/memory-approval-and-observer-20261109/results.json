@@ -1,0 +1,56 @@
+{
+  "status": "scoped_software_checks_passed",
+  "v10Complete": false,
+  "readyForMerge": false,
+  "invocations": [
+    {
+      "label": "context-engine-complete-r1",
+      "passed": 12,
+      "notSelected": 0,
+      "seconds": 146.0135584560012,
+      "peakOwnedDescendantRssBytes": 2916282368,
+      "sourcePinsStable": true,
+      "ownedPostgresLeftovers": 0
+    },
+    {
+      "label": "native-text-final-memory-16-r1",
+      "passed": 16,
+      "notSelected": 0,
+      "seconds": 135.87253272299859,
+      "peakOwnedDescendantRssBytes": 3118469120,
+      "sourcePinsStable": true,
+      "ownedPostgresLeftovers": 0
+    },
+    {
+      "label": "reservations-software-isolated-r1",
+      "passed": 26,
+      "notSelected": 7,
+      "seconds": 170.25148563200128,
+      "peakOwnedDescendantRssBytes": 3056619520,
+      "sourcePinsStable": true,
+      "ownedPostgresLeftovers": 0
+    }
+  ],
+  "typecheck": {
+    "steps": [
+      {
+        "command": [
+          "node",
+          "../node_modules/typescript/bin/tsc",
+          "--noEmit",
+          "--singleThreaded"
+        ],
+        "exit": 0,
+        "seconds": 96.06738401400071,
+        "peakGroupRssBytes": 6165303296,
+        "stopped": null
+      }
+    ],
+    "memoryBefore": "low 0\nhigh 0\nmax 0\noom 0\noom_kill 0\noom_group_kill 0\n",
+    "memoryAfter": "low 0\nhigh 0\nmax 0\noom 0\noom_kill 0\noom_group_kill 0\n"
+  },
+  "nodeObserverPassed": 5,
+  "securitySelectorAndReceiptNodeTestsPassed": 12,
+  "actualManagedSdkAndPrivilegedObserverQualification": "pending next CI; earlier jobs failed/timed out/cancelled and are not promoted",
+  "ciRegressionMatrixQualification": "pending actual GitHub execution"
+}

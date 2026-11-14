@@ -1,0 +1,139 @@
+{
+  "status": "in_progress",
+  "sourceCommit": "855227707c7117344268c9272745345b1ffac893",
+  "meaning": "Native outbound support gateway with explicit disabled-by-default HTTP relay; fake transport only, no external provider or end-to-end hosted support qualification.",
+  "logs": [
+    {
+      "name": "support-case-gateway-native",
+      "exitCode": 0,
+      "rawSha256": "193fe939eaab1169b0a3087d5fa287c0abfab6b0dff1ae39c57c78506d81212b",
+      "sanitizedSha256": "193fe939eaab1169b0a3087d5fa287c0abfab6b0dff1ae39c57c78506d81212b",
+      "archiveSha256": "e3ea465e40a6860b157ae46b7dce29466c184ed7b867f0de26824c9c2df4765e",
+      "redactions": {
+        "ansi": 0,
+        "bearer": 0,
+        "jwt": 0,
+        "credential_field": 0,
+        "url_credential": 0
+      },
+      "summary": [
+        "Test Files  1 passed (1)",
+        "Tests  6 passed (6)",
+        "Duration  9.86s (transform 2.90s, setup 82ms, import 4.97s, tests 4.68s, environment 0ms)"
+      ]
+    },
+    {
+      "name": "support-http-gateway",
+      "exitCode": 0,
+      "rawSha256": "a50cb81050e5e2f1b8c72e04ef4bc2053706ccee140125de031fb1e484d5a02b",
+      "sanitizedSha256": "a50cb81050e5e2f1b8c72e04ef4bc2053706ccee140125de031fb1e484d5a02b",
+      "archiveSha256": "f0eda429d31503672ec55471eb47a0563613c87ebb6e2edadd2689f3203ef277",
+      "redactions": {
+        "ansi": 0,
+        "bearer": 0,
+        "jwt": 0,
+        "credential_field": 0,
+        "url_credential": 0
+      },
+      "summary": [
+        "Test Files  1 passed (1)",
+        "Tests  3 passed (3)",
+        "Duration  4.37s (transform 2.69s, setup 107ms, import 4.11s, tests 28ms, environment 0ms)"
+      ]
+    },
+    {
+      "name": "support-gateway-http-intake-final",
+      "exitCode": 0,
+      "rawSha256": "3219ce0e30ba977946aed0f858c786fef542478c525c84606515a74cbb7d5ab3",
+      "sanitizedSha256": "3219ce0e30ba977946aed0f858c786fef542478c525c84606515a74cbb7d5ab3",
+      "archiveSha256": "6254096ec658b9c3b896bda2c40af5c7b762508474b101adf5a26ed05abcaa5b",
+      "redactions": {
+        "ansi": 0,
+        "bearer": 0,
+        "jwt": 0,
+        "credential_field": 0,
+        "url_credential": 0
+      },
+      "summary": [
+        "Test Files  2 passed (2)",
+        "Tests  58 passed (58)",
+        "Duration  30.73s (transform 11.80s, setup 151ms, import 18.71s, tests 11.57s, environment 0ms)"
+      ]
+    },
+    {
+      "name": "support-delivery-server-typecheck",
+      "exitCode": 1,
+      "rawSha256": "f8f8c9bfbe6ee237e1799f522d4fcdbc5ad0b4c66a9e5323247b05288abbe40e",
+      "sanitizedSha256": "f8f8c9bfbe6ee237e1799f522d4fcdbc5ad0b4c66a9e5323247b05288abbe40e",
+      "archiveSha256": "d8c04e3bc8d908b0576189c012942f36c581d67ffed0d09fdece35dd52cb900e",
+      "redactions": {
+        "ansi": 0,
+        "bearer": 0,
+        "jwt": 0,
+        "credential_field": 0,
+        "url_credential": 0
+      },
+      "summary": []
+    },
+    {
+      "name": "support-gateway-server-typecheck",
+      "exitCode": 1,
+      "rawSha256": "bfe9f7d052d0b564db5f29942babbccde7cda4619ba27a667724b91317e311bc",
+      "sanitizedSha256": "bfe9f7d052d0b564db5f29942babbccde7cda4619ba27a667724b91317e311bc",
+      "archiveSha256": "b0fc0bd9faed5923a93487d05ec6a9616a584937ea573ea1072401636e59e266",
+      "redactions": {
+        "ansi": 0,
+        "bearer": 0,
+        "jwt": 0,
+        "credential_field": 0,
+        "url_credential": 0
+      },
+      "summary": []
+    },
+    {
+      "name": "support-gateway-server-typecheck-final",
+      "exitCode": 0,
+      "rawSha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+      "sanitizedSha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+      "archiveSha256": "f61f27bd17de546264aa58f40f3aafaac7021e0ef69c17f6b1b4cd7664a037ec",
+      "redactions": {
+        "ansi": 0,
+        "bearer": 0,
+        "jwt": 0,
+        "credential_field": 0,
+        "url_credential": 0
+      },
+      "summary": []
+    },
+    {
+      "name": "support-gateway-help-final",
+      "exitCode": 0,
+      "rawSha256": "400154533b2f266c494a57ee480fe073567dafa2e87b826ac0cb0676b46885bc",
+      "sanitizedSha256": "400154533b2f266c494a57ee480fe073567dafa2e87b826ac0cb0676b46885bc",
+      "archiveSha256": "9fc8ba837b9bf91304d8cb7d8f50559a74c76354fdbd9b6b6428562554a47350",
+      "redactions": {
+        "ansi": 0,
+        "bearer": 0,
+        "jwt": 0,
+        "credential_field": 0,
+        "url_credential": 0
+      },
+      "summary": []
+    },
+    {
+      "name": "support-gateway-source-review",
+      "exitCode": 0,
+      "rawSha256": "d7ebe96c388510b805206103de093dd31f3530f52c08413f91837e013501e7bb",
+      "sanitizedSha256": "d7ebe96c388510b805206103de093dd31f3530f52c08413f91837e013501e7bb",
+      "archiveSha256": "d605bbcc8f965139f1929f722a29f3a97b64ec71c8673018660d7344b64bdf2c",
+      "redactions": {
+        "ansi": 0,
+        "bearer": 0,
+        "jwt": 0,
+        "credential_field": 0,
+        "url_credential": 0
+      },
+      "summary": []
+    }
+  ]
+}

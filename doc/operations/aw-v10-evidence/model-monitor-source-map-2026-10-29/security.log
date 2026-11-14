@@ -1,0 +1,14 @@
+✔ security fast path resolves every protected owner path to existing regression files (3.469607ms)
+✔ a changed protected path selects only its mapped regression files, deduplicated (0.303087ms)
+✔ a protected regression group cannot drift away from its CI job owner (0.94799ms)
+✔ an unmapped new security prefix fails closed while known domains select owner-directory regressions (0.481727ms)
+✔ the declared CI owner invokes changed selectors and has a fail-closed base diff (0.25832ms)
+✔ all model monitor contract changes select Human session and OpenAPI regressions (0.23218ms)
+ℹ tests 6
+ℹ suites 0
+ℹ pass 6
+ℹ fail 0
+ℹ cancelled 0
+ℹ skipped 0
+ℹ todo 0
+ℹ duration_ms 101.705889

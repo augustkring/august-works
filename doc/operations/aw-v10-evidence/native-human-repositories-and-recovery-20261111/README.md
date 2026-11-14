@@ -1,0 +1,7 @@
+# Native Human input, repository and recovery evidence — 2026-11-11
+
+The checkpoint binds managed Human questions and repository discovery to their original provider capture, current Human/access owners and consumed-source closure. Repository witnesses include the selected credential version, so rotation under an unchanged secret reference invalidates stale results. Native execution and checkout clearing share the queue owner’s physical-cleanup proof. Ask and Planning catalog checks follow the canonical modes.
+
+The retained software checks include PostgreSQL ownership/access cases, the full workspace typecheck and root build. The corrected three-file regression is recorded separately from both earlier 552/1 failed iterations. The workspace typecheck and build preceded the later test-fixture-only corrections; each receipt identifies its exact source snapshot. Raw logs remain private. The controlled SDK tests are source/build coverage here, not SDK execution evidence.
+
+Every receipt qualifies only its recorded source bytes. The earlier failed regression iterations are retained beside the corrected regression receipt. Actual SDK-positive progress/question/repository flows, browser journeys, privileged Host/helper execution, paid-provider calls, deployment, representative Human evidence, full V10 acceptance and merge readiness are not established here. Historical requirement and migration-phase states are not promoted.

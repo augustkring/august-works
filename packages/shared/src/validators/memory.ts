@@ -22,9 +22,11 @@ export const memorySourceDeletionInputSchema = z.object({
 export const memoryDeletionLedgerInputSchema = z.object({
   schema: z.literal("memory_deletion_ledger.v1"), companyId: z.string().guid(),
   markers: z.array(z.object({
-    key: z.string().regex(/^[a-f0-9]{64}$/), kind: z.enum(["record", "operation", "source"]),
+    key: z.string().max(65), kind: z.enum(["record", "operation", "source"]),
     recordId: z.string().guid().nullable(), deletedAt: z.string().datetime(),
-  }).strict()).max(10_000),
+  }).strict().refine(marker => /^[a-f0-9]{64}$/.test(marker.key) || (marker.kind === "source" && marker.recordId === null &&
+    /^memory-run-source-erasure:v1:[0-9a-f]{8}(?:-[0-9a-f]{4}){3}-[0-9a-f]{12}$/.test(marker.key)),
+  { path: ["key"], message: "Invalid deletion marker key" })).max(10_000),
 }).strict();
 
 export const memoryBindingInputSchema = z
@@ -209,9 +211,13 @@ export const memoryReviewInputSchema = z
   .object({
     decision: z.enum(["accept", "reject"]),
     reason: nullableBounded(2000).optional(),
+    publishPrivateShare: z.literal(true).optional().describe("Explicit owner consent to publish an exact proposed private Memory copy. Ordinary acceptance retains source privacy."),
   })
   .strict()
   .superRefine((value, ctx) => {
+    if (value.decision !== "accept" && value.publishPrivateShare) {
+      ctx.addIssue({ code: z.ZodIssueCode.custom, path: ["publishPrivateShare"], message: "Only acceptance can publish a private share" });
+    }
     if (value.decision === "reject" && !value.reason?.trim()) {
       ctx.addIssue({
         code: z.ZodIssueCode.custom,
@@ -314,6 +320,7 @@ export const memoryRecordListQuerySchema = z
 export const memoryReviewReasonSchema = z
   .object({
     reason: z.string().trim().min(1).max(2000).optional(),
+    publishPrivateShare: z.literal(true).optional().describe("Explicit owner consent to publish an exact proposed private Memory copy. Ordinary acceptance retains source privacy."),
   })
   .strict();
 

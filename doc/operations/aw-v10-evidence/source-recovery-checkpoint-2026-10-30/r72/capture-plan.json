@@ -1,0 +1,255 @@
+{
+  "capturePlan": "Small R72 recovery delta from R71 Host68 through frozen Host69/70/72c/73, per-candidate changed/new sources and pins/runners/patches plus compact closed receipts; Native R118/R120/R124 PG/TSC receipts, budget fixture, B122/R125 review-only candidates, A/0569 snapshot+9PG, known-stop strict38 and runtime receipt followup, inactive R6 metadata, current notes/aggregate and R71 dedup receipt only. No full base bundles or PG archives copied.",
+  "baseR71ArchiveSha256": "de8da0dbf1018d761872642e6fc94d370c1e1a334d23aa9054086ac6c55129fb",
+  "baseHost68PinsSha256": "83c19270ebeae346571139f6b21127fd929cbd71f86fb0b41c00c92e737f2da0",
+  "hostDeltas": [
+    {
+      "candidate": "69",
+      "basePaths": 108,
+      "candidatePaths": 109,
+      "added": [
+        "server/src/services/native-runtime/native-sandbox-artifact-staging.test.ts"
+      ],
+      "changed": [
+        "server/src/services/native-runtime/native-session-executor.ts"
+      ],
+      "deleted": [],
+      "addedPins": [
+        {
+          "path": "server/src/services/native-runtime/native-sandbox-artifact-staging.test.ts",
+          "candidateSha256": "2accce1e3156584d0806b247b32ff245424ee88d3c14d9df926eb3926b73fcea"
+        }
+      ],
+      "changedPins": [
+        {
+          "path": "server/src/services/native-runtime/native-session-executor.ts",
+          "baseSha256": "5b87b8d42a517c16de8a52d19fc4f71b7d93ed2b7be37f7f71cf13d8c1e2d4b4",
+          "candidateSha256": "614e1e561efca35be5b5ddb024b845848f3310ffd6baa88644a67dea5d76acd8"
+        }
+      ]
+    },
+    {
+      "candidate": "70",
+      "basePaths": 109,
+      "candidatePaths": 110,
+      "added": [
+        "server/src/__tests__/v7-worker-model-gateway.integration.test.ts"
+      ],
+      "changed": [
+        "server/src/__tests__/helpers/managed-native-opencode-e2e-fixture.ts",
+        "server/src/services/runtime/control.ts"
+      ],
+      "deleted": [],
+      "addedPins": [
+        {
+          "path": "server/src/__tests__/v7-worker-model-gateway.integration.test.ts",
+          "candidateSha256": "55551f115fde5f9822089bddfebf84f2843057f3b6fbee9a59dcc257ed95c1f1"
+        }
+      ],
+      "changedPins": [
+        {
+          "path": "server/src/__tests__/helpers/managed-native-opencode-e2e-fixture.ts",
+          "baseSha256": "d69212faf7be8b1e0632502e53ac08fca34ce51f892bf2cec32348b42e13f9b6",
+          "candidateSha256": "648a939c691db47eaa6697a359ec6d6145fe4e78e54792feb3eed6679d6a2f0b"
+        },
+        {
+          "path": "server/src/services/runtime/control.ts",
+          "baseSha256": "34198ad65cb47ded193c0f8cad0022b48e5f9727fe9b0b89c65114e779145984",
+          "candidateSha256": "54527afa70ae5d2e4379595b61a8aabe798c18f0bd0cf7c0493904a9042c60a6"
+        }
+      ]
+    },
+    {
+      "candidate": "72c",
+      "basePaths": 110,
+      "candidatePaths": 113,
+      "added": [
+        "server/src/__tests__/environment-execution-target.test.ts",
+        "server/src/__tests__/v9-native-task-source-erasure.integration.test.ts",
+        "server/src/services/environment-execution-target.ts"
+      ],
+      "changed": [
+        "server/src/services/native-runtime/paperclip-runner-tool-authority.ts"
+      ],
+      "deleted": [],
+      "addedPins": [
+        {
+          "path": "server/src/__tests__/environment-execution-target.test.ts",
+          "candidateSha256": "ddb9c89df2be1488e83f91b3004971af24e334d22a2f9a039e9cde4fc08de28a"
+        },
+        {
+          "path": "server/src/__tests__/v9-native-task-source-erasure.integration.test.ts",
+          "candidateSha256": "edf104acac20c2f600c5e281516b036cf8130f7d26877074a4258b02b663d5e2"
+        },
+        {
+          "path": "server/src/services/environment-execution-target.ts",
+          "candidateSha256": "3c0437216ddbe45f19c3294bfdae44b815ab07740371691a1c29a240d8befe93"
+        }
+      ],
+      "changedPins": [
+        {
+          "path": "server/src/services/native-runtime/paperclip-runner-tool-authority.ts",
+          "baseSha256": "eee8d9a45767f8ccc45fcb3c3bb707aa1cd75185fb68a685b9eea4b54b44cfa2",
+          "candidateSha256": "27fe646ec991a32a761bffcf884a504ede28d9c5d74744b4021ebc9f1c53e90c"
+        }
+      ]
+    },
+    {
+      "candidate": "73",
+      "basePaths": 113,
+      "candidatePaths": 113,
+      "added": [],
+      "changed": [
+        "server/src/__tests__/helpers/managed-native-conversation-sandbox-host.ts",
+        "server/src/__tests__/managed-worker-sandbox-lifecycle.integration.test.ts"
+      ],
+      "deleted": [],
+      "addedPins": [],
+      "changedPins": [
+        {
+          "path": "server/src/__tests__/helpers/managed-native-conversation-sandbox-host.ts",
+          "baseSha256": "d9f7305e40ee7f4401d0b98a00c96f5344b9e2fef7483217910e4c8461e04c97",
+          "candidateSha256": "8da5a1fcdd7e07b447dfb00e3d6924af3c5c58fb4485806126656d8f9e03ee7d"
+        },
+        {
+          "path": "server/src/__tests__/managed-worker-sandbox-lifecycle.integration.test.ts",
+          "baseSha256": "6d8313079b6eec2829b34de1b179ad858aa6b3527d7084a058387326d5c2cd8f",
+          "candidateSha256": "e03315398d5aead8954ba447d6845ff015f03efa69d88b121f620ec878fea320"
+        }
+      ]
+    }
+  ],
+  "inputs": {
+    "closed60-67-dedup/receipt.json": "/workspace/v10-preparation/durable-closed-host60-67-dedup-recovery-20261101/receipt.json",
+    "code-known-stop/known-process-stop.patch": "/workspace/v10-preparation/committed-native-agent-known-stop-followup-nov01/known-process-stop.patch",
+    "code-known-stop/source-pins.json": "/workspace/v10-preparation/committed-native-agent-known-stop-followup-nov01/source-pins.json",
+    "code-strict38/component.exit": "/workspace/v10-preparation/committed-native-agent-strict38-pg-nov01/component.exit",
+    "code-strict38/component.log": "/workspace/v10-preparation/committed-native-agent-strict38-pg-nov01/component.log",
+    "code-strict38/qualification-receipt.json": "/workspace/v10-preparation/committed-native-agent-strict38-pg-nov01/qualification-receipt.json",
+    "code-strict38/r1-missing-migration-path.exit": "/workspace/v10-preparation/committed-native-agent-strict38-pg-nov01/r1-missing-migration-path.exit",
+    "code-strict38/r1-missing-migration-path.log": "/workspace/v10-preparation/committed-native-agent-strict38-pg-nov01/r1-missing-migration-path.log",
+    "code-strict38/run-pg.sh": "/workspace/v10-preparation/committed-native-agent-strict38-pg-nov01/run-pg.sh",
+    "code-strict38/shared-entry.ts": "/workspace/v10-preparation/committed-native-agent-strict38-pg-nov01/shared-entry.ts",
+    "code-strict38/source-pins.json": "/workspace/v10-preparation/committed-native-agent-strict38-pg-nov01/source-pins.json",
+    "code-strict38/vitest.config.mjs": "/workspace/v10-preparation/committed-native-agent-strict38-pg-nov01/vitest.config.mjs",
+    "host69-73-deltas.json": "/workspace/v10-preparation/r72-recovery-prepared-nov01.building/host69-73-deltas.json",
+    "host69-closed/restore.log": "/workspace/v10-preparation/v10-149-r14.38.4.69-worker-artifact-chunking-private/qualification-r14.38.4.69-worker-artifact-chunking/restore.log",
+    "host69-closed/result-before-restore.json": "/workspace/v10-preparation/v10-149-r14.38.4.69-worker-artifact-chunking-private/qualification-r14.38.4.69-worker-artifact-chunking/result-before-restore.json",
+    "host69-closed/targeted-worker-vitest.exit": "/workspace/v10-preparation/v10-149-r14.38.4.69-worker-artifact-chunking-private/qualification-r14.38.4.69-worker-artifact-chunking/targeted-worker-vitest.exit",
+    "host69-delta/files/server/src/services/native-runtime/native-sandbox-artifact-staging.test.ts": "/workspace/v10-preparation/v10-149-r14.38.4.69-worker-artifact-chunking-private/files/server/src/services/native-runtime/native-sandbox-artifact-staging.test.ts",
+    "host69-delta/files/server/src/services/native-runtime/native-session-executor.ts": "/workspace/v10-preparation/v10-149-r14.38.4.69-worker-artifact-chunking-private/files/server/src/services/native-runtime/native-session-executor.ts",
+    "host69-status.json": "/workspace/v10-preparation/r72-recovery-prepared-nov01.building/host69-status.json",
+    "host69/host68-plus-r115.patch": "/workspace/v10-preparation/v10-149-r14.38.4.69-worker-artifact-chunking-private/host68-plus-r115.patch",
+    "host69/qualify-r14.38.4.69-worker-artifact-chunking.sh": "/workspace/v10-preparation/v10-149-r14.38.4.69-worker-artifact-chunking-private/qualify-r14.38.4.69-worker-artifact-chunking.sh",
+    "host69/source-pins.json": "/workspace/v10-preparation/v10-149-r14.38.4.69-worker-artifact-chunking-private/source-pins.json",
+    "host70-closed/restore.log": "/workspace/v10-preparation/v10-149-r14.38.4.70-worker-budget-issuer-private/qualification-r14.38.4.70-worker-budget-issuer/restore.log",
+    "host70-closed/result-before-restore.json": "/workspace/v10-preparation/v10-149-r14.38.4.70-worker-budget-issuer-private/qualification-r14.38.4.70-worker-budget-issuer/result-before-restore.json",
+    "host70-closed/server-tsc.exit": "/workspace/v10-preparation/v10-149-r14.38.4.70-worker-budget-issuer-private/qualification-r14.38.4.70-worker-budget-issuer/server-tsc.exit",
+    "host70-closed/targeted-worker-vitest.exit": "/workspace/v10-preparation/v10-149-r14.38.4.70-worker-budget-issuer-private/qualification-r14.38.4.70-worker-budget-issuer/targeted-worker-vitest.exit",
+    "host70-delta/files/server/src/__tests__/helpers/managed-native-opencode-e2e-fixture.ts": "/workspace/v10-preparation/v10-149-r14.38.4.70-worker-budget-issuer-private/files/server/src/__tests__/helpers/managed-native-opencode-e2e-fixture.ts",
+    "host70-delta/files/server/src/__tests__/v7-worker-model-gateway.integration.test.ts": "/workspace/v10-preparation/v10-149-r14.38.4.70-worker-budget-issuer-private/files/server/src/__tests__/v7-worker-model-gateway.integration.test.ts",
+    "host70-delta/files/server/src/services/runtime/control.ts": "/workspace/v10-preparation/v10-149-r14.38.4.70-worker-budget-issuer-private/files/server/src/services/runtime/control.ts",
+    "host70-status.json": "/workspace/v10-preparation/r72-recovery-prepared-nov01.building/host70-status.json",
+    "host70/qualify-r14.38.4.70-worker-budget-issuer.sh": "/workspace/v10-preparation/v10-149-r14.38.4.70-worker-budget-issuer-private/qualify-r14.38.4.70-worker-budget-issuer.sh",
+    "host70/source-only-r14.70.patch": "/workspace/v10-preparation/v10-149-r14.38.4.70-worker-budget-issuer-private/source-only-r14.70.patch",
+    "host70/source-pins-r69.json": "/workspace/v10-preparation/v10-149-r14.38.4.70-worker-budget-issuer-private/source-pins-r69.json",
+    "host70/source-pins.json": "/workspace/v10-preparation/v10-149-r14.38.4.70-worker-budget-issuer-private/source-pins.json",
+    "host72c-closed/qualification-receipt.json": "/workspace/v10-preparation/v10-149-r14.38.4.72c-worker-lock-order-private/qualification-r14.38.4.72c-worker-lock-order/qualification-receipt.json",
+    "host72c-closed/restore.log": "/workspace/v10-preparation/v10-149-r14.38.4.72c-worker-lock-order-private/qualification-r14.38.4.72c-worker-lock-order/restore.log",
+    "host72c-closed/result-before-restore.json": "/workspace/v10-preparation/v10-149-r14.38.4.72c-worker-lock-order-private/qualification-r14.38.4.72c-worker-lock-order/result-before-restore.json",
+    "host72c-closed/targeted-worker-vitest.exit": "/workspace/v10-preparation/v10-149-r14.38.4.72c-worker-lock-order-private/qualification-r14.38.4.72c-worker-lock-order/targeted-worker-vitest.exit",
+    "host72c-delta/files/server/src/__tests__/environment-execution-target.test.ts": "/workspace/v10-preparation/v10-149-r14.38.4.72c-worker-lock-order-private/files/server/src/__tests__/environment-execution-target.test.ts",
+    "host72c-delta/files/server/src/__tests__/v9-native-task-source-erasure.integration.test.ts": "/workspace/v10-preparation/v10-149-r14.38.4.72c-worker-lock-order-private/files/server/src/__tests__/v9-native-task-source-erasure.integration.test.ts",
+    "host72c-delta/files/server/src/services/environment-execution-target.ts": "/workspace/v10-preparation/v10-149-r14.38.4.72c-worker-lock-order-private/files/server/src/services/environment-execution-target.ts",
+    "host72c-delta/files/server/src/services/native-runtime/paperclip-runner-tool-authority.ts": "/workspace/v10-preparation/v10-149-r14.38.4.72c-worker-lock-order-private/files/server/src/services/native-runtime/paperclip-runner-tool-authority.ts",
+    "host72c-status.json": "/workspace/v10-preparation/r72-recovery-prepared-nov01.building/host72c-status.json",
+    "host72c/qualify-r14.38.4.72c-worker-lock-order.sh": "/workspace/v10-preparation/v10-149-r14.38.4.72c-worker-lock-order-private/qualify-r14.38.4.72c-worker-lock-order.sh",
+    "host72c/source-only-r14.72.patch": "/workspace/v10-preparation/v10-149-r14.38.4.72c-worker-lock-order-private/source-only-r14.72.patch",
+    "host72c/source-pins.json": "/workspace/v10-preparation/v10-149-r14.38.4.72c-worker-lock-order-private/source-pins.json",
+    "host73-closed/qualification-receipt.json": "/workspace/v10-preparation/v10-149-r14.38.4.73-worker-session-stop-private/qualification-r14.38.4.73-worker-session-stop/qualification-receipt.json",
+    "host73-closed/restore.log": "/workspace/v10-preparation/v10-149-r14.38.4.73-worker-session-stop-private/qualification-r14.38.4.73-worker-session-stop/restore.log",
+    "host73-closed/result-before-restore.json": "/workspace/v10-preparation/v10-149-r14.38.4.73-worker-session-stop-private/qualification-r14.38.4.73-worker-session-stop/result-before-restore.json",
+    "host73-closed/targeted-worker-vitest.exit": "/workspace/v10-preparation/v10-149-r14.38.4.73-worker-session-stop-private/qualification-r14.38.4.73-worker-session-stop/targeted-worker-vitest.exit",
+    "host73-delta/files/server/src/__tests__/helpers/managed-native-conversation-sandbox-host.ts": "/workspace/v10-preparation/v10-149-r14.38.4.73-worker-session-stop-private/files/server/src/__tests__/helpers/managed-native-conversation-sandbox-host.ts",
+    "host73-delta/files/server/src/__tests__/managed-worker-sandbox-lifecycle.integration.test.ts": "/workspace/v10-preparation/v10-149-r14.38.4.73-worker-session-stop-private/files/server/src/__tests__/managed-worker-sandbox-lifecycle.integration.test.ts",
+    "host73-status.json": "/workspace/v10-preparation/r72-recovery-prepared-nov01.building/host73-status.json",
+    "host73/qualify-r14.38.4.73-worker-session-stop.sh": "/workspace/v10-preparation/v10-149-r14.38.4.73-worker-session-stop-private/qualify-r14.38.4.73-worker-session-stop.sh",
+    "host73/source-only-r14.73.patch": "/workspace/v10-preparation/v10-149-r14.38.4.73-worker-session-stop-private/source-only-r14.73.patch",
+    "host73/source-pins.json": "/workspace/v10-preparation/v10-149-r14.38.4.73-worker-session-stop-private/source-pins.json",
+    "inventory-r6/updated-owner-plan-r6-audit.json": "/workspace/v10-preparation/final-metadata-inventory-audit-nov01/updated-owner-plan-r6-audit.json",
+    "inventory-r6/updated-owner-plan-r6-pins.json": "/workspace/v10-preparation/final-metadata-inventory-audit-nov01/updated-owner-plan-r6-pins.json",
+    "inventory-r6/updated-owner-plan-r6.json": "/workspace/v10-preparation/final-metadata-inventory-audit-nov01/updated-owner-plan-r6.json",
+    "native-a0569/files/packages/db/src/migrations/0569_native_remote_workload_stop_projection.sql": "/workspace/v10-preparation/native-remote-workload-stop-projection-final-nov01/files/packages/db/src/migrations/0569_native_remote_workload_stop_projection.sql",
+    "native-a0569/files/packages/db/src/migrations/meta/0569_snapshot.json": "/workspace/v10-preparation/native-remote-workload-stop-projection-final-nov01/files/packages/db/src/migrations/meta/0569_snapshot.json",
+    "native-a0569/files/packages/db/src/migrations/meta/_journal.json": "/workspace/v10-preparation/native-remote-workload-stop-projection-final-nov01/files/packages/db/src/migrations/meta/_journal.json",
+    "native-a0569/files/server/src/__tests__/native-remote-workload-stop-projection.integration.test.ts": "/workspace/v10-preparation/native-remote-workload-stop-projection-final-nov01/files/server/src/__tests__/native-remote-workload-stop-projection.integration.test.ts",
+    "native-a0569/files/server/src/services/remote-execution-termination.ts": "/workspace/v10-preparation/native-remote-workload-stop-projection-final-nov01/files/server/src/services/remote-execution-termination.ts",
+    "native-a0569/generation-receipt.json": "/workspace/v10-preparation/native-remote-workload-stop-projection-final-nov01/generation-receipt.json",
+    "native-a0569/qualification-receipt.json": "/workspace/v10-preparation/native-remote-workload-stop-projection-final-nov01/qualification-receipt.json",
+    "native-a0569/remote-workload-stop-projection.patch": "/workspace/v10-preparation/native-remote-workload-stop-projection-final-nov01/remote-workload-stop-projection.patch",
+    "native-a0569/source-pg.exit": "/workspace/v10-preparation/native-remote-workload-stop-projection-final-nov01/source-pg.exit",
+    "native-a0569/source-pg.log": "/workspace/v10-preparation/native-remote-workload-stop-projection-final-nov01/source-pg.log",
+    "native-a0569/source-pins.json": "/workspace/v10-preparation/native-remote-workload-stop-projection-final-nov01/source-pins.json",
+    "native-b122/canonical-sandbox-cleanup-state.patch": "/workspace/v10-preparation/native-sandbox-canonical-state-r122/canonical-sandbox-cleanup-state.patch",
+    "native-b122/files/server/src/__tests__/helpers/managed-native-conversation-sandbox-host.ts": "/workspace/v10-preparation/native-sandbox-canonical-state-r122/files/server/src/__tests__/helpers/managed-native-conversation-sandbox-host.ts",
+    "native-b122/files/server/src/__tests__/helpers/managed-native-opencode-e2e-fixture.ts": "/workspace/v10-preparation/native-sandbox-canonical-state-r122/files/server/src/__tests__/helpers/managed-native-opencode-e2e-fixture.ts",
+    "native-b122/files/server/src/__tests__/v7-sandbox-host-bridge.integration.test.ts": "/workspace/v10-preparation/native-sandbox-canonical-state-r122/files/server/src/__tests__/v7-sandbox-host-bridge.integration.test.ts",
+    "native-b122/files/server/src/index.ts": "/workspace/v10-preparation/native-sandbox-canonical-state-r122/files/server/src/index.ts",
+    "native-b122/files/server/src/services/environment-runtime.ts": "/workspace/v10-preparation/native-sandbox-canonical-state-r122/files/server/src/services/environment-runtime.ts",
+    "native-b122/files/server/src/services/execution-sandbox/native-host-bridge.ts": "/workspace/v10-preparation/native-sandbox-canonical-state-r122/files/server/src/services/execution-sandbox/native-host-bridge.ts",
+    "native-b122/files/server/src/services/execution-sandbox/run-lease-cleanup.ts": "/workspace/v10-preparation/native-sandbox-canonical-state-r122/files/server/src/services/execution-sandbox/run-lease-cleanup.ts",
+    "native-b122/files/server/src/services/execution-sandbox/sandbox-service.ts": "/workspace/v10-preparation/native-sandbox-canonical-state-r122/files/server/src/services/execution-sandbox/sandbox-service.ts",
+    "native-b122/files/server/src/services/runtime/control.ts": "/workspace/v10-preparation/native-sandbox-canonical-state-r122/files/server/src/services/runtime/control.ts",
+    "native-b122/review-findings.json": "/workspace/v10-preparation/native-sandbox-canonical-state-r122/review-findings.json",
+    "native-b122/source-pins.json": "/workspace/v10-preparation/native-sandbox-canonical-state-r122/source-pins.json",
+    "native-b122/syntax-receipt.json": "/workspace/v10-preparation/native-sandbox-canonical-state-r122/syntax-receipt.json",
+    "native-budget-fixture/README.md": "/workspace/v10-preparation/managed-worker-model-budget-fixture-nov01/README.md",
+    "native-budget-fixture/files/server/src/__tests__/helpers/managed-native-opencode-e2e-fixture.ts": "/workspace/v10-preparation/managed-worker-model-budget-fixture-nov01/files/server/src/__tests__/helpers/managed-native-opencode-e2e-fixture.ts",
+    "native-budget-fixture/source-pins.json": "/workspace/v10-preparation/managed-worker-model-budget-fixture-nov01/source-pins.json",
+    "native-budget-fixture/syntax-receipt.json": "/workspace/v10-preparation/managed-worker-model-budget-fixture-nov01/syntax-receipt.json",
+    "native-budget-fixture/worker-model-budget-fixture.patch": "/workspace/v10-preparation/managed-worker-model-budget-fixture-nov01/worker-model-budget-fixture.patch",
+    "native-r118/canonical-cleanup-scope.patch": "/workspace/v10-preparation/native-sandbox-cleanup-canonical-scope-r118/canonical-cleanup-scope.patch",
+    "native-r118/coherent/run.sh": "/workspace/v10-preparation/native-sandbox-cleanup-canonical-scope-r118/coherent/run.sh",
+    "native-r118/coherent/source-pins.json": "/workspace/v10-preparation/native-sandbox-cleanup-canonical-scope-r118/coherent/source-pins.json",
+    "native-r118/files/server/src/services/execution-sandbox/native-host-bridge.ts": "/workspace/v10-preparation/native-sandbox-cleanup-canonical-scope-r118/files/server/src/services/execution-sandbox/native-host-bridge.ts",
+    "native-r118/files/server/src/services/execution-sandbox/run-lease-cleanup.ts": "/workspace/v10-preparation/native-sandbox-cleanup-canonical-scope-r118/files/server/src/services/execution-sandbox/run-lease-cleanup.ts",
+    "native-r118/qualification-receipt.json": "/workspace/v10-preparation/native-sandbox-cleanup-canonical-scope-r118/qualification-receipt.json",
+    "native-r118/source-pins.json": "/workspace/v10-preparation/native-sandbox-cleanup-canonical-scope-r118/source-pins.json",
+    "native-r120/coherent/run.sh": "/workspace/v10-preparation/native-model-issuer-authority-r120/coherent/run.sh",
+    "native-r120/coherent/source-pins.json": "/workspace/v10-preparation/native-model-issuer-authority-r120/coherent/source-pins.json",
+    "native-r120/files/server/src/__tests__/v7-worker-model-gateway.integration.test.ts": "/workspace/v10-preparation/native-model-issuer-authority-r120/files/server/src/__tests__/v7-worker-model-gateway.integration.test.ts",
+    "native-r120/files/server/src/services/runtime/control.ts": "/workspace/v10-preparation/native-model-issuer-authority-r120/files/server/src/services/runtime/control.ts",
+    "native-r120/qualification-receipt.json": "/workspace/v10-preparation/native-model-issuer-authority-r120/qualification-receipt.json",
+    "native-r120/source-pins.json": "/workspace/v10-preparation/native-model-issuer-authority-r120/source-pins.json",
+    "native-r120/worker-issuer-authority.patch": "/workspace/v10-preparation/native-model-issuer-authority-r120/worker-issuer-authority.patch",
+    "native-r124/coherent/run.sh": "/workspace/v10-preparation/native-tool-identity-overlap-window-r124/coherent/run.sh",
+    "native-r124/coherent/source-pins.json": "/workspace/v10-preparation/native-tool-identity-overlap-window-r124/coherent/source-pins.json",
+    "native-r124/files/server/src/__tests__/v9-native-task-source-erasure.integration.test.ts": "/workspace/v10-preparation/native-tool-identity-overlap-window-r124/files/server/src/__tests__/v9-native-task-source-erasure.integration.test.ts",
+    "native-r124/files/server/src/services/native-runtime/paperclip-runner-tool-authority.ts": "/workspace/v10-preparation/native-tool-identity-overlap-window-r124/files/server/src/services/native-runtime/paperclip-runner-tool-authority.ts",
+    "native-r124/handoff-pins.json": "/workspace/v10-preparation/native-tool-identity-overlap-window-r124/handoff-pins.json",
+    "native-r124/identity-lock-order.patch": "/workspace/v10-preparation/native-tool-identity-overlap-window-r124/identity-lock-order.patch",
+    "native-r124/qualification-receipt.json": "/workspace/v10-preparation/native-tool-identity-overlap-window-r124/qualification-receipt.json",
+    "native-r124/source-pins.json": "/workspace/v10-preparation/native-tool-identity-overlap-window-r124/source-pins.json",
+    "native-r125/files/server/src/services/execution-sandbox/sandbox-service.ts": "/workspace/v10-preparation/native-sandbox-cleanup-locked-idempotency-r125/files/server/src/services/execution-sandbox/sandbox-service.ts",
+    "native-r125/files/server/src/services/runtime/control.ts": "/workspace/v10-preparation/native-sandbox-cleanup-locked-idempotency-r125/files/server/src/services/runtime/control.ts",
+    "native-r125/locked-stop-idempotency.patch": "/workspace/v10-preparation/native-sandbox-cleanup-locked-idempotency-r125/locked-stop-idempotency.patch",
+    "native-r125/source-pins.json": "/workspace/v10-preparation/native-sandbox-cleanup-locked-idempotency-r125/source-pins.json",
+    "native-runtime-receipt-followup/canonical-runtime-receipt.patch": "/workspace/v10-preparation/native-remote-stop-runtime-state-receipt-followup-nov01/canonical-runtime-receipt.patch",
+    "native-runtime-receipt-followup/files/server/src/services/remote-execution-termination.ts": "/workspace/v10-preparation/native-remote-stop-runtime-state-receipt-followup-nov01/files/server/src/services/remote-execution-termination.ts",
+    "native-runtime-receipt-followup/source-pins.json": "/workspace/v10-preparation/native-remote-stop-runtime-state-receipt-followup-nov01/source-pins.json",
+    "native-runtime-receipt-followup/syntax-check.mjs": "/workspace/v10-preparation/native-remote-stop-runtime-state-receipt-followup-nov01/syntax-check.mjs",
+    "native-runtime-receipt-followup/syntax-receipt.json": "/workspace/v10-preparation/native-remote-stop-runtime-state-receipt-followup-nov01/syntax-receipt.json",
+    "root/root-continuation-20261101-current.md": "/workspace/v10-preparation/root-continuation-20261101-current.md",
+    "root/run-final-workspace-aggregate-20261101.sh": "/workspace/v10-preparation/run-final-workspace-aggregate-20261101.sh"
+  },
+  "excluded": [
+    "R71 full archive",
+    "Host qualification overlay snapshots and large raw Worker logs",
+    "full coherent source bundles/PG archives",
+    "dedup original-content archive/manifests (receipt only)",
+    "private HELP-FIND archive",
+    "active B/Native outputs",
+    "Main/Mirror/Git mutations",
+    "dependencies/provider/Cargo/R88"
+  ]
+}

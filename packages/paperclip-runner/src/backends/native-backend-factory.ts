@@ -15,6 +15,7 @@ import {
   type CodexAcpxNativeSessionBackendOptions,
 } from "./codex-acpx-native-backend.js";
 import { createOpenCodeNativeSessionBackend } from "./opencode-native-backend.js";
+import type { NativeMcpLaunchBinding } from "../drivers/native-mcp.js";
 
 export interface NativeBackendFactoryOptions extends Omit<
   CodexNativeSessionBackendOptions,
@@ -36,6 +37,7 @@ export interface NativeBackendFactoryOptions extends Omit<
   acpxDynamicToolHandler?: CodexAcpxNativeSessionBackendOptions["dynamicToolHandler"];
   opencodeRuntimeDirectory?: string;
   opencodeEnvironment?: NodeJS.ProcessEnv;
+  opencodeAssignedMcp?: NativeMcpLaunchBinding | null;
   opencodeCommand?: string;
 }
 
@@ -54,6 +56,7 @@ export function createNativeSessionBackend(
   if (options.codexTransportFactory) {
     return createRunnerdNativeSessionBackend(input, {
       completionFeedback: options.completionFeedback,
+      opencodeSystemInstructions: options.opencodeSystemInstructions,
       runnerInstanceId: options.runnerInstanceId,
       onSpawn: options.onSpawn,
       dynamicTools: options.dynamicTools,
@@ -71,7 +74,9 @@ export function createNativeSessionBackend(
     }
     return createOpenCodeNativeSessionBackend(input, {
       runtimeDirectory: options.opencodeRuntimeDirectory,
+      systemInstructions: options.opencodeSystemInstructions,
       environment: options.opencodeEnvironment,
+      assignedMcp: options.opencodeAssignedMcp,
       command: options.opencodeCommand,
       runnerInstanceId: options.runnerInstanceId,
       onSpawn: options.onSpawn,

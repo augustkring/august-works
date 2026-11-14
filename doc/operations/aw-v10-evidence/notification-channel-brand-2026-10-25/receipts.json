@@ -1,0 +1,26 @@
+{
+  "status": "in_progress",
+  "sourceCommit": "d01093d5619bc07a2edef8f8ee84619098d41d3d",
+  "meaning": "Existing native notification channel now uses first-party product identity; full own-account channel suite11PASS, no real external messages.",
+  "logs": [
+    {
+      "name": "notification-channel-brand",
+      "exitCode": 0,
+      "rawSha256": "8c29acb005594a3d91c85ad0156e0fb70d15efbc239037a1d79c90e85b0248ee",
+      "sanitizedSha256": "8c29acb005594a3d91c85ad0156e0fb70d15efbc239037a1d79c90e85b0248ee",
+      "archiveSha256": "5e63f210db5aa9f376e365dbe4e0c1e4f6965b0b4559f79c06fb9ca79dada965",
+      "redactions": {
+        "ansi": 0,
+        "bearer": 0,
+        "jwt": 0,
+        "credential_field": 0,
+        "url_credential": 0
+      },
+      "summary": [
+        "Test Files  1 passed (1)",
+        "Tests  11 passed (11)",
+        "Duration  22.71s (transform 12.78s, setup 73ms, import 17.54s, tests 4.98s, environment 0ms)"
+      ]
+    }
+  ]
+}

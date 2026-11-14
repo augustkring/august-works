@@ -1,0 +1,1990 @@
+[
+  {
+    "archivePath": "host64-closed/restore.log",
+    "sourcePath": "/workspace/v10-preparation/v10-149-r14.38.4.65-stop-target-attestation-tests-private/qualification-r14.38.4.64-stop-target-attestation/restore.log",
+    "before": {
+      "bytes": 120,
+      "mode": 384,
+      "uid": 1000,
+      "gid": 1000,
+      "device": 27,
+      "inode": 666787,
+      "nlink": 1,
+      "mtimeNs": 1793560143352281247,
+      "ctimeNs": 1793560214971036971
+    },
+    "beforeSha256": "22f576297855a531d97608db0ae44fc32f0dde4c317820d5d49768a8566e3b44",
+    "after": {
+      "bytes": 120,
+      "mode": 384,
+      "uid": 1000,
+      "gid": 1000,
+      "device": 27,
+      "inode": 666787,
+      "nlink": 1,
+      "mtimeNs": 1793560143352281247,
+      "ctimeNs": 1793560214971036971
+    },
+    "afterSha256": "22f576297855a531d97608db0ae44fc32f0dde4c317820d5d49768a8566e3b44"
+  },
+  {
+    "archivePath": "host64-closed/result-before-restore.json",
+    "sourcePath": "/workspace/v10-preparation/v10-149-r14.38.4.65-stop-target-attestation-tests-private/qualification-r14.38.4.64-stop-target-attestation/result-before-restore.json",
+    "before": {
+      "bytes": 103,
+      "mode": 384,
+      "uid": 1000,
+      "gid": 1000,
+      "device": 27,
+      "inode": 666786,
+      "nlink": 1,
+      "mtimeNs": 1793560142798224646,
+      "ctimeNs": 1793560214971020456
+    },
+    "beforeSha256": "9f418e98dc532fe7a81936a12c561392e7ad041ebcdffa95788f70529efa96f2",
+    "after": {
+      "bytes": 103,
+      "mode": 384,
+      "uid": 1000,
+      "gid": 1000,
+      "device": 27,
+      "inode": 666786,
+      "nlink": 1,
+      "mtimeNs": 1793560142798224646,
+      "ctimeNs": 1793560214971020456
+    },
+    "afterSha256": "9f418e98dc532fe7a81936a12c561392e7ad041ebcdffa95788f70529efa96f2"
+  },
+  {
+    "archivePath": "host64-closed/server-tsc.exit",
+    "sourcePath": "/workspace/v10-preparation/v10-149-r14.38.4.65-stop-target-attestation-tests-private/qualification-r14.38.4.64-stop-target-attestation/server-tsc.exit",
+    "before": {
+      "bytes": 2,
+      "mode": 384,
+      "uid": 1000,
+      "gid": 1000,
+      "device": 27,
+      "inode": 666782,
+      "nlink": 1,
+      "mtimeNs": 1793560138652180888,
+      "ctimeNs": 1793560214970932994
+    },
+    "beforeSha256": "9a271f2a916b0b6ee6cecb2426f0b3206ef074578be55d9bc94f6f3fe3ab86aa",
+    "after": {
+      "bytes": 2,
+      "mode": 384,
+      "uid": 1000,
+      "gid": 1000,
+      "device": 27,
+      "inode": 666782,
+      "nlink": 1,
+      "mtimeNs": 1793560138652180888,
+      "ctimeNs": 1793560214970932994
+    },
+    "afterSha256": "9a271f2a916b0b6ee6cecb2426f0b3206ef074578be55d9bc94f6f3fe3ab86aa"
+  },
+  {
+    "archivePath": "host65-closed/host-node-tests.exit",
+    "sourcePath": "/workspace/v10-preparation/v10-149-r14.38.4.65-stop-target-attestation-tests-private/qualification-r14.38.4.65-stop-target-attestation-tests/host-node-tests.exit",
+    "before": {
+      "bytes": 2,
+      "mode": 384,
+      "uid": 1000,
+      "gid": 1000,
+      "device": 27,
+      "inode": 666804,
+      "nlink": 1,
+      "mtimeNs": 1793560236742401219,
+      "ctimeNs": 1793560236742401219
+    },
+    "beforeSha256": "9a271f2a916b0b6ee6cecb2426f0b3206ef074578be55d9bc94f6f3fe3ab86aa",
+    "after": {
+      "bytes": 2,
+      "mode": 384,
+      "uid": 1000,
+      "gid": 1000,
+      "device": 27,
+      "inode": 666804,
+      "nlink": 1,
+      "mtimeNs": 1793560236742401219,
+      "ctimeNs": 1793560236742401219
+    },
+    "afterSha256": "9a271f2a916b0b6ee6cecb2426f0b3206ef074578be55d9bc94f6f3fe3ab86aa"
+  },
+  {
+    "archivePath": "host65-closed/restore.log",
+    "sourcePath": "/workspace/v10-preparation/v10-149-r14.38.4.65-stop-target-attestation-tests-private/qualification-r14.38.4.65-stop-target-attestation-tests/restore.log",
+    "before": {
+      "bytes": 120,
+      "mode": 384,
+      "uid": 1000,
+      "gid": 1000,
+      "device": 27,
+      "inode": 666806,
+      "nlink": 1,
+      "mtimeNs": 1793560237304664358,
+      "ctimeNs": 1793560237304664358
+    },
+    "beforeSha256": "22f576297855a531d97608db0ae44fc32f0dde4c317820d5d49768a8566e3b44",
+    "after": {
+      "bytes": 120,
+      "mode": 384,
+      "uid": 1000,
+      "gid": 1000,
+      "device": 27,
+      "inode": 666806,
+      "nlink": 1,
+      "mtimeNs": 1793560237304664358,
+      "ctimeNs": 1793560237304664358
+    },
+    "afterSha256": "22f576297855a531d97608db0ae44fc32f0dde4c317820d5d49768a8566e3b44"
+  },
+  {
+    "archivePath": "host65-closed/result-before-restore.json",
+    "sourcePath": "/workspace/v10-preparation/v10-149-r14.38.4.65-stop-target-attestation-tests-private/qualification-r14.38.4.65-stop-target-attestation-tests/result-before-restore.json",
+    "before": {
+      "bytes": 67,
+      "mode": 384,
+      "uid": 1000,
+      "gid": 1000,
+      "device": 27,
+      "inode": 666805,
+      "nlink": 1,
+      "mtimeNs": 1793560236770428538,
+      "ctimeNs": 1793560236770428538
+    },
+    "beforeSha256": "f83a057385ad258dbaa871f2b1eced989e0cb21a2762b7278139ae91898c6610",
+    "after": {
+      "bytes": 67,
+      "mode": 384,
+      "uid": 1000,
+      "gid": 1000,
+      "device": 27,
+      "inode": 666805,
+      "nlink": 1,
+      "mtimeNs": 1793560236770428538,
+      "ctimeNs": 1793560236770428538
+    },
+    "afterSha256": "f83a057385ad258dbaa871f2b1eced989e0cb21a2762b7278139ae91898c6610"
+  },
+  {
+    "archivePath": "host65-node-summary.json",
+    "sourcePath": "/workspace/v10-preparation/r71-recovery-prepared-nov01.building/host65-node-summary.json",
+    "before": {
+      "bytes": 181,
+      "mode": 384,
+      "uid": 1000,
+      "gid": 1000,
+      "device": 27,
+      "inode": 667706,
+      "nlink": 1,
+      "mtimeNs": 1793561347148597018,
+      "ctimeNs": 1793561347148597018
+    },
+    "beforeSha256": "9687b83993ee18977f7487d11c014135b9f4ca3c9ffb5cadf778ddec144c011e",
+    "after": {
+      "bytes": 181,
+      "mode": 384,
+      "uid": 1000,
+      "gid": 1000,
+      "device": 27,
+      "inode": 667706,
+      "nlink": 1,
+      "mtimeNs": 1793561347148597018,
+      "ctimeNs": 1793561347148597018
+    },
+    "afterSha256": "9687b83993ee18977f7487d11c014135b9f4ca3c9ffb5cadf778ddec144c011e"
+  },
+  {
+    "archivePath": "host65/runner64.sh",
+    "sourcePath": "/workspace/v10-preparation/v10-149-r14.38.4.65-stop-target-attestation-tests-private/qualify-r14.38.4.64-stop-target-attestation.sh",
+    "before": {
+      "bytes": 9016,
+      "mode": 448,
+      "uid": 1000,
+      "gid": 1000,
+      "device": 27,
+      "inode": 666765,
+      "nlink": 1,
+      "mtimeNs": 1793559982062227735,
+      "ctimeNs": 1793560214969676655
+    },
+    "beforeSha256": "5b5e54426b90d2caeb76b2d8798fece660acac38120d626b2d6983144b9ce242",
+    "after": {
+      "bytes": 9016,
+      "mode": 448,
+      "uid": 1000,
+      "gid": 1000,
+      "device": 27,
+      "inode": 666765,
+      "nlink": 1,
+      "mtimeNs": 1793559982062227735,
+      "ctimeNs": 1793560214969676655
+    },
+    "afterSha256": "5b5e54426b90d2caeb76b2d8798fece660acac38120d626b2d6983144b9ce242"
+  },
+  {
+    "archivePath": "host65/runner65.sh",
+    "sourcePath": "/workspace/v10-preparation/v10-149-r14.38.4.65-stop-target-attestation-tests-private/qualify-r14.38.4.65-stop-target-attestation-tests.sh",
+    "before": {
+      "bytes": 8835,
+      "mode": 448,
+      "uid": 1000,
+      "gid": 1000,
+      "device": 27,
+      "inode": 666789,
+      "nlink": 1,
+      "mtimeNs": 1793560222099476506,
+      "ctimeNs": 1793560222099476506
+    },
+    "beforeSha256": "56bfc74ab6f78555d23fa36d299741855dfcb8e20f96c14cdaa8dfc15f10992a",
+    "after": {
+      "bytes": 8835,
+      "mode": 448,
+      "uid": 1000,
+      "gid": 1000,
+      "device": 27,
+      "inode": 666789,
+      "nlink": 1,
+      "mtimeNs": 1793560222099476506,
+      "ctimeNs": 1793560222099476506
+    },
+    "afterSha256": "56bfc74ab6f78555d23fa36d299741855dfcb8e20f96c14cdaa8dfc15f10992a"
+  },
+  {
+    "archivePath": "host65/source-pins.json",
+    "sourcePath": "/workspace/v10-preparation/v10-149-r14.38.4.65-stop-target-attestation-tests-private/source-pins.json",
+    "before": {
+      "bytes": 52084,
+      "mode": 384,
+      "uid": 1000,
+      "gid": 1000,
+      "device": 27,
+      "inode": 666763,
+      "nlink": 1,
+      "mtimeNs": 1793560215008582979,
+      "ctimeNs": 1793560215008582979
+    },
+    "beforeSha256": "2b9b1acbecc529e1efe0e230625806c0e779829c58cbc4f78eeda592f0998c4b",
+    "after": {
+      "bytes": 52084,
+      "mode": 384,
+      "uid": 1000,
+      "gid": 1000,
+      "device": 27,
+      "inode": 666763,
+      "nlink": 1,
+      "mtimeNs": 1793560215008582979,
+      "ctimeNs": 1793560215008582979
+    },
+    "afterSha256": "2b9b1acbecc529e1efe0e230625806c0e779829c58cbc4f78eeda592f0998c4b"
+  },
+  {
+    "archivePath": "host66-closed/restore.log",
+    "sourcePath": "/workspace/v10-preparation/v10-149-r14.38.4.66-worker-zod-safe-diagnostic-private/qualification-r14.38.4.66-worker-zod-safe-diagnostic/restore.log",
+    "before": {
+      "bytes": 120,
+      "mode": 384,
+      "uid": 1000,
+      "gid": 1000,
+      "device": 27,
+      "inode": 667064,
+      "nlink": 1,
+      "mtimeNs": 1793560496783528257,
+      "ctimeNs": 1793560496783528257
+    },
+    "beforeSha256": "22f576297855a531d97608db0ae44fc32f0dde4c317820d5d49768a8566e3b44",
+    "after": {
+      "bytes": 120,
+      "mode": 384,
+      "uid": 1000,
+      "gid": 1000,
+      "device": 27,
+      "inode": 667064,
+      "nlink": 1,
+      "mtimeNs": 1793560496783528257,
+      "ctimeNs": 1793560496783528257
+    },
+    "afterSha256": "22f576297855a531d97608db0ae44fc32f0dde4c317820d5d49768a8566e3b44"
+  },
+  {
+    "archivePath": "host66-closed/result-before-restore.json",
+    "sourcePath": "/workspace/v10-preparation/v10-149-r14.38.4.66-worker-zod-safe-diagnostic-private/qualification-r14.38.4.66-worker-zod-safe-diagnostic/result-before-restore.json",
+    "before": {
+      "bytes": 110,
+      "mode": 384,
+      "uid": 1000,
+      "gid": 1000,
+      "device": 27,
+      "inode": 667063,
+      "nlink": 1,
+      "mtimeNs": 1793560496265536816,
+      "ctimeNs": 1793560496265536816
+    },
+    "beforeSha256": "803b36379f6d65872fc25890dc477c51d5af5a36a4c3aceb61b9a123c752a8f1",
+    "after": {
+      "bytes": 110,
+      "mode": 384,
+      "uid": 1000,
+      "gid": 1000,
+      "device": 27,
+      "inode": 667063,
+      "nlink": 1,
+      "mtimeNs": 1793560496265536816,
+      "ctimeNs": 1793560496265536816
+    },
+    "afterSha256": "803b36379f6d65872fc25890dc477c51d5af5a36a4c3aceb61b9a123c752a8f1"
+  },
+  {
+    "archivePath": "host66-closed/targeted-worker-vitest.exit",
+    "sourcePath": "/workspace/v10-preparation/v10-149-r14.38.4.66-worker-zod-safe-diagnostic-private/qualification-r14.38.4.66-worker-zod-safe-diagnostic/targeted-worker-vitest.exit",
+    "before": {
+      "bytes": 2,
+      "mode": 384,
+      "uid": 1000,
+      "gid": 1000,
+      "device": 27,
+      "inode": 667062,
+      "nlink": 1,
+      "mtimeNs": 1793560496239968023,
+      "ctimeNs": 1793560496239968023
+    },
+    "beforeSha256": "4355a46b19d348dc2f57c046f8ef63d4538ebb936000f3c9ee954a27460dd865",
+    "after": {
+      "bytes": 2,
+      "mode": 384,
+      "uid": 1000,
+      "gid": 1000,
+      "device": 27,
+      "inode": 667062,
+      "nlink": 1,
+      "mtimeNs": 1793560496239968023,
+      "ctimeNs": 1793560496239968023
+    },
+    "afterSha256": "4355a46b19d348dc2f57c046f8ef63d4538ebb936000f3c9ee954a27460dd865"
+  },
+  {
+    "archivePath": "host67-closed/restore.log",
+    "sourcePath": "/workspace/v10-preparation/v10-149-r14.38.4.67-worker-zod-diagnostic-output-private/qualification-r14.38.4.67-worker-zod-diagnostic-output/restore.log",
+    "before": {
+      "bytes": 120,
+      "mode": 384,
+      "uid": 1000,
+      "gid": 1000,
+      "device": 27,
+      "inode": 667270,
+      "nlink": 1,
+      "mtimeNs": 1793560611520270924,
+      "ctimeNs": 1793560611520270924
+    },
+    "beforeSha256": "22f576297855a531d97608db0ae44fc32f0dde4c317820d5d49768a8566e3b44",
+    "after": {
+      "bytes": 120,
+      "mode": 384,
+      "uid": 1000,
+      "gid": 1000,
+      "device": 27,
+      "inode": 667270,
+      "nlink": 1,
+      "mtimeNs": 1793560611520270924,
+      "ctimeNs": 1793560611520270924
+    },
+    "afterSha256": "22f576297855a531d97608db0ae44fc32f0dde4c317820d5d49768a8566e3b44"
+  },
+  {
+    "archivePath": "host67-closed/result-before-restore.json",
+    "sourcePath": "/workspace/v10-preparation/v10-149-r14.38.4.67-worker-zod-diagnostic-output-private/qualification-r14.38.4.67-worker-zod-diagnostic-output/result-before-restore.json",
+    "before": {
+      "bytes": 91,
+      "mode": 384,
+      "uid": 1000,
+      "gid": 1000,
+      "device": 27,
+      "inode": 667269,
+      "nlink": 1,
+      "mtimeNs": 1793560610960507498,
+      "ctimeNs": 1793560610960507498
+    },
+    "beforeSha256": "45d1a152ce1a9152392bc15a0824ad84b2c076460487565583f0de5d84062bc4",
+    "after": {
+      "bytes": 91,
+      "mode": 384,
+      "uid": 1000,
+      "gid": 1000,
+      "device": 27,
+      "inode": 667269,
+      "nlink": 1,
+      "mtimeNs": 1793560610960507498,
+      "ctimeNs": 1793560610960507498
+    },
+    "afterSha256": "45d1a152ce1a9152392bc15a0824ad84b2c076460487565583f0de5d84062bc4"
+  },
+  {
+    "archivePath": "host67-closed/targeted-worker-vitest.exit",
+    "sourcePath": "/workspace/v10-preparation/v10-149-r14.38.4.67-worker-zod-diagnostic-output-private/qualification-r14.38.4.67-worker-zod-diagnostic-output/targeted-worker-vitest.exit",
+    "before": {
+      "bytes": 2,
+      "mode": 384,
+      "uid": 1000,
+      "gid": 1000,
+      "device": 27,
+      "inode": 667026,
+      "nlink": 1,
+      "mtimeNs": 1793560610934321112,
+      "ctimeNs": 1793560610934321112
+    },
+    "beforeSha256": "4355a46b19d348dc2f57c046f8ef63d4538ebb936000f3c9ee954a27460dd865",
+    "after": {
+      "bytes": 2,
+      "mode": 384,
+      "uid": 1000,
+      "gid": 1000,
+      "device": 27,
+      "inode": 667026,
+      "nlink": 1,
+      "mtimeNs": 1793560610934321112,
+      "ctimeNs": 1793560610934321112
+    },
+    "afterSha256": "4355a46b19d348dc2f57c046f8ef63d4538ebb936000f3c9ee954a27460dd865"
+  },
+  {
+    "archivePath": "host68-closed/db-build.exit",
+    "sourcePath": "/workspace/v10-preparation/v10-149-r14.38.4.68-worker-stdin-size-diagnostic-private/qualification-r14.38.4.68-worker-stdin-size-diagnostic/db-build.exit",
+    "before": {
+      "bytes": 2,
+      "mode": 384,
+      "uid": 1000,
+      "gid": 1000,
+      "device": 27,
+      "inode": 667438,
+      "nlink": 1,
+      "mtimeNs": 1793560762693413334,
+      "ctimeNs": 1793560762693413334
+    },
+    "beforeSha256": "9a271f2a916b0b6ee6cecb2426f0b3206ef074578be55d9bc94f6f3fe3ab86aa",
+    "after": {
+      "bytes": 2,
+      "mode": 384,
+      "uid": 1000,
+      "gid": 1000,
+      "device": 27,
+      "inode": 667438,
+      "nlink": 1,
+      "mtimeNs": 1793560762693413334,
+      "ctimeNs": 1793560762693413334
+    },
+    "afterSha256": "9a271f2a916b0b6ee6cecb2426f0b3206ef074578be55d9bc94f6f3fe3ab86aa"
+  },
+  {
+    "archivePath": "host68-closed/restore.log",
+    "sourcePath": "/workspace/v10-preparation/v10-149-r14.38.4.68-worker-stdin-size-diagnostic-private/qualification-r14.38.4.68-worker-stdin-size-diagnostic/restore.log",
+    "before": {
+      "bytes": 120,
+      "mode": 384,
+      "uid": 1000,
+      "gid": 1000,
+      "device": 27,
+      "inode": 667453,
+      "nlink": 1,
+      "mtimeNs": 1793560919367830684,
+      "ctimeNs": 1793560919367830684
+    },
+    "beforeSha256": "22f576297855a531d97608db0ae44fc32f0dde4c317820d5d49768a8566e3b44",
+    "after": {
+      "bytes": 120,
+      "mode": 384,
+      "uid": 1000,
+      "gid": 1000,
+      "device": 27,
+      "inode": 667453,
+      "nlink": 1,
+      "mtimeNs": 1793560919367830684,
+      "ctimeNs": 1793560919367830684
+    },
+    "afterSha256": "22f576297855a531d97608db0ae44fc32f0dde4c317820d5d49768a8566e3b44"
+  },
+  {
+    "archivePath": "host68-closed/result-before-restore.json",
+    "sourcePath": "/workspace/v10-preparation/v10-149-r14.38.4.68-worker-stdin-size-diagnostic-private/qualification-r14.38.4.68-worker-stdin-size-diagnostic/result-before-restore.json",
+    "before": {
+      "bytes": 110,
+      "mode": 384,
+      "uid": 1000,
+      "gid": 1000,
+      "device": 27,
+      "inode": 667452,
+      "nlink": 1,
+      "mtimeNs": 1793560918810587357,
+      "ctimeNs": 1793560918810587357
+    },
+    "beforeSha256": "803b36379f6d65872fc25890dc477c51d5af5a36a4c3aceb61b9a123c752a8f1",
+    "after": {
+      "bytes": 110,
+      "mode": 384,
+      "uid": 1000,
+      "gid": 1000,
+      "device": 27,
+      "inode": 667452,
+      "nlink": 1,
+      "mtimeNs": 1793560918810587357,
+      "ctimeNs": 1793560918810587357
+    },
+    "afterSha256": "803b36379f6d65872fc25890dc477c51d5af5a36a4c3aceb61b9a123c752a8f1"
+  },
+  {
+    "archivePath": "host68-closed/server-tsc.exit",
+    "sourcePath": "/workspace/v10-preparation/v10-149-r14.38.4.68-worker-stdin-size-diagnostic-private/qualification-r14.38.4.68-worker-stdin-size-diagnostic/server-tsc.exit",
+    "before": {
+      "bytes": 2,
+      "mode": 384,
+      "uid": 1000,
+      "gid": 1000,
+      "device": 27,
+      "inode": 667440,
+      "nlink": 1,
+      "mtimeNs": 1793560874375680310,
+      "ctimeNs": 1793560874375680310
+    },
+    "beforeSha256": "9a271f2a916b0b6ee6cecb2426f0b3206ef074578be55d9bc94f6f3fe3ab86aa",
+    "after": {
+      "bytes": 2,
+      "mode": 384,
+      "uid": 1000,
+      "gid": 1000,
+      "device": 27,
+      "inode": 667440,
+      "nlink": 1,
+      "mtimeNs": 1793560874375680310,
+      "ctimeNs": 1793560874375680310
+    },
+    "afterSha256": "9a271f2a916b0b6ee6cecb2426f0b3206ef074578be55d9bc94f6f3fe3ab86aa"
+  },
+  {
+    "archivePath": "host68-closed/shared-build.exit",
+    "sourcePath": "/workspace/v10-preparation/v10-149-r14.38.4.68-worker-stdin-size-diagnostic-private/qualification-r14.38.4.68-worker-stdin-size-diagnostic/shared-build.exit",
+    "before": {
+      "bytes": 2,
+      "mode": 384,
+      "uid": 1000,
+      "gid": 1000,
+      "device": 27,
+      "inode": 667436,
+      "nlink": 1,
+      "mtimeNs": 1793560740360959193,
+      "ctimeNs": 1793560740360959193
+    },
+    "beforeSha256": "9a271f2a916b0b6ee6cecb2426f0b3206ef074578be55d9bc94f6f3fe3ab86aa",
+    "after": {
+      "bytes": 2,
+      "mode": 384,
+      "uid": 1000,
+      "gid": 1000,
+      "device": 27,
+      "inode": 667436,
+      "nlink": 1,
+      "mtimeNs": 1793560740360959193,
+      "ctimeNs": 1793560740360959193
+    },
+    "afterSha256": "9a271f2a916b0b6ee6cecb2426f0b3206ef074578be55d9bc94f6f3fe3ab86aa"
+  },
+  {
+    "archivePath": "host68-closed/source-oxc.exit",
+    "sourcePath": "/workspace/v10-preparation/v10-149-r14.38.4.68-worker-stdin-size-diagnostic-private/qualification-r14.38.4.68-worker-stdin-size-diagnostic/source-oxc.exit",
+    "before": {
+      "bytes": 2,
+      "mode": 384,
+      "uid": 1000,
+      "gid": 1000,
+      "device": 27,
+      "inode": 667434,
+      "nlink": 1,
+      "mtimeNs": 1793560735205076078,
+      "ctimeNs": 1793560735205076078
+    },
+    "beforeSha256": "9a271f2a916b0b6ee6cecb2426f0b3206ef074578be55d9bc94f6f3fe3ab86aa",
+    "after": {
+      "bytes": 2,
+      "mode": 384,
+      "uid": 1000,
+      "gid": 1000,
+      "device": 27,
+      "inode": 667434,
+      "nlink": 1,
+      "mtimeNs": 1793560735205076078,
+      "ctimeNs": 1793560735205076078
+    },
+    "afterSha256": "9a271f2a916b0b6ee6cecb2426f0b3206ef074578be55d9bc94f6f3fe3ab86aa"
+  },
+  {
+    "archivePath": "host68-closed/targeted-worker-vitest.exit",
+    "sourcePath": "/workspace/v10-preparation/v10-149-r14.38.4.68-worker-stdin-size-diagnostic-private/qualification-r14.38.4.68-worker-stdin-size-diagnostic/targeted-worker-vitest.exit",
+    "before": {
+      "bytes": 2,
+      "mode": 384,
+      "uid": 1000,
+      "gid": 1000,
+      "device": 27,
+      "inode": 667451,
+      "nlink": 1,
+      "mtimeNs": 1793560918788606490,
+      "ctimeNs": 1793560918788606490
+    },
+    "beforeSha256": "4355a46b19d348dc2f57c046f8ef63d4538ebb936000f3c9ee954a27460dd865",
+    "after": {
+      "bytes": 2,
+      "mode": 384,
+      "uid": 1000,
+      "gid": 1000,
+      "device": 27,
+      "inode": 667451,
+      "nlink": 1,
+      "mtimeNs": 1793560918788606490,
+      "ctimeNs": 1793560918788606490
+    },
+    "afterSha256": "4355a46b19d348dc2f57c046f8ef63d4538ebb936000f3c9ee954a27460dd865"
+  },
+  {
+    "archivePath": "host68-delta.json",
+    "sourcePath": "/workspace/v10-preparation/r71-recovery-prepared-nov01.building/host68-delta.json",
+    "before": {
+      "bytes": 2013,
+      "mode": 384,
+      "uid": 1000,
+      "gid": 1000,
+      "device": 27,
+      "inode": 667703,
+      "nlink": 1,
+      "mtimeNs": 1793561347147834606,
+      "ctimeNs": 1793561347147834606
+    },
+    "beforeSha256": "c1942b5f7f13fac518c9c734a1b27592339e1b766a48aeab53f9d1998773b55a",
+    "after": {
+      "bytes": 2013,
+      "mode": 384,
+      "uid": 1000,
+      "gid": 1000,
+      "device": 27,
+      "inode": 667703,
+      "nlink": 1,
+      "mtimeNs": 1793561347147834606,
+      "ctimeNs": 1793561347147834606
+    },
+    "afterSha256": "c1942b5f7f13fac518c9c734a1b27592339e1b766a48aeab53f9d1998773b55a"
+  },
+  {
+    "archivePath": "host68-delta/files/deploy/v6/host-agent/openshell.mjs",
+    "sourcePath": "/workspace/v10-preparation/v10-149-r14.38.4.68-worker-stdin-size-diagnostic-private/files/deploy/v6/host-agent/openshell.mjs",
+    "before": {
+      "bytes": 225032,
+      "mode": 384,
+      "uid": 1000,
+      "gid": 1000,
+      "device": 27,
+      "inode": 667004,
+      "nlink": 1,
+      "mtimeNs": 1793559882353998245,
+      "ctimeNs": 1793560698738036965
+    },
+    "beforeSha256": "68da0b3f6814856a383b317846a1f8535adb2a74222c2fce9a799a3557b85fb0",
+    "after": {
+      "bytes": 225032,
+      "mode": 384,
+      "uid": 1000,
+      "gid": 1000,
+      "device": 27,
+      "inode": 667004,
+      "nlink": 1,
+      "mtimeNs": 1793559882353998245,
+      "ctimeNs": 1793560698738036965
+    },
+    "afterSha256": "68da0b3f6814856a383b317846a1f8535adb2a74222c2fce9a799a3557b85fb0"
+  },
+  {
+    "archivePath": "host68-delta/files/deploy/v6/host-agent/openshell.test.mjs",
+    "sourcePath": "/workspace/v10-preparation/v10-149-r14.38.4.68-worker-stdin-size-diagnostic-private/files/deploy/v6/host-agent/openshell.test.mjs",
+    "before": {
+      "bytes": 193527,
+      "mode": 384,
+      "uid": 1000,
+      "gid": 1000,
+      "device": 27,
+      "inode": 667005,
+      "nlink": 1,
+      "mtimeNs": 1793560214998430844,
+      "ctimeNs": 1793560698738236897
+    },
+    "beforeSha256": "a2fc1947c073829d326e549b1d5129657d025482774f31507d1b7033193c718a",
+    "after": {
+      "bytes": 193527,
+      "mode": 384,
+      "uid": 1000,
+      "gid": 1000,
+      "device": 27,
+      "inode": 667005,
+      "nlink": 1,
+      "mtimeNs": 1793560214998430844,
+      "ctimeNs": 1793560698738236897
+    },
+    "afterSha256": "a2fc1947c073829d326e549b1d5129657d025482774f31507d1b7033193c718a"
+  },
+  {
+    "archivePath": "host68-delta/files/deploy/v6/host-agent/sandbox-host-contracts.test.mjs",
+    "sourcePath": "/workspace/v10-preparation/v10-149-r14.38.4.68-worker-stdin-size-diagnostic-private/files/deploy/v6/host-agent/sandbox-host-contracts.test.mjs",
+    "before": {
+      "bytes": 2323,
+      "mode": 384,
+      "uid": 1000,
+      "gid": 1000,
+      "device": 27,
+      "inode": 667007,
+      "nlink": 1,
+      "mtimeNs": 1793559923078952044,
+      "ctimeNs": 1793560698738375105
+    },
+    "beforeSha256": "3810999a1fee63ba2776058dc641ba336bc63197aa7eac6cfdae5fac221a2745",
+    "after": {
+      "bytes": 2323,
+      "mode": 384,
+      "uid": 1000,
+      "gid": 1000,
+      "device": 27,
+      "inode": 667007,
+      "nlink": 1,
+      "mtimeNs": 1793559923078952044,
+      "ctimeNs": 1793560698738375105
+    },
+    "afterSha256": "3810999a1fee63ba2776058dc641ba336bc63197aa7eac6cfdae5fac221a2745"
+  },
+  {
+    "archivePath": "host68-delta/files/packages/shared/src/sandbox-host-contracts.ts",
+    "sourcePath": "/workspace/v10-preparation/v10-149-r14.38.4.68-worker-stdin-size-diagnostic-private/files/packages/shared/src/sandbox-host-contracts.ts",
+    "before": {
+      "bytes": 13411,
+      "mode": 384,
+      "uid": 1000,
+      "gid": 1000,
+      "device": 27,
+      "inode": 667315,
+      "nlink": 1,
+      "mtimeNs": 1793559817031418181,
+      "ctimeNs": 1793560698741397134
+    },
+    "beforeSha256": "324d08e67923c05cd8a543f8da1c166c4427f66a2437a38b8a3c900bdc36c11a",
+    "after": {
+      "bytes": 13411,
+      "mode": 384,
+      "uid": 1000,
+      "gid": 1000,
+      "device": 27,
+      "inode": 667315,
+      "nlink": 1,
+      "mtimeNs": 1793559817031418181,
+      "ctimeNs": 1793560698741397134
+    },
+    "afterSha256": "324d08e67923c05cd8a543f8da1c166c4427f66a2437a38b8a3c900bdc36c11a"
+  },
+  {
+    "archivePath": "host68-delta/files/server/src/__tests__/helpers/managed-native-conversation-sandbox-host.ts",
+    "sourcePath": "/workspace/v10-preparation/v10-149-r14.38.4.68-worker-stdin-size-diagnostic-private/files/server/src/__tests__/helpers/managed-native-conversation-sandbox-host.ts",
+    "before": {
+      "bytes": 154103,
+      "mode": 384,
+      "uid": 1000,
+      "gid": 1000,
+      "device": 27,
+      "inode": 667323,
+      "nlink": 1,
+      "mtimeNs": 1793560707592291843,
+      "ctimeNs": 1793560707592291843
+    },
+    "beforeSha256": "d9f7305e40ee7f4401d0b98a00c96f5344b9e2fef7483217910e4c8461e04c97",
+    "after": {
+      "bytes": 154103,
+      "mode": 384,
+      "uid": 1000,
+      "gid": 1000,
+      "device": 27,
+      "inode": 667323,
+      "nlink": 1,
+      "mtimeNs": 1793560707592291843,
+      "ctimeNs": 1793560707592291843
+    },
+    "afterSha256": "d9f7305e40ee7f4401d0b98a00c96f5344b9e2fef7483217910e4c8461e04c97"
+  },
+  {
+    "archivePath": "host68-delta/files/server/src/__tests__/v7-sandbox-host-bridge.integration.test.ts",
+    "sourcePath": "/workspace/v10-preparation/v10-149-r14.38.4.68-worker-stdin-size-diagnostic-private/files/server/src/__tests__/v7-sandbox-host-bridge.integration.test.ts",
+    "before": {
+      "bytes": 141456,
+      "mode": 384,
+      "uid": 1000,
+      "gid": 1000,
+      "device": 27,
+      "inode": 667343,
+      "nlink": 1,
+      "mtimeNs": 1793559905590576309,
+      "ctimeNs": 1793560698742604095
+    },
+    "beforeSha256": "5d4315b4e0d96edb160d02145cdfd11c9c09e8f5d1dece418672ff1ff9352a1a",
+    "after": {
+      "bytes": 141456,
+      "mode": 384,
+      "uid": 1000,
+      "gid": 1000,
+      "device": 27,
+      "inode": 667343,
+      "nlink": 1,
+      "mtimeNs": 1793559905590576309,
+      "ctimeNs": 1793560698742604095
+    },
+    "afterSha256": "5d4315b4e0d96edb160d02145cdfd11c9c09e8f5d1dece418672ff1ff9352a1a"
+  },
+  {
+    "archivePath": "host68-safe-diagnostic-excerpt.txt",
+    "sourcePath": "/workspace/v10-preparation/r71-recovery-prepared-nov01.building/host68-safe-diagnostic-excerpt.txt",
+    "before": {
+      "bytes": 511,
+      "mode": 384,
+      "uid": 1000,
+      "gid": 1000,
+      "device": 27,
+      "inode": 667705,
+      "nlink": 1,
+      "mtimeNs": 1793561347148391527,
+      "ctimeNs": 1793561347148391527
+    },
+    "beforeSha256": "a4bd8fbf2a4da22da89c838eda85aee6baeb11cdc6d261b2cad13af15704955a",
+    "after": {
+      "bytes": 511,
+      "mode": 384,
+      "uid": 1000,
+      "gid": 1000,
+      "device": 27,
+      "inode": 667705,
+      "nlink": 1,
+      "mtimeNs": 1793561347148391527,
+      "ctimeNs": 1793561347148391527
+    },
+    "afterSha256": "a4bd8fbf2a4da22da89c838eda85aee6baeb11cdc6d261b2cad13af15704955a"
+  },
+  {
+    "archivePath": "host68-status.json",
+    "sourcePath": "/workspace/v10-preparation/r71-recovery-prepared-nov01.building/host68-status.json",
+    "before": {
+      "bytes": 515,
+      "mode": 384,
+      "uid": 1000,
+      "gid": 1000,
+      "device": 27,
+      "inode": 667704,
+      "nlink": 1,
+      "mtimeNs": 1793561347148206918,
+      "ctimeNs": 1793561347148206918
+    },
+    "beforeSha256": "741255b6a76e3db73a7b767f9550e7dfb00edc6b4db711569f2ae7512d9d35a2",
+    "after": {
+      "bytes": 515,
+      "mode": 384,
+      "uid": 1000,
+      "gid": 1000,
+      "device": 27,
+      "inode": 667704,
+      "nlink": 1,
+      "mtimeNs": 1793561347148206918,
+      "ctimeNs": 1793561347148206918
+    },
+    "afterSha256": "741255b6a76e3db73a7b767f9550e7dfb00edc6b4db711569f2ae7512d9d35a2"
+  },
+  {
+    "archivePath": "host68/diagnostic-output-only.patch",
+    "sourcePath": "/workspace/v10-preparation/v10-149-r14.38.4.68-worker-stdin-size-diagnostic-private/diagnostic-output-only.patch",
+    "before": {
+      "bytes": 584,
+      "mode": 384,
+      "uid": 1000,
+      "gid": 1000,
+      "device": 27,
+      "inode": 667421,
+      "nlink": 1,
+      "mtimeNs": 1793560698751418077,
+      "ctimeNs": 1793560698751418077
+    },
+    "beforeSha256": "b03016d69676684b3a5ba3a2228d502a6918bc16fcb2017ead654a938c1fce29",
+    "after": {
+      "bytes": 584,
+      "mode": 384,
+      "uid": 1000,
+      "gid": 1000,
+      "device": 27,
+      "inode": 667421,
+      "nlink": 1,
+      "mtimeNs": 1793560698751418077,
+      "ctimeNs": 1793560698751418077
+    },
+    "afterSha256": "b03016d69676684b3a5ba3a2228d502a6918bc16fcb2017ead654a938c1fce29"
+  },
+  {
+    "archivePath": "host68/qualify-r14.38.4.68-worker-stdin-size-diagnostic.sh",
+    "sourcePath": "/workspace/v10-preparation/v10-149-r14.38.4.68-worker-stdin-size-diagnostic-private/qualify-r14.38.4.68-worker-stdin-size-diagnostic.sh",
+    "before": {
+      "bytes": 9076,
+      "mode": 448,
+      "uid": 1000,
+      "gid": 1000,
+      "device": 27,
+      "inode": 667423,
+      "nlink": 1,
+      "mtimeNs": 1793560715309565211,
+      "ctimeNs": 1793560715309565211
+    },
+    "beforeSha256": "90cc6a1f43706beaf18da713758cb5dd43ebedacde36f9214f045ae0051ea22e",
+    "after": {
+      "bytes": 9076,
+      "mode": 448,
+      "uid": 1000,
+      "gid": 1000,
+      "device": 27,
+      "inode": 667423,
+      "nlink": 1,
+      "mtimeNs": 1793560715309565211,
+      "ctimeNs": 1793560715309565211
+    },
+    "afterSha256": "90cc6a1f43706beaf18da713758cb5dd43ebedacde36f9214f045ae0051ea22e"
+  },
+  {
+    "archivePath": "host68/source-pins.json",
+    "sourcePath": "/workspace/v10-preparation/v10-149-r14.38.4.68-worker-stdin-size-diagnostic-private/source-pins.json",
+    "before": {
+      "bytes": 52575,
+      "mode": 384,
+      "uid": 1000,
+      "gid": 1000,
+      "device": 27,
+      "inode": 667420,
+      "nlink": 1,
+      "mtimeNs": 1793560715245863835,
+      "ctimeNs": 1793560715245863835
+    },
+    "beforeSha256": "83c19270ebeae346571139f6b21127fd929cbd71f86fb0b41c00c92e737f2da0",
+    "after": {
+      "bytes": 52575,
+      "mode": 384,
+      "uid": 1000,
+      "gid": 1000,
+      "device": 27,
+      "inode": 667420,
+      "nlink": 1,
+      "mtimeNs": 1793560715245863835,
+      "ctimeNs": 1793560715245863835
+    },
+    "afterSha256": "83c19270ebeae346571139f6b21127fd929cbd71f86fb0b41c00c92e737f2da0"
+  },
+  {
+    "archivePath": "host68/stdin-size-diagnostic-only.patch",
+    "sourcePath": "/workspace/v10-preparation/v10-149-r14.38.4.68-worker-stdin-size-diagnostic-private/stdin-size-diagnostic-only.patch",
+    "before": {
+      "bytes": 1560,
+      "mode": 384,
+      "uid": 1000,
+      "gid": 1000,
+      "device": 27,
+      "inode": 667422,
+      "nlink": 1,
+      "mtimeNs": 1793560715309463097,
+      "ctimeNs": 1793560715309463097
+    },
+    "beforeSha256": "ed0f557445c4fc23c30bae06fdbf4fda79d73accb34a5e7b853531ad601de126",
+    "after": {
+      "bytes": 1560,
+      "mode": 384,
+      "uid": 1000,
+      "gid": 1000,
+      "device": 27,
+      "inode": 667422,
+      "nlink": 1,
+      "mtimeNs": 1793560715309463097,
+      "ctimeNs": 1793560715309463097
+    },
+    "afterSha256": "ed0f557445c4fc23c30bae06fdbf4fda79d73accb34a5e7b853531ad601de126"
+  },
+  {
+    "archivePath": "inventory-r5/updated-owner-plan-r5-audit.json",
+    "sourcePath": "/workspace/v10-preparation/final-metadata-inventory-audit-nov01/updated-owner-plan-r5-audit.json",
+    "before": {
+      "bytes": 8668,
+      "mode": 384,
+      "uid": 1000,
+      "gid": 1000,
+      "device": 27,
+      "inode": 667472,
+      "nlink": 1,
+      "mtimeNs": 1793561112941472386,
+      "ctimeNs": 1793561112941472386
+    },
+    "beforeSha256": "32da3f875f3eeab2d2454dc72d140363c942ca9eef979d455b5cebccd990a525",
+    "after": {
+      "bytes": 8668,
+      "mode": 384,
+      "uid": 1000,
+      "gid": 1000,
+      "device": 27,
+      "inode": 667472,
+      "nlink": 1,
+      "mtimeNs": 1793561112941472386,
+      "ctimeNs": 1793561112941472386
+    },
+    "afterSha256": "32da3f875f3eeab2d2454dc72d140363c942ca9eef979d455b5cebccd990a525"
+  },
+  {
+    "archivePath": "inventory-r5/updated-owner-plan-r5-pins.json",
+    "sourcePath": "/workspace/v10-preparation/final-metadata-inventory-audit-nov01/updated-owner-plan-r5-pins.json",
+    "before": {
+      "bytes": 787,
+      "mode": 384,
+      "uid": 1000,
+      "gid": 1000,
+      "device": 27,
+      "inode": 667474,
+      "nlink": 1,
+      "mtimeNs": 1793561112941610254,
+      "ctimeNs": 1793561112941610254
+    },
+    "beforeSha256": "c3d3aa0402a3146121507516f497be5eade80d7e46ccda1e7d70c75de726397e",
+    "after": {
+      "bytes": 787,
+      "mode": 384,
+      "uid": 1000,
+      "gid": 1000,
+      "device": 27,
+      "inode": 667474,
+      "nlink": 1,
+      "mtimeNs": 1793561112941610254,
+      "ctimeNs": 1793561112941610254
+    },
+    "afterSha256": "c3d3aa0402a3146121507516f497be5eade80d7e46ccda1e7d70c75de726397e"
+  },
+  {
+    "archivePath": "inventory-r5/updated-owner-plan-r5.json",
+    "sourcePath": "/workspace/v10-preparation/final-metadata-inventory-audit-nov01/updated-owner-plan-r5.json",
+    "before": {
+      "bytes": 83278,
+      "mode": 384,
+      "uid": 1000,
+      "gid": 1000,
+      "device": 27,
+      "inode": 667471,
+      "nlink": 1,
+      "mtimeNs": 1793561112940839730,
+      "ctimeNs": 1793561112940839730
+    },
+    "beforeSha256": "03b70671a7e401767a4db21d6de8d278a8e62be230413a534953050f32b2450a",
+    "after": {
+      "bytes": 83278,
+      "mode": 384,
+      "uid": 1000,
+      "gid": 1000,
+      "device": 27,
+      "inode": 667471,
+      "nlink": 1,
+      "mtimeNs": 1793561112940839730,
+      "ctimeNs": 1793561112940839730
+    },
+    "afterSha256": "03b70671a7e401767a4db21d6de8d278a8e62be230413a534953050f32b2450a"
+  },
+  {
+    "archivePath": "native-r1123-status.json",
+    "sourcePath": "/workspace/v10-preparation/r71-recovery-prepared-nov01.building/native-r1123-status.json",
+    "before": {
+      "bytes": 205,
+      "mode": 384,
+      "uid": 1000,
+      "gid": 1000,
+      "device": 27,
+      "inode": 667707,
+      "nlink": 1,
+      "mtimeNs": 1793561347150891624,
+      "ctimeNs": 1793561347150891624
+    },
+    "beforeSha256": "92e6994a5da7d1cc2291be88eb3f7ef4fb5f15b33bb264fdef5b904158595245",
+    "after": {
+      "bytes": 205,
+      "mode": 384,
+      "uid": 1000,
+      "gid": 1000,
+      "device": 27,
+      "inode": 667707,
+      "nlink": 1,
+      "mtimeNs": 1793561347150891624,
+      "ctimeNs": 1793561347150891624
+    },
+    "afterSha256": "92e6994a5da7d1cc2291be88eb3f7ef4fb5f15b33bb264fdef5b904158595245"
+  },
+  {
+    "archivePath": "native-r1123/files/server/src/__tests__/v7-sandbox-host-bridge.integration.test.ts",
+    "sourcePath": "/workspace/v10-preparation/native-sandbox-stop-receipt-r1123/files/server/src/__tests__/v7-sandbox-host-bridge.integration.test.ts",
+    "before": {
+      "bytes": 149606,
+      "mode": 384,
+      "uid": 1000,
+      "gid": 1000,
+      "device": 27,
+      "inode": 665606,
+      "nlink": 1,
+      "mtimeNs": 1793560183732474832,
+      "ctimeNs": 1793560183732474832
+    },
+    "beforeSha256": "54e5f743e9254532420ac307d4b1f1e2f3d4daf942477cc163f2aebeff4231ec",
+    "after": {
+      "bytes": 149606,
+      "mode": 384,
+      "uid": 1000,
+      "gid": 1000,
+      "device": 27,
+      "inode": 665606,
+      "nlink": 1,
+      "mtimeNs": 1793560183732474832,
+      "ctimeNs": 1793560183732474832
+    },
+    "afterSha256": "54e5f743e9254532420ac307d4b1f1e2f3d4daf942477cc163f2aebeff4231ec"
+  },
+  {
+    "archivePath": "native-r1123/files/server/src/services/environment-runtime.ts",
+    "sourcePath": "/workspace/v10-preparation/native-sandbox-stop-receipt-r1123/files/server/src/services/environment-runtime.ts",
+    "before": {
+      "bytes": 197537,
+      "mode": 384,
+      "uid": 1000,
+      "gid": 1000,
+      "device": 27,
+      "inode": 665578,
+      "nlink": 1,
+      "mtimeNs": 1793560074315939220,
+      "ctimeNs": 1793560074315939220
+    },
+    "beforeSha256": "23fd8b8b90a7da948ee0ce42fd85cd6fcc97bf239d67ee661a5e5f55b7583589",
+    "after": {
+      "bytes": 197537,
+      "mode": 384,
+      "uid": 1000,
+      "gid": 1000,
+      "device": 27,
+      "inode": 665578,
+      "nlink": 1,
+      "mtimeNs": 1793560074315939220,
+      "ctimeNs": 1793560074315939220
+    },
+    "afterSha256": "23fd8b8b90a7da948ee0ce42fd85cd6fcc97bf239d67ee661a5e5f55b7583589"
+  },
+  {
+    "archivePath": "native-r1123/files/server/src/services/execution-sandbox/native-host-bridge.ts",
+    "sourcePath": "/workspace/v10-preparation/native-sandbox-stop-receipt-r1123/files/server/src/services/execution-sandbox/native-host-bridge.ts",
+    "before": {
+      "bytes": 61575,
+      "mode": 384,
+      "uid": 1000,
+      "gid": 1000,
+      "device": 27,
+      "inode": 665581,
+      "nlink": 1,
+      "mtimeNs": 1793559673350135660,
+      "ctimeNs": 1793559673350135660
+    },
+    "beforeSha256": "d8d707b44452cd98839a69d44e45fc9254ee9f045d300e4d830e6779c45829a6",
+    "after": {
+      "bytes": 61575,
+      "mode": 384,
+      "uid": 1000,
+      "gid": 1000,
+      "device": 27,
+      "inode": 665581,
+      "nlink": 1,
+      "mtimeNs": 1793559673350135660,
+      "ctimeNs": 1793559673350135660
+    },
+    "afterSha256": "d8d707b44452cd98839a69d44e45fc9254ee9f045d300e4d830e6779c45829a6"
+  },
+  {
+    "archivePath": "native-r1123/files/server/src/services/execution-sandbox/run-lease-cleanup.ts",
+    "sourcePath": "/workspace/v10-preparation/native-sandbox-stop-receipt-r1123/files/server/src/services/execution-sandbox/run-lease-cleanup.ts",
+    "before": {
+      "bytes": 11842,
+      "mode": 384,
+      "uid": 1000,
+      "gid": 1000,
+      "device": 27,
+      "inode": 665582,
+      "nlink": 1,
+      "mtimeNs": 1793560098496869646,
+      "ctimeNs": 1793560098496869646
+    },
+    "beforeSha256": "d145dbcb7a3d57f69a5c0e490ac9400941a3b149d95f979ab583d9dcf158ecce",
+    "after": {
+      "bytes": 11842,
+      "mode": 384,
+      "uid": 1000,
+      "gid": 1000,
+      "device": 27,
+      "inode": 665582,
+      "nlink": 1,
+      "mtimeNs": 1793560098496869646,
+      "ctimeNs": 1793560098496869646
+    },
+    "afterSha256": "d145dbcb7a3d57f69a5c0e490ac9400941a3b149d95f979ab583d9dcf158ecce"
+  },
+  {
+    "archivePath": "native-r1123/files/server/src/services/remote-execution-termination.ts",
+    "sourcePath": "/workspace/v10-preparation/native-sandbox-stop-receipt-r1123/files/server/src/services/remote-execution-termination.ts",
+    "before": {
+      "bytes": 4272,
+      "mode": 384,
+      "uid": 1000,
+      "gid": 1000,
+      "device": 27,
+      "inode": 665579,
+      "nlink": 1,
+      "mtimeNs": 1793560074316180715,
+      "ctimeNs": 1793560074316180715
+    },
+    "beforeSha256": "f7130c4efd1b4a6e7cda85abae9ab29abcd4a3455747f116a8284610602906c8",
+    "after": {
+      "bytes": 4272,
+      "mode": 384,
+      "uid": 1000,
+      "gid": 1000,
+      "device": 27,
+      "inode": 665579,
+      "nlink": 1,
+      "mtimeNs": 1793560074316180715,
+      "ctimeNs": 1793560074316180715
+    },
+    "afterSha256": "f7130c4efd1b4a6e7cda85abae9ab29abcd4a3455747f116a8284610602906c8"
+  },
+  {
+    "archivePath": "native-r1123/sandbox-cleanup-server.patch",
+    "sourcePath": "/workspace/v10-preparation/native-sandbox-stop-receipt-r1123/sandbox-cleanup-server.patch",
+    "before": {
+      "bytes": 44659,
+      "mode": 384,
+      "uid": 1000,
+      "gid": 1000,
+      "device": 27,
+      "inode": 666578,
+      "nlink": 1,
+      "mtimeNs": 1793560207008344444,
+      "ctimeNs": 1793560207008344444
+    },
+    "beforeSha256": "2f7a8dbcc83b3bac684387498b751d0bcc628f3e2c44dd5232f88aa57e006aa9",
+    "after": {
+      "bytes": 44659,
+      "mode": 384,
+      "uid": 1000,
+      "gid": 1000,
+      "device": 27,
+      "inode": 666578,
+      "nlink": 1,
+      "mtimeNs": 1793560207008344444,
+      "ctimeNs": 1793560207008344444
+    },
+    "afterSha256": "2f7a8dbcc83b3bac684387498b751d0bcc628f3e2c44dd5232f88aa57e006aa9"
+  },
+  {
+    "archivePath": "native-r1123/source-pins.json",
+    "sourcePath": "/workspace/v10-preparation/native-sandbox-stop-receipt-r1123/source-pins.json",
+    "before": {
+      "bytes": 2168,
+      "mode": 384,
+      "uid": 1000,
+      "gid": 1000,
+      "device": 27,
+      "inode": 666579,
+      "nlink": 1,
+      "mtimeNs": 1793560207010752734,
+      "ctimeNs": 1793560207010752734
+    },
+    "beforeSha256": "f407b52c1bebadb157b0080b6147ddcf4ed190712e0e28793fbfef071580426a",
+    "after": {
+      "bytes": 2168,
+      "mode": 384,
+      "uid": 1000,
+      "gid": 1000,
+      "device": 27,
+      "inode": 666579,
+      "nlink": 1,
+      "mtimeNs": 1793560207010752734,
+      "ctimeNs": 1793560207010752734
+    },
+    "afterSha256": "f407b52c1bebadb157b0080b6147ddcf4ed190712e0e28793fbfef071580426a"
+  },
+  {
+    "archivePath": "native-r1124-status.json",
+    "sourcePath": "/workspace/v10-preparation/r71-recovery-prepared-nov01.building/native-r1124-status.json",
+    "before": {
+      "bytes": 225,
+      "mode": 384,
+      "uid": 1000,
+      "gid": 1000,
+      "device": 27,
+      "inode": 667708,
+      "nlink": 1,
+      "mtimeNs": 1793561347151337627,
+      "ctimeNs": 1793561347151337627
+    },
+    "beforeSha256": "1f0d63b85f1e2e563731fa50376bd9549e53414f30e109ba834a9ede7136e9ec",
+    "after": {
+      "bytes": 225,
+      "mode": 384,
+      "uid": 1000,
+      "gid": 1000,
+      "device": 27,
+      "inode": 667708,
+      "nlink": 1,
+      "mtimeNs": 1793561347151337627,
+      "ctimeNs": 1793561347151337627
+    },
+    "afterSha256": "1f0d63b85f1e2e563731fa50376bd9549e53414f30e109ba834a9ede7136e9ec"
+  },
+  {
+    "archivePath": "native-r1124/files/server/src/__tests__/v7-sandbox-host-bridge.integration.test.ts",
+    "sourcePath": "/workspace/v10-preparation/native-sandbox-cleanup-chronology-r1124/files/server/src/__tests__/v7-sandbox-host-bridge.integration.test.ts",
+    "before": {
+      "bytes": 149931,
+      "mode": 384,
+      "uid": 1000,
+      "gid": 1000,
+      "device": 27,
+      "inode": 667061,
+      "nlink": 1,
+      "mtimeNs": 1793560403152301931,
+      "ctimeNs": 1793560403152301931
+    },
+    "beforeSha256": "cc73bbb532943fc913c57d112fdb5e7bda5585ae05ae131a70e50d44f09e0132",
+    "after": {
+      "bytes": 149931,
+      "mode": 384,
+      "uid": 1000,
+      "gid": 1000,
+      "device": 27,
+      "inode": 667061,
+      "nlink": 1,
+      "mtimeNs": 1793560403152301931,
+      "ctimeNs": 1793560403152301931
+    },
+    "afterSha256": "cc73bbb532943fc913c57d112fdb5e7bda5585ae05ae131a70e50d44f09e0132"
+  },
+  {
+    "archivePath": "native-r1124/files/server/src/services/execution-sandbox/run-lease-cleanup.ts",
+    "sourcePath": "/workspace/v10-preparation/native-sandbox-cleanup-chronology-r1124/files/server/src/services/execution-sandbox/run-lease-cleanup.ts",
+    "before": {
+      "bytes": 11992,
+      "mode": 384,
+      "uid": 1000,
+      "gid": 1000,
+      "device": 27,
+      "inode": 667060,
+      "nlink": 1,
+      "mtimeNs": 1793560403151823759,
+      "ctimeNs": 1793560403151823759
+    },
+    "beforeSha256": "62ab944c547599408551d3e7d1c4200dfab6067d6378838e747470261e39936a",
+    "after": {
+      "bytes": 11992,
+      "mode": 384,
+      "uid": 1000,
+      "gid": 1000,
+      "device": 27,
+      "inode": 667060,
+      "nlink": 1,
+      "mtimeNs": 1793560403151823759,
+      "ctimeNs": 1793560403151823759
+    },
+    "afterSha256": "62ab944c547599408551d3e7d1c4200dfab6067d6378838e747470261e39936a"
+  },
+  {
+    "archivePath": "native-r1124/review-closure.json",
+    "sourcePath": "/workspace/v10-preparation/native-sandbox-cleanup-chronology-r1124/review-closure.json",
+    "before": {
+      "bytes": 834,
+      "mode": 384,
+      "uid": 1000,
+      "gid": 1000,
+      "device": 27,
+      "inode": 667499,
+      "nlink": 1,
+      "mtimeNs": 1793561253989395533,
+      "ctimeNs": 1793561253989395533
+    },
+    "beforeSha256": "7bc7489961e483c37ff82fa54a79b04323619da98873082ad1e52cc869fc33ba",
+    "after": {
+      "bytes": 834,
+      "mode": 384,
+      "uid": 1000,
+      "gid": 1000,
+      "device": 27,
+      "inode": 667499,
+      "nlink": 1,
+      "mtimeNs": 1793561253989395533,
+      "ctimeNs": 1793561253989395533
+    },
+    "afterSha256": "7bc7489961e483c37ff82fa54a79b04323619da98873082ad1e52cc869fc33ba"
+  },
+  {
+    "archivePath": "native-r1124/sandbox-cleanup-chronology.patch",
+    "sourcePath": "/workspace/v10-preparation/native-sandbox-cleanup-chronology-r1124/sandbox-cleanup-chronology.patch",
+    "before": {
+      "bytes": 4108,
+      "mode": 384,
+      "uid": 1000,
+      "gid": 1000,
+      "device": 27,
+      "inode": 667264,
+      "nlink": 1,
+      "mtimeNs": 1793560545787425045,
+      "ctimeNs": 1793560545787425045
+    },
+    "beforeSha256": "c24d0d7706afa161512c8544ca17f25731286a52f228d5422d9a489a44d05706",
+    "after": {
+      "bytes": 4108,
+      "mode": 384,
+      "uid": 1000,
+      "gid": 1000,
+      "device": 27,
+      "inode": 667264,
+      "nlink": 1,
+      "mtimeNs": 1793560545787425045,
+      "ctimeNs": 1793560545787425045
+    },
+    "afterSha256": "c24d0d7706afa161512c8544ca17f25731286a52f228d5422d9a489a44d05706"
+  },
+  {
+    "archivePath": "native-r1124/source-pins.json",
+    "sourcePath": "/workspace/v10-preparation/native-sandbox-cleanup-chronology-r1124/source-pins.json",
+    "before": {
+      "bytes": 1071,
+      "mode": 384,
+      "uid": 1000,
+      "gid": 1000,
+      "device": 27,
+      "inode": 667266,
+      "nlink": 1,
+      "mtimeNs": 1793560545787552367,
+      "ctimeNs": 1793560545787552367
+    },
+    "beforeSha256": "57d95df7ce30266e8b60d0787e440822d94c4ca2d74db62a73082f1e0d4e239a",
+    "after": {
+      "bytes": 1071,
+      "mode": 384,
+      "uid": 1000,
+      "gid": 1000,
+      "device": 27,
+      "inode": 667266,
+      "nlink": 1,
+      "mtimeNs": 1793560545787552367,
+      "ctimeNs": 1793560545787552367
+    },
+    "afterSha256": "57d95df7ce30266e8b60d0787e440822d94c4ca2d74db62a73082f1e0d4e239a"
+  },
+  {
+    "archivePath": "native-r115-status.json",
+    "sourcePath": "/workspace/v10-preparation/r71-recovery-prepared-nov01.building/native-r115-status.json",
+    "before": {
+      "bytes": 492,
+      "mode": 384,
+      "uid": 1000,
+      "gid": 1000,
+      "device": 27,
+      "inode": 667709,
+      "nlink": 1,
+      "mtimeNs": 1793561347152199820,
+      "ctimeNs": 1793561347152199820
+    },
+    "beforeSha256": "9f47c70525d9e59cab10d1c6438e409e20237433f252975684f29ec1d7e6345b",
+    "after": {
+      "bytes": 492,
+      "mode": 384,
+      "uid": 1000,
+      "gid": 1000,
+      "device": 27,
+      "inode": 667709,
+      "nlink": 1,
+      "mtimeNs": 1793561347152199820,
+      "ctimeNs": 1793561347152199820
+    },
+    "afterSha256": "9f47c70525d9e59cab10d1c6438e409e20237433f252975684f29ec1d7e6345b"
+  },
+  {
+    "archivePath": "native-r115/coherent-unit-run1/artifact-unit.exit",
+    "sourcePath": "/workspace/v10-preparation/native-sandbox-artifact-staging-r115/coherent-unit-r2/qualification-run1/artifact-unit.exit",
+    "before": {
+      "bytes": 2,
+      "mode": 384,
+      "uid": 1000,
+      "gid": 1000,
+      "device": 27,
+      "inode": 667496,
+      "nlink": 1,
+      "mtimeNs": 1793561230164061502,
+      "ctimeNs": 1793561230164061502
+    },
+    "beforeSha256": "9a271f2a916b0b6ee6cecb2426f0b3206ef074578be55d9bc94f6f3fe3ab86aa",
+    "after": {
+      "bytes": 2,
+      "mode": 384,
+      "uid": 1000,
+      "gid": 1000,
+      "device": 27,
+      "inode": 667496,
+      "nlink": 1,
+      "mtimeNs": 1793561230164061502,
+      "ctimeNs": 1793561230164061502
+    },
+    "afterSha256": "9a271f2a916b0b6ee6cecb2426f0b3206ef074578be55d9bc94f6f3fe3ab86aa"
+  },
+  {
+    "archivePath": "native-r115/coherent-unit-run1/artifact-unit.log",
+    "sourcePath": "/workspace/v10-preparation/native-sandbox-artifact-staging-r115/coherent-unit-r2/qualification-run1/artifact-unit.log",
+    "before": {
+      "bytes": 653,
+      "mode": 384,
+      "uid": 1000,
+      "gid": 1000,
+      "device": 27,
+      "inode": 667495,
+      "nlink": 1,
+      "mtimeNs": 1793561230072059180,
+      "ctimeNs": 1793561230072059180
+    },
+    "beforeSha256": "64413173458ed0e6454f308f9b5e15eb103e0123c94163f54c36219b32ba3283",
+    "after": {
+      "bytes": 653,
+      "mode": 384,
+      "uid": 1000,
+      "gid": 1000,
+      "device": 27,
+      "inode": 667495,
+      "nlink": 1,
+      "mtimeNs": 1793561230072059180,
+      "ctimeNs": 1793561230072059180
+    },
+    "afterSha256": "64413173458ed0e6454f308f9b5e15eb103e0123c94163f54c36219b32ba3283"
+  },
+  {
+    "archivePath": "native-r115/coherent-unit-run1/restore.log",
+    "sourcePath": "/workspace/v10-preparation/native-sandbox-artifact-staging-r115/coherent-unit-r2/qualification-run1/restore.log",
+    "before": {
+      "bytes": 120,
+      "mode": 384,
+      "uid": 1000,
+      "gid": 1000,
+      "device": 27,
+      "inode": 667498,
+      "nlink": 1,
+      "mtimeNs": 1793561230682434626,
+      "ctimeNs": 1793561230682434626
+    },
+    "beforeSha256": "22f576297855a531d97608db0ae44fc32f0dde4c317820d5d49768a8566e3b44",
+    "after": {
+      "bytes": 120,
+      "mode": 384,
+      "uid": 1000,
+      "gid": 1000,
+      "device": 27,
+      "inode": 667498,
+      "nlink": 1,
+      "mtimeNs": 1793561230682434626,
+      "ctimeNs": 1793561230682434626
+    },
+    "afterSha256": "22f576297855a531d97608db0ae44fc32f0dde4c317820d5d49768a8566e3b44"
+  },
+  {
+    "archivePath": "native-r115/coherent-unit-run1/result-before-restore.json",
+    "sourcePath": "/workspace/v10-preparation/native-sandbox-artifact-staging-r115/coherent-unit-r2/qualification-run1/result-before-restore.json",
+    "before": {
+      "bytes": 82,
+      "mode": 384,
+      "uid": 1000,
+      "gid": 1000,
+      "device": 27,
+      "inode": 667497,
+      "nlink": 1,
+      "mtimeNs": 1793561230185457964,
+      "ctimeNs": 1793561230185457964
+    },
+    "beforeSha256": "1959102f514160f0f54b13b3e69de51a61e3356a26efc3cf36a11e46630a6a15",
+    "after": {
+      "bytes": 82,
+      "mode": 384,
+      "uid": 1000,
+      "gid": 1000,
+      "device": 27,
+      "inode": 667497,
+      "nlink": 1,
+      "mtimeNs": 1793561230185457964,
+      "ctimeNs": 1793561230185457964
+    },
+    "afterSha256": "1959102f514160f0f54b13b3e69de51a61e3356a26efc3cf36a11e46630a6a15"
+  },
+  {
+    "archivePath": "native-r115/coherent-unit-run1/source-head-at-acquisition.txt",
+    "sourcePath": "/workspace/v10-preparation/native-sandbox-artifact-staging-r115/coherent-unit-r2/qualification-run1/source-head-at-acquisition.txt",
+    "before": {
+      "bytes": 41,
+      "mode": 384,
+      "uid": 1000,
+      "gid": 1000,
+      "device": 27,
+      "inode": 667486,
+      "nlink": 1,
+      "mtimeNs": 1793561189052288219,
+      "ctimeNs": 1793561189052288219
+    },
+    "beforeSha256": "67ab59e58e04de3f46f350f68af76855911371f87bd90c6e2929f49b4133a2a0",
+    "after": {
+      "bytes": 41,
+      "mode": 384,
+      "uid": 1000,
+      "gid": 1000,
+      "device": 27,
+      "inode": 667486,
+      "nlink": 1,
+      "mtimeNs": 1793561189052288219,
+      "ctimeNs": 1793561189052288219
+    },
+    "afterSha256": "67ab59e58e04de3f46f350f68af76855911371f87bd90c6e2929f49b4133a2a0"
+  },
+  {
+    "archivePath": "native-r115/coherent-unit-source-pins.json",
+    "sourcePath": "/workspace/v10-preparation/native-sandbox-artifact-staging-r115/coherent-unit-r2/source-pins.json",
+    "before": {
+      "bytes": 68604,
+      "mode": 384,
+      "uid": 1000,
+      "gid": 1000,
+      "device": 27,
+      "inode": 667478,
+      "nlink": 1,
+      "mtimeNs": 1793561175781763502,
+      "ctimeNs": 1793561175781763502
+    },
+    "beforeSha256": "a68caa635090f90973d88abaa8695799d95c698362ad0fc247d00d244782776e",
+    "after": {
+      "bytes": 68604,
+      "mode": 384,
+      "uid": 1000,
+      "gid": 1000,
+      "device": 27,
+      "inode": 667478,
+      "nlink": 1,
+      "mtimeNs": 1793561175781763502,
+      "ctimeNs": 1793561175781763502
+    },
+    "afterSha256": "a68caa635090f90973d88abaa8695799d95c698362ad0fc247d00d244782776e"
+  },
+  {
+    "archivePath": "native-r115/files/server/src/services/native-runtime/native-sandbox-artifact-staging.test.ts",
+    "sourcePath": "/workspace/v10-preparation/native-sandbox-artifact-staging-r115/files/server/src/services/native-runtime/native-sandbox-artifact-staging.test.ts",
+    "before": {
+      "bytes": 4451,
+      "mode": 384,
+      "uid": 1000,
+      "gid": 1000,
+      "device": 27,
+      "inode": 667450,
+      "nlink": 1,
+      "mtimeNs": 1793560878183949780,
+      "ctimeNs": 1793560878183949780
+    },
+    "beforeSha256": "2accce1e3156584d0806b247b32ff245424ee88d3c14d9df926eb3926b73fcea",
+    "after": {
+      "bytes": 4451,
+      "mode": 384,
+      "uid": 1000,
+      "gid": 1000,
+      "device": 27,
+      "inode": 667450,
+      "nlink": 1,
+      "mtimeNs": 1793560878183949780,
+      "ctimeNs": 1793560878183949780
+    },
+    "afterSha256": "2accce1e3156584d0806b247b32ff245424ee88d3c14d9df926eb3926b73fcea"
+  },
+  {
+    "archivePath": "native-r115/files/server/src/services/native-runtime/native-session-executor.ts",
+    "sourcePath": "/workspace/v10-preparation/native-sandbox-artifact-staging-r115/files/server/src/services/native-runtime/native-session-executor.ts",
+    "before": {
+      "bytes": 717661,
+      "mode": 384,
+      "uid": 1000,
+      "gid": 1000,
+      "device": 27,
+      "inode": 667449,
+      "nlink": 1,
+      "mtimeNs": 1793560878178889315,
+      "ctimeNs": 1793560878178889315
+    },
+    "beforeSha256": "614e1e561efca35be5b5ddb024b845848f3310ffd6baa88644a67dea5d76acd8",
+    "after": {
+      "bytes": 717661,
+      "mode": 384,
+      "uid": 1000,
+      "gid": 1000,
+      "device": 27,
+      "inode": 667449,
+      "nlink": 1,
+      "mtimeNs": 1793560878178889315,
+      "ctimeNs": 1793560878178889315
+    },
+    "afterSha256": "614e1e561efca35be5b5ddb024b845848f3310ffd6baa88644a67dea5d76acd8"
+  },
+  {
+    "archivePath": "native-r115/local-validation.json",
+    "sourcePath": "/workspace/v10-preparation/native-sandbox-artifact-staging-r115/local-validation.json",
+    "before": {
+      "bytes": 666,
+      "mode": 384,
+      "uid": 1000,
+      "gid": 1000,
+      "device": 27,
+      "inode": 667455,
+      "nlink": 1,
+      "mtimeNs": 1793561004150876610,
+      "ctimeNs": 1793561004150876610
+    },
+    "beforeSha256": "a223e6f1d61eb769d095f4c8841ea82b5751b7d17a80a03295e7a8c713ae2b6b",
+    "after": {
+      "bytes": 666,
+      "mode": 384,
+      "uid": 1000,
+      "gid": 1000,
+      "device": 27,
+      "inode": 667455,
+      "nlink": 1,
+      "mtimeNs": 1793561004150876610,
+      "ctimeNs": 1793561004150876610
+    },
+    "afterSha256": "a223e6f1d61eb769d095f4c8841ea82b5751b7d17a80a03295e7a8c713ae2b6b"
+  },
+  {
+    "archivePath": "native-r115/qualification-receipt.json",
+    "sourcePath": "/workspace/v10-preparation/native-sandbox-artifact-staging-r115/qualification-receipt.json",
+    "before": {
+      "bytes": 1115,
+      "mode": 384,
+      "uid": 1000,
+      "gid": 1000,
+      "device": 27,
+      "inode": 667696,
+      "nlink": 1,
+      "mtimeNs": 1793561274187562049,
+      "ctimeNs": 1793561274187562049
+    },
+    "beforeSha256": "702ccfaf41caa005b6af5eeb6df6c5a5ad53bff518d0286456f587d32aef88c8",
+    "after": {
+      "bytes": 1115,
+      "mode": 384,
+      "uid": 1000,
+      "gid": 1000,
+      "device": 27,
+      "inode": 667696,
+      "nlink": 1,
+      "mtimeNs": 1793561274187562049,
+      "ctimeNs": 1793561274187562049
+    },
+    "afterSha256": "702ccfaf41caa005b6af5eeb6df6c5a5ad53bff518d0286456f587d32aef88c8"
+  },
+  {
+    "archivePath": "native-r115/run-unit.sh",
+    "sourcePath": "/workspace/v10-preparation/native-sandbox-artifact-staging-r115/run-unit.sh",
+    "before": {
+      "bytes": 2521,
+      "mode": 384,
+      "uid": 1000,
+      "gid": 1000,
+      "device": 27,
+      "inode": 667459,
+      "nlink": 1,
+      "mtimeNs": 1793561051482377598,
+      "ctimeNs": 1793561051482377598
+    },
+    "beforeSha256": "886e24bffe5af688591f7d2e70edd7fe325b4c790d67c12fefc59bb7fdfd0a7d",
+    "after": {
+      "bytes": 2521,
+      "mode": 384,
+      "uid": 1000,
+      "gid": 1000,
+      "device": 27,
+      "inode": 667459,
+      "nlink": 1,
+      "mtimeNs": 1793561051482377598,
+      "ctimeNs": 1793561051482377598
+    },
+    "afterSha256": "886e24bffe5af688591f7d2e70edd7fe325b4c790d67c12fefc59bb7fdfd0a7d"
+  },
+  {
+    "archivePath": "native-r115/sandbox-artifact-stage.patch",
+    "sourcePath": "/workspace/v10-preparation/native-sandbox-artifact-staging-r115/sandbox-artifact-stage.patch",
+    "before": {
+      "bytes": 5208,
+      "mode": 384,
+      "uid": 1000,
+      "gid": 1000,
+      "device": 27,
+      "inode": 667475,
+      "nlink": 1,
+      "mtimeNs": 1793561122693520120,
+      "ctimeNs": 1793561122693520120
+    },
+    "beforeSha256": "7dd68825ddfbbba392cacfa015cf6ac1ef2f1d179cfa0410c1ca599257c0cc67",
+    "after": {
+      "bytes": 5208,
+      "mode": 384,
+      "uid": 1000,
+      "gid": 1000,
+      "device": 27,
+      "inode": 667475,
+      "nlink": 1,
+      "mtimeNs": 1793561122693520120,
+      "ctimeNs": 1793561122693520120
+    },
+    "afterSha256": "7dd68825ddfbbba392cacfa015cf6ac1ef2f1d179cfa0410c1ca599257c0cc67"
+  },
+  {
+    "archivePath": "native-r115/source-pins.json",
+    "sourcePath": "/workspace/v10-preparation/native-sandbox-artifact-staging-r115/source-pins.json",
+    "before": {
+      "bytes": 999,
+      "mode": 384,
+      "uid": 1000,
+      "gid": 1000,
+      "device": 27,
+      "inode": 667476,
+      "nlink": 1,
+      "mtimeNs": 1793561122693690758,
+      "ctimeNs": 1793561122693690758
+    },
+    "beforeSha256": "4146703e354f1b832021bbd5888f4584ef2f236c88df77974caba11554d484c1",
+    "after": {
+      "bytes": 999,
+      "mode": 384,
+      "uid": 1000,
+      "gid": 1000,
+      "device": 27,
+      "inode": 667476,
+      "nlink": 1,
+      "mtimeNs": 1793561122693690758,
+      "ctimeNs": 1793561122693690758
+    },
+    "afterSha256": "4146703e354f1b832021bbd5888f4584ef2f236c88df77974caba11554d484c1"
+  },
+  {
+    "archivePath": "native-r115/test-pins.json",
+    "sourcePath": "/workspace/v10-preparation/native-sandbox-artifact-staging-r115/test-pins.json",
+    "before": {
+      "bytes": 712,
+      "mode": 384,
+      "uid": 1000,
+      "gid": 1000,
+      "device": 27,
+      "inode": 667458,
+      "nlink": 1,
+      "mtimeNs": 1793561051482284067,
+      "ctimeNs": 1793561051482284067
+    },
+    "beforeSha256": "d7dd1d9dfe1dccfee50f7cd0fcc29ae7e7a605feb1c9dab1e99b7935c3e87c59",
+    "after": {
+      "bytes": 712,
+      "mode": 384,
+      "uid": 1000,
+      "gid": 1000,
+      "device": 27,
+      "inode": 667458,
+      "nlink": 1,
+      "mtimeNs": 1793561051482284067,
+      "ctimeNs": 1793561051482284067
+    },
+    "afterSha256": "d7dd1d9dfe1dccfee50f7cd0fcc29ae7e7a605feb1c9dab1e99b7935c3e87c59"
+  },
+  {
+    "archivePath": "native-r115/validate-local.mjs",
+    "sourcePath": "/workspace/v10-preparation/native-sandbox-artifact-staging-r115/validate-local.mjs",
+    "before": {
+      "bytes": 4745,
+      "mode": 384,
+      "uid": 1000,
+      "gid": 1000,
+      "device": 27,
+      "inode": 667454,
+      "nlink": 1,
+      "mtimeNs": 1793561003847627000,
+      "ctimeNs": 1793561003847627000
+    },
+    "beforeSha256": "e18b190c4872332012651071ba0055d3e6cc90ec3a0ffc3876ff8ede1b55e5ba",
+    "after": {
+      "bytes": 4745,
+      "mode": 384,
+      "uid": 1000,
+      "gid": 1000,
+      "device": 27,
+      "inode": 667454,
+      "nlink": 1,
+      "mtimeNs": 1793561003847627000,
+      "ctimeNs": 1793561003847627000
+    },
+    "afterSha256": "e18b190c4872332012651071ba0055d3e6cc90ec3a0ffc3876ff8ede1b55e5ba"
+  },
+  {
+    "archivePath": "root/root-continuation-20261101-current.md",
+    "sourcePath": "/workspace/v10-preparation/root-continuation-20261101-current.md",
+    "before": {
+      "bytes": 135216,
+      "mode": 384,
+      "uid": 1000,
+      "gid": 1000,
+      "device": 27,
+      "inode": 386387,
+      "nlink": 1,
+      "mtimeNs": 1793560459847202939,
+      "ctimeNs": 1793560459847202939
+    },
+    "beforeSha256": "ef840e62dd3016b94d2ac6ce0a58a4ee1de1e7ced4734c17c2c20d56db4a1845",
+    "after": {
+      "bytes": 135216,
+      "mode": 384,
+      "uid": 1000,
+      "gid": 1000,
+      "device": 27,
+      "inode": 386387,
+      "nlink": 1,
+      "mtimeNs": 1793560459847202939,
+      "ctimeNs": 1793560459847202939
+    },
+    "afterSha256": "ef840e62dd3016b94d2ac6ce0a58a4ee1de1e7ced4734c17c2c20d56db4a1845"
+  },
+  {
+    "archivePath": "root/run-final-workspace-aggregate-20261101.sh",
+    "sourcePath": "/workspace/v10-preparation/run-final-workspace-aggregate-20261101.sh",
+    "before": {
+      "bytes": 15797,
+      "mode": 448,
+      "uid": 1000,
+      "gid": 1000,
+      "device": 27,
+      "inode": 386404,
+      "nlink": 1,
+      "mtimeNs": 1793560069198592988,
+      "ctimeNs": 1793560069198592988
+    },
+    "beforeSha256": "95816ac5dcdddcf4f53319f95df288300a4cce1a862ff62d9d489480bd1bc68e",
+    "after": {
+      "bytes": 15797,
+      "mode": 448,
+      "uid": 1000,
+      "gid": 1000,
+      "device": 27,
+      "inode": 386404,
+      "nlink": 1,
+      "mtimeNs": 1793560069198592988,
+      "ctimeNs": 1793560069198592988
+    },
+    "afterSha256": "95816ac5dcdddcf4f53319f95df288300a4cce1a862ff62d9d489480bd1bc68e"
+  }
+]

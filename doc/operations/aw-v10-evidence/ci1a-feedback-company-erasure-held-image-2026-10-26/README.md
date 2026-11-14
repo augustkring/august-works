@@ -1,0 +1,5 @@
+# Feedback image erasure during company offboarding
+
+The current focused run (`r5-real-billing`) passed 1/1. It preserves the existing held-image denial, advances the actual offboarding owner through revoke, runtime, billing, and retention stages, confirms purge remains blocked while held, rejects reapplying a hold after purge ownership is pending, and completes company purge only after the real local image deletion receipt is physically confirmed. The no-subscription billing account uses the actual billing service; its configured fetcher throws if a provider request is attempted.
+
+Earlier runs are diagnostic only: r1 exposed a generic pending offboarding state; r2/r3 revealed the fixture manually skipped required stages and stopped at billing; r4 added the real billing account and reached the release/retry point but had an extra test-only `errorCode:null` assertion that was stricter than the operation contract. Only r5 is the passing result. Each run carries pinned source, raw compressed Vitest output, and exit receipts.

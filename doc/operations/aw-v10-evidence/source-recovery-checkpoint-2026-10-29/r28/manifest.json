@@ -1,0 +1,128 @@
+{
+  "purpose": "recovery_only_not_qualification",
+  "savedAtUtc": "2026-10-29T22:07:23.186715+00:00",
+  "baseCommit": "b0eb7930b27fabcc7e16933921ab4e59b310763d",
+  "patchBytes": 1735959,
+  "patchSha256": "91da783b7fc82d0d78ea2867bb059692ca891a291866f42eecf05a6b6b55ec81",
+  "archiveSha256": "cf63bebc91115d6c7040de988aa9a0d0564835a74bb77075c322b31d77ab6740",
+  "untrackedSourceFiles": [
+    {
+      "path": "packages/shared/src/resource-governance.test.ts",
+      "bytes": 2495,
+      "sha256": "484ff87ecbd16b0c0e7897be4939ea63dc63e8d0337a6422623ce35f329232e8"
+    },
+    {
+      "path": "packages/shared/src/resource-governance.ts",
+      "bytes": 2483,
+      "sha256": "7dfa3d66fe0562b6c5e093da516f130f8e42bffd54889ca92e8381f9a2f885c6"
+    },
+    {
+      "path": "server/src/__tests__/resource-governance.integration.test.ts",
+      "bytes": 38195,
+      "sha256": "4173dde0cb6e7299032ea1cf3005c9080fdeccd8db79444cdeb3b43c1be8347b"
+    },
+    {
+      "path": "server/src/services/resource-governance.ts",
+      "bytes": 4436,
+      "sha256": "03c26a8e4108a11c3b6559dc458206fc61f6b7b64e1e585071b10906fe9f93b6"
+    }
+  ],
+  "privateUnappliedResourceDrafts": [
+    {
+      "originalPath": "/workspace/v10-preparation/b-resource-governance-current.sql",
+      "archive": "unapplied-resource-private-0-b-resource-governance-current.sql.gz",
+      "bytes": 18639,
+      "sha256": "06a09db9ee76d79f02d8c32a696ddda7a0da23bc49b5314b062b06e1ae2af9d7",
+      "archiveSha256": "2774a94b04a94c91fce8e6af0887e32107a4d459d06e02b977fa3f23cc4eafca",
+      "status": "private_unapplied_recovery_only_non_authoritative"
+    },
+    {
+      "originalPath": "/workspace/v10-preparation/b-resource-0564-schema-overlay-20261029/manifest.json",
+      "archive": "unapplied-resource-private-1-manifest.json.gz",
+      "bytes": 1737,
+      "sha256": "ca82eb8e684c3b39dab9bdbe450b198e5838736c073b5e089a2a9b68f46c0652",
+      "archiveSha256": "045255d8a92731497a2ec001ea557a92464653f81b1807103c65b2bd7eae9a2a",
+      "status": "private_unapplied_recovery_only_non_authoritative"
+    },
+    {
+      "originalPath": "/workspace/v10-preparation/b-resource-0564-schema-overlay-20261029/packages/db/src/schema/memory_jobs.ts",
+      "archive": "unapplied-resource-private-2-memory_jobs.ts.gz",
+      "bytes": 5735,
+      "sha256": "d6767af727ccabb5109141fa9ff2ce0f03fd41c119232bdcd9a3b9467df3258b",
+      "archiveSha256": "cd28ee7e9f803c4bd9c097b030522410639c47c85b1e54ad7a5e9221968d0f9c",
+      "status": "private_unapplied_recovery_only_non_authoritative"
+    },
+    {
+      "originalPath": "/workspace/v10-preparation/b-resource-0564-schema-overlay-20261029/packages/db/src/schema/native_run_finalizations.ts",
+      "archive": "unapplied-resource-private-3-native_run_finalizations.ts.gz",
+      "bytes": 4394,
+      "sha256": "4dffb87a6701eba9882ca168b69530c9c37dbd8a20e762382c1784f4df1fb288",
+      "archiveSha256": "3a8a8c15ee8793bdad037e07d71f8215e76cfdba6aedc377ea92f4293fb30b96",
+      "status": "private_unapplied_recovery_only_non_authoritative"
+    },
+    {
+      "originalPath": "/workspace/v10-preparation/b-resource-0564-schema-overlay-20261029/packages/db/src/schema/heartbeat_run_events.ts",
+      "archive": "unapplied-resource-private-4-heartbeat_run_events.ts.gz",
+      "bytes": 2059,
+      "sha256": "f887d01bfb4173faa88f62f9df680b7710b57336221af70fc988e35968998388",
+      "archiveSha256": "d55c1e393163059db6010d17cc1a46596b122e2705672a853294014e41bde970",
+      "status": "private_unapplied_recovery_only_non_authoritative"
+    },
+    {
+      "originalPath": "/workspace/v10-preparation/b-resource-0564-schema-overlay-20261029/packages/db/src/schema/environment_leases.ts",
+      "archive": "unapplied-resource-private-5-environment_leases.ts.gz",
+      "bytes": 3901,
+      "sha256": "88222db0df8a135ccfca439ea8cbe624df8bd8df1209a8de48f775254a278b96",
+      "archiveSha256": "bb13edaf33582d439b929ab23fd77029d6b856323bf0d9a622725bd529bd94d7",
+      "status": "private_unapplied_recovery_only_non_authoritative"
+    },
+    {
+      "originalPath": "/workspace/v10-preparation/b-resource-0564-schema-overlay-20261029/packages/db/src/schema/heartbeat_runs.ts",
+      "archive": "unapplied-resource-private-6-heartbeat_runs.ts.gz",
+      "bytes": 10566,
+      "sha256": "98463a00ffaedd8da1bf9e35a944fd1411e338f76f01e9a49ee28a472ec1cac3",
+      "archiveSha256": "e6d413c18f557752a9270218630611e207eaea280fcc98056b4f83580de3a924",
+      "status": "private_unapplied_recovery_only_non_authoritative"
+    },
+    {
+      "originalPath": "/workspace/v10-preparation/b-resource-0564-schema-overlay-20261029/packages/db/src/schema/workflows.ts",
+      "archive": "unapplied-resource-private-7-workflows.ts.gz",
+      "bytes": 19713,
+      "sha256": "09affeab6594e5d161381ae2f5a44e861f55e2338aa3ff134d8256f5bd807db4",
+      "archiveSha256": "f991e74488813c6819d5231a222210cbc06871f85cc5faae60aa812d8d74067c",
+      "status": "private_unapplied_recovery_only_non_authoritative"
+    },
+    {
+      "originalPath": "/workspace/v10-preparation/b-resource-0564-schema-overlay-20261029/server/src/services/execution-blocker.ts",
+      "archive": "unapplied-resource-private-8-execution-blocker.ts.gz",
+      "bytes": 4238,
+      "sha256": "4e93263aae7d464206ac401ba4bf3dc9f4d8a72fd90c40f3e042351b556b1777",
+      "archiveSha256": "7206e5e429e655d3c19413a25673768ec200f3e3b13177d4ac37e8a243716625",
+      "status": "private_unapplied_recovery_only_non_authoritative"
+    },
+    {
+      "originalPath": "/workspace/v10-preparation/run-resource-governance-qualified-r5-20261029.sh",
+      "archive": "unapplied-resource-private-9-run-resource-governance-qualified-r5-20261029.sh.gz",
+      "bytes": 13099,
+      "sha256": "ec62d62755e453aa4c69a7f32cb936d30b38445f3b0cbabc930f60c5d3ed1990",
+      "archiveSha256": "fbc897a2ba91334aa01fff2e86491bc8751b6b679c7bb8810d8cf9cdbced5bee",
+      "status": "private_unapplied_recovery_only_non_authoritative"
+    },
+    {
+      "originalPath": "/workspace/v10-preparation/run-resource-governance-qualified-r6-20261029.sh",
+      "archive": "unapplied-resource-private-10-run-resource-governance-qualified-r6-20261029.sh.gz",
+      "bytes": 14079,
+      "sha256": "e98277bdb34d427f3b6b3c82d8fe0470359682f0ead5060b579d0a53b522961c",
+      "archiveSha256": "30523627ce4b2a1bc508c9fedc2d2ba3a211a9eb200596d7247a2f61619a93d8",
+      "status": "private_unapplied_recovery_only_non_authoritative"
+    },
+    {
+      "originalPath": "/workspace/v10-preparation/run-resource-governance-qualified-r7-20261029.sh",
+      "archive": "unapplied-resource-private-11-run-resource-governance-qualified-r7-20261029.sh.gz",
+      "bytes": 14083,
+      "sha256": "1e7168be4b62ae69a62810cc910e82fc6df0cba924e461dbb22cf5cf6b26bb56",
+      "archiveSha256": "070ee3711eaf4f1b5f561511142a6a496d2b2e7c7888c8b1ca80018ec14159de",
+      "status": "private_unapplied_recovery_only_non_authoritative"
+    }
+  ]
+}

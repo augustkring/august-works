@@ -1,0 +1,62 @@
+(!) Your Vite config uses features that are unsupported by `configLoader: 'native'`, which is planned to become the default in a future major version of Vite:
+  - `__dirname` (vitest.config.ts:7:25). Use `import.meta.dirname` instead
+Set `VITE_CONFIG_NATIVE_IGNORE_WARNING=true` to suppress this warning.
+
+ RUN  v4.1.11 /workspace/blentera-v10
+
+ ❯ |@paperclipai/ui| src/pages/CustomerSupportCases.test.tsx (23 tests | 2 failed | 21 skipped) 305ms
+   × keeps the original command retryable after a hidden accepted response 183ms
+   × keeps the original command retryable after a hidden uncertain response 119ms
+
+⎯⎯⎯⎯⎯⎯⎯ Failed Tests 2 ⎯⎯⎯⎯⎯⎯⎯
+
+ FAIL  |@paperclipai/ui| src/pages/CustomerSupportCases.test.tsx > keeps the original command retryable after a hidden accepted response
+AssertionError: expected { …(2) } to have property "supportRequest" with value { …(2) }
+
+- Expected:
+{
+  "key": "74e1a750-0ed4-48f9-be36-422a0871bfcc",
+  "kind": "create",
+}
+
++ Received:
+undefined
+
+ ❯ src/pages/CustomerSupportCases.test.tsx:304:31
+    302|   expect(container.querySelector<HTMLTextAreaElement>("form textarea")…
+    303|   expect(post).toHaveBeenCalledTimes(1);
+    304|   expect(lastLocation!.state).toHaveProperty("supportRequest", { key: …
+       |                               ^
+    305|   expect(JSON.stringify(lastLocation!.state)).not.toContain("Private r…
+    306|   expect(container.querySelector('form button[type="submit"]')?.textCo…
+
+⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯[1/2]⎯
+
+ FAIL  |@paperclipai/ui| src/pages/CustomerSupportCases.test.tsx > keeps the original command retryable after a hidden uncertain response
+AssertionError: expected { …(2) } to have property "supportRequest" with value { …(2) }
+
+- Expected:
+{
+  "key": "a37d657e-ee06-4017-87de-ce3f97d15495",
+  "kind": "create",
+}
+
++ Received:
+undefined
+
+ ❯ src/pages/CustomerSupportCases.test.tsx:304:31
+    302|   expect(container.querySelector<HTMLTextAreaElement>("form textarea")…
+    303|   expect(post).toHaveBeenCalledTimes(1);
+    304|   expect(lastLocation!.state).toHaveProperty("supportRequest", { key: …
+       |                               ^
+    305|   expect(JSON.stringify(lastLocation!.state)).not.toContain("Private r…
+    306|   expect(container.querySelector('form button[type="submit"]')?.textCo…
+
+⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯[2/2]⎯
+
+
+ Test Files  1 failed (1)
+      Tests  2 failed | 21 skipped (23)
+   Start at  21:24:35
+   Duration  25.24s (transform 13.16s, setup 75ms, import 20.71s, tests 305ms, environment 3.31s)
+

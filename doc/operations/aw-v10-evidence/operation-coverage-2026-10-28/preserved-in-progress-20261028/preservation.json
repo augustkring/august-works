@@ -1,0 +1,49 @@
+{
+  "kind": "Recovered in-progress source review, not qualification evidence",
+  "reason": "Preserve later edits separately rather than mutating earlier historical check/review receipts. Original committed historical bytes are restored at their existing paths. All later review bytes remain inspectable here.",
+  "sourceHead": "7fc451cb082e08d2a174fe05c7e8e580f7ea725f",
+  "files": [
+    {
+      "path": "doc/operations/aw-v10-evidence/operation-coverage-2026-10-28/r4/check.log",
+      "originalCommittedSha256": "f5d2d1e27baa34624899011e539fef2d6c666007825ae6a57f8488f3a7d6e1ec",
+      "preservedInProgressSha256": "7bd6980a3c13f1fc58b6671f55c928b430eeeb6c278fa00ca34d194664bab280",
+      "preservedAt": "current-bytes/r4/check.log"
+    },
+    {
+      "path": "doc/operations/aw-v10-evidence/operation-coverage-2026-10-28/r4/post-source-pins.sha256",
+      "originalCommittedSha256": "06a5ab6b49cbe83a7e806aa0ed0ce6654354445e7fd49ccfd7fa3f7fe390570e",
+      "preservedInProgressSha256": "6936c4d770d9a7559f70762ae343214b44b1596288220dfe69d92aa8ed904fbe",
+      "preservedAt": "current-bytes/r4/post-source-pins.sha256"
+    },
+    {
+      "path": "doc/operations/aw-v10-evidence/operation-coverage-2026-10-28/r4/review-root.json",
+      "originalCommittedSha256": "5d492e36b38c8a54bcbbb4f9215b69d107cfe4e855bc8bfeddf3168df7e36087",
+      "preservedInProgressSha256": "736dddab7dedcee7d1e25c50a02860bf12a2a9db0ef84649e1543099e07e4d3d",
+      "preservedAt": "current-bytes/r4/review-root.json"
+    },
+    {
+      "path": "doc/operations/aw-v10-evidence/operation-coverage-2026-10-28/r4/review-security.json",
+      "originalCommittedSha256": "6e86304600f7196cc7aec0e8888137e8346697ce16c87d89f7685f5f6b2aaab5",
+      "preservedInProgressSha256": "0cc33e19fe5c279f2d9b90a4ca6334103aa3ce057c71e37f6b133d03e1823da1",
+      "preservedAt": "current-bytes/r4/review-security.json"
+    },
+    {
+      "path": "doc/operations/aw-v10-evidence/operation-coverage-2026-10-28/r4/test.log",
+      "originalCommittedSha256": "2b6cf0089986c11488e0f9be20cc6a4831f000f76af21a3c8607fc3396df8191",
+      "preservedInProgressSha256": "b24e2d50198b3970ac5120f8259fa42e726ba9a9cc8988e02623d3282e2d85ec",
+      "preservedAt": "current-bytes/r4/test.log"
+    },
+    {
+      "path": "doc/operations/aw-v10-evidence/operation-coverage-2026-10-28/r5/evidence-pins.sha256",
+      "originalCommittedSha256": "0ca28ce2c3932c038ee4840cf71c1e2e13d2b2055ca611640eb945651c8060ec",
+      "preservedInProgressSha256": "9c960bec1cb4a21ba1b98a0a9a3c358a3320b9485f6d47c4fdddf452dc59998f",
+      "preservedAt": "current-bytes/r5/evidence-pins.sha256"
+    },
+    {
+      "path": "doc/operations/aw-v10-evidence/operation-coverage-2026-10-28/r5/result.json",
+      "originalCommittedSha256": "2ee415083cb8e2bf539125ee55aad910794614c6ed253811d28682d426ad07bb",
+      "preservedInProgressSha256": "00796122acfff2dec4e5782d5738e05e3d57ad08e90abc3e9da8b7053d0b004e",
+      "preservedAt": "current-bytes/r5/result.json"
+    }
+  ]
+}

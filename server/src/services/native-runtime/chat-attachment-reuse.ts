@@ -134,17 +134,22 @@ export function isExternalChatWaitAuthorizationContention(
 export type ChatAttachmentReuseSource = {
   sourceCommentId: string;
   attachmentId: string;
+  /** Original database Asset identity. Storage object keys are not source ids. */
+  assetId: string;
   filename: string;
   contentType: string;
   byteSize: number;
   sha256: string;
   objectKey: string;
   createdAt: Date;
+  payloadSourceProtocolVersion: number;
+  payloadSourceSnapshot: unknown;
+  payloadSourceSnapshotInvalidated: boolean;
 };
 
 export type ListedChatAttachment = Omit<
   ChatAttachmentReuseSource,
-  "objectKey" | "createdAt"
+  "assetId" | "objectKey" | "createdAt" | "payloadSourceProtocolVersion" | "payloadSourceSnapshot" | "payloadSourceSnapshotInvalidated"
 > & {
   createdAt: string;
   contentAccess: "metadata_only";
@@ -919,6 +924,10 @@ async function loadSource(
   const [row] = await tx
     .select({
       attachmentId: issueAttachments.id,
+      assetId: issueAttachments.assetId,
+      payloadSourceProtocolVersion: issueAttachments.payloadSourceProtocolVersion,
+      payloadSourceSnapshot: issueAttachments.payloadSourceSnapshot,
+      payloadSourceSnapshotInvalidated: issueAttachments.payloadSourceSnapshotInvalidated,
       parentCommentId: issueComments.id,
       filename: assets.originalFilename,
       contentType: assets.contentType,
@@ -965,6 +974,10 @@ async function loadSource(
   const sourceWithParent = {
     sourceCommentId,
     attachmentId: row.attachmentId,
+    assetId: row.assetId,
+    payloadSourceProtocolVersion: row.payloadSourceProtocolVersion,
+    payloadSourceSnapshot: row.payloadSourceSnapshot,
+    payloadSourceSnapshotInvalidated: row.payloadSourceSnapshotInvalidated,
     parentCommentId: row.parentCommentId,
     // Provider photos/voice messages legitimately have no original filename.
     // Derive display metadata from the already-validated MIME and opaque id;

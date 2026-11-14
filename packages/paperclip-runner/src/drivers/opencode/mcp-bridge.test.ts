@@ -1,3 +1,4 @@
+import { createHash } from "node:crypto";
 import { afterEach, describe, expect, it, vi } from "vitest";
 
 import { canonicalOpenCodeMcpToolName, startOpenCodeMcpBridge, type OpenCodeMcpBridge } from "./mcp-bridge.js";
@@ -76,6 +77,79 @@ describe("OpenCode MCP bridge", () => {
     expect(handler).toHaveBeenCalledWith(expect.objectContaining({ tool: "documents.read", callId: "call-1", arguments: { id: "doc" } }));
   });
 
+  it("binds managed handler calls to an authenticated exact OpenCode hook observation", async () => {
+    const handler = vi.fn(async ({ callId, arguments: args }) => ({ callId, args }));
+    const bridge = await startOpenCodeMcpBridge({
+      requireNativeToolCallObservation: true,
+      tools: [{ name: "documents.read", inputSchema: {
+        type: "object", properties: { id: { type: "string" } }, required: ["id"], additionalProperties: false,
+      } }],
+      handler,
+    });
+    bridges.push(bridge);
+    const args = { id: "doc-1" };
+    const argsHash = createHash("sha256").update(JSON.stringify(args)).digest("hex");
+    const noObservation = await rpc(bridge, { id: "rpc-0", method: "tools/call",
+      params: { name: "paperclip_documents.read", arguments: args } });
+    expect(await noObservation.json()).toMatchObject({ result: { isError: true,
+      content: [{ text: "Managed tool call has no exact hook observation." }] } });
+    expect(handler).not.toHaveBeenCalled();
+
+    const mismatchObservation = await fetch(`${bridge.url.replace(/\/mcp$/, "")}/paperclip-native-tool-call`, {
+      method: "POST", headers: { Authorization: `Bearer ${bridge.secret}`, "Content-Type": "application/json" },
+      body: JSON.stringify({ callId: "provider-tool-use-mismatch", tool: "documents.read", argsHash }),
+    });
+    expect(mismatchObservation.status).toBe(202);
+    const mismatchedCall = await rpc(bridge, { id: "rpc-mismatch", method: "tools/call",
+      params: { name: "paperclip_documents.read", arguments: { id: "different-doc" } } });
+    expect(await mismatchedCall.json()).toMatchObject({ result: { isError: true,
+      content: [{ text: "Managed tool call has no exact hook observation." }] } });
+    expect(handler).not.toHaveBeenCalled();
+
+    const observed = await fetch(`${bridge.url.replace(/\/mcp$/, "")}/paperclip-native-tool-call`, {
+      method: "POST", headers: { Authorization: `Bearer ${bridge.secret}`, "Content-Type": "application/json" },
+      body: JSON.stringify({ callId: "provider-tool-use-1", tool: "paperclip_documents.read", argsHash }),
+    });
+    expect(observed.status).toBe(202);
+    const duplicateTuple = await fetch(`${bridge.url.replace(/\/mcp$/, "")}/paperclip-native-tool-call`, {
+      method: "POST", headers: { Authorization: `Bearer ${bridge.secret}`, "Content-Type": "application/json" },
+      body: JSON.stringify({ callId: "provider-tool-use-ambiguous", tool: "documents.read", argsHash }),
+    });
+    expect(duplicateTuple.status).toBe(409);
+    const otherArgs = { id: "doc-2" };
+    const otherArgsHash = createHash("sha256").update(JSON.stringify(otherArgs)).digest("hex");
+    const otherObserved = await fetch(`${bridge.url.replace(/\/mcp$/, "")}/paperclip-native-tool-call`, {
+      method: "POST", headers: { Authorization: `Bearer ${bridge.secret}`, "Content-Type": "application/json" },
+      body: JSON.stringify({ callId: "provider-tool-use-2", tool: "documents.read", argsHash: otherArgsHash }),
+    });
+    expect(otherObserved.status).toBe(202);
+    expect(await (await rpc(bridge, { id: "rpc-1", method: "tools/call",
+      params: { name: "paperclip_documents.read", arguments: args } })).json()).toMatchObject({
+        result: { content: [{ text: "{\"callId\":\"provider-tool-use-1\",\"args\":{\"id\":\"doc-1\"}}" }] },
+      });
+    expect(await (await rpc(bridge, { id: "rpc-2", method: "tools/call",
+      params: { name: "paperclip_documents.read", arguments: otherArgs } })).json()).toMatchObject({
+        result: { content: [{ text: "{\"callId\":\"provider-tool-use-2\",\"args\":{\"id\":\"doc-2\"}}" }] },
+      });
+    expect(handler).toHaveBeenCalledTimes(2);
+    expect(handler).toHaveBeenCalledWith(expect.objectContaining({ tool: "documents.read",
+      callId: "provider-tool-use-1", arguments: args }));
+    for (const callId of ["provider-tool-use-1", "provider-tool-use-2"]) {
+      const complete = await fetch(`${bridge.url.replace(/\/mcp$/, "")}/paperclip-native-tool-call-complete`, {
+        method: "POST", headers: { Authorization: `Bearer ${bridge.secret}`, "Content-Type": "application/json" },
+        body: JSON.stringify({ callId }),
+      });
+      expect(complete.status).toBe(202);
+    }
+
+    const replayObservation = await fetch(`${bridge.url.replace(/\/mcp$/, "")}/paperclip-native-tool-call`, {
+      method: "POST", headers: { Authorization: `Bearer ${bridge.secret}`, "Content-Type": "application/json" },
+      body: JSON.stringify({ callId: "provider-tool-use-1", tool: "documents.read", argsHash }),
+    });
+    expect(replayObservation.status).toBe(409);
+    expect(handler).toHaveBeenCalledTimes(2);
+  });
+
   it("fails conflicting duplicate identities and handler errors closed", async () => {
     const bridge = await startOpenCodeMcpBridge({
       tools: [{ name: "documents.read", inputSchema: { type: "object" } }],
@@ -112,6 +186,47 @@ describe("OpenCode MCP bridge", () => {
     });
     expect(await response.json()).toMatchObject({ result: { isError: true } });
     expect(handler).not.toHaveBeenCalled();
+  });
+
+  it("starts with an assigned app tool that declares JSON Schema draft-07 and validates by that dialect", async () => {
+    // Assigned app tools such as Railway publish zod `target: "draft-7"` schemas.
+    const handler = vi.fn(async () => ({ ok: true }));
+    const bridge = await startOpenCodeMcpBridge({
+      tools: [{
+        name: "app_railway_list_projects",
+        inputSchema: {
+          $schema: "http://json-schema.org/draft-07/schema#",
+          type: "object", required: ["limit"], additionalProperties: false,
+          properties: { limit: { type: "integer", minimum: 1 }, cursor: { type: "string" } },
+        },
+      }, {
+        name: "create_project",
+        inputSchema: { $schema: "https://json-schema.org/draft/2020-12/schema", type: "object", properties: {} },
+      }],
+      handler,
+    });
+    bridges.push(bridge);
+    const invalid = await rpc(bridge, {
+      id: "draft7-invalid",
+      method: "tools/call",
+      params: { name: "app_railway_list_projects", arguments: { limit: "ten" } },
+    });
+    expect(await invalid.json()).toMatchObject({ result: { isError: true } });
+    expect(handler).not.toHaveBeenCalled();
+    const valid = await rpc(bridge, {
+      id: "draft7-valid",
+      method: "tools/call",
+      params: { name: "app_railway_list_projects", arguments: { limit: 5 } },
+    });
+    expect(await valid.json()).not.toMatchObject({ result: { isError: true } });
+    expect(handler).toHaveBeenCalledTimes(1);
+  });
+
+  it("still fails closed on an unknown JSON Schema dialect", async () => {
+    await expect(startOpenCodeMcpBridge({
+      tools: [{ name: "unknown_dialect", inputSchema: { $schema: "https://example.invalid/schema", type: "object" } }],
+      handler: async () => ({ ok: true }),
+    })).rejects.toThrow(/no schema with key or ref/);
   });
 
   it("times out and cancels in-flight calls", async () => {

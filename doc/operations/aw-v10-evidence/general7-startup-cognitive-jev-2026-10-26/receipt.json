@@ -1,0 +1,26 @@
+{
+  "scope": "Composed focused software results on recorded source snapshots, not final workspace acceptance.",
+  "initial": {
+    "executed": 29,
+    "passed": 28,
+    "failed": 1,
+    "exitCode": 1,
+    "greenSlices": [
+      "server-startup-feedback-export.test.ts (22)",
+      "jev-decision-provider.test.ts (2)"
+    ],
+    "remainingFailure": "Unqualified Agent key expected an empty result but now correctly receives 403."
+  },
+  "cognitiveRerun": {
+    "executed": 5,
+    "passed": 5,
+    "failed": 0,
+    "exitCode": 0
+  },
+  "composedDistinctPassed": 29,
+  "sourceHashes": {
+    "server/src/__tests__/server-startup-feedback-export.test.ts": "e712d3466c28c011fe75b5ec1b51403385afbb86531638b27a5349f06069ae1d",
+    "server/src/services/jev-decision-provider.test.ts": "0c152424eebfd920fe8979282b00bca4b9e4b45ca6ac1132a7abe2d645eff6ea",
+    "server/src/__tests__/v7-cognitive-memory.integration.test.ts": "3d38b91130fdaa8869d84b79766f354b12ec5f63111b104357fe837029ad9de6"
+  }
+}

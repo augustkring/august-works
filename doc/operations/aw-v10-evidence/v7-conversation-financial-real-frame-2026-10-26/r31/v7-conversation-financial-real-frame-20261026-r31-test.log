@@ -1,0 +1,26 @@
+
+ RUN  v4.1.11 /workspace/v10-dep-qualification/server
+
+ ❯ src/__tests__/v7-model-reservations.integration.test.ts (31 tests | 1 failed | 30 skipped) 33894ms
+     × settles the actual qualified conversation usage once and preserves the exact debit in canonical purge 29502ms
+
+⎯⎯⎯⎯⎯⎯⎯ Failed Tests 1 ⎯⎯⎯⎯⎯⎯⎯
+
+ FAIL  src/__tests__/v7-model-reservations.integration.test.ts > native model reservation ledger and dispatch boundary > settles the actual qualified conversation usage once and preserves the exact debit in canonical purge
+Error: conversation_runtime_outbox_receipt_mismatch:{"beforePurge":{"status":null,"kind":null,"runId":null,"companyPurgeOperationId":null},"afterPurge":{"status":"queued","kind":"runtime_asset_erasure","runId":"8b8046b8-2ace-40a1-87ca-44abc142d3a3","companyPurgeOperationId":"9f6c7f20-3f41-4dec-99b3-f5760d074e4a"},"operationId":"9f6c7f20-3f41-4dec-99b3-f5760d074e4a","runId":"8b8046b8-2ace-40a1-87ca-44abc142d3a3"}
+ ❯ src/__tests__/v7-model-reservations.integration.test.ts:828:15
+    826|       if (runtimeErasureAfterPurge.status !== "succeeded" || runtimeEr…
+    827|         runtimeErasureAfterPurge.runId !== facts.run.id || runtimeEras…
+    828|         throw new Error(`conversation_runtime_outbox_receipt_mismatch:…
+       |               ^
+    829|           afterPurge: runtimeErasureAfterPurge, operationId: operation…
+    830|       expect(await db.select().from(orchestrationModelReservations).wh…
+
+⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯[1/1]⎯
+
+
+ Test Files  1 failed (1)
+      Tests  1 failed | 30 skipped (31)
+   Start at  18:59:59
+   Duration  51.62s (transform 12.44s, setup 80ms, import 17.46s, tests 33.89s, environment 0ms)
+

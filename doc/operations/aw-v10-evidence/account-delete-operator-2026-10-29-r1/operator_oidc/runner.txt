@@ -1,0 +1,3 @@
+timeout_seconds=240
+test_file=src/__tests__/account-deletion-sso-reauth.integration.test.ts
+test_pattern=requires a signed fresh OIDC auth_time|requires a real native TOTP session|requires qualified SSO and an already enrolled native passkey for an operator with an unset PR flag|rejects password-only deletion for a configured local operator while its PR flag is false

@@ -1,0 +1,4 @@
+timeout_seconds=600
+test_file=src/services/native-runtime/native-opencode-managed-conversation-frame.integration.test.ts
+test_pattern=.
+C0 full-five run interrupted by operator before case completion because the root requested a fresh Runner dist before C0; no pass result is claimed.

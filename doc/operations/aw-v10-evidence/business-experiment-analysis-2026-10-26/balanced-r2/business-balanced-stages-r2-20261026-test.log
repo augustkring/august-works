@@ -1,0 +1,52 @@
+
+ RUN  v4.1.11 /workspace/v10-dep-qualification/server
+
+stdout | src/__tests__/business-experiment-analysis.integration.test.ts > Native experiment final capture and human interpretation on migrated PostgreSQL > actual migrated owner admits registered effect only with balanced pretreatment invariants (false; DoWhy=false)
+experiment-balanced-fixture-stage prepared
+
+stdout | src/__tests__/business-experiment-analysis.integration.test.ts > Native experiment final capture and human interpretation on migrated PostgreSQL > actual migrated owner admits registered effect only with balanced pretreatment invariants (false; DoWhy=false)
+experiment-balanced-fixture-stage assigned
+
+stdout | src/__tests__/business-experiment-analysis.integration.test.ts > Native experiment final capture and human interpretation on migrated PostgreSQL > actual migrated owner admits registered effect only with balanced pretreatment invariants (false; DoWhy=false)
+experiment-balanced-fixture-stage closed
+
+stdout | src/__tests__/business-experiment-analysis.integration.test.ts > Native experiment final capture and human interpretation on migrated PostgreSQL > actual migrated owner admits registered effect only with balanced pretreatment invariants (false; DoWhy=false)
+experiment-balanced-fixture-stage analyzed
+
+stdout | src/__tests__/business-experiment-analysis.integration.test.ts > Native experiment final capture and human interpretation on migrated PostgreSQL > actual migrated owner admits registered effect only with balanced pretreatment invariants (false; DoWhy=false)
+experiment-balanced-fixture-stage causal_create
+
+stdout | src/__tests__/business-experiment-analysis.integration.test.ts > Native experiment final capture and human interpretation on migrated PostgreSQL > actual migrated owner admits registered effect only with balanced pretreatment invariants (false; DoWhy=false)
+experiment-balanced-fixture-stage causal_created
+
+stdout | src/__tests__/business-experiment-analysis.integration.test.ts > Native experiment final capture and human interpretation on migrated PostgreSQL > actual migrated owner admits registered effect only with balanced pretreatment invariants (false; DoWhy=false)
+experiment-balanced-fixture-stage causal_analyze
+
+stdout | src/__tests__/business-experiment-analysis.integration.test.ts > Native experiment final capture and human interpretation on migrated PostgreSQL > actual migrated owner admits registered effect only with balanced pretreatment invariants (false; DoWhy=false)
+experiment-balanced-fixture-stage causal_analyzed
+
+stdout | src/__tests__/business-experiment-analysis.integration.test.ts > Native experiment final capture and human interpretation on migrated PostgreSQL > actual migrated owner admits registered effect only with balanced pretreatment invariants (false; DoWhy=false)
+experiment-balanced-fixture-stage management_capture
+
+stdout | src/__tests__/business-experiment-analysis.integration.test.ts > Native experiment final capture and human interpretation on migrated PostgreSQL > actual migrated owner admits registered effect only with balanced pretreatment invariants (false; DoWhy=false)
+experiment-balanced-fixture-stage management_captured
+
+ ❯ src/__tests__/business-experiment-analysis.integration.test.ts (20 tests | 1 failed | 19 skipped) 64950ms
+     × actual migrated owner admits registered effect only with balanced pretreatment invariants (false; DoWhy=false) 60089ms
+
+⎯⎯⎯⎯⎯⎯⎯ Failed Tests 1 ⎯⎯⎯⎯⎯⎯⎯
+
+ FAIL  src/__tests__/business-experiment-analysis.integration.test.ts > Native experiment final capture and human interpretation on migrated PostgreSQL > actual migrated owner admits registered effect only with balanced pretreatment invariants (false; DoWhy=false)
+Error: Test timed out in 60000ms.
+If this is a long-running test, pass a timeout value as the last argument or configure it globally with "testTimeout".
+ ❯ src/__tests__/business-experiment-analysis.integration.test.ts:213:146
+
+
+⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯[1/1]⎯
+
+
+ Test Files  1 failed (1)
+      Tests  1 failed | 19 skipped (20)
+   Start at  21:04:58
+   Duration  79.08s (transform 9.92s, setup 73ms, import 13.94s, tests 64.95s, environment 0ms)
+

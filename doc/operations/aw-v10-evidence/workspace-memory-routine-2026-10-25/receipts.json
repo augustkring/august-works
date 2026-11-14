@@ -1,0 +1,57 @@
+{
+  "status": "in_progress",
+  "sourceCommit": "c83a142700770ff39067b3b9c066d4b00810743f",
+  "meaning": "Whole pnpm-r typecheck0 and pnpm build0 onstablefunctional637b4a0ff; docs/evidence-onlyHEADc83a14270 buildstamp, nofunctionalSourceeditsduringchecks. Followupthreeoriginalserverfamilies125cases110PASS15FAIL; failureinventoryexplicit, notfullworkspace/servertestgreen. Wholefinaltests/allV10gatesremainopen.",
+  "logs": [
+    {
+      "name": "v10-memory-routine-workspace-typecheck",
+      "exitCode": 0,
+      "rawSha256": "e628c382216f2aa996c90b1f7866c7ee7e4d2b38044f1e822fb4744c9e6929ac",
+      "sanitizedSha256": "e628c382216f2aa996c90b1f7866c7ee7e4d2b38044f1e822fb4744c9e6929ac",
+      "archiveSha256": "776ebc0512449973a393416f768c684d2f2c4952a6a0f9f3a8414c8a804195e8",
+      "redactions": {
+        "ansi": 0,
+        "bearer": 0,
+        "jwt": 0,
+        "credential_field": 0,
+        "url_credential": 0
+      },
+      "summary": []
+    },
+    {
+      "name": "v10-memory-routine-workspace-build",
+      "exitCode": 0,
+      "rawSha256": "316965833cc7763e756c1bd2b81292d266ba460a42f29cc1601f92a063287162",
+      "sanitizedSha256": "961933042c2bec9db347a69da8f026363764a60e920707edd9429d5cd034eaf1",
+      "archiveSha256": "e18a453462a400ebb4188af8c4bc8d311e9a8633d0a55f78223ecb3454942aa0",
+      "redactions": {
+        "ansi": 72,
+        "bearer": 0,
+        "jwt": 0,
+        "credential_field": 0,
+        "url_credential": 0
+      },
+      "summary": []
+    },
+    {
+      "name": "v10-current-source-family-followup",
+      "exitCode": 1,
+      "rawSha256": "f3a8bf9dd723d83ef196da74a319808f902120a2872b43ed95577e4fdd08305f",
+      "sanitizedSha256": "2a84121e8bed4935080000816fb8345c863c6b81895b85707654c319184b5c60",
+      "archiveSha256": "22a70bf415a608e88f4e5bf87d5614e98e9276da47063d36bc4ee1d4de1cade3",
+      "redactions": {
+        "ansi": 42,
+        "bearer": 0,
+        "jwt": 0,
+        "credential_field": 0,
+        "url_credential": 0
+      },
+      "summary": [
+        "\u23af\u23af\u23af\u23af\u23af\u23af Failed Tests 15 \u23af\u23af\u23af\u23af\u23af\u23af\u23af",
+        "Test Files  3 failed (3)",
+        "Tests  15 failed | 110 passed (125)",
+        "Duration  244.93s (transform 10.07s, setup 188ms, import 21.86s, tests 222.52s, environment 0ms)"
+      ]
+    }
+  ]
+}

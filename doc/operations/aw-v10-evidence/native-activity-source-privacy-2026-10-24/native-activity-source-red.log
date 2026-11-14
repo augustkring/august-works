@@ -1,0 +1,83 @@
+(!) Your Vite config uses features that are unsupported by `configLoader: 'native'`, which is planned to become the default in a future major version of Vite:
+  - `__dirname` (vitest.config.ts:7:25). Use `import.meta.dirname` instead
+Set `VITE_CONFIG_NATIVE_IGNORE_WARNING=true` to suppress this warning.
+
+ RUN  v4.1.11 /workspace/blentera-v10
+
+ ❯ |@paperclipai/server| src/__tests__/activity-native-source-privacy.integration.test.ts (3 tests | 3 failed) 10279ms
+     × keeps the private owner's company activity while selecting the other reader's first authorized row 158ms
+     × filters unified audit rows before its cursor and enrichment 29ms
+     × does not export private Task details or title through a company audit grant 38ms
+
+⎯⎯⎯⎯⎯⎯⎯ Failed Tests 3 ⎯⎯⎯⎯⎯⎯⎯
+
+ FAIL  |@paperclipai/server| src/__tests__/activity-native-source-privacy.integration.test.ts > native activity source privacy before pagination and export > keeps the private owner's company activity while selecting the other reader's first authorized row
+AssertionError: expected [ Array(1) ] to deeply equal [ Array(1) ]
+
+- Expected
++ Received
+
+  [
+-   "66b5a4f3-fc03-47d2-a33a-e0d910d7a0b8",
++   "a6427a58-4cbf-4023-b6d2-3f75b60387a7",
+  ]
+
+ ❯ src/__tests__/activity-native-source-privacy.integration.test.ts:70:61
+     68|     expect(owner.body.map((row: { id: string }) => row.id)).toEqual([p…
+     69|     const other = await request(appFor(bob)).get(`/api/companies/${com…
+     70|     expect(other.body.map((row: { id: string }) => row.id)).toEqual([p…
+       |                                                             ^
+     71|     expect(JSON.stringify(other.body)).not.toContain(privateMarker);
+     72|   });
+
+⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯[1/3]⎯
+
+ FAIL  |@paperclipai/server| src/__tests__/activity-native-source-privacy.integration.test.ts > native activity source privacy before pagination and export > filters unified audit rows before its cursor and enrichment
+AssertionError: expected [ Array(1) ] to deeply equal [ Array(1) ]
+
+- Expected
++ Received
+
+  [
+-   "66b5a4f3-fc03-47d2-a33a-e0d910d7a0b8",
++   "a6427a58-4cbf-4023-b6d2-3f75b60387a7",
+  ]
+
+ ❯ src/__tests__/activity-native-source-privacy.integration.test.ts:75:70
+     73|   it("filters unified audit rows before its cursor and enrichment", as…
+     74|     const response = await request(appFor(bob)).get(`/api/companies/${…
+     75|     expect(response.body.items.map((row: { id: string }) => row.id)).t…
+       |                                                                      ^
+     76|     expect(response.body.nextCursor).toBeNull();
+     77|     expect(JSON.stringify(response.body)).not.toContain(privateMarker);
+
+⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯[2/3]⎯
+
+ FAIL  |@paperclipai/server| src/__tests__/activity-native-source-privacy.integration.test.ts > native activity source privacy before pagination and export > does not export private Task details or title through a company audit grant
+AssertionError: expected 'createdAt,action,actorType,actorId,ag…' not to contain 'PRIVATE_NATIVE_ACTIVITY_RETAINED_BODY'
+
+- Expected
++ Received
+
+- PRIVATE_NATIVE_ACTIVITY_RETAINED_BODY
++ createdAt,action,actorType,actorId,agentId,runId,responsibleUserId,entityType,entityId,issueIdentifier,issueTitle,commentExcerpt,documentKey
++ 2026-10-24T11:11:40.157Z,issue.activity_source_control,user,bdf54d26-f721-4995-91c4-42b834db9bc9,,,bdf54d26-f721-4995-91c4-42b834db9bc9,issue,dff3af26-f030-4bf6-ad59-29d1a2362f72,APd1392-2,PRIVATE_NATIVE_ACTIVITY_RETAINED_BODY,,
++ 2026-10-24T11:10:40.152Z,issue.activity_source_control,user,bdf54d26-f721-4995-91c4-42b834db9bc9,,,bdf54d26-f721-4995-91c4-42b834db9bc9,issue,8d9b1665-85fa-4543-97a4-6736350ee68a,APd1392-1,Public activity parent,,
++
+
+ ❯ src/__tests__/activity-native-source-privacy.integration.test.ts:81:31
+     79|   it("does not export private Task details or title through a company …
+     80|     const response = await request(appFor(bob)).get(`/api/companies/${…
+     81|     expect(response.text).not.toContain(privateMarker);
+       |                               ^
+     82|     expect(response.text).toContain("issue.activity_source_control");
+     83|   });
+
+⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯[3/3]⎯
+
+
+ Test Files  1 failed (1)
+      Tests  3 failed (3)
+   Start at  11:10:44
+   Duration  55.73s (transform 28.36s, setup 214ms, import 44.87s, tests 10.28s, environment 0ms)
+

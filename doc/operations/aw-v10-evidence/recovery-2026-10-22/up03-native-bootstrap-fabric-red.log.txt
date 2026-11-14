@@ -1,0 +1,41 @@
+(!) Your Vite config uses features that are unsupported by `configLoader: 'native'`, which is planned to become the default in a future major version of Vite:
+  - `__dirname` (vitest.config.ts:7:25). Use `import.meta.dirname` instead
+Set `VITE_CONFIG_NATIVE_IGNORE_WARNING=true` to suppress this warning.
+
+ RUN  v4.1.11 /workspace/blentera-v10
+
+ ❯ |@paperclipai/server| src/__tests__/agent-runtime-fabric-v5.test.ts (5 tests | 1 failed | 4 skipped) 11877ms
+     × pins immutable provenance, rechecks resumed runs and rejects revoked human membership 1140ms
+
+⎯⎯⎯⎯⎯⎯⎯ Failed Tests 1 ⎯⎯⎯⎯⎯⎯⎯
+
+ FAIL  |@paperclipai/server| src/__tests__/agent-runtime-fabric-v5.test.ts > V5 execution authority > pins immutable provenance, rechecks resumed runs and rejects revoked human membership
+AssertionError: expected undefined to deeply equal [ { …(2) } ]
+
+- Expected:
+[
+  {
+    "companyId": "d426950f-03fb-45ae-9edb-c4c508c8fc15",
+    "contextManifestId": "c698b93f-e9fd-4f64-aca8-924a8ccac162",
+  },
+]
+
++ Received:
+undefined
+
+ ❯ src/__tests__/agent-runtime-fabric-v5.test.ts:91:42
+     89|     const first = await svc.prepare(input); expect(first?.manifest.age…
+     90|     expect(first?.manifest.executionScope.delegatedScopes).toEqual([]);
+     91|     expect(first?.inputContextManifests).toEqual(first?.manifest.conte…
+       |                                          ^
+     92|     const resumed = await svc.prepare(input); expect(resumed?.record.i…
+     93|     expect(resumed?.manifest.contextManifests).toEqual(first?.manifest…
+
+⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯[1/1]⎯
+
+
+ Test Files  1 failed (1)
+      Tests  1 failed | 4 skipped (5)
+   Start at  06:23:19
+   Duration  59.31s (transform 31.40s, setup 185ms, import 46.87s, tests 11.88s, environment 0ms)
+

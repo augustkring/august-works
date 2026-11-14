@@ -36,6 +36,7 @@ import {
   githubBotRequest,
 } from "./chat-github-client.js";
 import { githubChatPrincipalAccess } from "./chat-github-access.js";
+import { parseGitHubReviewThreadIdentity } from "./chat-github-thread-id.js";
 import {
   effectiveGitHubReviewPolicy,
   githubReviewConclusion,
@@ -227,11 +228,8 @@ export function githubChatReviewService(db: Db, fetchImpl = fetch) {
       throw conflict(
         "Refresh the bot's repository access before using its tools",
       );
-    const match =
-      /^github:([^:]+):(?:(issue):)?([1-9][0-9]*)(?::rc:([1-9][0-9]*))?$/.exec(
-        source.conversation.externalThreadId,
-      );
-    if (!match || match[1]!.toLowerCase() !== repository.toLowerCase())
+    const threadIdentity = parseGitHubReviewThreadIdentity(source.conversation.externalThreadId);
+    if (!threadIdentity || threadIdentity.repository.toLowerCase() !== repository.toLowerCase())
       throw forbidden("Invalid task repository binding");
     const [agent] = await db
       .select()
@@ -294,9 +292,9 @@ export function githubChatReviewService(db: Db, fetchImpl = fetch) {
       access,
       repositoryId,
       repository,
-      number: Number(match[3]),
-      isIssue: !!match[2],
-      replyId: match[4] ?? null,
+      number: Number(threadIdentity.number),
+      isIssue: threadIdentity.issue,
+      replyId: threadIdentity.reviewCommentId,
       policy: effectiveGitHubReviewPolicy(
         source.config.configuration,
         repositoryId,
@@ -973,9 +971,7 @@ export function githubChatReviewService(db: Db, fetchImpl = fetch) {
           eq(chatConversations.endpointId, action.endpointId),
         ),
       );
-    const number = binding?.thread.match(
-      /^github:[^:]+:(?:issue:)?([1-9][0-9]*)(?::rc:[1-9][0-9]*)?$/,
-    )?.[1];
+    const number = binding?.thread ? parseGitHubReviewThreadIdentity(binding.thread)?.number : undefined;
     if (!number || !binding?.repository.providerRepositoryId) return;
     await withGitHubPublicationLease(
       db,
@@ -1250,7 +1246,7 @@ export function githubChatReviewService(db: Db, fetchImpl = fetch) {
                       externalConversationId:
                         source.conversation.externalConversationId,
                       externalThreadId: `github:${source.repository}:${source.number}:rc:${posted.id}`,
-                      sessionGeneration: 1,
+                      sessionGeneration: source.conversation.sessionGeneration,
                       externalLabel: source.conversation.externalLabel,
                       providerUrl: posted.html_url,
                       isDirectMessage: false,

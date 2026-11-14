@@ -3,6 +3,7 @@ import path from "node:path";
 import { and, eq, sql } from "drizzle-orm";
 import { chatConversations, issues, type Db } from "@paperclipai/db";
 import { resolvePaperclipInstanceRoot } from "../../home-paths.js";
+import { readNativeChannelConversationScope } from "./native-channel-conversation-owner.js";
 
 export type NativeChatWorkspaceScope = {
   companyId: string;
@@ -29,20 +30,39 @@ export async function findNativeChatWorkspaceScope(
     companyId: string;
     agentId: string;
     issueId: string | null;
+    /** Exact current Native conversation Task binding; required for canonical chat Tasks. */
+    runId?: string | null;
+    responsibleUserId?: string | null;
+    conversationSessionGeneration?: number | null;
+    sourceCommentId?: string | null;
     instanceRoot?: string;
   },
 ): Promise<NativeChatWorkspaceScope | null> {
   if (
     input.adapterType !== "paperclip_runner" ||
-    input.environmentDriver !== "local" ||
+    !["local", "sandbox"].includes(input.environmentDriver ?? "") ||
     !input.issueId
-  )
+  ) {
+    if (process.env.PAPERCLIP_NATIVE_SOURCE_CLOSURE_DIAGNOSTICS === "1") {
+      console.info("Native conversation workspace scope", JSON.stringify({
+        nativeAdapter: input.adapterType === "paperclip_runner",
+        supportedEnvironment: input.environmentDriver === "local" || input.environmentDriver === "sandbox",
+        issuePresent: Boolean(input.issueId),
+        selectedCanonicalConversationScope: false,
+      }));
+    }
     return null;
+  }
   const [issue] = await db
     .select({
       id: issues.id,
       projectId: issues.projectId,
       originKind: issues.originKind,
+      conversationAgentId: issues.conversationAgentId,
+      conversationUserId: issues.conversationUserId,
+      conversationState: issues.conversationState,
+      conversationSessionGeneration: issues.conversationSessionGeneration,
+      executionRunId: issues.executionRunId,
       hasConversation: sql<boolean>`exists (
       select 1 from ${chatConversations}
       where ${chatConversations.issueId} = ${issues.id}
@@ -55,8 +75,50 @@ export async function findNativeChatWorkspaceScope(
     )
     .limit(1);
   if (!issue) throw new Error("native_chat_workspace_issue_unavailable");
-  if (issue.originKind !== "chat_channel" && !issue.hasConversation)
-    return null;
+  const canonicalRunBoundConversation = Boolean(
+    input.runId &&
+    input.responsibleUserId &&
+    typeof input.conversationSessionGeneration === "number" &&
+    issue.conversationAgentId === input.agentId &&
+    issue.conversationUserId === input.responsibleUserId &&
+    (issue.conversationState === "active" || issue.conversationState === "waiting") &&
+    issue.conversationSessionGeneration === input.conversationSessionGeneration &&
+    issue.executionRunId === input.runId,
+  );
+  if (process.env.PAPERCLIP_NATIVE_SOURCE_CLOSURE_DIAGNOSTICS === "1") {
+    console.info("Native conversation workspace scope", JSON.stringify({
+      nativeAdapter: input.adapterType === "paperclip_runner",
+      supportedEnvironment: input.environmentDriver === "local" || input.environmentDriver === "sandbox",
+      issuePresent: true,
+      conversationChannelOrigin: issue.originKind === "chat_channel",
+      chatConversationRowPresent: issue.hasConversation,
+      canonicalConversationAgentMatches: issue.conversationAgentId === input.agentId,
+      canonicalConversationHumanMatches: Boolean(input.responsibleUserId) && issue.conversationUserId === input.responsibleUserId,
+      canonicalConversationStateActive: issue.conversationState === "active" || issue.conversationState === "waiting",
+      canonicalConversationGenerationMatches: typeof input.conversationSessionGeneration === "number" &&
+        issue.conversationSessionGeneration === input.conversationSessionGeneration,
+      canonicalConversationRunMatches: Boolean(input.runId) && issue.executionRunId === input.runId,
+      channelBindingInputsComplete: Boolean(input.runId && input.responsibleUserId && input.sourceCommentId &&
+        typeof input.conversationSessionGeneration === "number" &&
+        Number.isSafeInteger(input.conversationSessionGeneration) && input.conversationSessionGeneration >= 1),
+      sourceCommentPresent: Boolean(input.sourceCommentId),
+      selectedCanonicalConversationScope: canonicalRunBoundConversation,
+    }));
+  }
+  let canonicalChannelConversation = false;
+  if (issue.originKind === "chat_channel") {
+    if (!input.runId || !input.responsibleUserId || !input.sourceCommentId || typeof input.conversationSessionGeneration !== "number") return null;
+    try {
+      const scope = await readNativeChannelConversationScope(db, {
+        companyId: input.companyId, issueId: input.issueId, agentId: input.agentId,
+        responsibleUserId: input.responsibleUserId, runId: input.runId,
+        sessionGeneration: input.conversationSessionGeneration, sourceCommentId: input.sourceCommentId, consumer: "workspace",
+      });
+      canonicalChannelConversation = scope.issueId === issue.id && scope.runId === input.runId;
+    } catch { canonicalChannelConversation = false; }
+  }
+  if (issue.originKind === "chat_channel" && !canonicalChannelConversation) return null;
+  if (issue.originKind !== "chat_channel" && !issue.hasConversation && !canonicalRunBoundConversation) return null;
   const instanceRoot = await realpath(
     input.instanceRoot ?? resolvePaperclipInstanceRoot(),
   );

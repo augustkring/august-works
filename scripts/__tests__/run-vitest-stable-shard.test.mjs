@@ -1,6 +1,8 @@
 import assert from "node:assert/strict";
+import { chmodSync, mkdtempSync, mkdirSync, rmSync, writeFileSync } from "node:fs";
 import { spawnSync } from "node:child_process";
 import { readFileSync } from "node:fs";
+import os from "node:os";
 import path from "node:path";
 import { fileURLToPath } from "node:url";
 import test from "node:test";
@@ -49,7 +51,7 @@ function dryRunJson(args, envOverrides = {}) {
   return JSON.parse(result.stdout);
 }
 
-const SHARD_COUNT = 12;
+const SHARD_COUNT = 18;
 const SERIALIZED_SHARD_COUNT = 9;
 
 
@@ -86,6 +88,67 @@ test("the general-server shards form a complete, non-overlapping partition", () 
   // Every suite runs exactly once: union covers the whole set with no overlap.
   assert.equal(selectedTotal, total, "every suite must be selected exactly once");
   assert.equal(seen.size, total, "union of shards must cover the whole suite set");
+});
+
+test("only the shard selecting the built-server restart suite prepares the runtime bundle", { skip: process.platform === "win32" }, () => {
+  const restartSuite = "server/src/__tests__/scheduled-work-server-restart.integration.test.ts";
+  const selectedShard = Array.from({ length: SHARD_COUNT }, (_, index) => ({
+    index,
+    files: dryRunJson([
+      "--mode", "general", "--group", "general-server",
+      "--shard-index", String(index), "--shard-count", String(SHARD_COUNT),
+    ]).selectedGeneralServerSuites,
+  })).find((shard) => shard.files.includes(restartSuite));
+  assert.ok(selectedShard, "the restart integration suite must belong to one general-server shard");
+  const unrelatedShard = Array.from({ length: SHARD_COUNT }, (_, index) => ({
+    index,
+    files: dryRunJson([
+      "--mode", "general", "--group", "general-server",
+      "--shard-index", String(index), "--shard-count", String(SHARD_COUNT),
+    ]).selectedGeneralServerSuites,
+  })).find((shard) => !shard.files.includes(restartSuite));
+  assert.ok(unrelatedShard, "another shard must not select the restart integration suite");
+
+  const tempRoot = mkdtempSync(path.join(os.tmpdir(), "vitest-build-preflight-"));
+  const fakeBin = path.join(tempRoot, "bin");
+  const capturedCommands = path.join(tempRoot, "commands.jsonl");
+  mkdirSync(fakeBin);
+  const fakePnpm = path.join(fakeBin, "pnpm");
+  writeFileSync(fakePnpm, `#!/usr/bin/env node
+import { appendFileSync } from 'node:fs';
+appendFileSync(process.env.PNPM_CAPTURE, JSON.stringify(process.argv.slice(2)) + '\\n');
+`);
+  chmodSync(fakePnpm, 0o755);
+  const runShard = (index) => spawnSync(process.execPath, [script,
+    "--mode", "general", "--group", "general-server",
+    "--shard-index", String(index), "--shard-count", String(SHARD_COUNT),
+  ], {
+    cwd: repoRoot,
+    encoding: "utf8",
+    env: workflowEnv({
+      PATH: `${fakeBin}${path.delimiter}${process.env.PATH ?? ""}`,
+      PNPM_CAPTURE: capturedCommands,
+    }),
+  });
+  try {
+    const targetRun = runShard(selectedShard.index);
+    assert.equal(targetRun.status, 0, targetRun.stderr);
+    const targetCommands = readFileSync(capturedCommands, "utf8").trim().split("\n").map((line) => JSON.parse(line));
+    assert.deepEqual(targetCommands.slice(0, 2), [
+      ["--filter", "@paperclipai/server", "build"],
+      ["--filter", "@paperclipai/server", "build:runtime"],
+    ]);
+    assert.ok(targetCommands[2].includes("vitest"), "the selected shard must launch Vitest after preparation");
+
+    rmSync(capturedCommands, { force: true });
+    const unrelatedRun = runShard(unrelatedShard.index);
+    assert.equal(unrelatedRun.status, 0, unrelatedRun.stderr);
+    const unrelatedCommands = readFileSync(capturedCommands, "utf8").trim().split("\n").map((line) => JSON.parse(line));
+    assert.equal(unrelatedCommands.length, 1, "an unrelated shard should launch Vitest without either build");
+    assert.ok(unrelatedCommands[0].includes("vitest"));
+  } finally {
+    rmSync(tempRoot, { recursive: true, force: true });
+  }
 });
 
 test("a route/authz suite never leaks into the general-server shards", () => {
@@ -129,6 +192,28 @@ test("workspaces-a shards map to Vitest native --shard slices over a stable proj
     "sharding must not change which projects the lane covers",
   );
   assert.equal(unsharded.workspacesVitestShard, null);
+});
+
+test("workspace groups cover every declared root project exactly once for every caller", () => {
+  // Read the deliberately static declaration without importing Vitest or its config graph.
+  const config = readFileSync(path.join(repoRoot, "vitest.config.ts"), "utf8");
+  const declaration = /projects:\s*\[([\s\S]*?)\]/.exec(config)?.[1];
+  assert.ok(declaration, "expected the root project declaration");
+  const literals = [...declaration.matchAll(/"([^"\n]+)"/g)];
+  assert.equal(declaration.replace(/"[^"\n]+"/g, "").replace(/[\s,]/g, ""), "",
+    "project declarations must stay explicit or this coverage check must be updated");
+  const declared = literals.map(([, directory]) =>
+    JSON.parse(readFileSync(path.join(repoRoot, directory, "package.json"), "utf8")).name);
+  assert.equal(new Set(declared).size, declared.length, "root project names must be unique");
+  const serverName = JSON.parse(readFileSync(path.join(repoRoot, "server", "package.json"), "utf8")).name;
+  assert.ok(declared.includes(serverName), "the server must remain a root project");
+  for (const caller of [undefined, "PR", "Release", "Cloud"]) {
+    const env = caller === undefined ? {} : { GITHUB_WORKFLOW: caller };
+    const selected = [serverName, ...["general-workspaces-a", "general-workspaces-b"].flatMap(group =>
+      dryRunJson(["--mode", "general", "--group", group], env).workspaceProjects)];
+    assert.equal(new Set(selected).size, selected.length, `workspace groups must not overlap for ${caller ?? "local"}`);
+    assert.deepEqual(selected.sort(), [...declared].sort(), `all root projects must run for ${caller ?? "local"}`);
+  }
 });
 
 test("duration-aware partition balances skewed weights better than round-robin", () => {
@@ -274,21 +359,66 @@ const chatSuitePath = "server/src/__tests__/chat-channels.integration.test.ts";
 const nativeRunnerSuitePath =
   "server/src/services/native-runtime/native-codex-runner.integration.test.ts";
 
-// Mirrors pr-trusted.yml (12 shards, called by pr.yml so GITHUB_WORKFLOW is
+const managedNativeSuitePaths = [
+  "server/src/__tests__/heartbeat-comment-wake-batching-managed-positive.integration.test.ts",
+  "server/src/__tests__/heartbeat-managed-chat-dispatch-boundaries.integration.test.ts",
+  "server/src/__tests__/heartbeat-managed-chat-workspace-root.integration.test.ts",
+  "server/src/__tests__/heartbeat-managed-native-conversation-followup.integration.test.ts",
+  "server/src/__tests__/heartbeat-managed-native-interaction-retry.integration.test.ts",
+  "server/src/__tests__/heartbeat-managed-native-runtime-skills.integration.test.ts",
+  "server/src/__tests__/heartbeat-managed-native-selection-fence.integration.test.ts",
+  "server/src/__tests__/heartbeat-managed-project-workspace.integration.test.ts",
+  "server/src/__tests__/heartbeat-managed-scheduler.integration.test.ts",
+  "server/src/__tests__/heartbeat-managed-serial-scheduler.integration.test.ts",
+  "server/src/__tests__/helpers/managed-native-model-transport.test.ts",
+  "server/src/__tests__/managed-worker-sandbox-lifecycle.integration.test.ts",
+  "server/src/__tests__/native-memory-task-transaction-reuse.integration.test.ts",
+  "server/src/__tests__/native-opencode-managed-session-resumption.integration.test.ts",
+  "server/src/__tests__/native-payload-temporal-sources.integration.test.ts",
+  "server/src/__tests__/v7-model-reservations.integration.test.ts",
+  "server/src/services/native-runtime/heartbeat-managed-native-comment-handoff.integration.test.ts",
+  "server/src/services/native-runtime/native-model-session-controller.integration.test.ts",
+  "server/src/services/native-runtime/native-opencode-conversation-task-erasure.integration.test.ts",
+  "server/src/services/native-runtime/native-opencode-managed-browser-governed-handoffs.integration.test.ts",
+  "server/src/services/native-runtime/native-opencode-managed-browser-history-workflows.integration.test.ts",
+  "server/src/services/native-runtime/native-opencode-managed-browser-repository.integration.test.ts",
+  "server/src/services/native-runtime/native-opencode-managed-browser-sidebar-tool.integration.test.ts",
+  "server/src/services/native-runtime/native-opencode-managed-browser-source-invalid.integration.test.ts",
+  "server/src/services/native-runtime/native-opencode-managed-browser.integration.test.ts",
+  "server/src/services/native-runtime/native-opencode-managed-channel-conversation.integration.test.ts",
+  "server/src/services/native-runtime/native-opencode-managed-conversation-frame.integration.test.ts",
+  "server/src/services/native-runtime/native-opencode-managed-progress-conversation.integration.test.ts",
+  "server/src/services/native-runtime/native-opencode-managed-project-create-wait.integration.test.ts",
+  "server/src/services/native-runtime/native-opencode-managed-project-create.integration.test.ts",
+  "server/src/services/native-runtime/native-opencode-managed-source.integration.test.ts"
+];
+const MANAGED_NATIVE_SHARD_COUNT = managedNativeSuitePaths.length;
+
+// Mirrors pr-trusted.yml (SHARD_COUNT shards, called by pr.yml so GITHUB_WORKFLOW is
 // "PR"): the chat suite runs in its dedicated lanes and the cargo-dependent
 // native-runner suite in the Rust-cached final Verify Paperclip Runner vitest
 // shard, so together the three cover the full server group exactly.
-test("12 PR without-chat shards plus the dedicated chat and native-runner lanes cover the original server group exactly", () => {
+test("PR server, managed Native, chat and Rust lanes form a complete non-overlapping cover", () => {
   const prEnv = { GITHUB_WORKFLOW: "PR" };
   const full = dryRunJson(["--mode", "general", "--group", "general-server", "--shard-index", "0", "--shard-count", "1"], prEnv);
-  const shards = Array.from({ length: 12 }, (_, index) => dryRunJson([
+  const shards = Array.from({ length: SHARD_COUNT }, (_, index) => dryRunJson([
     "--mode", "general", "--group", "general-server-without-chat",
-    "--shard-index", String(index), "--shard-count", "12",
+    "--shard-index", String(index), "--shard-count", String(SHARD_COUNT),
   ], prEnv));
   const files = shards.flatMap((shard) => shard.selectedGeneralServerSuites);
   assert.ok(!files.includes(chatSuitePath));
   assert.ok(!files.includes(nativeRunnerSuitePath));
-  assert.deepEqual([...files, chatSuitePath, nativeRunnerSuitePath].sort(), full.selectedGeneralServerSuites.sort());
+  const managed = Array.from({ length: MANAGED_NATIVE_SHARD_COUNT }, (_, index) => dryRunJson([
+    "--mode", "general", "--group", "general-server-managed-native",
+    "--shard-index", String(index), "--shard-count", String(MANAGED_NATIVE_SHARD_COUNT),
+  ], prEnv));
+  const managedFiles = managed.flatMap(shard => shard.selectedGeneralServerSuites);
+  assert.deepEqual(managedFiles.slice().sort(), managedNativeSuitePaths);
+  assert.ok(managed.every(shard => shard.selectedGeneralServerSuites.length === 1),
+    "every managed Native job must select exactly one whole file");
+  assert.ok(managedFiles.every(file => !files.includes(file)), "managed files must not run in plain PR server shards");
+  assert.deepEqual([...files, ...managedFiles, chatSuitePath, nativeRunnerSuitePath].sort(), full.selectedGeneralServerSuites.sort());
+  assert.equal(new Set([...files, ...managedFiles]).size, files.length + managedFiles.length);
   assert.equal(new Set(files).size, files.length);
   const defaultRun = dryRunJson([], prEnv);
   assert.ok(defaultRun.generalServerSuiteCount === full.generalServerSuiteCount);
@@ -297,7 +427,7 @@ test("12 PR without-chat shards plus the dedicated chat and native-runner lanes 
 // Mirrors release-verify.yml (10 shards, called by the Release and Cloud
 // readiness workflows) and local runs: no Rust-cached vitest lane exists
 // there, so the native-runner suite must stay in the server shards.
-for (const [caller, envOverrides] of [["Release", { GITHUB_WORKFLOW: "Release" }], ["no ambient workflow", {}]]) {
+for (const [caller, envOverrides] of [["Release", { GITHUB_WORKFLOW: "Release" }], ["Cloud", { GITHUB_WORKFLOW: "Cloud" }], ["renamed PR", { GITHUB_WORKFLOW: "PR renamed" }], ["no ambient workflow", {}]]) {
   test(`10 without-chat shards under ${caller} keep the native-runner suite and cover the server group with chat alone`, () => {
     const full = dryRunJson(["--mode", "general", "--group", "general-server", "--shard-index", "0", "--shard-count", "1"], envOverrides);
     const shards = Array.from({ length: 10 }, (_, index) => dryRunJson([
@@ -307,6 +437,7 @@ for (const [caller, envOverrides] of [["Release", { GITHUB_WORKFLOW: "Release" }
     const files = shards.flatMap((shard) => shard.selectedGeneralServerSuites);
     assert.ok(!files.includes(chatSuitePath));
     assert.ok(files.includes(nativeRunnerSuitePath));
+    assert.ok(managedNativeSuitePaths.every(file => files.includes(file)), "non-PR callers retain all managed Native files");
     assert.deepEqual([...files, chatSuitePath].sort(), full.selectedGeneralServerSuites.sort());
     assert.equal(new Set(files).size, files.length);
   });
@@ -427,4 +558,125 @@ test("filtered collection must match the exact assigned case identities, includi
     [expected[0], expected[1], caseAt(21, "nested > case")]]) {
     assert.throws(() => assertSelectedTests(expected, actual, lineShardFile));
   }
+});
+
+test("managed Native selection is deterministic and the unsharded named group stays exact", () => {
+  const args = ["--mode", "general", "--group", "general-server-managed-native"];
+  const full = dryRunJson(args, { GITHUB_WORKFLOW: "PR" });
+  assert.deepEqual(full.selectedGeneralServerSuites.slice().sort(), managedNativeSuitePaths);
+  for (let index = 0; index < MANAGED_NATIVE_SHARD_COUNT; index++) {
+    const shardArgs = [...args, "--shard-index", String(index), "--shard-count", String(MANAGED_NATIVE_SHARD_COUNT)];
+    assert.deepEqual(dryRunJson(shardArgs, { GITHUB_WORKFLOW: "PR" }).selectedGeneralServerSuites,
+      dryRunJson(shardArgs, { GITHUB_WORKFLOW: "PR" }).selectedGeneralServerSuites);
+  }
+});
+
+test("the PR managed Native matrix covers every dedicated shard and keeps existing bounds", () => {
+  const workflow = readFileSync(path.join(repoRoot, ".github/workflows/pr-trusted.yml"), "utf8");
+  const rows = [...workflow.matchAll(/- group: general-server-managed-native\n\s+group_label: managed Native \((\d+)\/(\d+)\)\n\s+shard_index: (\d+)\n\s+shard_count: (\d+)/g)];
+  assert.equal(rows.length, MANAGED_NATIVE_SHARD_COUNT);
+  assert.deepEqual(rows.map(row => Number(row[3])), Array.from({ length: MANAGED_NATIVE_SHARD_COUNT }, (_, index) => index));
+  assert.ok(rows.every(row => Number(row[2]) === MANAGED_NATIVE_SHARD_COUNT && Number(row[4]) === MANAGED_NATIVE_SHARD_COUNT));
+  assert.equal((workflow.match(/if: matrix.group == 'general-server-without-chat' \|\| matrix.group == 'general-server-managed-native'/g) ?? []).length, 5,
+    "both groups must use the same existing Node, pack, Chrome and sandbox prerequisites");
+});
+
+test("the managed Native execution path dispatches only its selected whole file", { skip: process.platform === "win32" }, () => {
+  const root = mkdtempSync(path.join(os.tmpdir(), "managed-native-dispatch-"));
+  const bin = path.join(root, "bin"), captured = path.join(root, "commands.jsonl");
+  mkdirSync(bin);
+  const pnpm = path.join(bin, "pnpm");
+  writeFileSync(pnpm, `#!/usr/bin/env node
+require('node:fs').appendFileSync(process.env.PNPM_CAPTURE, JSON.stringify(process.argv.slice(2)) + '\\n');
+`);
+  chmodSync(pnpm, 0o755);
+  try {
+    for (let index = 0; index < MANAGED_NATIVE_SHARD_COUNT; index++) {
+      const args = ["--mode", "general", "--group", "general-server-managed-native",
+        "--shard-index", String(index), "--shard-count", String(MANAGED_NATIVE_SHARD_COUNT)];
+      const selected = dryRunJson(args, { GITHUB_WORKFLOW: "PR" }).selectedGeneralServerSuites;
+      const result = spawnSync(process.execPath, [script, ...args], {
+        cwd: repoRoot, encoding: "utf8", env: workflowEnv({ GITHUB_WORKFLOW: "PR",
+          PATH: `${bin}${path.delimiter}${process.env.PATH ?? ""}`, PNPM_CAPTURE: captured,
+          PAPERCLIP_VITEST_REPORT_DIR: "" }),
+      });
+      assert.equal(result.status, 0, result.stderr);
+      const commands = readFileSync(captured, "utf8").trim().split("\n").map(line => JSON.parse(line));
+      assert.equal(commands.length, 1, "one Vitest invocation, no unrelated build or test command");
+      assert.ok(commands[0].includes("vitest"));
+      assert.deepEqual(commands[0].filter(value => value.endsWith(".test.ts")), selected);
+      rmSync(captured);
+    }
+  } finally { rmSync(root, { recursive: true, force: true }); }
+});
+
+test("AWV4 server jobs share the qualified Native observer installer", () => {
+  const workflow = readFileSync(path.join(repoRoot, ".github", "workflows", "aw-v4-verification.yml"), "utf8");
+  const helper = readFileSync(path.join(repoRoot, "scripts", "ci-install-managed-native-test-observers.sh"), "utf8");
+  const job = (name) => {
+    const start = workflow.indexOf(`\n  ${name}:`);
+    assert.notEqual(start, -1, `expected ${name} job`);
+    const tail = workflow.slice(start + 3);
+    const nextJob = tail.search(/\n  [a-zA-Z][\w-]*:/);
+    return workflow.slice(start, nextJob === -1 ? undefined : start + 3 + nextJob);
+  };
+  assert.match(job("tests"), /if: startsWith\(matrix\.partition, 'server-'\)[\s\S]*?run: bash scripts\/ci-install-managed-native-test-observers\.sh/);
+  assert.match(job("security-regressions"), /if: contains\(needs\.security-regression-plan\.outputs\.selected_files_json, 'server\/'\)[\s\S]*?run: bash scripts\/ci-install-managed-native-test-observers\.sh/);
+  const browserPredicate = /startsWith\("server\/src\/services\/native-runtime\/native-opencode-managed-browser"\) && value\.endsWith\("\.integration\.test\.ts"\)/;
+  assert.match(job("tests"), /Select installed Chrome for managed browser fixtures[\s\S]*?selectedGeneralServerSuites[\s\S]*?PAPERCLIP_PLAYWRIGHT_EXECUTABLE/);
+  assert.ok(browserPredicate.test(job("tests")), "AWV4 server shards select Chrome for every managed browser cohort");
+  assert.match(job("security-regressions"), /Select installed Chrome for managed browser fixtures[\s\S]*?SELECTED_FILES_JSON[\s\S]*?PAPERCLIP_PLAYWRIGHT_EXECUTABLE/);
+  assert.ok(browserPredicate.test(job("security-regressions")), "AWV4 security shards select Chrome for every managed browser cohort");
+
+  const sessionQualification = helper.lastIndexOf("scripts/fixtures/native-session-handle-observer-check.mjs");
+  const sessionFlag = helper.indexOf("PAPERCLIP_TEST_PRIVILEGED_SESSION_OBSERVER=1");
+  const socketQualification = helper.lastIndexOf("scripts/fixtures/native-model-socket-observer-check.mjs");
+  const socketFlag = helper.indexOf("PAPERCLIP_TEST_PRIVILEGED_MODEL_SOCKET_OBSERVER=1");
+  assert.match(helper, /^set -euo pipefail/m);
+  assert.ok(sessionQualification >= 0 && sessionQualification < sessionFlag,
+    "the session-observer flag follows its finite qualification control");
+  assert.ok(socketQualification >= 0 && socketQualification < socketFlag,
+    "the model-socket flag follows its owner-qualification control");
+});
+
+// Regression guard for the cancelled General tests shards (runs 43525294898,
+// 43488585377, 43412221333): a stale manifest made twelve shards look like
+// ~230s each while they really ran 17-20 minutes against a 20 minute limit.
+test("the PR general-server matrix lists exactly SHARD_COUNT shards", () => {
+  const workflow = readFileSync(path.join(repoRoot, ".github/workflows/pr-trusted.yml"), "utf8");
+  const rows = [...workflow.matchAll(/- group: general-server-without-chat\n\s+group_label: server \((\d+)\/(\d+)\)\n\s+shard_index: (\d+)\n\s+shard_count: (\d+)/g)];
+  assert.equal(rows.length, SHARD_COUNT);
+  assert.deepEqual(rows.map((row) => Number(row[3])), Array.from({ length: SHARD_COUNT }, (_, index) => index));
+  assert.ok(rows.every((row) => Number(row[2]) === SHARD_COUNT && Number(row[4]) === SHARD_COUNT));
+  assert.ok(rows.every((row, index) => Number(row[1]) === index + 1));
+});
+
+test("the PR general_tests job gives only the whole-file managed Native shards a longer timeout", () => {
+  const workflow = readFileSync(path.join(repoRoot, ".github/workflows/pr-trusted.yml"), "utf8");
+  const job = workflow.slice(workflow.indexOf("\n  general_tests:"));
+  const timeout = job.match(/\n    timeout-minutes: (.+)\n/);
+  assert.ok(timeout, "general_tests must set timeout-minutes");
+  assert.equal(
+    timeout[1],
+    "${{ matrix.group == 'general-server-managed-native' && 30 || 20 }}",
+  );
+});
+
+test("the checked-in durations keep every PR general-server shard well inside the 20 minute limit", () => {
+  const durations = loadShardDurations(durationsManifest);
+  const prEnv = { GITHUB_WORKFLOW: "PR" };
+  const files = dryRunJson(
+    ["--mode", "general", "--group", "general-server-without-chat", "--shard-index", "0", "--shard-count", "1"],
+    prEnv,
+  ).selectedGeneralServerSuites;
+  const missing = files.filter((file) => durations[file] === undefined);
+  // New suites fall back to the median weight, so a few are fine; a manifest
+  // that has lost track of most suites would silently unbalance the shards.
+  assert.ok(missing.length <= files.length * 0.1, `${missing.length} of ${files.length} suites have no recorded duration; refresh ${path.basename(durationsManifest)}`);
+  const shards = partitionGeneralServerSuites(files, SHARD_COUNT, durations);
+  // Observed job cost: ~34s setup + 1.05 x summed vitest time + ~2.9s per file.
+  const predictedSeconds = shards.map((shard) => 34 + (1.05 * shard.totalWeight) / 1000 + 2.9 * shard.files.length);
+  assert.ok(Math.max(...predictedSeconds) <= 15 * 60, `slowest predicted shard ${(Math.max(...predictedSeconds) / 60).toFixed(1)} min exceeds 15 min`);
+  const meanSeconds = predictedSeconds.reduce((a, b) => a + b, 0) / predictedSeconds.length;
+  assert.ok(Math.max(...predictedSeconds) <= meanSeconds * 1.25, "shards must stay balanced within 25% of the mean");
 });

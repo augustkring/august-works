@@ -1,0 +1,38 @@
+(!) Your Vite config uses features that are unsupported by `configLoader: 'native'`, which is planned to become the default in a future major version of Vite:
+  - `__dirname` (vitest.config.ts:7:25). Use `import.meta.dirname` instead
+Set `VITE_CONFIG_NATIVE_IGNORE_WARNING=true` to suppress this warning.
+
+ RUN  v4.1.11 /workspace/blentera-v10
+
+ ❯ |@paperclipai/server| src/__tests__/native-payload-source-binding.integration.test.ts (21 tests | 2 failed | 19 skipped) 8865ms
+     × preserves a concurrently replaced issue environment selection 243ms
+     × preserves a concurrently replaced project environment selection 33ms
+
+⎯⎯⎯⎯⎯⎯⎯ Failed Tests 2 ⎯⎯⎯⎯⎯⎯⎯
+
+ FAIL  |@paperclipai/server| src/__tests__/native-payload-source-binding.integration.test.ts > Native payload source snapshot binds its original payload owner > preserves a concurrently replaced issue environment selection
+ FAIL  |@paperclipai/server| src/__tests__/native-payload-source-binding.integration.test.ts > Native payload source snapshot binds its original payload owner > preserves a concurrently replaced project environment selection
+AssertionError: expected 1 to be +0 // Object.is equality
+
+- Expected
++ Received
+
+- 0
++ 1
+
+ ❯ src/__tests__/native-payload-source-binding.integration.test.ts:357:28
+    355|     } finally { release(); }
+    356|     await blocker;
+    357|     expect(await clearing).toBe(0);
+       |                            ^
+    358|     const [stored] = await db.execute<{ settings: unknown }>(sql`selec…
+    359|     expect(stored!.settings).toEqual(replacement);
+
+⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯[1/2]⎯
+
+
+ Test Files  1 failed (1)
+      Tests  2 failed | 19 skipped (21)
+   Start at  22:13:52
+   Duration  57.79s (transform 37.04s, setup 186ms, import 48.22s, tests 8.87s, environment 0ms)
+

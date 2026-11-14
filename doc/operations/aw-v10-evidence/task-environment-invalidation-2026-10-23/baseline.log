@@ -1,0 +1,39 @@
+(!) Your Vite config uses features that are unsupported by `configLoader: 'native'`, which is planned to become the default in a future major version of Vite:
+  - `__dirname` (vitest.config.ts:7:25). Use `import.meta.dirname` instead
+Set `VITE_CONFIG_NATIVE_IGNORE_WARNING=true` to suppress this warning.
+
+ RUN  v4.1.11 /workspace/blentera-v10
+
+ ❯ |@paperclipai/server| src/__tests__/native-payload-source-binding.integration.test.ts (9 tests | 1 failed | 8 skipped) 9853ms
+     × invalidates only the selected company's captured workspace settings when an environment is removed 202ms
+
+⎯⎯⎯⎯⎯⎯⎯ Failed Tests 1 ⎯⎯⎯⎯⎯⎯⎯
+
+ FAIL  |@paperclipai/server| src/__tests__/native-payload-source-binding.integration.test.ts > Native payload source snapshot binds its original payload owner > invalidates only the selected company's captured workspace settings when an environment is removed
+Error: Failed query: update "issues" set "execution_workspace_settings" = $1, "updated_at" = $2 where "issues"."id" = $3
+params: {"mode":"shared_workspace","environmentId":null},2026-10-23T21:01:00.834Z,5c5d4918-1ea9-4871-8ef0-e7d8e7162e43
+ ❯ PostgresJsPreparedQuery.queryWithCache ../node_modules/.pnpm/drizzle-orm@0.45.2_@opentelemetry+api@1.9.1_kysely@0.29.5_pg@8.18.0_postgres@3.4.9_patch_hash_uil4xuf7icnddjurbgy2qn5oo4/node_modules/src/pg-core/session.ts:73:10
+ ❯ Object.clearExecutionWorkspaceEnvironmentSelection src/services/issues.ts:11780:9
+    11778|         if (settings?.environmentId !== environmentId) continue;
+    11779|
+    11780|         await db
+       |         ^
+    11781|           .update(issues)
+    11782|           .set({
+ ❯ src/__tests__/native-payload-source-binding.integration.test.ts:135:12
+
+Caused by: PostgresError: Native payload source snapshot does not bind its owner and body
+ ❯ ErrorResponse ../node_modules/.pnpm/postgres@3.4.9_patch_hash=sryle6qd5qfmnxvoebal4gashi/node_modules/postgres/src/connection.js:819:30
+ ❯ handle ../node_modules/.pnpm/postgres@3.4.9_patch_hash=sryle6qd5qfmnxvoebal4gashi/node_modules/postgres/src/connection.js:493:6
+ ❯ Socket.data ../node_modules/.pnpm/postgres@3.4.9_patch_hash=sryle6qd5qfmnxvoebal4gashi/node_modules/postgres/src/connection.js:324:9
+
+⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯
+Serialized Error: { severity_local: 'ERROR', severity: 'ERROR', code: '23514', where: 'PL/pgSQL function aw_native_payload_source_binding() line 39 at RAISE', file: 'pl_exec.c', routine: 'exec_stmt_raise', query: 'update "issues" set "execution_workspace_settings" = $1, "updated_at" = $2 where "issues"."id" = $3', parameters: [ '{"mode":"shared_workspace","environmentId":null}', '2026-10-23T21:01:00.834Z', '5c5d4918-1ea9-4871-8ef0-e7d8e7162e43' ], args: [ '{"mode":"shared_workspace","environmentId":null}', '2026-10-23T21:01:00.834Z', '5c5d4918-1ea9-4871-8ef0-e7d8e7162e43' ], types: [ 3802, 1184, 2950 ] }
+⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯[1/1]⎯
+
+
+ Test Files  1 failed (1)
+      Tests  1 failed | 8 skipped (9)
+   Start at  21:00:10
+   Duration  50.84s (transform 28.06s, setup 212ms, import 40.21s, tests 9.85s, environment 0ms)
+

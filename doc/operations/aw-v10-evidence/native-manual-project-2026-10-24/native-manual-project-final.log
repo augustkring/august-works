@@ -1,0 +1,19 @@
+(!) Your Vite config uses features that are unsupported by `configLoader: 'native'`, which is planned to become the default in a future major version of Vite:
+  - `__dirname` (vitest.config.ts:7:25). Use `import.meta.dirname` instead
+Set `VITE_CONFIG_NATIVE_IGNORE_WARNING=true` to suppress this warning.
+
+ RUN  v4.1.11 /workspace/blentera-v10
+
+[09:46:50] [32mINFO[39m: [36mSetup-token login confidential transport startup assessment[39m [90m{"proxyForwardingEnabled":false,"reason":"no_proxy_allowlist_local_trusted_loopback_only","deploymentMode":"local_trusted"}[39m
+[09:46:51] [34mDEBUG[39m: [36msafe authenticated GET observed[39m [90m{"event":"safe_get_request_observed","route":"GET /api/companies/:companyId/issues","companyId":"b6b6ca03-8002-4200-9297-dd1f5e01e373","actorType":"board","actorIdentityHash":"lSgQlDSU5zdk7UV8","clientHash":"tyW0XNaQNMuB9rot","cacheKeyHash":"6DyIM5Iz79KE_sRi","queryKeys":["excludeRoutineExecutions","includeBlockedBy","includeBlockedInboxAttention","includeLiveDescendantSummary","includePluginOperations","includeRoutineExecutions","limit","offset"],"requestCount":1,"durationMs":417,"statusCode":200,"responseBytes":2538,"compressedBytes":null,"contentEncoding":null,"cacheStatus":"miss","etagOutcome":"none","referer":null,"visibilityHint":null}[39m
+[09:46:51] [32mINFO[39m: [36mSetup-token login confidential transport startup assessment[39m [90m{"proxyForwardingEnabled":false,"reason":"no_proxy_allowlist_local_trusted_loopback_only","deploymentMode":"local_trusted"}[39m
+[09:46:51] [32mINFO[39m: [36mSetup-token login confidential transport startup assessment[39m [90m{"proxyForwardingEnabled":false,"reason":"no_proxy_allowlist_local_trusted_loopback_only","deploymentMode":"local_trusted"}[39m
+[09:46:52] [32mINFO[39m: [36mSetup-token login confidential transport startup assessment[39m [90m{"proxyForwardingEnabled":false,"reason":"no_proxy_allowlist_local_trusted_loopback_only","deploymentMode":"local_trusted"}[39m
+[09:46:52] [32mINFO[39m: [36mSetup-token login confidential transport startup assessment[39m [90m{"proxyForwardingEnabled":false,"reason":"no_proxy_allowlist_local_trusted_loopback_only","deploymentMode":"local_trusted"}[39m
+[09:46:53] [32mINFO[39m: [36mSetup-token login confidential transport startup assessment[39m [90m{"proxyForwardingEnabled":false,"reason":"no_proxy_allowlist_local_trusted_loopback_only","deploymentMode":"local_trusted"}[39m
+
+ Test Files  4 passed (4)
+      Tests  59 passed (59)
+   Start at  09:45:34
+   Duration  102.03s (transform 23.03s, setup 941ms, import 51.42s, tests 48.50s, environment 1ms)
+

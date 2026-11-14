@@ -1224,3 +1224,37 @@ export function applyIssueExecutionPolicyTransition(input: TransitionInput): Tra
 export function applyIssueMonitorPolicyTransition(input: TransitionInput): TransitionResult {
   return { patch: applyMonitorTransition(input, {}) };
 }
+
+// Negation/rejection markers that invalidate an otherwise approval-looking heading.
+// Match common phrasings ("NOT APPROVED", "Do not approve", "Not approving", "Changes requested",
+// "Rejected", "Denied", "Blocked") so a reviewer comment intending to reject cannot auto-complete
+// the issue. We rely on the heading being a single line, so testing the heading text alone is safe.
+const APPROVAL_NEGATION_REGEX =
+  /\b(?:NOT|REJECT(?:ED|ING|S)?|DENY|DENIED|DENYING|BLOCK(?:ED|ING|S)?|CHANGES?\s+REQUESTED)\b/i;
+
+export function isApprovalReviewComment(body: string) {
+  const normalized = body.replace(/\r\n?/g, "\n");
+  const headingMatch = normalized.match(/(?:^|\n)##\s*Review:\s*([^\n]*)/i);
+  if (headingMatch) {
+    const headingText = headingMatch[1];
+    if (
+      /\bAPPROVED\b/i.test(headingText) &&
+      !APPROVAL_NEGATION_REGEX.test(headingText)
+    ) {
+      return true;
+    }
+  }
+  // Require the `kind: review` and `decision: approved` lines to appear on truly consecutive
+  // lines (no blank-line separation) so prose like "the previous sprint decision: approved"
+  // can't combine with an unrelated `kind: review` line elsewhere in the body to trigger
+  // auto-approval. Use `[ \t]*` between the lines so `\s*` does not silently swallow a newline.
+  return (
+    /^[ \t]*kind[ \t]*:[ \t]*review[ \t]*\n[ \t]*decision[ \t]*:[ \t]*approved[ \t]*$/im.test(
+      normalized,
+    ) ||
+    /^[ \t]*decision[ \t]*:[ \t]*approved[ \t]*\n[ \t]*kind[ \t]*:[ \t]*review[ \t]*$/im.test(
+      normalized,
+    )
+  );
+}
+

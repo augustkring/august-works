@@ -216,6 +216,7 @@ export function SearchableSelect<
           }}
           aria-expanded={open}
           role="combobox"
+          aria-label={placeholder}
           className={cn("w-full justify-between overflow-hidden", className, triggerClassName)}
         >
           <span className={cn("min-w-0 flex-1 truncate text-left", !selectedOption && "text-muted-foreground")}>

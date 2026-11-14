@@ -1,0 +1,99 @@
+{
+  "baseCommit": "886014cae5a7d6ed5a9ab99d62613ec7646308cb",
+  "qualificationWorkspace": "/workspace/v10-dep-qualification",
+  "copiedFiles": [
+    {
+      "path": ".github/docker-context-checks.Dockerfile",
+      "sha256": "8133009f5b3fc345eabdcd38a10960991ed88e3e44b1381d6b9a2e575f4076a1"
+    },
+    {
+      "path": "doc/plans/2026-10-18-blentera-v10-upstream-integration.md",
+      "sha256": "0c985a8c40fe398cd95fe1a68b344f853f55ed2139a4bacaf16f8f9424bf9567"
+    },
+    {
+      "path": "package.json",
+      "sha256": "dd176b5d872614c7269da5dc1119e8ff60522e217e842533ae10a765217283e7"
+    },
+    {
+      "path": "packages/adapters/claude-local/package.json",
+      "sha256": "22ad853fb08bfe01b1b8ee4fe73c480abb9f160a7fabe95db12e94b5e3832e90"
+    },
+    {
+      "path": "packages/paperclip-runner/package.json",
+      "sha256": "dae589d7d800bc0e063f9e77b481a2d81090c10f660d5d704c3557e73a57329a"
+    },
+    {
+      "path": "pnpm-lock.yaml",
+      "sha256": "6bce79ea6e951c5c96a0cf93b93eb3abb853495a7e38c6a6aa7633bd138b1bb2"
+    },
+    {
+      "path": "pnpm-workspace.yaml",
+      "sha256": "a710365e54bf19dc0511042cd7e7582c89491bbfb9eec657d01a5255a1c3c82e"
+    },
+    {
+      "path": "server/package.json",
+      "sha256": "302937840cc0b0ded39dbf3e2bc19444dc8f30d2528e4179cc5e072c21efad71"
+    },
+    {
+      "path": "server/src/__tests__/heartbeat-process-recovery.test.ts",
+      "sha256": "8b04a2e8d46ad3d050d01e488d88a1cb271958c9493b140112d81cb9b16e7887"
+    },
+    {
+      "path": "server/src/__tests__/helpers/managed-native-opencode-e2e-fixture.ts",
+      "sha256": "ed97f2b67f7eaf6c1fc5ba48fa1404758c7d35e716cb9a234ac8dafd60b84185"
+    },
+    {
+      "path": "server/src/__tests__/tool-access-service.test.ts",
+      "sha256": "6ff80b86d755180f606c56ab91bfc927fc0069743e6c176a532c9f12434901c7"
+    },
+    {
+      "path": "server/src/__tests__/v7-learning.integration.test.ts",
+      "sha256": "428598a9e5d7e011fad5d835074888881d1301566a9780a5838aa2b53f9bad6a"
+    },
+    {
+      "path": "server/src/services/context/context-engine.ts",
+      "sha256": "a24f5ce7bf8a591c16fcc09f505af783e39e0d0eae2bff209784fc07c2f06b36"
+    },
+    {
+      "path": "server/src/services/context/context-manifest.test.ts",
+      "sha256": "38cfa904976cfbc47fcf93452832282a24b35b209d57be8e2a68b073084656e0"
+    },
+    {
+      "path": "server/src/services/context/context-manifest.ts",
+      "sha256": "f5ca035a708ee4746105f8721c83417b03955282e9e4db88d1e57082b70680b3"
+    },
+    {
+      "path": "server/src/services/heartbeat.ts",
+      "sha256": "1466cd545a0c1c2ca587328b9f57fabc060cfe7fe62d85769780ee6172e8db7f"
+    },
+    {
+      "path": "server/src/services/knowledge/connected-knowledge.test.ts",
+      "sha256": "2ec7c3a5d5f2e6f4ebb33da5b079c7ed8a3a428d33b1cf802dbf5d53f358c63b"
+    },
+    {
+      "path": "server/src/services/native-runtime/native-execution-input.test.ts",
+      "sha256": "d503a41f88b143877acc235ebdc25cb26de5108dcc78282d667004d919c4f949"
+    },
+    {
+      "path": "server/src/services/native-runtime/native-execution-input.ts",
+      "sha256": "e54ac8d1b73a88b827285166b36709f6ebd03b58cf07c9d8419fe90d92280342"
+    },
+    {
+      "path": "server/src/services/native-runtime/native-model-input-dispatch.integration.test.ts",
+      "sha256": "c32ecd963c19372dfd0f88a49371cbbd1f173d6470f73bab409787ab4964ceb8"
+    },
+    {
+      "path": "server/src/services/native-runtime/native-opencode-managed-source.integration.test.ts",
+      "sha256": "077fb5702a3a78952714b60be96fb8f5cca280c71dfcca2be2dd670b0ec7fa70"
+    },
+    {
+      "path": "server/src/services/native-runtime/native-session-executor.ts",
+      "sha256": "2bc623007fff9b5077cb3f3512ab42691d4077468703018a6ab51a9ac433fb62"
+    },
+    {
+      "path": "ui/package.json",
+      "sha256": "5e84ab58534a6d6340b0925a7d24d35f50c21432422a44d0c22189c1aeaf834e"
+    }
+  ],
+  "limits": "Source snapshot at compiler start; other main-tree edits after capture are outside this pass. Reuses derived Rust target cache; no Rust source drift."
+}

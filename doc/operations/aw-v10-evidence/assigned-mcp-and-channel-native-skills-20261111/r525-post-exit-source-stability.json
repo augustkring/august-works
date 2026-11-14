@@ -1,0 +1,6 @@
+{
+  "headUnchanged": true,
+  "allSourceHashesUnchanged": true,
+  "allSourceMtimesUnchanged": true,
+  "scope": "r525 protected workspace typecheck input and current r526 build input; r525 build RSS-stop is not a build pass"
+}

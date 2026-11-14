@@ -1,0 +1,590 @@
+{
+  "schemaVersion": 1,
+  "kind": "Recovery only, not source activation or acceptance",
+  "sourceBaselineHead": "1c7a1cb3a61915e2c80cc47c6167ad3fedbe98f9",
+  "sourceBaseCommit": "81d3445b98b1cd80ff400ede6bd44ea71d88d735",
+  "cohorts": [
+    {
+      "name": "native-r174",
+      "capturedManifestSha256": "7006aa5a178b8e16d7b9baa2e757247f46b67d43a85303190402e314d3a88e81",
+      "changedSourcePaths": [
+        {
+          "path": "server/src/__tests__/helpers/managed-native-conversation-sandbox-host.ts",
+          "baselineSha256": "16e9c5e9d9094a245f431c4501df74a84654123284af062e9cd35ffee443cebd",
+          "candidateSha256": "ea396936ed073b05c47c6fb3428ad75a0f548abc711d138fb4552e9488dc9fc4"
+        },
+        {
+          "path": "server/src/services/native-runtime/native-opencode-managed-conversation-frame.integration.test.ts",
+          "baselineSha256": "54b9d1b1cc33797f76979adb36bedb12ac19a8ff6bb87863dd0e376ee696ba2f",
+          "candidateSha256": "24f5bce4f26219daba7bb47f2409a5ae56929a95b995131d6b18c3e20fd686ba"
+        },
+        {
+          "path": "ui/src/components/task-chat/TaskChatSystemNotice.test.tsx",
+          "baselineSha256": "22961858b5b0e869433703bb76482f178a689b011bff365064066d8eae396c73",
+          "candidateSha256": "f9ed0acd4e646ece15cebfa460c9341935b639b2b4ab7c3450dd22855d0e0588"
+        },
+        {
+          "path": "ui/src/lib/system-notice-humanizer.test.ts",
+          "baselineSha256": "987ade73c6cafc53379ef9ca488403f513739b7fdc00cee817e7592f168d1b86",
+          "candidateSha256": "78f54df481317fcdc7da63a8e7ae57f4ddba9c3e239011b6a2507ef4ad02b4e8"
+        }
+      ],
+      "qualification": "Recovery only; consult scoped receipts. Scheduler, SmokeLab, notice browsers, Host16 and full Native acceptance remain open."
+    },
+    {
+      "name": "scheduler-r5",
+      "capturedManifestSha256": "d7c214084c01cc4bec8d6a891ad70b2f5860a71949cfa03b9dacf548c969a6a2",
+      "changedSourcePaths": [
+        {
+          "path": "server/src/__tests__/heartbeat-managed-scheduler.integration.test.ts",
+          "baselineSha256": null,
+          "candidateSha256": "284efa9e6e77f8242f7afc8a6f09eff831b0bee1334ef6b6e86b5efa8d4a55fb"
+        },
+        {
+          "path": "server/src/__tests__/helpers/managed-native-conversation-sandbox-host.ts",
+          "baselineSha256": "16e9c5e9d9094a245f431c4501df74a84654123284af062e9cd35ffee443cebd",
+          "candidateSha256": "aa5f434c1045345f5925b33201969ac6dade06833c9db3d9a1f1a6c8966480e3"
+        },
+        {
+          "path": "server/src/__tests__/helpers/managed-native-heartbeat-fixture.ts",
+          "baselineSha256": null,
+          "candidateSha256": "c6c1f13b4c81a55231142cd1579f4e100c74cce79eb7eb6d9617f9b56e638371"
+        },
+        {
+          "path": "server/src/services/heartbeat.ts",
+          "baselineSha256": "2e96c2238f3aefa732745a8fbf9da91a10247cbf04ea9af686b4631d73f8141d",
+          "candidateSha256": "057981c2c67835666dba55ede274139cf4df4c0a0e6b3c98889cf1756da0fd74"
+        },
+        {
+          "path": "server/src/services/native-runtime/native-opencode-managed-conversation-frame.integration.test.ts",
+          "baselineSha256": "54b9d1b1cc33797f76979adb36bedb12ac19a8ff6bb87863dd0e376ee696ba2f",
+          "candidateSha256": "fbf7e524b5512a97fd093a8d66cdb6d1dd85fcab65fa3194a9799b26f7781405"
+        },
+        {
+          "path": "server/src/services/orchestration/native-draft-runtime.ts",
+          "baselineSha256": "dd70fb31148dd5df199597f897affe2ec487351d0b5c021b1e8371f47e58ac36",
+          "candidateSha256": "10c4fe58eb75dc2442a50559c13409c216cb2e15ce4c0618a542b12b47a2a8cf"
+        },
+        {
+          "path": "server/src/services/orchestration/worker-model-gateway.ts",
+          "baselineSha256": "3556e066742fa42fa2044fb38dab96e909296dedda3212fd0451f9421944c4f5",
+          "candidateSha256": "a09849d29591328f2ac901b3beefc85902648225953854fd2532665c3face106"
+        },
+        {
+          "path": "ui/src/components/task-chat/TaskChatSystemNotice.test.tsx",
+          "baselineSha256": "22961858b5b0e869433703bb76482f178a689b011bff365064066d8eae396c73",
+          "candidateSha256": "f9ed0acd4e646ece15cebfa460c9341935b639b2b4ab7c3450dd22855d0e0588"
+        },
+        {
+          "path": "ui/src/lib/system-notice-humanizer.test.ts",
+          "baselineSha256": "987ade73c6cafc53379ef9ca488403f513739b7fdc00cee817e7592f168d1b86",
+          "candidateSha256": "78f54df481317fcdc7da63a8e7ae57f4ddba9c3e239011b6a2507ef4ad02b4e8"
+        }
+      ],
+      "qualification": "Recovery only; consult scoped receipts. Scheduler, SmokeLab, notice browsers, Host16 and full Native acceptance remain open."
+    },
+    {
+      "name": "host-r16",
+      "capturedManifestSha256": "6b8bfe3e783c82d7fa6e8f4e607e6f7ac27dc76f8c1727b3940c5f3d6488b594",
+      "changedSourcePaths": [
+        {
+          "path": "server/src/__tests__/helpers/managed-native-conversation-sandbox-host.ts",
+          "baselineSha256": "16e9c5e9d9094a245f431c4501df74a84654123284af062e9cd35ffee443cebd",
+          "candidateSha256": "0f198ebf5e52d7b69a675d1a46e6521184a1dacae716828e42ffe9c2814430ae"
+        }
+      ],
+      "qualification": "Recovery only; consult scoped receipts. Scheduler, SmokeLab, notice browsers, Host16 and full Native acceptance remain open."
+    },
+    {
+      "name": "smoke-r2",
+      "capturedManifestSha256": "f836dcb144d426c63328d0621d5d8863cc473c7390980e952386bfb901fd0f62",
+      "changedSourcePaths": [
+        {
+          "path": "tests/e2e/smoke-lab.shared.ts",
+          "baselineSha256": "f18b576ab8ceb776553a619cf03c10faf7be71bb2b906762f1367d496c254ac3",
+          "candidateSha256": "79af1278a1a759fb1ec813c78430e569ad4edb9c7d6221c1e09467f7e5f4b161"
+        },
+        {
+          "path": "tests/e2e/smoke-lab.catalog.ts",
+          "baselineSha256": "222c5df4f5cb88ad11cd317a04432d79a6cce6759128b65682d33dacffd502e8",
+          "candidateSha256": "f6063945d010eb5c834fbcb268f51f667659dcea8eac4ddb66d2f650d9dd059f"
+        }
+      ],
+      "qualification": "Recovery only; consult scoped receipts. Scheduler, SmokeLab, notice browsers, Host16 and full Native acceptance remain open."
+    },
+    {
+      "name": "notice-e2e-r1",
+      "capturedManifestSha256": "2176a6ed1735780aa5a3556e030fe008a41550929f94dee339dfffb88e75dc49",
+      "changedSourcePaths": [
+        {
+          "path": "server/src/services/native-runtime/paid-transport-admission.ts",
+          "baselineSha256": "1352bf3437c9b622fe619cfa2d5bfe5cb5648b1f54b8f4dd41b827a6f0683a32",
+          "candidateSha256": "fe2d33847251f13660e1dc5ff471d98835322559ebef45a8a77f2829605e17d1"
+        },
+        {
+          "path": "server/src/services/recovery/stranded-notice.test.ts",
+          "baselineSha256": "795953ee26b3e3a6f7fcca74a4d071ac0f6ad4d36aa2b413518fb5da330882eb",
+          "candidateSha256": "349d11ff07877015c8d6ff46b6331496a6828d0bab3cd01bdb65c681541df24f"
+        },
+        {
+          "path": "server/src/services/recovery/stranded-notice.ts",
+          "baselineSha256": "e3d2f0cd46eda23966e845a57bdd765c503238e9aaf371a5126cd8b6bbf8db4f",
+          "candidateSha256": "714fe58ef39900f05092ff0f8320a0ac00d4969259a7ee295392baa1e94c2d29"
+        },
+        {
+          "path": "tests/e2e/acp-stop-continuation.spec.ts",
+          "baselineSha256": "bb066b7ced5d6f90798851eec9705d8385bf25afe74ce83e4615b2e125c7ad85",
+          "candidateSha256": "79f749e4cb8937e649c9b35f37f4b0b1ac45f1419277819c2135fd02522ffda7"
+        },
+        {
+          "path": "tests/e2e/composer-stop.spec.ts",
+          "baselineSha256": "c14cb70c51e2cf5678f1986fbd2b4b1b5193b8ada6db8c8774d8d0cca202f80b",
+          "candidateSha256": "12b658c847533154387282295215858afaae9f8d9820b7ecb42abf78c3df0386"
+        },
+        {
+          "path": "tests/e2e/fixtures/assert-unqualified-runtime.ts",
+          "baselineSha256": null,
+          "candidateSha256": "f7240c701ce919ad22abcab8eeddd59f17560a58276685d3bf0ba3d1d0b0d865"
+        },
+        {
+          "path": "tests/e2e/legacy-failure-continuation.spec.ts",
+          "baselineSha256": "76b07cc3e3658cd4bf4f5f11b5a9e6d0e7630c7548939f54695676dc6bff485a",
+          "candidateSha256": "0e3d955028f5c10db6f7713d624d5b165f5e1ed3f36f1f46ed5aec4aea17aab3"
+        }
+      ],
+      "qualification": "Recovery only; consult scoped receipts. Scheduler, SmokeLab, notice browsers, Host16 and full Native acceptance remain open."
+    }
+  ],
+  "entries": [
+    {
+      "source": "/workspace/v10-preparation/native-c7-original-horizon-actual-r174/source-pins.json",
+      "archivePath": "cohorts/native-r174/source-pins.json",
+      "sha256": "7006aa5a178b8e16d7b9baa2e757247f46b67d43a85303190402e314d3a88e81",
+      "bytes": 75981,
+      "mode": 384,
+      "uid": 1000,
+      "gid": 1000,
+      "mtimeNs": 1793585862007099617
+    },
+    {
+      "source": "/workspace/v10-preparation/native-c7-original-horizon-actual-r174/files/server/src/__tests__/helpers/managed-native-conversation-sandbox-host.ts",
+      "archivePath": "cohorts/native-r174/files/server/src/__tests__/helpers/managed-native-conversation-sandbox-host.ts",
+      "sha256": "ea396936ed073b05c47c6fb3428ad75a0f548abc711d138fb4552e9488dc9fc4",
+      "bytes": 227768,
+      "mode": 384,
+      "uid": 1000,
+      "gid": 1000,
+      "mtimeNs": 1793579675303785181
+    },
+    {
+      "source": "/workspace/v10-preparation/native-c7-original-horizon-actual-r174/files/server/src/services/native-runtime/native-opencode-managed-conversation-frame.integration.test.ts",
+      "archivePath": "cohorts/native-r174/files/server/src/services/native-runtime/native-opencode-managed-conversation-frame.integration.test.ts",
+      "sha256": "24f5bce4f26219daba7bb47f2409a5ae56929a95b995131d6b18c3e20fd686ba",
+      "bytes": 105503,
+      "mode": 384,
+      "uid": 1000,
+      "gid": 1000,
+      "mtimeNs": 1793585770023553764
+    },
+    {
+      "source": "/workspace/v10-preparation/native-c7-original-horizon-actual-r174/files/ui/src/components/task-chat/TaskChatSystemNotice.test.tsx",
+      "archivePath": "cohorts/native-r174/files/ui/src/components/task-chat/TaskChatSystemNotice.test.tsx",
+      "sha256": "f9ed0acd4e646ece15cebfa460c9341935b639b2b4ab7c3450dd22855d0e0588",
+      "bytes": 12075,
+      "mode": 384,
+      "uid": 1000,
+      "gid": 1000,
+      "mtimeNs": 1793536563433177295
+    },
+    {
+      "source": "/workspace/v10-preparation/native-c7-original-horizon-actual-r174/files/ui/src/lib/system-notice-humanizer.test.ts",
+      "archivePath": "cohorts/native-r174/files/ui/src/lib/system-notice-humanizer.test.ts",
+      "sha256": "78f54df481317fcdc7da63a8e7ae57f4ddba9c3e239011b6a2507ef4ad02b4e8",
+      "bytes": 7525,
+      "mode": 384,
+      "uid": 1000,
+      "gid": 1000,
+      "mtimeNs": 1793536563433307091
+    },
+    {
+      "source": "/workspace/v10-preparation/heartbeat-scheduler-managed-admission-20261102/coherent-r5/source-pins-after-host.json",
+      "archivePath": "cohorts/scheduler-r5/source-pins.json",
+      "sha256": "d7c214084c01cc4bec8d6a891ad70b2f5860a71949cfa03b9dacf548c969a6a2",
+      "bytes": 81606,
+      "mode": 384,
+      "uid": 1000,
+      "gid": 1000,
+      "mtimeNs": 1793587089588696110
+    },
+    {
+      "source": "/workspace/v10-preparation/heartbeat-scheduler-managed-admission-20261102/coherent-r5/files/server/src/__tests__/heartbeat-managed-scheduler.integration.test.ts",
+      "archivePath": "cohorts/scheduler-r5/files/server/src/__tests__/heartbeat-managed-scheduler.integration.test.ts",
+      "sha256": "284efa9e6e77f8242f7afc8a6f09eff831b0bee1334ef6b6e86b5efa8d4a55fb",
+      "bytes": 9988,
+      "mode": 384,
+      "uid": 1000,
+      "gid": 1000,
+      "mtimeNs": 1793586227277007182
+    },
+    {
+      "source": "/workspace/v10-preparation/heartbeat-scheduler-managed-admission-20261102/coherent-r5/files/server/src/__tests__/helpers/managed-native-conversation-sandbox-host.ts",
+      "archivePath": "cohorts/scheduler-r5/files/server/src/__tests__/helpers/managed-native-conversation-sandbox-host.ts",
+      "sha256": "aa5f434c1045345f5925b33201969ac6dade06833c9db3d9a1f1a6c8966480e3",
+      "bytes": 228120,
+      "mode": 384,
+      "uid": 1000,
+      "gid": 1000,
+      "mtimeNs": 1793585444338528093
+    },
+    {
+      "source": "/workspace/v10-preparation/heartbeat-scheduler-managed-admission-20261102/coherent-r5/files/server/src/__tests__/helpers/managed-native-heartbeat-fixture.ts",
+      "archivePath": "cohorts/scheduler-r5/files/server/src/__tests__/helpers/managed-native-heartbeat-fixture.ts",
+      "sha256": "c6c1f13b4c81a55231142cd1579f4e100c74cce79eb7eb6d9617f9b56e638371",
+      "bytes": 33214,
+      "mode": 384,
+      "uid": 1000,
+      "gid": 1000,
+      "mtimeNs": 1793585818993705600
+    },
+    {
+      "source": "/workspace/v10-preparation/heartbeat-scheduler-managed-admission-20261102/coherent-r5/files/server/src/services/heartbeat.ts",
+      "archivePath": "cohorts/scheduler-r5/files/server/src/services/heartbeat.ts",
+      "sha256": "057981c2c67835666dba55ede274139cf4df4c0a0e6b3c98889cf1756da0fd74",
+      "bytes": 1227837,
+      "mode": 384,
+      "uid": 1000,
+      "gid": 1000,
+      "mtimeNs": 1793585444357423223
+    },
+    {
+      "source": "/workspace/v10-preparation/heartbeat-scheduler-managed-admission-20261102/coherent-r5/files/server/src/services/native-runtime/native-opencode-managed-conversation-frame.integration.test.ts",
+      "archivePath": "cohorts/scheduler-r5/files/server/src/services/native-runtime/native-opencode-managed-conversation-frame.integration.test.ts",
+      "sha256": "fbf7e524b5512a97fd093a8d66cdb6d1dd85fcab65fa3194a9799b26f7781405",
+      "bytes": 105503,
+      "mode": 384,
+      "uid": 1000,
+      "gid": 1000,
+      "mtimeNs": 1793582020244286867
+    },
+    {
+      "source": "/workspace/v10-preparation/heartbeat-scheduler-managed-admission-20261102/coherent-r5/files/server/src/services/orchestration/native-draft-runtime.ts",
+      "archivePath": "cohorts/scheduler-r5/files/server/src/services/orchestration/native-draft-runtime.ts",
+      "sha256": "10c4fe58eb75dc2442a50559c13409c216cb2e15ce4c0618a542b12b47a2a8cf",
+      "bytes": 15323,
+      "mode": 384,
+      "uid": 1000,
+      "gid": 1000,
+      "mtimeNs": 1793585305417550485
+    },
+    {
+      "source": "/workspace/v10-preparation/heartbeat-scheduler-managed-admission-20261102/coherent-r5/files/server/src/services/orchestration/worker-model-gateway.ts",
+      "archivePath": "cohorts/scheduler-r5/files/server/src/services/orchestration/worker-model-gateway.ts",
+      "sha256": "a09849d29591328f2ac901b3beefc85902648225953854fd2532665c3face106",
+      "bytes": 175413,
+      "mode": 384,
+      "uid": 1000,
+      "gid": 1000,
+      "mtimeNs": 1793585576203847810
+    },
+    {
+      "source": "/workspace/v10-preparation/heartbeat-scheduler-managed-admission-20261102/coherent-r5/files/ui/src/components/task-chat/TaskChatSystemNotice.test.tsx",
+      "archivePath": "cohorts/scheduler-r5/files/ui/src/components/task-chat/TaskChatSystemNotice.test.tsx",
+      "sha256": "f9ed0acd4e646ece15cebfa460c9341935b639b2b4ab7c3450dd22855d0e0588",
+      "bytes": 12075,
+      "mode": 384,
+      "uid": 1000,
+      "gid": 1000,
+      "mtimeNs": 1793536563433177295
+    },
+    {
+      "source": "/workspace/v10-preparation/heartbeat-scheduler-managed-admission-20261102/coherent-r5/files/ui/src/lib/system-notice-humanizer.test.ts",
+      "archivePath": "cohorts/scheduler-r5/files/ui/src/lib/system-notice-humanizer.test.ts",
+      "sha256": "78f54df481317fcdc7da63a8e7ae57f4ddba9c3e239011b6a2507ef4ad02b4e8",
+      "bytes": 7525,
+      "mode": 384,
+      "uid": 1000,
+      "gid": 1000,
+      "mtimeNs": 1793536563433307091
+    },
+    {
+      "source": "/workspace/v10-preparation/host-runner-closure-witness-r16/source-pins.json",
+      "archivePath": "cohorts/host-r16/source-pins.json",
+      "sha256": "6b8bfe3e783c82d7fa6e8f4e607e6f7ac27dc76f8c1727b3940c5f3d6488b594",
+      "bytes": 996,
+      "mode": 384,
+      "uid": 1000,
+      "gid": 1000,
+      "mtimeNs": 1793586757252300036
+    },
+    {
+      "source": "/workspace/v10-preparation/host-runner-closure-witness-r16/files/server/src/__tests__/helpers/managed-native-conversation-sandbox-host.ts",
+      "archivePath": "cohorts/host-r16/files/server/src/__tests__/helpers/managed-native-conversation-sandbox-host.ts",
+      "sha256": "0f198ebf5e52d7b69a675d1a46e6521184a1dacae716828e42ffe9c2814430ae",
+      "bytes": 228756,
+      "mode": 384,
+      "uid": 1000,
+      "gid": 1000,
+      "mtimeNs": 1793586739194112565
+    },
+    {
+      "source": "/workspace/v10-preparation/smoke-lab-unqualified-evidence-r2/source-pins.json",
+      "archivePath": "cohorts/smoke-r2/source-pins.json",
+      "sha256": "f836dcb144d426c63328d0621d5d8863cc473c7390980e952386bfb901fd0f62",
+      "bytes": 977,
+      "mode": 384,
+      "uid": 1000,
+      "gid": 1000,
+      "mtimeNs": 1793586589809145202
+    },
+    {
+      "source": "/workspace/v10-preparation/smoke-lab-unqualified-evidence-r2/files/tests/e2e/smoke-lab.shared.ts",
+      "archivePath": "cohorts/smoke-r2/files/tests/e2e/smoke-lab.shared.ts",
+      "sha256": "79af1278a1a759fb1ec813c78430e569ad4edb9c7d6221c1e09467f7e5f4b161",
+      "bytes": 24422,
+      "mode": 384,
+      "uid": 1000,
+      "gid": 1000,
+      "mtimeNs": 1793586566229766009
+    },
+    {
+      "source": "/workspace/v10-preparation/smoke-lab-unqualified-evidence-r2/files/tests/e2e/smoke-lab.catalog.ts",
+      "archivePath": "cohorts/smoke-r2/files/tests/e2e/smoke-lab.catalog.ts",
+      "sha256": "f6063945d010eb5c834fbcb268f51f667659dcea8eac4ddb66d2f650d9dd059f",
+      "bytes": 7136,
+      "mode": 384,
+      "uid": 1000,
+      "gid": 1000,
+      "mtimeNs": 1793586568909823472
+    },
+    {
+      "source": "/workspace/v10-preparation/legacy-runtime-unavailable-e2e-20261102/source-pins.json",
+      "archivePath": "cohorts/notice-e2e-r1/source-pins.json",
+      "sha256": "2176a6ed1735780aa5a3556e030fe008a41550929f94dee339dfffb88e75dc49",
+      "bytes": 2332,
+      "mode": 384,
+      "uid": 1000,
+      "gid": 1000,
+      "mtimeNs": 1793586844519353413
+    },
+    {
+      "source": "/workspace/v10-preparation/legacy-runtime-unavailable-e2e-20261102/files/server/src/services/native-runtime/paid-transport-admission.ts",
+      "archivePath": "cohorts/notice-e2e-r1/files/server/src/services/native-runtime/paid-transport-admission.ts",
+      "sha256": "fe2d33847251f13660e1dc5ff471d98835322559ebef45a8a77f2829605e17d1",
+      "bytes": 5585,
+      "mode": 384,
+      "uid": 1000,
+      "gid": 1000,
+      "mtimeNs": 1793586438281376277
+    },
+    {
+      "source": "/workspace/v10-preparation/legacy-runtime-unavailable-e2e-20261102/files/server/src/services/recovery/stranded-notice.test.ts",
+      "archivePath": "cohorts/notice-e2e-r1/files/server/src/services/recovery/stranded-notice.test.ts",
+      "sha256": "349d11ff07877015c8d6ff46b6331496a6828d0bab3cd01bdb65c681541df24f",
+      "bytes": 12598,
+      "mode": 384,
+      "uid": 1000,
+      "gid": 1000,
+      "mtimeNs": 1793586438281605833
+    },
+    {
+      "source": "/workspace/v10-preparation/legacy-runtime-unavailable-e2e-20261102/files/server/src/services/recovery/stranded-notice.ts",
+      "archivePath": "cohorts/notice-e2e-r1/files/server/src/services/recovery/stranded-notice.ts",
+      "sha256": "714fe58ef39900f05092ff0f8320a0ac00d4969259a7ee295392baa1e94c2d29",
+      "bytes": 11879,
+      "mode": 384,
+      "uid": 1000,
+      "gid": 1000,
+      "mtimeNs": 1793586438281524090
+    },
+    {
+      "source": "/workspace/v10-preparation/legacy-runtime-unavailable-e2e-20261102/files/tests/e2e/acp-stop-continuation.spec.ts",
+      "archivePath": "cohorts/notice-e2e-r1/files/tests/e2e/acp-stop-continuation.spec.ts",
+      "sha256": "79f749e4cb8937e649c9b35f37f4b0b1ac45f1419277819c2135fd02522ffda7",
+      "bytes": 4053,
+      "mode": 384,
+      "uid": 1000,
+      "gid": 1000,
+      "mtimeNs": 1793586468052751008
+    },
+    {
+      "source": "/workspace/v10-preparation/legacy-runtime-unavailable-e2e-20261102/files/tests/e2e/composer-stop.spec.ts",
+      "archivePath": "cohorts/notice-e2e-r1/files/tests/e2e/composer-stop.spec.ts",
+      "sha256": "12b658c847533154387282295215858afaae9f8d9820b7ecb42abf78c3df0386",
+      "bytes": 6636,
+      "mode": 384,
+      "uid": 1000,
+      "gid": 1000,
+      "mtimeNs": 1793586546361248426
+    },
+    {
+      "source": "/workspace/v10-preparation/legacy-runtime-unavailable-e2e-20261102/files/tests/e2e/fixtures/assert-unqualified-runtime.ts",
+      "archivePath": "cohorts/notice-e2e-r1/files/tests/e2e/fixtures/assert-unqualified-runtime.ts",
+      "sha256": "f7240c701ce919ad22abcab8eeddd59f17560a58276685d3bf0ba3d1d0b0d865",
+      "bytes": 2247,
+      "mode": 384,
+      "uid": 1000,
+      "gid": 1000,
+      "mtimeNs": 1793586480004004534
+    },
+    {
+      "source": "/workspace/v10-preparation/legacy-runtime-unavailable-e2e-20261102/files/tests/e2e/legacy-failure-continuation.spec.ts",
+      "archivePath": "cohorts/notice-e2e-r1/files/tests/e2e/legacy-failure-continuation.spec.ts",
+      "sha256": "0e3d955028f5c10db6f7713d624d5b165f5e1ed3f36f1f46ed5aec4aea17aab3",
+      "bytes": 9320,
+      "mode": 384,
+      "uid": 1000,
+      "gid": 1000,
+      "mtimeNs": 1793586468052412007
+    },
+    {
+      "source": "/workspace/v10-preparation/root-continuation-20261101-current.md",
+      "archivePath": "records/root-continuation-20261101-current.md",
+      "sha256": "b0bd17fcf3187989132af23e6396c79cb7b7744c61e697a47d772ace98411e8a",
+      "bytes": 237869,
+      "mode": 384,
+      "uid": 1000,
+      "gid": 1000,
+      "mtimeNs": 1793587205740335318
+    },
+    {
+      "source": "/workspace/v10-preparation/authority-api-source-publication-20261102.json",
+      "archivePath": "records/authority-api-source-publication-20261102.json",
+      "sha256": "69e13b4cbb5f79f367c7c48da49f7138329e4c51f57613445e3b977106154f68",
+      "bytes": 743,
+      "mode": 384,
+      "uid": 1000,
+      "gid": 1000,
+      "mtimeNs": 1793585168334137344
+    },
+    {
+      "source": "/workspace/v10-preparation/qualified-ci-source-publication-20261102.json",
+      "archivePath": "records/qualified-ci-source-publication-20261102.json",
+      "sha256": "a58efbc0494014007b02eb6f32a324b40f44ff7619edf55adf473be36401fa29",
+      "bytes": 1102,
+      "mode": 384,
+      "uid": 1000,
+      "gid": 1000,
+      "mtimeNs": 1793585786872872727
+    },
+    {
+      "source": "/workspace/v10-preparation/native-conversation-authority-registry-r170/closed-qualification-receipt.json",
+      "archivePath": "records/native-conversation-authority-registry-r170/closed-qualification-receipt.json",
+      "sha256": "6c0b99af0d78c43143f7c6785c004ceec9c1c722757341d35a426acb644c655f",
+      "bytes": 782,
+      "mode": 384,
+      "uid": 1000,
+      "gid": 1000,
+      "mtimeNs": 1793584950424334184
+    },
+    {
+      "source": "/workspace/v10-preparation/native-conversation-authority-production-r172/qualification-r1/compiler-resource-usage.json",
+      "archivePath": "records/native-conversation-authority-production-r172/qualification-r1/compiler-resource-usage.json",
+      "sha256": "b618bdd5fb0d21e051e5c3c4365faa77c49bf2c51e20d4c2300e7b4071657690",
+      "bytes": 201,
+      "mode": 384,
+      "uid": 1000,
+      "gid": 1000,
+      "mtimeNs": 1793585488836579632
+    },
+    {
+      "source": "/workspace/v10-preparation/native-c7-original-horizon-actual-r174/closed-qualification-receipt.json",
+      "archivePath": "records/native-c7-original-horizon-actual-r174/closed-qualification-receipt.json",
+      "sha256": "3c40383d70094af8a9b5b2684c16304e87304cb2b7af59d64003e2a62286db7c",
+      "bytes": 1424,
+      "mode": 384,
+      "uid": 1000,
+      "gid": 1000,
+      "mtimeNs": 1793586708840975235
+    },
+    {
+      "source": "/workspace/v10-preparation/host-runner-closure-witness-r16-controls/control-receipt.json",
+      "archivePath": "records/host-runner-closure-witness-r16-controls/control-receipt.json",
+      "sha256": "bfb31c856dc380785e2f7e14fea8fe9ab78120d5d319e88b72e3d3484f8671fb",
+      "bytes": 926,
+      "mode": 384,
+      "uid": 1000,
+      "gid": 1000,
+      "mtimeNs": 1793586894100148728
+    },
+    {
+      "source": "/workspace/v10-preparation/host-runner-closure-witness-r16-controls/stop-receipt-start-provenance.control.mjs",
+      "archivePath": "records/host-runner-closure-witness-r16-controls/stop-receipt-start-provenance.control.mjs",
+      "sha256": "d9e5f324aa10653d66ba38f89674aacf56e6752b71d2b0e7743654af4c2d2a9d",
+      "bytes": 5331,
+      "mode": 384,
+      "uid": 1000,
+      "gid": 1000,
+      "mtimeNs": 1793586887908862009
+    },
+    {
+      "source": "/workspace/v10-preparation/tool-access-fixed-railway-test-tab-20261102/qualification-receipt.json",
+      "archivePath": "records/tool-access-fixed-railway-test-tab-20261102/qualification-receipt.json",
+      "sha256": "226b72d1df70d722e0874c20801da6a4d48991cccdc2daf180fd956c696c18df",
+      "bytes": 2704,
+      "mode": 384,
+      "uid": 1000,
+      "gid": 1000,
+      "mtimeNs": 1793585387690231890
+    },
+    {
+      "source": "/workspace/v10-preparation/ci-source-clusters-r2/qualification/three-files.receipt.json",
+      "archivePath": "records/ci-source-clusters-r2/qualification/three-files.receipt.json",
+      "sha256": "29f8bafed35d5dcb3bd0fe15264937350515ec792c64ee1a871bb44253196995",
+      "bytes": 1346,
+      "mode": 384,
+      "uid": 1000,
+      "gid": 1000,
+      "mtimeNs": 1793585242083485134
+    },
+    {
+      "source": "/workspace/v10-preparation/paid-ci-server-focused-qualification-20261102/qualification-receipt.json",
+      "archivePath": "records/paid-ci-server-focused-qualification-20261102/qualification-receipt.json",
+      "sha256": "62a3ec83c84494a50f95e2652c21ee73673e7d9e1ce9f2dde2bc2074d1b21f00",
+      "bytes": 1625,
+      "mode": 384,
+      "uid": 1000,
+      "gid": 1000,
+      "mtimeNs": 1793585154084795307
+    },
+    {
+      "source": "/workspace/v10-preparation/gemini-paid-probe-server-baseline-20261102/qualification-receipt.json",
+      "archivePath": "records/gemini-paid-probe-server-baseline-20261102/qualification-receipt.json",
+      "sha256": "272ab966c9a993b7ab6e895955341ed9be7e674b7fe3c6db28d5825e55f34810",
+      "bytes": 875,
+      "mode": 384,
+      "uid": 1000,
+      "gid": 1000,
+      "mtimeNs": 1793585655523207380
+    },
+    {
+      "source": "/workspace/v10-preparation/feedback-erasure-quality-request-20261102/qualification/receipt.json",
+      "archivePath": "records/feedback-erasure-quality-request-20261102/qualification/receipt.json",
+      "sha256": "f5274fa6663076a4678c093b731edf675987471b3038fe8464fc389df37a8716",
+      "bytes": 516,
+      "mode": 384,
+      "uid": 1000,
+      "gid": 1000,
+      "mtimeNs": 1793585694568741247
+    },
+    {
+      "source": "/workspace/v10-preparation/legacy-runtime-unavailable-e2e-20261102/notice-owner.patch",
+      "archivePath": "records/legacy-runtime-unavailable-e2e-20261102/notice-owner.patch",
+      "sha256": "3afc345e4ad89d9fe6235c9f74757e882110935e4fa1664022294c72f2ae140e",
+      "bytes": 4217,
+      "mode": 384,
+      "uid": 1000,
+      "gid": 1000,
+      "mtimeNs": 1793586844519136576
+    },
+    {
+      "source": "/workspace/v10-preparation/run-final-workspace-aggregate-20261101.sh",
+      "archivePath": "records/run-final-workspace-aggregate-20261101.sh",
+      "sha256": "c7e2cc7e533fd3f6ceae95cd3cbc488a5ceba95c10ee5309b421b8e3402917fa",
+      "bytes": 17333,
+      "mode": 448,
+      "uid": 1000,
+      "gid": 1000,
+      "mtimeNs": 1793585654260532307
+    }
+  ]
+}

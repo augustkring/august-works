@@ -1,0 +1,700 @@
+
+> paperclip@ build /workspace/blentera-v10
+> pnpm run preflight:workspace-links && pnpm -r build
+
+
+> paperclip@ preflight:workspace-links /workspace/blentera-v10
+> node cli/node_modules/tsx/dist/cli.mjs scripts/ensure-workspace-package-links.ts
+
+Scope: 35 of 36 workspace projects
+packages/google-sheets-mcp-server build$ tsc
+packages/kv-demo-mcp-server build$ tsc
+packages/paperclip-eval-kernel build$ tsc -p tsconfig.json
+packages/shared build$ tsc && mkdir -p dist/cliplab && cp src/cliplab/LICENSE src/cliplab/PROVENANCE.md dist/cliplab/
+packages/paperclip-eval-kernel build: Done
+packages/tailscale-https-broker build$ tsc && node scripts/build-native.mjs
+packages/kv-demo-mcp-server build: Done
+packages/teams-catalog build$ pnpm run build:manifest && tsc -p tsconfig.json
+packages/teams-catalog build: > @paperclipai/teams-catalog@0.1.0 build:manifest /workspace/blentera-v10/packages/teams-catalog
+packages/teams-catalog build: > node ../../cli/node_modules/tsx/dist/cli.mjs scripts/build-catalog-manifest.ts
+packages/tailscale-https-broker build: Done
+packages/teams-catalog build: Wrote 4 teams to generated/catalog.json
+packages/teams-catalog build: Done
+packages/google-sheets-mcp-server build: Done
+packages/shared build: Done
+packages/adapter-utils build$ tsc
+packages/db build$ pnpm run check:migrations && tsc && rm -rf dist/migrations && mkdir -p dist/migrations/meta && cp src/migrations/*.sql dist/migrations/ && cp src/migrations/meta/_journal.json dist/migrations/meta/
+packages/mcp-server build$ tsc
+packages/paperclip-runner build$ pnpm run check:protocol-manifest && pnpm run build:typescript && pnpm run check:capability-contract && pnpm run check:capability-inventory && pnpm run check:protocol-coverage && pnpm run check:semantic-contracts && pnpm run check:runner-workflow-traceability && pnpm run build:binary && node scripts/generate-replay-goldens.mjs --check && node scripts/generate-semantic-action-catalog.mjs --check
+packages/paperclip-runner build: > @paperclipai/paperclip-runner@0.0.0 check:protocol-manifest /workspace/blentera-v10/packages/paperclip-runner
+packages/paperclip-runner build: > node scripts/generate-protocol-manifest.mjs --check
+packages/db build: > @paperclipai/db@0.3.1 check:migrations /workspace/blentera-v10/packages/db
+packages/db build: > tsx src/check-migration-numbering.ts && tsx src/check-migration-safety.ts
+packages/paperclip-runner build: The generated PRP contract manifest matches its sources.
+packages/db build: Migration safety check passed: 20 historical finding(s) covered by baseline (1 stale baseline id(s) ignored).
+packages/paperclip-runner build: > @paperclipai/paperclip-runner@0.0.0 build:typescript /workspace/blentera-v10/packages/paperclip-runner
+packages/paperclip-runner build: > pnpm run ensure:eval-build-deps && pnpm run check:protocol-types && node ./node_modules/typescript/bin/tsc --version && node ./node_modules/typescript/bin/tsc -p tsconfig.json && node ./node_modules/typescript/bin/tsc -p tsconfig.surfaces.json && node scripts/build-verified-provider-entrypoints.mjs
+packages/paperclip-runner build: > @paperclipai/paperclip-runner@0.0.0 ensure:eval-build-deps /workspace/blentera-v10/packages/paperclip-runner
+packages/paperclip-runner build: > pnpm --filter @paperclipai/paperclip-eval-kernel build
+packages/paperclip-runner build: > @paperclipai/paperclip-eval-kernel@0.1.0 build /workspace/blentera-v10/packages/paperclip-eval-kernel
+packages/paperclip-runner build: > tsc -p tsconfig.json
+packages/mcp-server build: Done
+packages/plugins/sdk build$ pnpm --filter @paperclipai/shared build && tsc
+packages/paperclip-runner build: > @paperclipai/paperclip-runner@0.0.0 check:protocol-types /workspace/blentera-v10/packages/paperclip-runner
+packages/paperclip-runner build: > node scripts/generate-protocol-schema-module.mjs --check && node scripts/generate-acpx-sidecar-contract.mjs --check
+packages/plugins/sdk build: > @paperclipai/shared@0.3.1 build /workspace/blentera-v10/packages/shared
+packages/plugins/sdk build: > tsc && mkdir -p dist/cliplab && cp src/cliplab/LICENSE src/cliplab/PROVENANCE.md dist/cliplab/
+packages/paperclip-runner build: Generated PRP schema modules match the JSON Schema sources.
+packages/paperclip-runner build: Generated TypeScript/Rust ACPX sidecar contracts match the schema.
+packages/paperclip-runner build: Version 7.0.2
+packages/adapter-utils build: Done
+packages/skills-catalog build$ pnpm run build:manifest && tsc -p tsconfig.json
+packages/skills-catalog build: > @paperclipai/skills-catalog@0.3.1 build:manifest /workspace/blentera-v10/packages/skills-catalog
+packages/skills-catalog build: > node ../../cli/node_modules/tsx/dist/cli.mjs scripts/build-catalog-manifest.ts
+packages/paperclip-runner build: > @paperclipai/paperclip-runner@0.0.0 check:capability-contract /workspace/blentera-v10/packages/paperclip-runner
+packages/paperclip-runner build: > node scripts/generate-capability-contract.mjs --check
+packages/plugins/sdk build: Done
+packages/paperclip-runner build: > @paperclipai/paperclip-runner@0.0.0 check:capability-inventory /workspace/blentera-v10/packages/paperclip-runner
+packages/paperclip-runner build: > node scripts/check-capability-inventory.mjs
+packages/paperclip-runner build: Capability inventory completeness and generated-output checks passed.
+packages/paperclip-runner build: > @paperclipai/paperclip-runner@0.0.0 check:protocol-coverage /workspace/blentera-v10/packages/paperclip-runner
+packages/paperclip-runner build: > node scripts/generate-protocol-coverage.mjs --check
+packages/paperclip-runner build: > @paperclipai/paperclip-runner@0.0.0 check:semantic-contracts /workspace/blentera-v10/packages/paperclip-runner
+packages/paperclip-runner build: > pnpm run build:typescript && node scripts/generate-semantic-contracts.mjs --check
+packages/paperclip-runner build: > @paperclipai/paperclip-runner@0.0.0 build:typescript /workspace/blentera-v10/packages/paperclip-runner
+packages/paperclip-runner build: > pnpm run ensure:eval-build-deps && pnpm run check:protocol-types && node ./node_modules/typescript/bin/tsc --version && node ./node_modules/typescript/bin/tsc -p tsconfig.json && node ./node_modules/typescript/bin/tsc -p tsconfig.surfaces.json && node scripts/build-verified-provider-entrypoints.mjs
+packages/paperclip-runner build: > @paperclipai/paperclip-runner@0.0.0 ensure:eval-build-deps /workspace/blentera-v10/packages/paperclip-runner
+packages/paperclip-runner build: > pnpm --filter @paperclipai/paperclip-eval-kernel build
+packages/paperclip-runner build: > @paperclipai/paperclip-eval-kernel@0.1.0 build /workspace/blentera-v10/packages/paperclip-eval-kernel
+packages/paperclip-runner build: > tsc -p tsconfig.json
+packages/paperclip-runner build: > @paperclipai/paperclip-runner@0.0.0 check:protocol-types /workspace/blentera-v10/packages/paperclip-runner
+packages/paperclip-runner build: > node scripts/generate-protocol-schema-module.mjs --check && node scripts/generate-acpx-sidecar-contract.mjs --check
+packages/paperclip-runner build: Generated PRP schema modules match the JSON Schema sources.
+packages/paperclip-runner build: Generated TypeScript/Rust ACPX sidecar contracts match the schema.
+packages/paperclip-runner build: Version 7.0.2
+packages/db build: Done
+packages/skills-catalog build: Wrote generated/catalog.json with 17 catalog skills.
+packages/paperclip-runner build: > @paperclipai/paperclip-runner@0.0.0 check:runner-workflow-traceability /workspace/blentera-v10/packages/paperclip-runner
+packages/paperclip-runner build: > pnpm run build:typescript && node scripts/check-runner-workflow-traceability.mjs
+packages/paperclip-runner build: > @paperclipai/paperclip-runner@0.0.0 build:typescript /workspace/blentera-v10/packages/paperclip-runner
+packages/paperclip-runner build: > pnpm run ensure:eval-build-deps && pnpm run check:protocol-types && node ./node_modules/typescript/bin/tsc --version && node ./node_modules/typescript/bin/tsc -p tsconfig.json && node ./node_modules/typescript/bin/tsc -p tsconfig.surfaces.json && node scripts/build-verified-provider-entrypoints.mjs
+packages/skills-catalog build: Done
+packages/paperclip-runner build: > @paperclipai/paperclip-runner@0.0.0 ensure:eval-build-deps /workspace/blentera-v10/packages/paperclip-runner
+packages/paperclip-runner build: > pnpm --filter @paperclipai/paperclip-eval-kernel build
+packages/paperclip-runner build: > @paperclipai/paperclip-eval-kernel@0.1.0 build /workspace/blentera-v10/packages/paperclip-eval-kernel
+packages/paperclip-runner build: > tsc -p tsconfig.json
+packages/paperclip-runner build: > @paperclipai/paperclip-runner@0.0.0 check:protocol-types /workspace/blentera-v10/packages/paperclip-runner
+packages/paperclip-runner build: > node scripts/generate-protocol-schema-module.mjs --check && node scripts/generate-acpx-sidecar-contract.mjs --check
+packages/paperclip-runner build: Generated PRP schema modules match the JSON Schema sources.
+packages/paperclip-runner build: Generated TypeScript/Rust ACPX sidecar contracts match the schema.
+packages/paperclip-runner build: Version 7.0.2
+packages/paperclip-runner build: Runner stress traceability passed: 44 findings, 12 workflows, 1 explicit exclusion.
+packages/paperclip-runner build: > @paperclipai/paperclip-runner@0.0.0 build:binary /workspace/blentera-v10/packages/paperclip-runner
+packages/paperclip-runner build: > cargo build --release --manifest-path runner/Cargo.toml --locked -p paperclip-runner-core --bin paperclip-runnerd && node scripts/stage-runner-binary.mjs
+packages/paperclip-runner build: warning: unused imports: `OpenOptions` and `self`
+packages/paperclip-runner build:  --> crates/runner-core/src/process_supervisor.rs:3:15
+packages/paperclip-runner build:   |
+packages/paperclip-runner build: 3 | use std::fs::{self, File, OpenOptions};
+packages/paperclip-runner build:   |               ^^^^        ^^^^^^^^^^^
+packages/paperclip-runner build:   |
+packages/paperclip-runner build:   = note: `#[warn(unused_imports)]` (part of `#[warn(unused)]`) on by default
+packages/paperclip-runner build: warning: variable does not need to be mutable
+packages/paperclip-runner build:    --> crates/runner-core/src/process_supervisor.rs:709:17
+packages/paperclip-runner build:     |
+packages/paperclip-runner build: 709 |             let mut inherited = launch.inherited_command()?;
+packages/paperclip-runner build:     |                 ----^^^^^^^^^
+packages/paperclip-runner build:     |                 |
+packages/paperclip-runner build:     |                 help: remove this `mut`
+packages/paperclip-runner build:     |
+packages/paperclip-runner build:     = note: `#[warn(unused_mut)]` (part of `#[warn(unused)]`) on by default
+packages/paperclip-runner build: warning: variable does not need to be mutable
+packages/paperclip-runner build:    --> crates/runner-core/src/process_supervisor.rs:710:17
+packages/paperclip-runner build:     |
+packages/paperclip-runner build: 710 |             let mut result = Self::spawn_command(
+packages/paperclip-runner build:     |                 ----^^^^^^
+packages/paperclip-runner build:     |                 |
+packages/paperclip-runner build:     |                 help: remove this `mut`
+packages/paperclip-runner build: warning: fields `config` and `system_instructions` are never read
+packages/paperclip-runner build:     --> crates/runner-core/src/claude_managed_provider.rs:1248:5
+packages/paperclip-runner build:      |
+packages/paperclip-runner build: 1232 | pub struct ClaudeManagedProvider {
+packages/paperclip-runner build:      |            --------------------- fields in this struct
+packages/paperclip-runner build: ...
+packages/paperclip-runner build: 1248 |     config: ClaudeManagedProviderConfig,
+packages/paperclip-runner build:      |     ^^^^^^
+packages/paperclip-runner build: 1249 |     system_instructions: String,
+packages/paperclip-runner build:      |     ^^^^^^^^^^^^^^^^^^^
+packages/paperclip-runner build:      |
+packages/paperclip-runner build:      = note: `#[warn(dead_code)]` (part of `#[warn(unused)]`) on by default
+packages/paperclip-runner build: warning: function `receive_plain` is never used
+packages/paperclip-runner build:     --> crates/runner-core/src/durable/transport.rs:1545:4
+packages/paperclip-runner build:      |
+packages/paperclip-runner build: 1545 | fn receive_plain(
+packages/paperclip-runner build:      |    ^^^^^^^^^^^^^
+packages/paperclip-runner build: warning: function `validate_tool_result_contract` is never used
+packages/paperclip-runner build:     --> crates/runner-core/src/provider_bridge.rs:1043:4
+packages/paperclip-runner build:      |
+packages/paperclip-runner build: 1043 | fn validate_tool_result_contract(
+packages/paperclip-runner build:      |    ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+packages/paperclip-runner build: warning: `paperclip-runner-core` (lib) generated 6 warnings (run `cargo fix --lib -p paperclip-runner-core` to apply 3 suggestions)
+packages/paperclip-runner build:     Finished `release` profile [optimized] target(s) in 0.16s
+packages/paperclip-runner build: Replay golden snapshots and parity summaries are current.
+packages/paperclip-runner build: Done
+packages/adapters/claude-local build$ tsc
+packages/adapters/codex-local build$ tsc && cp src/server/codex-auth-merge-decision.cjs src/server/codex-auth-merge-extract.sh dist/server/
+packages/adapters/cursor-cloud build$ tsc
+packages/adapters/cursor-local build$ tsc
+packages/adapters/cursor-cloud build: Done
+packages/adapters/gemini-local build$ tsc
+packages/adapters/codex-local build: Done
+packages/adapters/grok-local build$ tsc && cp src/server/grok-auth-merge-decision.cjs dist/server/
+packages/adapters/cursor-local build: Done
+packages/adapters/claude-local build: Done
+packages/adapters/hermes build$ tsc
+packages/adapters/kimi-local build$ tsc
+packages/adapters/grok-local build: Done
+packages/adapters/openclaw-gateway build$ tsc
+packages/adapters/hermes build: Done
+packages/adapters/opencode-local build$ tsc
+packages/adapters/kimi-local build: Done
+packages/adapters/pi-local build$ tsc
+packages/adapters/gemini-local build: Done
+packages/plugins/create-paperclip-plugin build$ tsc
+packages/plugins/create-paperclip-plugin build: Done
+.../plugin-authoring-smoke-example prebuild$ pnpm --filter @paperclipai/plugin-sdk ensure-build-deps
+packages/adapters/openclaw-gateway build: Done
+.../examples/plugin-file-browser-example prebuild$ pnpm --filter @paperclipai/plugin-sdk ensure-build-deps
+.../plugin-authoring-smoke-example prebuild: > @paperclipai/plugin-sdk@1.0.0 ensure-build-deps /workspace/blentera-v10/packages/plugins/sdk
+.../plugin-authoring-smoke-example prebuild: > node ../../../scripts/ensure-plugin-build-deps.mjs
+.../plugin-authoring-smoke-example prebuild: Done
+.../plugin-authoring-smoke-example build$ node ./esbuild.config.mjs
+.../examples/plugin-file-browser-example prebuild: > @paperclipai/plugin-sdk@1.0.0 ensure-build-deps /workspace/blentera-v10/packages/plugins/sdk
+.../examples/plugin-file-browser-example prebuild: > node ../../../scripts/ensure-plugin-build-deps.mjs
+.../plugin-authoring-smoke-example build: Done
+.../examples/plugin-hello-world-example prebuild$ pnpm --filter @paperclipai/plugin-sdk ensure-build-deps
+.../examples/plugin-file-browser-example prebuild: Done
+.../examples/plugin-file-browser-example build$ tsc && node ./scripts/build-ui.mjs
+packages/adapters/opencode-local build: Done
+.../examples/plugin-kitchen-sink-example prebuild$ pnpm --filter @paperclipai/plugin-sdk ensure-build-deps
+.../examples/plugin-hello-world-example prebuild: > @paperclipai/plugin-sdk@1.0.0 ensure-build-deps /workspace/blentera-v10/packages/plugins/sdk
+.../examples/plugin-hello-world-example prebuild: > node ../../../scripts/ensure-plugin-build-deps.mjs
+.../examples/plugin-hello-world-example prebuild: Done
+.../examples/plugin-hello-world-example build$ tsc
+.../examples/plugin-kitchen-sink-example prebuild: > @paperclipai/plugin-sdk@1.0.0 ensure-build-deps /workspace/blentera-v10/packages/plugins/sdk
+.../examples/plugin-kitchen-sink-example prebuild: > node ../../../scripts/ensure-plugin-build-deps.mjs
+.../examples/plugin-kitchen-sink-example prebuild: Done
+.../examples/plugin-kitchen-sink-example build$ tsc && node ./scripts/build-ui.mjs
+packages/adapters/pi-local build: Done
+.../paperclip-plugin-fake-sandbox prebuild$ pnpm --filter @paperclipai/plugin-sdk ensure-build-deps
+.../paperclip-plugin-fake-sandbox prebuild: > @paperclipai/plugin-sdk@1.0.0 ensure-build-deps /workspace/blentera-v10/packages/plugins/sdk
+.../paperclip-plugin-fake-sandbox prebuild: > node ../../../scripts/ensure-plugin-build-deps.mjs
+.../paperclip-plugin-fake-sandbox prebuild: Done
+.../paperclip-plugin-fake-sandbox build$ tsc
+.../examples/plugin-file-browser-example build:   dist/ui/index.js      961.9kb
+.../examples/plugin-file-browser-example build:   dist/ui/index.js.map    2.0mb
+.../examples/plugin-file-browser-example build: ⚡ Done in 288ms
+.../examples/plugin-file-browser-example build: Done
+packages/plugins/plugin-llm-wiki prebuild$ pnpm --filter @paperclipai/plugin-sdk ensure-build-deps
+packages/plugins/plugin-llm-wiki prebuild: > @paperclipai/plugin-sdk@1.0.0 ensure-build-deps /workspace/blentera-v10/packages/plugins/sdk
+packages/plugins/plugin-llm-wiki prebuild: > node ../../../scripts/ensure-plugin-build-deps.mjs
+.../examples/plugin-hello-world-example build: Done
+packages/plugins/plugin-workspace-diff prebuild$ pnpm --filter @paperclipai/plugin-sdk ensure-build-deps
+packages/plugins/plugin-llm-wiki prebuild: Done
+packages/plugins/plugin-llm-wiki build$ node ./esbuild.config.mjs
+packages/plugins/plugin-llm-wiki build: Done
+packages/plugins/plugin-workspace-diff prebuild: > @paperclipai/plugin-sdk@1.0.0 ensure-build-deps /workspace/blentera-v10/packages/plugins/sdk
+packages/plugins/plugin-workspace-diff prebuild: > node ../../../scripts/ensure-plugin-build-deps.mjs
+packages/plugins/plugin-workspace-diff prebuild: Done
+packages/plugins/plugin-workspace-diff build$ tsc && node ./scripts/build-ui.mjs
+.../examples/plugin-kitchen-sink-example build:   dist/ui/index.js      111.2kb
+.../examples/plugin-kitchen-sink-example build:   dist/ui/index.js.map  176.5kb
+.../examples/plugin-kitchen-sink-example build: ⚡ Done in 55ms
+.../examples/plugin-kitchen-sink-example build: Done
+.../paperclip-plugin-fake-sandbox build: Done
+packages/plugins/plugin-workspace-diff build:   dist/ui/index.js      10.9mb ⚠️
+packages/plugins/plugin-workspace-diff build:   dist/ui/index.js.map  14.5mb
+packages/plugins/plugin-workspace-diff build: ⚡ Done in 433ms
+packages/plugins/plugin-workspace-diff build: Done
+packages/adapters/hermes-gateway build$ tsc
+server build$ pnpm run prepare:runner-vendor && node scripts/verify-runner-vendor-dependencies.mjs && tsc --singleThreaded && mkdir -p dist/onboarding-assets dist/built-ins dist/services/scripts dist/vendor/paperclip-runner && cp -R src/onboarding-assets/. dist/onboarding-assets/ && cp -R src/built-ins/. dist/built-ins/ && cp -R src/services/scripts/. dist/services/scripts/ && cp -R ../packages/paperclip-runner/dist/. dist/vendor/paperclip-runner/ && node scripts/write-build-stamp.mjs
+ui build$ vite build
+ui build: (!) Your Vite config uses features that are unsupported by `configLoader: 'native'`, which is planned to become the default in a future major version of Vite:
+ui build:   - `__dirname` (vite.config.ts:15:30). Use `import.meta.dirname` instead
+ui build:   - import "./src/lib/vite-watch" without a file extension (vite.config.ts:5:41). Add the file extension
+ui build:   - import "./src/lib/vite-api-proxy" without a file extension (vite.config.ts:6:32). Add the file extension
+ui build:   - import "./src/lib/vite-sw-build-id" without a file extension (vite.config.ts:7:44). Add the file extension
+ui build:   - import "./src/lib/vite-build-commit" without a file extension (vite.config.ts:8:40). Add the file extension
+ui build: Set `VITE_CONFIG_NATIVE_IGNORE_WARNING=true` to suppress this warning.
+ui build: Both esbuild and oxc options were set. oxc options will be used and esbuild options will be ignored. The following esbuild options were set: `{
+ui build:   keepNames: true,
+ui build:   drop: [ 'console', 'debugger' ],
+ui build:   legalComments: 'none'
+ui build: }`
+ui build: vite v8.2.2 building client environment for production...
+ui build: transforming...
+server build: > @paperclipai/server@0.3.1 prepare:runner-vendor /workspace/blentera-v10/server
+server build: > pnpm --filter @paperclipai/paperclip-runner build
+server build: > @paperclipai/paperclip-runner@0.0.0 build /workspace/blentera-v10/packages/paperclip-runner
+server build: > pnpm run check:protocol-manifest && pnpm run build:typescript && pnpm run check:capability-contract && pnpm run check:capability-inventory && pnpm run check:protocol-coverage && pnpm run check:semantic-contracts && pnpm run check:runner-workflow-traceability && pnpm run build:binary && node scripts/generate-replay-goldens.mjs --check && node scripts/generate-semantic-action-catalog.mjs --check
+ui build: Found 4 warnings while optimizing generated CSS:
+ui build: Issue #1:
+ui build: [2m│   background-color: var(--streamlined-task-detail-bg);[22m
+ui build: [2m│ }[22m
+ui build: [2m│[22m ::highlight(paperclip-doc-annotation-open) {
+ui build: [2m┆[22m             [33m[2m^--[22m 'highlight' is not recognized as a valid pseudo-element. Did you mean ':highlight' (pseudo-class) or is this a typo?[39m
+ui build: [2m┆[22m
+ui build: [2m│   background-color: transparent;[22m
+ui build: [2m│   color: inherit;[22m
+ui build: Issue #2:
+ui build: [2m│   color: inherit;[22m
+ui build: [2m│ }[22m
+ui build: [2m│[22m ::highlight(paperclip-doc-annotation-focused) {
+ui build: [2m┆[22m             [33m[2m^--[22m 'highlight' is not recognized as a valid pseudo-element. Did you mean ':highlight' (pseudo-class) or is this a typo?[39m
+ui build: [2m┆[22m
+ui build: [2m│   background-color: transparent;[22m
+ui build: [2m│   color: inherit;[22m
+ui build: Issue #3:
+ui build: [2m│   color: inherit;[22m
+ui build: [2m│ }[22m
+ui build: [2m│[22m ::highlight(paperclip-doc-annotation-stale) {
+ui build: [2m┆[22m             [33m[2m^--[22m 'highlight' is not recognized as a valid pseudo-element. Did you mean ':highlight' (pseudo-class) or is this a typo?[39m
+ui build: [2m┆[22m
+ui build: [2m│   background-color: transparent;[22m
+ui build: [2m│   color: inherit;[22m
+ui build: Issue #4:
+ui build: [2m│   color: inherit;[22m
+ui build: [2m│ }[22m
+ui build: [2m│[22m ::highlight(paperclip-doc-annotation-resolved) {
+ui build: [2m┆[22m             [33m[2m^--[22m 'highlight' is not recognized as a valid pseudo-element. Did you mean ':highlight' (pseudo-class) or is this a typo?[39m
+ui build: [2m┆[22m
+ui build: [2m│   background-color: transparent;[22m
+ui build: [2m│   color: inherit;[22m
+ui build: ✓ 8022 modules transformed.
+server build: > @paperclipai/paperclip-runner@0.0.0 check:protocol-manifest /workspace/blentera-v10/packages/paperclip-runner
+server build: > node scripts/generate-protocol-manifest.mjs --check
+server build: The generated PRP contract manifest matches its sources.
+server build: > @paperclipai/paperclip-runner@0.0.0 build:typescript /workspace/blentera-v10/packages/paperclip-runner
+server build: > pnpm run ensure:eval-build-deps && pnpm run check:protocol-types && node ./node_modules/typescript/bin/tsc --version && node ./node_modules/typescript/bin/tsc -p tsconfig.json && node ./node_modules/typescript/bin/tsc -p tsconfig.surfaces.json && node scripts/build-verified-provider-entrypoints.mjs
+packages/adapters/hermes-gateway build: Done
+ui build: rendering chunks...
+server build: > @paperclipai/paperclip-runner@0.0.0 ensure:eval-build-deps /workspace/blentera-v10/packages/paperclip-runner
+server build: > pnpm --filter @paperclipai/paperclip-eval-kernel build
+server build: > @paperclipai/paperclip-eval-kernel@0.1.0 build /workspace/blentera-v10/packages/paperclip-eval-kernel
+server build: > tsc -p tsconfig.json
+server build: > @paperclipai/paperclip-runner@0.0.0 check:protocol-types /workspace/blentera-v10/packages/paperclip-runner
+server build: > node scripts/generate-protocol-schema-module.mjs --check && node scripts/generate-acpx-sidecar-contract.mjs --check
+server build: Generated PRP schema modules match the JSON Schema sources.
+server build: Generated TypeScript/Rust ACPX sidecar contracts match the schema.
+server build: Version 7.0.2
+ui build: computing gzip size...
+ui build: dist/index.html                                             9.19 kB │ gzip:     2.68 kB
+ui build: dist/assets/index-VkiVeol7.css                            531.78 kB │ gzip:    76.03 kB
+ui build: dist/assets/Costs.production-C9QqTXBy.js                    0.06 kB │ gzip:     0.07 kB
+ui build: dist/assets/treemap-WGGIJYW6-DNWYF4zd.js                    0.12 kB │ gzip:     0.13 kB
+ui build: dist/assets/pie-WAS4IAKB-CP_gIBKD.js                        0.12 kB │ gzip:     0.13 kB
+ui build: dist/assets/info-A6RAGUB7-DP8pqSDg.js                       0.12 kB │ gzip:     0.13 kB
+ui build: dist/assets/radar-RG4KPBEZ-DbvKbV6l.js                      0.12 kB │ gzip:     0.13 kB
+ui build: dist/assets/packet-AYTQ26CC-DHxu-C4z.js                     0.12 kB │ gzip:     0.13 kB
+ui build: dist/assets/cynefin-OW5HDTMX-SmJ8tLYh.js                    0.12 kB │ gzip:     0.13 kB
+ui build: dist/assets/wardley-WFR3VGLG-C18JBEVS.js                    0.12 kB │ gzip:     0.13 kB
+ui build: dist/assets/gitGraph-4MIJSDKK-SUTvd_QT.js                   0.12 kB │ gzip:     0.13 kB
+ui build: dist/assets/railroad-74A4TZTK-BPHjMWIu.js                   0.12 kB │ gzip:     0.13 kB
+ui build: dist/assets/treeView-Q6P3EWNA-CzxfDhvq.js                   0.12 kB │ gzip:     0.13 kB
+ui build: dist/assets/railroad-peg-WCYAUIDC-0bHp9JB9.js               0.13 kB │ gzip:     0.13 kB
+ui build: dist/assets/architecture-7GRP2DOG-B-bRgmfI.js               0.13 kB │ gzip:     0.13 kB
+ui build: dist/assets/railroad-abnf-HS5TGJTU-DKY8xCGL.js              0.13 kB │ gzip:     0.13 kB
+ui build: dist/assets/railroad-ebnf-LZEXJU2U-DK75GN4x.js              0.13 kB │ gzip:     0.13 kB
+ui build: dist/assets/eventmodeling-NTZA5JFV-CCSRuDgA.js              0.13 kB │ gzip:     0.13 kB
+ui build: dist/assets/check-B2kzfU5I.js                               0.13 kB │ gzip:     0.14 kB
+ui build: dist/assets/chevron-down-BAZEzPnm.js                        0.13 kB │ gzip:     0.14 kB
+ui build: dist/assets/chevron-right-C34Z0wIX.js                       0.14 kB │ gzip:     0.14 kB
+ui build: dist/assets/loader-circle-DjBris5x.js                       0.15 kB │ gzip:     0.16 kB
+ui build: dist/assets/x-CFAm7fKQ.js                                   0.16 kB │ gzip:     0.15 kB
+ui build: dist/assets/clock-CAxJ66sQ.js                               0.17 kB │ gzip:     0.17 kB
+ui build: dist/assets/channel-B3VoVDQm.js                             0.20 kB │ gzip:     0.19 kB
+ui build: dist/assets/array-CL5Tisss.js                               0.21 kB │ gzip:     0.18 kB
+ui build: dist/assets/init-BXPE0p7i.js                                0.23 kB │ gzip:     0.19 kB
+ui build: dist/assets/chunk-Y2CYZVJY-OvsAdhaO.js                      0.26 kB │ gzip:     0.17 kB
+ui build: dist/assets/external-link-ut_ql3lY.js                       0.26 kB │ gzip:     0.20 kB
+ui build: dist/assets/chunk-XXDRQBXY-ChU1SbwH.js                      0.29 kB │ gzip:     0.24 kB
+ui build: dist/assets/chunk-2Q5K7J3B-CkPHWFj-.js                      0.30 kB │ gzip:     0.22 kB
+ui build: dist/assets/Agents.production-B3GANpIp.js                   0.31 kB │ gzip:     0.25 kB
+ui build: dist/assets/CompanySkills.production-CONlGDtx.js            0.33 kB │ gzip:     0.25 kB
+ui build: dist/assets/chunk-JWPE2WC7--HEGjv3t.js                      0.33 kB │ gzip:     0.23 kB
+ui build: dist/assets/bot-CfWvaOKs.js                                 0.33 kB │ gzip:     0.23 kB
+ui build: dist/assets/chunk-5VM5RSS4-2H3r6wq0.js                      0.36 kB │ gzip:     0.27 kB
+ui build: dist/assets/diff-C60bAYOU.js                                0.39 kB │ gzip:     0.29 kB
+ui build: dist/assets/useIsFetching-CX5N8w6L.js                       0.40 kB │ gzip:     0.31 kB
+ui build: dist/assets/octagon-alert-DR3umtWu.js                       0.43 kB │ gzip:     0.26 kB
+ui build: dist/assets/partial-XjNoEfqo.js                             0.49 kB │ gzip:     0.30 kB
+ui build: dist/assets/flowDiagram-HODETNUW-BVj979Ia.js                0.57 kB │ gzip:     0.31 kB
+ui build: dist/assets/chunk-POPQ4Y6H-CVKEtytG.js                      0.58 kB │ gzip:     0.40 kB
+ui build: dist/assets/infoDiagram-27XIBGKW-B9Ate4Az.js                0.65 kB │ gzip:     0.42 kB
+ui build: dist/assets/brainfuck-NEHkmXMc.js                           0.70 kB │ gzip:     0.38 kB
+ui build: dist/assets/instanceSettings-CKulLM24.js                    0.74 kB │ gzip:     0.35 kB
+ui build: dist/assets/properties-BKTTDgau.js                          0.77 kB │ gzip:     0.40 kB
+ui build: dist/assets/workflow-CPbuW54w.js                            0.78 kB │ gzip:     0.42 kB
+ui build: dist/assets/classDiagram-ZZMXUADV-z-LNz_xS.js               0.79 kB │ gzip:     0.45 kB
+ui build: dist/assets/classDiagram-v2-VYDZK3BY-z-LNz_xS.js            0.79 kB │ gzip:     0.45 kB
+ui build: dist/assets/stateDiagram-v2-MP3YSRHH-Btp5KQnC.js            0.80 kB │ gzip:     0.46 kB
+ui build: dist/assets/swimlanesDiagram-VR7AAH4N-z9QHpL0f.js           0.83 kB │ gzip:     0.49 kB
+ui build: dist/assets/business-metric-targets-DzdcF2Qy.js             0.87 kB │ gzip:     0.43 kB
+ui build: dist/assets/cmake-koz-qBlo.js                               0.92 kB │ gzip:     0.54 kB
+ui build: dist/assets/asciiarmor-DFLNSgns.js                          0.92 kB │ gzip:     0.48 kB
+ui build: dist/assets/rolldown-runtime-ZpX3ckPj.js                    0.93 kB │ gzip:     0.52 kB
+ui build: dist/assets/protobuf-UWh8gh_j.js                            0.97 kB │ gzip:     0.59 kB
+ui build: dist/assets/definition-Byy1m1gI.js                          0.99 kB │ gzip:     0.58 kB
+ui build: dist/assets/solr-Dj8ahEwG.js                                1.06 kB │ gzip:     0.55 kB
+ui build: dist/assets/ExperienceToolUI-C5u2JKTT.js                    1.06 kB │ gzip:     0.64 kB
+ui build: dist/assets/line-K0zMh0bP.js                                1.08 kB │ gzip:     0.55 kB
+ui build: dist/assets/sizeCapture-INFHLROL-XURNLuv_.js                1.09 kB │ gzip:     0.58 kB
+ui build: dist/assets/troff-Lns35Xcq.js                               1.09 kB │ gzip:     0.51 kB
+ui build: dist/assets/enterprise-eRmVl_0z.js                          1.11 kB │ gzip:     0.44 kB
+ui build: dist/assets/http-0jwMmfWP.js                                1.12 kB │ gzip:     0.55 kB
+ui build: dist/assets/useV9CurrentAccount-DoasF4EK.js                 1.22 kB │ gzip:     0.65 kB
+ui build: dist/assets/spreadsheet-B8doD_pL.js                         1.24 kB │ gzip:     0.59 kB
+ui build: dist/assets/toml-Civ2fTsu.js                                1.24 kB │ gzip:     0.60 kB
+ui build: dist/assets/ordinal-BJyFM1v8.js                             1.39 kB │ gzip:     0.67 kB
+ui build: dist/assets/preload-helper-CceJXRIF.js                      1.39 kB │ gzip:     0.79 kB
+ui build: dist/assets/chunk-GVQU2GXP-Clvd7HPg.js                      1.53 kB │ gzip:     0.86 kB
+ui build: dist/assets/mbox-JGl1Fgvq.js                                1.54 kB │ gzip:     0.74 kB
+ui build: dist/assets/clipboard-ADXR1Tl9.js                           1.64 kB │ gzip:     0.92 kB
+ui build: dist/assets/factor-CM3-9V3b.js                              1.67 kB │ gzip:     0.61 kB
+ui build: dist/assets/railroadDiagram-O6MQD6OU-4zo_hk8C.js            1.67 kB │ gzip:     0.77 kB
+ui build: dist/assets/rpm-Csj9nLHl.js                                 1.71 kB │ gzip:     0.88 kB
+ui build: dist/assets/readiness-Cn98cM4h.js                           1.80 kB │ gzip:     0.90 kB
+ui build: dist/assets/sieve-CcvsXPZo.js                               1.83 kB │ gzip:     0.87 kB
+ui build: dist/assets/folder-h24Oz8yT.js                              1.84 kB │ gzip:     0.85 kB
+ui build: dist/assets/StatusGlyph-B7cZwlDy.js                         1.84 kB │ gzip:     0.96 kB
+ui build: dist/assets/z80-CB2cGLew.js                                 1.85 kB │ gzip:     0.88 kB
+ui build: dist/assets/abnfDiagram-VCTEODGH-DdBgOFup.js                1.86 kB │ gzip:     0.90 kB
+ui build: dist/assets/provider-capabilities-Cqemcfcy.js               1.91 kB │ gzip:     0.83 kB
+ui build: dist/assets/dockerfile-BttNdtK0.js                          1.93 kB │ gzip:     0.65 kB
+ui build: dist/assets/chunk-P2QGCYS3-CjKK9u5-.js                      1.96 kB │ gzip:     0.96 kB
+ui build: dist/assets/eiffel-DuLnr4-r.js                              1.97 kB │ gzip:     1.02 kB
+ui build: dist/assets/chunk-F27PBJKO-CyeOmT2o.js                      2.02 kB │ gzip:     0.91 kB
+ui build: dist/assets/pegDiagram-XKGWAZYB-uNE6RWC5.js                 2.03 kB │ gzip:     0.94 kB
+ui build: dist/assets/mathematica-CE9SaVsW.js                         2.07 kB │ gzip:     0.90 kB
+ui build: dist/assets/dist-YH7EZ8d1.js                                2.08 kB │ gzip:     1.31 kB
+ui build: dist/assets/ebnf-bm-I2WIh.js                                2.08 kB │ gzip:     0.86 kB
+ui build: dist/assets/ebnfDiagram-PWID7BFC-CSkq93LX.js                2.08 kB │ gzip:     0.89 kB
+ui build: dist/assets/elm-njbaCU-L.js                                 2.12 kB │ gzip:     0.95 kB
+ui build: dist/assets/turtle-DTIS1YQ7.js                              2.17 kB │ gzip:     1.01 kB
+ui build: dist/assets/mumps-C7oS353s.js                               2.20 kB │ gzip:     1.07 kB
+ui build: dist/assets/ntriples-5ckCopnn.js                            2.22 kB │ gzip:     0.81 kB
+ui build: dist/assets/smalltalk-Cmg-4mjQ.js                           2.24 kB │ gzip:     0.96 kB
+ui build: dist/assets/dtd-CCVZU5Da.js                                 2.26 kB │ gzip:     0.98 kB
+ui build: dist/assets/fcl-nWsMJ92o.js                                 2.27 kB │ gzip:     1.04 kB
+ui build: dist/assets/yacas-BG9ha7tU.js                               2.35 kB │ gzip:     1.19 kB
+ui build: dist/assets/dist-Cj4C2HPs.js                                2.39 kB │ gzip:     1.09 kB
+ui build: dist/assets/apl-MHzTCvfx.js                                 2.41 kB │ gzip:     1.30 kB
+ui build: dist/assets/octave-D1J2QQNt.js                              2.48 kB │ gzip:     1.20 kB
+ui build: dist/assets/commonlisp-C4OOCwkD.js                          2.49 kB │ gzip:     1.20 kB
+ui build: dist/assets/pascal-B-I6JP0Y.js                              2.50 kB │ gzip:     1.29 kB
+ui build: dist/assets/simple-mode-B79cVo-x.js                         2.52 kB │ gzip:     1.22 kB
+ui build: dist/assets/path-D6mommQw.js                                2.53 kB │ gzip:     1.14 kB
+ui build: dist/assets/tcl-RZa1cqc-.js                                 2.56 kB │ gzip:     1.33 kB
+ui build: dist/assets/webidl-ChvzbZ5-.js                              2.64 kB │ gzip:     1.32 kB
+ui build: dist/assets/forth-BQ9HrCVY.js                               2.68 kB │ gzip:     1.41 kB
+ui build: dist/assets/puppet-BAHVzCkO.js                              2.69 kB │ gzip:     1.28 kB
+ui build: dist/assets/pig-FQI0W3S3.js                                 2.70 kB │ gzip:     1.48 kB
+ui build: dist/assets/dist-DoBOMP6Y.js                                2.71 kB │ gzip:     1.55 kB
+ui build: dist/assets/button-BDW6bsma.js                              2.78 kB │ gzip:     1.28 kB
+ui build: dist/assets/shell-BSKClwid.js                               2.80 kB │ gzip:     1.33 kB
+ui build: dist/assets/v9-feature-flags-kk1BcRKw.js                    2.87 kB │ gzip:     1.30 kB
+ui build: dist/assets/velocity-BIIn-Nl2.js                            2.88 kB │ gzip:     1.22 kB
+ui build: dist/assets/tiddlywiki-C9bm_Oju.js                          3.04 kB │ gzip:     1.20 kB
+ui build: dist/assets/modelica-5XCgKQt8.js                            3.04 kB │ gzip:     1.41 kB
+ui build: dist/assets/r-CktBKya9.js                                   3.14 kB │ gzip:     1.47 kB
+ui build: dist/assets/oz-CPsllMDD.js                                  3.17 kB │ gzip:     1.42 kB
+ui build: dist/assets/BusinessExperimentMetricPicker-Bkeh25gA.js      3.35 kB │ gzip:     1.55 kB
+ui build: dist/assets/dialog-YCZmy9RR.js                              3.37 kB │ gzip:     1.26 kB
+ui build: dist/assets/stex-CW6K5Nmu.js                                3.44 kB │ gzip:     1.36 kB
+ui build: dist/assets/dist-BuzarGBs.js                                3.45 kB │ gzip:     1.76 kB
+ui build: dist/assets/NewGovernedSkill-5RmW2od0.js                    3.55 kB │ gzip:     1.36 kB
+ui build: dist/assets/vhdl-Cn8cC8Yb.js                                3.60 kB │ gzip:     1.63 kB
+ui build: dist/assets/lua-Vher-70I.js                                 3.61 kB │ gzip:     1.56 kB
+ui build: dist/assets/tiki-DJOT-rFT.js                                3.63 kB │ gzip:     1.45 kB
+ui build: dist/assets/mscgen-mVFg19ri.js                              3.71 kB │ gzip:     1.09 kB
+ui build: dist/assets/v5-feature-flags-CKSUEhws.js                    3.71 kB │ gzip:     1.42 kB
+ui build: dist/assets/cypher-z2oFsVv2.js                              3.73 kB │ gzip:     1.63 kB
+ui build: dist/assets/arc-BQ55EiX2.js                                 3.75 kB │ gzip:     1.62 kB
+ui build: dist/assets/sparql-LAJYmgfk.js                              3.77 kB │ gzip:     1.76 kB
+ui build: dist/assets/d-Dkt6y7AQ.js                                   3.97 kB │ gzip:     1.82 kB
+ui build: dist/assets/coffeescript-CXYzYf-Y.js                        4.09 kB │ gzip:     1.81 kB
+ui build: dist/assets/vb-BO8UacKu.js                                  4.15 kB │ gzip:     1.93 kB
+ui build: dist/assets/asn1-CfPVWRYE.js                                4.20 kB │ gzip:     2.08 kB
+ui build: dist/assets/swift-BD82LMDK.js                               4.22 kB │ gzip:     1.93 kB
+ui build: dist/assets/livescript-DSHsJPcD.js                          4.22 kB │ gzip:     1.70 kB
+ui build: dist/assets/dylan-3pmV5wzs.js                               4.23 kB │ gzip:     1.75 kB
+ui build: dist/assets/q-Cooe-Nh8.js                                   4.31 kB │ gzip:     1.84 kB
+ui build: dist/assets/ttcn-cfg-B8qhhp6o.js                            4.31 kB │ gzip:     1.84 kB
+ui build: dist/assets/haskell-CHSpCNOy.js                             4.38 kB │ gzip:     2.03 kB
+ui build: dist/assets/diagram-Z3DM3KII-DUxxf-Zn.js                    4.44 kB │ gzip:     1.93 kB
+ui build: dist/assets/groovy-ByXGF8cx.js                              4.47 kB │ gzip:     1.94 kB
+ui build: dist/assets/ConfigureBuiltInAgentModal-Dc0lN1aF.js          4.47 kB │ gzip:     2.05 kB
+ui build: dist/assets/asterisk-CJ4OeA7Y.js                            4.58 kB │ gzip:     1.85 kB
+ui build: dist/assets/model-DL5biheO.js                               4.74 kB │ gzip:     2.19 kB
+ui build: dist/assets/gas-ByO0qYMr.js                                 4.74 kB │ gzip:     1.39 kB
+ui build: dist/assets/fortran-DHJe28ev.js                             4.80 kB │ gzip:     2.12 kB
+ui build: dist/assets/agent-retirement-CB0Rka4K.js                    4.85 kB │ gzip:     2.26 kB
+ui build: dist/assets/mllike-DuNQsEw8.js                              5.02 kB │ gzip:     1.67 kB
+ui build: dist/assets/ttcn-7vlxVTUK.js                                5.09 kB │ gzip:     2.26 kB
+ui build: dist/assets/dist-BRrJTSwu.js                                5.14 kB │ gzip:     2.46 kB
+ui build: dist/assets/defaultLocale-C2Bpu8Ih.js                       5.21 kB │ gzip:     2.42 kB
+ui build: dist/assets/linear-C9DRiNu0.js                              5.25 kB │ gzip:     2.24 kB
+ui build: dist/assets/dist-BtkwU0uX.js                                5.28 kB │ gzip:     1.84 kB
+ui build: dist/assets/ecl-BIv3PrZb.js                                 5.38 kB │ gzip:     2.44 kB
+ui build: dist/assets/crystal-BlJXQDvy.js                             5.42 kB │ gzip:     2.22 kB
+ui build: dist/assets/ruby-bGx9eo-K.js                                5.50 kB │ gzip:     2.32 kB
+ui build: dist/assets/experience-DR3qklEk.js                          5.55 kB │ gzip:     2.36 kB
+ui build: dist/assets/CustomerSupport-CSI7qPem.js                     5.66 kB │ gzip:     2.07 kB
+ui build: dist/assets/julia-KVJvUu_F.js                               5.69 kB │ gzip:     2.30 kB
+ui build: dist/assets/ExperienceProjectDraft-eC9JBcua.js              5.84 kB │ gzip:     2.20 kB
+ui build: dist/assets/ExperienceTaskDraft-CDKgP_WW.js                 5.86 kB │ gzip:     2.24 kB
+ui build: dist/assets/SecurityEvents-CIadF4qw.js                      5.89 kB │ gzip:     2.40 kB
+ui build: dist/assets/companySkills-C33EpixK.js                       5.94 kB │ gzip:     1.15 kB
+ui build: dist/assets/vbscript-DWLru3lT.js                            6.03 kB │ gzip:     2.71 kB
+ui build: dist/assets/customer-support-4Eykyr5l.js                    6.04 kB │ gzip:     2.64 kB
+ui build: dist/assets/mirc-BGWbO906.js                                6.11 kB │ gzip:     2.82 kB
+ui build: dist/assets/MyFeedback-BiGJ9o9j.js                          6.17 kB │ gzip:     2.62 kB
+ui build: dist/assets/diagram-UQ7AKVKN-CSSRZoEx.js                    6.32 kB │ gzip:     2.71 kB
+ui build: dist/assets/cobol-Bo8Zw9gB.js                               6.38 kB │ gzip:     3.08 kB
+ui build: dist/assets/chunk-PWAF6VOD-BuKQffME.js                      6.44 kB │ gzip:     3.00 kB
+ui build: dist/assets/pieDiagram-E7YTZNPT-DBtZ-tmm.js                 6.54 kB │ gzip:     2.77 kB
+ui build: dist/assets/scheme-DcjG9bAf.js                              6.67 kB │ gzip:     2.55 kB
+ui build: dist/assets/AgentAvatar-BfKXH0U9.js                         6.68 kB │ gzip:     2.84 kB
+ui build: dist/assets/AgentPause-Cyb3oNat.js                          6.69 kB │ gzip:     2.55 kB
+ui build: dist/assets/python-C2DOnsac.js                              6.84 kB │ gzip:     2.91 kB
+ui build: dist/assets/AgentRetirement-D1hNw_Rf.js                     7.01 kB │ gzip:     2.53 kB
+ui build: dist/assets/nsis-KFC6hioG.js                                7.06 kB │ gzip:     3.08 kB
+ui build: dist/assets/xquery-BKN7qEbU.js                              7.07 kB │ gzip:     2.80 kB
+ui build: dist/assets/queryClient-CyqL2jYY.js                         7.16 kB │ gzip:     2.25 kB
+ui build: dist/assets/textile-C-BY_OGF.js                             7.29 kB │ gzip:     2.63 kB
+ui build: dist/assets/pug-C20tNwmy.js                                 7.53 kB │ gzip:     2.34 kB
+ui build: dist/assets/nginx-DXVlpyCz.js                               7.56 kB │ gzip:     2.84 kB
+ui build: dist/assets/AgentMonitor-Bh_V-O16.js                        7.59 kB │ gzip:     2.66 kB
+ui build: dist/assets/MemoryMaintenanceHistory-s2wQ7sdQ.js            8.03 kB │ gzip:     2.96 kB
+ui build: dist/assets/StatusIcon-BOID4xkI.js                          8.04 kB │ gzip:     3.45 kB
+ui build: dist/assets/MaintenanceHistory-CZF-AtNF.js                  8.14 kB │ gzip:     2.79 kB
+ui build: dist/assets/powershell-BAu6x78A.js                          8.18 kB │ gzip:     3.48 kB
+ui build: dist/assets/v7-feature-flags-DEHEtO80.js                    8.22 kB │ gzip:     2.82 kB
+ui build: dist/assets/ExperienceMeasures-CKpGkOWv.js                  8.27 kB │ gzip:     3.24 kB
+ui build: dist/assets/diagram-S7CK7UJ4-DmIvmJbL.js                    8.57 kB │ gzip:     3.81 kB
+ui build: dist/assets/erlang-CuhOC2I8.js                              8.57 kB │ gzip:     3.16 kB
+ui build: dist/assets/status-colors-fbzQvaGr.js                       8.59 kB │ gzip:     1.82 kB
+ui build: dist/assets/haxe-P2jh68ck.js                                8.80 kB │ gzip:     3.38 kB
+ui build: dist/assets/verilog-BVYlmXGg.js                             8.82 kB │ gzip:     3.74 kB
+ui build: dist/assets/dist-BXoB5t8y.js                                8.97 kB │ gzip:     3.90 kB
+ui build: dist/assets/sas-Drou_EQ9.js                                 9.46 kB │ gzip:     4.19 kB
+ui build: dist/assets/src-hk5Ry2JZ.js                                 9.55 kB │ gzip:     4.00 kB
+ui build: dist/assets/chunk-L3NEJ4N5-Dg7gAcPs.js                      9.88 kB │ gzip:     2.70 kB
+ui build: dist/assets/perl-CI8WIWBi.js                                9.97 kB │ gzip:     3.63 kB
+ui build: dist/assets/gherkin-CwOmHL5K.js                            10.26 kB │ gzip:     5.17 kB
+ui build: dist/assets/cynefinDiagram-5FMLGOSQ-Dg8EaCQR.js            10.41 kB │ gzip:     3.73 kB
+ui build: dist/assets/RolePacks-B22tfktP.js                          10.41 kB │ gzip:     2.87 kB
+ui build: dist/assets/OrgChart.production-V34CDTzl.js                10.46 kB │ gzip:     3.94 kB
+ui build: dist/assets/stateDiagram-D77RDMKH-DeWpZ_ri.js              10.81 kB │ gzip:     3.83 kB
+ui build: dist/assets/clojure-DFaIEz5O.js                            11.00 kB │ gzip:     4.19 kB
+ui build: dist/assets/dagre-GXQ25YYZ-D5fHQoUe.js                     11.08 kB │ gzip:     4.23 kB
+ui build: dist/assets/diagram-VSXAHHWV-DQbnNYmn.js                   11.59 kB │ gzip:     4.34 kB
+ui build: dist/assets/idl-DTVVj6r5.js                                11.75 kB │ gzip:     4.73 kB
+ui build: dist/assets/dist-BwA171_x.js                               12.33 kB │ gzip:     4.52 kB
+ui build: dist/assets/dist-DZgNtG8a.js                               12.83 kB │ gzip:     5.74 kB
+ui build: dist/assets/CompanyActivity.production-Hn16_9Or.js         13.17 kB │ gzip:     4.45 kB
+ui build: dist/assets/Enterprise-D003kIH0.js                         13.92 kB │ gzip:     4.35 kB
+ui build: dist/assets/Portfolio-DpY0PErO.js                          13.95 kB │ gzip:     3.89 kB
+ui build: dist/assets/createLucideIcon-PRFy5c1P.js                   14.19 kB │ gzip:     5.29 kB
+ui build: dist/assets/dist-CXeuJs-w.js                               15.00 kB │ gzip:     6.12 kB
+ui build: dist/assets/Playbooks-BRlo1kcj.js                          15.18 kB │ gzip:     4.01 kB
+ui build: dist/assets/chunk-SVP7TREG-CDbuWMsc.js                     15.90 kB │ gzip:     4.49 kB
+ui build: dist/assets/dist-oQmcCiSD.js                               16.37 kB │ gzip:     7.55 kB
+ui build: dist/assets/diagram-VX7I27RA-BqD8iJQz.js                   16.84 kB │ gzip:     6.03 kB
+ui build: dist/assets/ishikawaDiagram-5VMMS53U-UxKFfkGK.js           17.94 kB │ gzip:     6.82 kB
+ui build: dist/assets/mermaid-parser.core-CHJSk6z0.js                18.53 kB │ gzip:     4.20 kB
+ui build: dist/assets/javascript-Cblpdx44.js                         19.01 kB │ gzip:     6.65 kB
+ui build: dist/assets/kanban-definition-UXKFOSKX-DW0I4pPv.js         20.88 kB │ gzip:     7.43 kB
+ui build: dist/assets/dist-DKJ0FdKS.js                               21.07 kB │ gzip:     9.55 kB
+ui build: dist/assets/dist-DkIAknd6.js                               21.16 kB │ gzip:     7.26 kB
+ui build: dist/assets/NewAgent-Cb_zn-qb.js                           21.29 kB │ gzip:     7.37 kB
+ui build: dist/assets/dist-CSbL7rtN.js                               21.34 kB │ gzip:     9.89 kB
+ui build: dist/assets/ManagementReviews-Dj17OiDS.js                  21.85 kB │ gzip:     6.37 kB
+ui build: dist/assets/SkillGovernance-BfDSpV6k.js                    22.55 kB │ gzip:     5.64 kB
+ui build: dist/assets/dist-B0TRtKS8.js                               23.21 kB │ gzip:    10.54 kB
+ui build: dist/assets/clike-CIx9nZSv.js                              23.27 kB │ gzip:     8.28 kB
+ui build: dist/assets/AgentRuntimeFabric-D0LwdiBL.js                 23.95 kB │ gzip:     6.19 kB
+ui build: dist/assets/CustomerSupportCases-CEAbufq4.js               24.06 kB │ gzip:     6.66 kB
+ui build: dist/assets/mindmap-definition-YA3MSWOX-DxHMkxe2.js        24.09 kB │ gzip:     8.24 kB
+ui build: dist/assets/journeyDiagram-3NMN7TZE-BmZgudXW.js            24.11 kB │ gzip:     8.50 kB
+ui build: dist/assets/sankeyDiagram-P5KCCOFB-DKBM3_mK.js             24.78 kB │ gzip:     9.20 kB
+ui build: dist/assets/character-CguPM7IG.js                          24.98 kB │ gzip:     2.50 kB
+ui build: dist/assets/StrategyExecution-DCfsHl0X.js                  25.67 kB │ gzip:     7.18 kB
+ui build: dist/assets/wardleyDiagram-VM6X3IG4-CvwOq-w4.js            26.03 kB │ gzip:     6.96 kB
+ui build: dist/assets/CustomAgent-h9sT0U_V.js                        26.04 kB │ gzip:     6.56 kB
+ui build: dist/assets/tooltip-DNmsGN3y.js                            26.21 kB │ gzip:     7.31 kB
+ui build: dist/assets/stylus-BS-Ienrc.js                             26.36 kB │ gzip:     8.97 kB
+ui build: dist/assets/CompanyExport-6Hwb4Lmj.js                      26.37 kB │ gzip:     9.31 kB
+ui build: dist/assets/dist-Bs8B1orN.js                               26.49 kB │ gzip:     8.96 kB
+ui build: dist/assets/graphlib-DHhK3saS.js                           26.69 kB │ gzip:     9.56 kB
+ui build: dist/assets/css-DEZwfVpY.js                                27.41 kB │ gzip:     8.70 kB
+ui build: dist/assets/AgentPackages-92bOqt0p.js                      28.37 kB │ gzip:     9.54 kB
+ui build: dist/assets/rough.esm-DnC5Tr1g.js                          28.63 kB │ gzip:     9.68 kB
+ui build: dist/assets/dist-CWrRKmYk.js                               28.69 kB │ gzip:    13.08 kB
+ui build: dist/assets/agent-authoring-C2Zc_cnD.js                    28.96 kB │ gzip:     7.84 kB
+ui build: dist/assets/dist-BeN6V24C.js                               29.22 kB │ gzip:    12.00 kB
+ui build: dist/assets/FeedbackTriage-DBih-zJP.js                     29.56 kB │ gzip:     7.44 kB
+ui build: dist/assets/gitGraphDiagram-WWUBYQGX-B3cokvPh.js           29.62 kB │ gzip:     8.81 kB
+ui build: dist/assets/Routines.production-wvd5zk4k.js                30.29 kB │ gzip:     8.77 kB
+ui build: dist/assets/CrossProjectPlanning-CDxNVQ_t.js               30.79 kB │ gzip:     8.47 kB
+ui build: dist/assets/dist-BX-OCtve.js                               30.98 kB │ gzip:    12.88 kB
+ui build: dist/assets/erDiagram-RLTQ6QDP-BGKXn_S1.js                 31.54 kB │ gzip:    10.94 kB
+ui build: dist/assets/timeline-definition-24CTP7MA-BOYmfccF.js       31.56 kB │ gzip:    10.47 kB
+ui build: dist/assets/requirementDiagram-BXWQKSXE-BRLic-jE.js        31.72 kB │ gzip:    10.07 kB
+ui build: dist/assets/dist-C2jegCUe.js                               33.11 kB │ gzip:    13.53 kB
+ui build: dist/assets/BusinessForecasts-B6RutNLD.js                  33.52 kB │ gzip:     8.83 kB
+ui build: dist/assets/chunk-75Z2AOVW-COClgF8u.js                     33.99 kB │ gzip:     9.38 kB
+ui build: dist/assets/quadrantDiagram-AXDQQJYC-DhKHvEn5.js           34.86 kB │ gzip:    10.15 kB
+ui build: dist/assets/BusinessMetrics-B4Cp6inp.js                    36.30 kB │ gzip:     9.37 kB
+ui build: dist/assets/chunk-OSK3NFVY--M0l8iqO.js                     37.16 kB │ gzip:     8.18 kB
+ui build: dist/assets/sql-C3kWxFGw.js                                37.23 kB │ gzip:    11.10 kB
+ui build: dist/assets/ProcessIntelligence-Dp0GpMtw.js                38.12 kB │ gzip:     9.90 kB
+ui build: dist/assets/chunk-IMKFNOWR-pZISMn40.js                     38.64 kB │ gzip:    12.73 kB
+ui build: dist/assets/dist-xQwUswee.js                               40.84 kB │ gzip:    17.02 kB
+ui build: dist/assets/dagre-Bnei_7lW.js                              41.51 kB │ gzip:    15.41 kB
+ui build: dist/assets/CausalClaims-efikHWtP.js                       42.64 kB │ gzip:    11.50 kB
+ui build: dist/assets/blockDiagram-I7D4REHJ-CzWWQOJ0.js              42.89 kB │ gzip:    13.90 kB
+ui build: dist/assets/label-Cyu2NUX6.js                              43.14 kB │ gzip:    15.17 kB
+ui build: dist/assets/vennDiagram-4TSXK5OY-CJczJP8X.js               43.76 kB │ gzip:    16.52 kB
+ui build: dist/assets/HireAgent-CzY5Slaf.js                          44.58 kB │ gzip:    10.36 kB
+ui build: dist/assets/dist-DyyIM2uF.js                               45.51 kB │ gzip:    19.64 kB
+ui build: dist/assets/Activation-CivlQFFg.js                         45.61 kB │ gzip:    11.13 kB
+ui build: dist/assets/RoutineDetail.production-DG8x4egg.js           45.64 kB │ gzip:    12.55 kB
+ui build: dist/assets/dist-C8CoeHVO.js                               45.80 kB │ gzip:    16.14 kB
+ui build: dist/assets/xychartDiagram-S5SC5T6Z-BZjEzPgd.js            46.13 kB │ gzip:    12.88 kB
+ui build: dist/assets/BusinessExperiments-B-o1XwlS.js                48.65 kB │ gzip:    12.53 kB
+ui build: dist/assets/chunk-TICWLB2K-Bt-KvTir.js                     49.71 kB │ gzip:    16.12 kB
+ui build: dist/assets/chunk-GMAD6QVW-CemLxv0_.js                     53.50 kB │ gzip:    17.53 kB
+ui build: dist/assets/AgentDraftReview-BW716E2B.js                   53.52 kB │ gzip:    12.33 kB
+ui build: dist/assets/chunk-SHT3W25Y-Afs3kyNs.js                     62.23 kB │ gzip:    20.28 kB
+ui build: dist/assets/BusinessScenarios-Bnogesa1.js                  63.25 kB │ gzip:    15.17 kB
+ui build: dist/assets/c4Diagram-7LVT6UL2-ByV9KHJL.js                 66.11 kB │ gzip:    19.13 kB
+ui build: dist/assets/dist-DpmnjHX9.js                               70.94 kB │ gzip:    26.19 kB
+ui build: dist/assets/zap-DDQ624-r.js                                71.13 kB │ gzip:    25.77 kB
+ui build: dist/assets/ganttDiagram-EL5Y4UJY-E_7xLjWX.js              73.95 kB │ gzip:    24.93 kB
+ui build: dist/assets/cose-bilkent-JH36ORCC-DI2QKxlB.js              84.25 kB │ gzip:    23.23 kB
+ui build: dist/assets/dist-sLIQSVjm.js                               85.29 kB │ gzip:    34.05 kB
+ui build: dist/assets/router-BXUI9q8n.js                             89.24 kB │ gzip:    30.80 kB
+ui build: dist/assets/dist-CBo4NvFW.js                               98.47 kB │ gzip:    28.95 kB
+ui build: dist/assets/mention-chips-BmhrEeG1.js                     102.56 kB │ gzip:    31.56 kB
+ui build: dist/assets/dist-DsLYqWnM.js                              104.05 kB │ gzip:    34.85 kB
+ui build: dist/assets/mermaid.core-CMiVjQyr.js                      107.51 kB │ gzip:    35.72 kB
+ui build: dist/assets/chunk-4HAMMTFA-B7QOXtjH.js                    108.75 kB │ gzip:    27.01 kB
+ui build: dist/assets/sequenceDiagram-WJ2MYXX4-UdeAXYYh.js          117.84 kB │ gzip:    31.55 kB
+ui build: dist/assets/swimlanes-42K2YHIH-CpRlxfeY.js                121.01 kB │ gzip:    43.80 kB
+ui build: dist/assets/architectureDiagram-5GKGNRK7-BF3-uS2A.js      155.10 kB │ gzip:    44.36 kB
+ui build: dist/assets/AgentDetail-Dc7z3le9.js                       205.83 kB │ gzip:    54.56 kB
+ui build: dist/assets/chunk-DU6HZSFF-CpU8ZIph.js                    241.87 kB │ gzip:    40.69 kB
+ui build: dist/assets/katex-Du_FPwxl.js                             264.40 kB │ gzip:    79.45 kB
+ui build: dist/assets/dist-DCJXgQu0.js                              329.12 kB │ gzip:   109.72 kB
+ui build: dist/assets/cytoscape.esm-B68Piqei.js                     465.72 kB │ gzip:   149.67 kB
+ui build: dist/assets/prod-COP_vZWu.js                              493.71 kB │ gzip:   166.56 kB
+ui build: dist/assets/runtime-IAg0vdY9.js                           578.56 kB │ gzip:   151.24 kB
+ui build: dist/assets/dist-C_o2HSxL.js                              691.46 kB │ gzip:   210.63 kB
+ui build: dist/assets/chunk-FOHPRMQF-7Ogwfo6e.js                    703.85 kB │ gzip:   154.33 kB
+ui build: dist/assets/MarkdownEditor-C8H4jUyi.js                    790.36 kB │ gzip:   259.18 kB
+ui build: dist/assets/index-BzSoRpsv.js                           8,050.81 kB │ gzip: 2,143.90 kB
+ui build: ✓ built in 6.61s
+ui build: [plugin builtin:vite-reporter] 
+ui build: (!) Some chunks are larger than 500 kB after minification. Consider:
+ui build: - Using dynamic import() to code-split the application
+ui build: - Use build.rolldownOptions.output.codeSplitting to improve chunking: https://rolldown.rs/reference/OutputOptions.codeSplitting
+ui build: - Adjust chunk size limit for this warning via build.chunkSizeWarningLimit.
+ui build: Done
+server build: > @paperclipai/paperclip-runner@0.0.0 check:capability-contract /workspace/blentera-v10/packages/paperclip-runner
+server build: > node scripts/generate-capability-contract.mjs --check
+server build: > @paperclipai/paperclip-runner@0.0.0 check:capability-inventory /workspace/blentera-v10/packages/paperclip-runner
+server build: > node scripts/check-capability-inventory.mjs
+server build: Capability inventory completeness and generated-output checks passed.
+server build: > @paperclipai/paperclip-runner@0.0.0 check:protocol-coverage /workspace/blentera-v10/packages/paperclip-runner
+server build: > node scripts/generate-protocol-coverage.mjs --check
+server build: > @paperclipai/paperclip-runner@0.0.0 check:semantic-contracts /workspace/blentera-v10/packages/paperclip-runner
+server build: > pnpm run build:typescript && node scripts/generate-semantic-contracts.mjs --check
+server build: > @paperclipai/paperclip-runner@0.0.0 build:typescript /workspace/blentera-v10/packages/paperclip-runner
+server build: > pnpm run ensure:eval-build-deps && pnpm run check:protocol-types && node ./node_modules/typescript/bin/tsc --version && node ./node_modules/typescript/bin/tsc -p tsconfig.json && node ./node_modules/typescript/bin/tsc -p tsconfig.surfaces.json && node scripts/build-verified-provider-entrypoints.mjs
+server build: > @paperclipai/paperclip-runner@0.0.0 ensure:eval-build-deps /workspace/blentera-v10/packages/paperclip-runner
+server build: > pnpm --filter @paperclipai/paperclip-eval-kernel build
+server build: > @paperclipai/paperclip-eval-kernel@0.1.0 build /workspace/blentera-v10/packages/paperclip-eval-kernel
+server build: > tsc -p tsconfig.json
+server build: > @paperclipai/paperclip-runner@0.0.0 check:protocol-types /workspace/blentera-v10/packages/paperclip-runner
+server build: > node scripts/generate-protocol-schema-module.mjs --check && node scripts/generate-acpx-sidecar-contract.mjs --check
+server build: Generated PRP schema modules match the JSON Schema sources.
+server build: Generated TypeScript/Rust ACPX sidecar contracts match the schema.
+server build: Version 7.0.2
+server build: > @paperclipai/paperclip-runner@0.0.0 check:runner-workflow-traceability /workspace/blentera-v10/packages/paperclip-runner
+server build: > pnpm run build:typescript && node scripts/check-runner-workflow-traceability.mjs
+server build: > @paperclipai/paperclip-runner@0.0.0 build:typescript /workspace/blentera-v10/packages/paperclip-runner
+server build: > pnpm run ensure:eval-build-deps && pnpm run check:protocol-types && node ./node_modules/typescript/bin/tsc --version && node ./node_modules/typescript/bin/tsc -p tsconfig.json && node ./node_modules/typescript/bin/tsc -p tsconfig.surfaces.json && node scripts/build-verified-provider-entrypoints.mjs
+server build: > @paperclipai/paperclip-runner@0.0.0 ensure:eval-build-deps /workspace/blentera-v10/packages/paperclip-runner
+server build: > pnpm --filter @paperclipai/paperclip-eval-kernel build
+server build: > @paperclipai/paperclip-eval-kernel@0.1.0 build /workspace/blentera-v10/packages/paperclip-eval-kernel
+server build: > tsc -p tsconfig.json
+server build: > @paperclipai/paperclip-runner@0.0.0 check:protocol-types /workspace/blentera-v10/packages/paperclip-runner
+server build: > node scripts/generate-protocol-schema-module.mjs --check && node scripts/generate-acpx-sidecar-contract.mjs --check
+server build: Generated PRP schema modules match the JSON Schema sources.
+server build: Generated TypeScript/Rust ACPX sidecar contracts match the schema.
+server build: Version 7.0.2
+server build: Runner stress traceability passed: 44 findings, 12 workflows, 1 explicit exclusion.
+server build: > @paperclipai/paperclip-runner@0.0.0 build:binary /workspace/blentera-v10/packages/paperclip-runner
+server build: > cargo build --release --manifest-path runner/Cargo.toml --locked -p paperclip-runner-core --bin paperclip-runnerd && node scripts/stage-runner-binary.mjs
+server build: warning: unused imports: `OpenOptions` and `self`
+server build:  --> crates/runner-core/src/process_supervisor.rs:3:15
+server build:   |
+server build: 3 | use std::fs::{self, File, OpenOptions};
+server build:   |               ^^^^        ^^^^^^^^^^^
+server build:   |
+server build:   = note: `#[warn(unused_imports)]` (part of `#[warn(unused)]`) on by default
+server build: warning: variable does not need to be mutable
+server build:    --> crates/runner-core/src/process_supervisor.rs:709:17
+server build:     |
+server build: 709 |             let mut inherited = launch.inherited_command()?;
+server build:     |                 ----^^^^^^^^^
+server build:     |                 |
+server build:     |                 help: remove this `mut`
+server build:     |
+server build:     = note: `#[warn(unused_mut)]` (part of `#[warn(unused)]`) on by default
+server build: warning: variable does not need to be mutable
+server build:    --> crates/runner-core/src/process_supervisor.rs:710:17
+server build:     |
+server build: 710 |             let mut result = Self::spawn_command(
+server build:     |                 ----^^^^^^
+server build:     |                 |
+server build:     |                 help: remove this `mut`
+server build: warning: fields `config` and `system_instructions` are never read
+server build:     --> crates/runner-core/src/claude_managed_provider.rs:1248:5
+server build:      |
+server build: 1232 | pub struct ClaudeManagedProvider {
+server build:      |            --------------------- fields in this struct
+server build: ...
+server build: 1248 |     config: ClaudeManagedProviderConfig,
+server build:      |     ^^^^^^
+server build: 1249 |     system_instructions: String,
+server build:      |     ^^^^^^^^^^^^^^^^^^^
+server build:      |
+server build:      = note: `#[warn(dead_code)]` (part of `#[warn(unused)]`) on by default
+server build: warning: function `receive_plain` is never used
+server build:     --> crates/runner-core/src/durable/transport.rs:1545:4
+server build:      |
+server build: 1545 | fn receive_plain(
+server build:      |    ^^^^^^^^^^^^^
+server build: warning: function `validate_tool_result_contract` is never used
+server build:     --> crates/runner-core/src/provider_bridge.rs:1043:4
+server build:      |
+server build: 1043 | fn validate_tool_result_contract(
+server build:      |    ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+server build: warning: `paperclip-runner-core` (lib) generated 6 warnings (run `cargo fix --lib -p paperclip-runner-core` to apply 3 suggestions)
+server build:     Finished `release` profile [optimized] target(s) in 0.16s
+server build: Replay golden snapshots and parity summaries are current.
+server build: [build-stamp] wrote /workspace/blentera-v10/server/dist/build-info.json commit=6c89a25c8649a671402b6905f43ddfc4f4edb12a
+server build: Done
+cli build$ node --input-type=module -e "import esbuild from 'esbuild'; import config from './esbuild.config.mjs'; await esbuild.build(config);" && chmod +x dist/index.js
+cli build: Done

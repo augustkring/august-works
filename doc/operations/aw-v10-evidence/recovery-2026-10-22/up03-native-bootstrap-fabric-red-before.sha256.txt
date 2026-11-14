@@ -1,0 +1,2 @@
+2b277c366db759027722d38d0d0dcf7537de92ada3b924a1aac4492cadd5478e  server/src/services/agent-runtime-fabric.ts
+9a7f64b02869c4859b79a9b89d4f91064f7bb4454ba7a8d7af1c9c5d46812535  server/src/__tests__/agent-runtime-fabric-v5.test.ts

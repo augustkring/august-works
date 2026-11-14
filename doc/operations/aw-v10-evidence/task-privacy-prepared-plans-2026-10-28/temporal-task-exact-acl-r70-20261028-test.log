@@ -1,0 +1,16 @@
+
+ RUN  v4.1.11 /workspace/v10-dep-qualification/server
+
+stderr | src/__tests__/native-memory-task-transaction-reuse.integration.test.ts > Native Memory Task source checks preserve readers when reusing one transaction > matches Alice, Bob, and revoked Alice against a sealed managed Native Memory output
+unknown format "date-time" ignored in schema at path "#/properties/memoryCandidates/items/properties/validFrom/anyOf/0"
+unknown format "date-time" ignored in schema at path "#/properties/memoryCandidates/items/properties/validFrom/anyOf/0"
+unknown format "date-time" ignored in schema at path "#/properties/memoryCandidates/items/properties/validUntil/anyOf/0"
+unknown format "date-time" ignored in schema at path "#/properties/memoryCandidates/items/properties/validUntil/anyOf/0"
+
+ ✓ src/__tests__/native-memory-task-transaction-reuse.integration.test.ts > Native Memory Task source checks preserve readers when reusing one transaction > matches Alice, Bob, and revoked Alice against a sealed managed Native Memory output 51137ms
+
+ Test Files  1 passed (1)
+      Tests  1 passed (1)
+   Start at  09:56:51
+   Duration  73.89s (transform 12.82s, setup 82ms, import 17.79s, tests 55.87s, environment 0ms)
+

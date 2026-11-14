@@ -1,0 +1,8 @@
+{
+  "attempt": "agent-chat-sessions-084-20261026",
+  "testExecuted": 1,
+  "exitCode": 1,
+  "result": "failed_before_source_receipt_assertion",
+  "sourcePin": "agent-chat-sessions-084-20261026-source-pins.json",
+  "note": "second idle timed out after native_session_cleanup_quarantined"
+}

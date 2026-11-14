@@ -1,14 +1,26 @@
 import { randomUUID } from "node:crypto";
 import express from "express";
 import request from "supertest";
-import { afterAll, afterEach, beforeAll, describe, expect, it } from "vitest";
-import { companies, createDb, projects } from "@paperclipai/db";
+import { afterAll, afterEach, beforeAll, beforeEach, describe, expect, it, vi } from "vitest";
+import { activityLog, companies, createDb, projects } from "@paperclipai/db";
 import {
   getEmbeddedPostgresTestSupport,
   startEmbeddedPostgresTestDatabase,
 } from "./helpers/embedded-postgres.js";
 import { errorHandler } from "../middleware/index.js";
 import { projectRoutes } from "../routes/projects.js";
+
+const mockProjectReadDecision = vi.hoisted(() => vi.fn());
+vi.mock("../services/index.js", async () => {
+  const actual = await vi.importActual<typeof import("../services/index.js")>("../services/index.js");
+  return {
+    ...actual,
+    accessService: (db: Parameters<typeof actual.accessService>[0]) => ({
+      ...actual.accessService(db),
+      decide: mockProjectReadDecision,
+    }),
+  };
+});
 
 const embeddedPostgresSupport = await getEmbeddedPostgresTestSupport();
 const describeEmbeddedPostgres = embeddedPostgresSupport.supported ? describe : describe.skip;
@@ -24,8 +36,8 @@ if (!embeddedPostgresSupport.supported) {
 function boardActor(companyId: string): Express.Request["actor"] {
   return {
     type: "board",
-    userId: "user-1",
-    source: "session",
+    userId: "local-board",
+    source: "local_implicit",
     isInstanceAdmin: true,
     companyIds: [companyId],
     memberships: [{ companyId, membershipRole: "admin", status: "active" }],
@@ -53,7 +65,14 @@ describeEmbeddedPostgres("project list archived route defaults", () => {
     db = createDb(tempDb.connectionString);
   }, 20_000);
 
+  beforeEach(() => {
+    mockProjectReadDecision.mockImplementation(async (input: { action: string }) => ({
+      allowed: true, action: input.action, reason: "allow_test", explanation: "Project list behavior fixture.",
+    }));
+  });
+
   afterEach(async () => {
+    await db.delete(activityLog);
     await db.delete(projects);
     await db.delete(companies);
   });
@@ -64,27 +83,30 @@ describeEmbeddedPostgres("project list archived route defaults", () => {
 
   async function seed() {
     const companyId = randomUUID();
-    const activeProjectId = randomUUID();
-    const archivedProjectId = randomUUID();
-
     await db.insert(companies).values({
       id: companyId,
       name: "Paperclip",
       issuePrefix: `T${companyId.replace(/-/g, "").slice(0, 6).toUpperCase()}`,
       requireBoardApprovalForNewAgents: false,
     });
-    await db.insert(projects).values([
-      { id: activeProjectId, companyId, name: "Active Project", status: "in_progress" },
-      {
-        id: archivedProjectId,
-        companyId,
-        name: "Archived Project",
-        status: "completed",
-        archivedAt: new Date(),
-      },
-    ]);
+    const app = createApp(db, boardActor(companyId));
+    const active = await request(app).post(`/api/companies/${companyId}/projects`).send({
+      name: "Active Project",
+      status: "in_progress",
+    });
+    expect(active.status).toBe(201);
+    const archived = await request(app).post(`/api/companies/${companyId}/projects`).send({
+      name: "Archived Project",
+      status: "completed",
+    });
+    expect(archived.status).toBe(201);
+    const archivedProjectId = archived.body.id as string;
+    const archiveResult = await request(app).patch(`/api/projects/${archivedProjectId}`).send({
+      archivedAt: new Date().toISOString(),
+    });
+    expect(archiveResult.status).toBe(200);
 
-    return { activeProjectId, archivedProjectId, companyId };
+    return { activeProjectId: active.body.id as string, archivedProjectId, companyId };
   }
 
   it("omits archived projects by default", async () => {

@@ -1,0 +1,5 @@
+source commit: 40b354f61cb4fc693e007b797da408739802f6ae
+run start UTC: 2026-10-26T00:07:27Z
+direct Vitest source: main workspace current files
+source commit: 40b354f61cb4fc693e007b797da408739802f6ae
+locked rerun start UTC: 2026-10-26T00:08:38Z

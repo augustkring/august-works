@@ -4,7 +4,7 @@ import express from "express";
 import request from "supertest";
 import { afterAll, beforeAll, beforeEach, describe, expect, it, vi } from "vitest";
 import { and, eq, count } from "drizzle-orm";
-import { companies, issues, projects, businessExperiments, businessExperimentAssignments, businessExperimentExposures, businessExperimentExecutions, businessExperimentCompletions, businessExperimentVersions, businessExperimentOutcomes, analyticalLineageManifests, analyticalLineageEdges, createDb } from "@paperclipai/db";
+import { companies, issues, businessExperiments, businessExperimentAssignments, businessExperimentExposures, businessExperimentExecutions, businessExperimentCompletions, businessExperimentVersions, businessExperimentOutcomes, analyticalLineageManifests, analyticalLineageEdges, createDb } from "@paperclipai/db";
 import { ISSUE_STATUSES, businessMetricDefinitionSchema } from "@paperclipai/shared";
 import { businessExperimentService } from "../services/business-experiments/service.js";
 import { businessExperimentRecordingService } from "../services/business-experiments/recording.js";
@@ -21,6 +21,7 @@ import { metricDefinition, analyticalPurpose } from "./helpers/business-metric-f
 import { experimentDefinition } from "./helpers/business-experiment-fixture.js";
 import { experimentVolumeFixture } from "./helpers/business-experiment-volume-fixture.js";
 import { getEmbeddedPostgresTestSupport, startEmbeddedPostgresTestDatabase } from "./helpers/embedded-postgres.js";
+import { createCanonicalHumanProject, seedCurrentHumanSourceActor } from "./helpers/current-human-source-fixture.js";
 const support = await getEmbeddedPostgresTestSupport(), suite = support.supported ? describe : describe.skip;
 const actor = { type: "board" as const, source: "local_implicit" as const }, rationale = "Human source-owner recording of this exact non-personal native protocol";
 const flags = { analytical_lineage_v8: true, business_metrics_v8: true, business_experiments_v8: true, ai_use_cases_v7: true, governance_evidence_v7: true };
@@ -155,7 +156,8 @@ suite("Native experiment assignment and human attestation on migrated PostgreSQL
     expect((await recording().receipts(companyId, actor, d.experiment.id, d.version.id)).assignments).toHaveLength(1);
   });
   it("denies cached registry and receipt data after an enrolled source leaves current authority", async () => {
-    const d = await running(), { unit } = await enrolled(d), [foreignProject] = await db.insert(projects).values({ companyId: otherId, name: "Foreign private scope" }).returning();
+    const d = await running(), { unit } = await enrolled(d), foreignActor = await seedCurrentHumanSourceActor(db, [otherId]);
+    const foreignProject = await createCanonicalHumanProject(db, otherId, foreignActor, "Foreign private scope");
     await db.update(issues).set({ projectId: foreignProject.id }).where(eq(issues.id, unit.id));
     await expect(recording().receipts(companyId, actor, d.experiment.id, d.version.id)).rejects.toMatchObject({ status: 404 });
     expect((await registry().list(companyId, actor)).items).toEqual([]);

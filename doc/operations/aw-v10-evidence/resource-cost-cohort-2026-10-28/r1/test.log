@@ -1,0 +1,69 @@
+(!) Your Vite config uses features that are unsupported by `configLoader: 'native'`, which is planned to become the default in a future major version of Vite:
+  - `__dirname` (vitest.config.ts:7:25). Use `import.meta.dirname` instead
+Set `VITE_CONFIG_NATIVE_IGNORE_WARNING=true` to suppress this warning.
+
+ RUN  v4.1.11 /workspace/blentera-v10
+
+ ❯ |@paperclipai/server| src/__tests__/openapi-routes.test.ts (28 tests | 2 failed) 1703ms
+     × documents the bounded successful-run provider cost cohort 54ms
+     × documents mandatory Trust notices and Trust routes as native-session-only 47ms
+
+⎯⎯⎯⎯⎯⎯⎯ Failed Tests 2 ⎯⎯⎯⎯⎯⎯⎯
+
+ FAIL  |@paperclipai/server| src/__tests__/openapi-routes.test.ts > openapi routes > documents the bounded successful-run provider cost cohort
+AssertionError: expected undefined to deeply equal ArrayContaining{…}
+
+- Expected:
+ArrayContaining [
+  ObjectContaining {
+    "type": "number",
+  },
+  ObjectContaining {
+    "type": "null",
+  },
+]
+
++ Received:
+undefined
+
+ ❯ src/__tests__/openapi-routes.test.ts:353:71
+    351|     ]));
+    352|     expect(schema.properties.providerCostPerSuccessfulRunStatus.enum).…
+    353|     expect(schema.properties.providerCostPerSuccessfulRunCents.anyOf).…
+       |                                                                       ^
+    354|       expect.objectContaining({ type: "number" }),
+    355|       expect.objectContaining({ type: "null" }),
+
+⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯[1/2]⎯
+
+ FAIL  |@paperclipai/server| src/__tests__/openapi-routes.test.ts > openapi routes > documents mandatory Trust notices and Trust routes as native-session-only
+AssertionError: expected [ { BoardSessionAuth: [] }, …(1) ] to deeply equal [ { BoardSessionAuth: [] } ]
+
+- Expected
++ Received
+
+  [
+    {
+      "BoardSessionAuth": [],
+    },
++   {
++     "BoardApiKeyAuth": [],
++   },
+  ]
+
+ ❯ src/__tests__/openapi-routes.test.ts:1168:34
+    1166|     for (const [path, method] of paths) {
+    1167|       const operation = spec.paths[path][method];
+    1168|       expect(operation.security).toEqual([{ BoardSessionAuth: [] }]);
+       |                                  ^
+    1169|       expect(operation.security).not.toContainEqual({ BoardApiKeyAuth:…
+    1170|       expect(operation["x-paperclip-authorization"]).toMatchObject({ a…
+
+⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯[2/2]⎯
+
+
+ Test Files  1 failed | 2 passed (3)
+      Tests  2 failed | 50 passed (52)
+   Start at  10:22:09
+   Duration  26.22s (transform 10.84s, setup 144ms, import 17.65s, tests 7.41s, environment 641ms)
+

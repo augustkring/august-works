@@ -10,6 +10,7 @@ import {
   UserRoundPen,
 } from "lucide-react";
 import type { DeploymentMode } from "@paperclipai/shared";
+import { PRODUCT_IDENTITY } from "@paperclipai/shared/product-identity";
 import { Link } from "@/lib/router";
 import { authApi } from "@/api/auth";
 import { queryKeys } from "@/lib/queryKeys";
@@ -17,7 +18,6 @@ import { useCloudInstance } from "@/hooks/useCloudInstance";
 import { useSignOut } from "@/hooks/useSignOut";
 import { useSidebar } from "../context/SidebarContext";
 import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover";
-import { Tooltip, TooltipContent, TooltipTrigger } from "@/components/ui/tooltip";
 import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar";
 import { cn, SIDEBAR_RAIL_HIDDEN_LABEL } from "../lib/utils";
 import { ThemeToggle } from "./ThemeToggle";
@@ -26,8 +26,7 @@ import { useV9FeatureEnabled } from "../hooks/useV9FeatureEnabled";
 import { useTranslation } from "react-i18next";
 
 const PROFILE_SETTINGS_PATH = "/company/settings/instance/profile";
-const DOCS_URL = "https://docs.paperclip.ing/";
-const FEEDBACK_URL = "https://paperclip.ing/feedback";
+const DOCS_URL = PRODUCT_IDENTITY.docsOrigin;
 
 interface SidebarAccountMenuProps {
   deploymentMode?: DeploymentMode;
@@ -117,7 +116,6 @@ export function SidebarAccountMenu({
 }: SidebarAccountMenuProps) {
   const { t } = useTranslation("experience");
   const customerFeedback = useV9FeatureEnabled("customer_feedback_v9");
-  const shell = useV9FeatureEnabled("progressive_shell_v9");
   const isCloud = Boolean(useCloudInstance());
   const [internalOpen, setInternalOpen] = useState(false);
   const { isMobile, setSidebarOpen, collapsed, peeking } = useSidebar();
@@ -245,21 +243,6 @@ export function SidebarAccountMenu({
             }}>
             <Flag className="h-4 w-4" aria-hidden="true" />
           </button>
-        ) : !rail && !isCloud && !shell.enabled ? (
-          <Tooltip>
-            <TooltipTrigger asChild>
-              <a
-                href={FEEDBACK_URL}
-                target="_blank"
-                rel="noreferrer"
-                aria-label="Share feedback"
-                className="flex size-8 shrink-0 items-center justify-center rounded-lg text-muted-foreground/50 transition-colors hover:bg-sidebar-accent hover:text-sidebar-accent-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
-              >
-                <Flag className="h-4 w-4" aria-hidden="true" />
-              </a>
-            </TooltipTrigger>
-            <TooltipContent side="top">Share feedback</TooltipContent>
-          </Tooltip>
         ) : null}
       </div>
     </div>

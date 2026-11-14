@@ -9,6 +9,8 @@ import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import { ApiError } from "../api/client";
 import type { CompanyImportJobAccepted } from "../api/companies";
 import { CompanyImport } from "./CompanyImport";
+import { readStoredImportJob } from "../lib/import-job-watch";
+import { i18n } from "../i18n";
 
 // jsdom's crypto has no SubtleCrypto; the chunked transfer path hashes parts
 // with WebCrypto, so back the global with Node's implementation.
@@ -150,6 +152,7 @@ const previewFiles = {
 
 function buildPreviewResult(): CompanyPortabilityPreviewResult {
   return {
+    sourceFingerprint: "a".repeat(64),
     include: { company: true, agents: true, projects: true, issues: true },
     targetCompanyId: null,
     targetCompanyName: null,
@@ -300,6 +303,7 @@ describe("CompanyImport", () => {
     container.remove();
     document.body.innerHTML = "";
     sessionStorage.clear();
+    await i18n.changeLanguage("en");
     vi.clearAllMocks();
   });
 
@@ -315,6 +319,14 @@ describe("CompanyImport", () => {
       button?.dispatchEvent(new MouseEvent("click", { bubbles: true }));
     });
     await flushReact();
+    await flushReact();
+  }
+
+  async function confirmSourceReleaseReview() {
+    const review = Array.from(container.querySelectorAll<HTMLInputElement>('input[type="checkbox"]'))
+      .find(input => input.closest("label")?.textContent?.includes("reviewed this exact package"));
+    if (!review || review.checked) return;
+    await act(async () => { review.click(); });
     await flushReact();
   }
 
@@ -369,6 +381,9 @@ describe("CompanyImport", () => {
     expect(pauseLabel).toBeTruthy();
     expect(pauseLabel?.querySelector<HTMLInputElement>('input[type="checkbox"]')?.checked).toBe(true);
 
+    expect(findButton((text) => text.startsWith("Import 3 file"))?.disabled).toBe(true);
+    await confirmSourceReleaseReview();
+    expect(findButton((text) => text.startsWith("Import 3 file"))?.disabled).toBe(false);
     await clickButton((text) => text.startsWith("Import 3 file"));
     await settle();
   }
@@ -377,7 +392,8 @@ describe("CompanyImport", () => {
     await renderPageAndImport();
 
     expect(mockCompaniesApi.importBundleAsync).toHaveBeenCalledWith(
-      expect.objectContaining({ pauseAutomations: true }),
+      expect.objectContaining({ pauseAutomations: true, expectedSourceFingerprint: "a".repeat(64),
+        sourceReleaseReview: { confirmed: true, sourceFingerprint: "a".repeat(64) } }),
     );
     // The page polls the job it was handed and runs the same activation path
     // the synchronous response used to drive.
@@ -394,6 +410,19 @@ describe("CompanyImport", () => {
     expect(container.textContent).toContain("activated");
     expect(container.textContent).not.toContain("failed:");
     expect(findButton((text) => text === "Go to dashboard")).toBeTruthy();
+  });
+
+  it("shows the resolved GitHub commit in English and Danish", async () => {
+    const preview = buildPreviewResult();
+    preview.sourceRevision = "f".repeat(40);
+    mockCompaniesApi.importPreview.mockResolvedValue(preview);
+    await i18n.changeLanguage("en");
+    await renderPage();
+    await enterGithubUrl();
+    await clickButton((text) => text === "Preview import");
+    expect(container.textContent).toContain(`GitHub source commit: ${preview.sourceRevision}`);
+    await i18n.changeLanguage("da");
+    expect(container.textContent).toContain(`GitHub-kildecommit: ${preview.sourceRevision}`);
   });
 
   it("keeps activating remaining items and surfaces per-item failures", async () => {
@@ -451,6 +480,7 @@ describe("CompanyImport", () => {
     expect(mockCompaniesApi.importPreview).not.toHaveBeenCalled();
     expect(mockCompaniesApi.importPreviewPackage.mock.calls[0]![0]).toBe(file);
 
+    await confirmSourceReleaseReview();
     await clickButton((text) => text.startsWith("Import 3 file"));
     await settle();
 
@@ -535,6 +565,7 @@ describe("CompanyImport", () => {
     expect(mockCompaniesApi.importPreviewPackage).not.toHaveBeenCalled();
     expect(container.textContent).toContain("Import preview");
 
+    await confirmSourceReleaseReview();
     await clickButton((text) => text.startsWith("Import 3 file"));
     await vi.waitFor(() => {
       expect(mockCompaniesApi.importTransferApply).toHaveBeenCalledTimes(1);
@@ -547,7 +578,7 @@ describe("CompanyImport", () => {
     expect(mockCompaniesApi.importTransferUploadPart).toHaveBeenCalledTimes(2);
     expect(mockCompaniesApi.importTransferApply).toHaveBeenCalledWith(
       "transfer-1",
-      expect.objectContaining({ pauseAutomations: true }),
+      expect.objectContaining({ pauseAutomations: true, expectedSourceFingerprint: "a".repeat(64) }),
     );
     expect(mockCompaniesApi.importBundlePackageAsync).not.toHaveBeenCalled();
     expect(mockCompaniesApi.getImportJob).toHaveBeenCalledWith("job-1");
@@ -689,6 +720,7 @@ describe("CompanyImport", () => {
     await enterGithubUrl();
     await clickButton((text) => text === "Preview import");
 
+    await confirmSourceReleaseReview();
     await clickButton((text) => text.startsWith("Import 3 file"));
 
     expect(container.textContent).toContain("Import running on the server");
@@ -758,6 +790,7 @@ describe("CompanyImport", () => {
 
     // The pause toggle feeds the request payload too: after another failed
     // attempt, toggling it also supersedes the request and clears the panel.
+    await confirmSourceReleaseReview();
     await clickButton((text) => text.startsWith("Import 3 file"));
     await act(async () => {
       rejectImport(new Error("second failure"));
@@ -778,6 +811,7 @@ describe("CompanyImport", () => {
     expect(container.textContent).not.toContain("Import failed:");
 
     // File-selection edits feed the payload too and supersede a failure.
+    await confirmSourceReleaseReview();
     await clickButton((text) => text.startsWith("Import 3 file"));
     await act(async () => {
       rejectImport(new Error("third failure"));
@@ -788,7 +822,8 @@ describe("CompanyImport", () => {
 
     const fileCheckbox = Array.from(
       container.querySelectorAll<HTMLInputElement>('input[type="checkbox"]'),
-    ).find((input) => !input.closest("label")?.textContent?.includes("Start imported agents"));
+    ).find((input) => !input.closest("label")?.textContent?.includes("Start imported agents")
+      && !input.closest("label")?.textContent?.includes("reviewed this exact package"));
     expect(fileCheckbox).toBeTruthy();
     await act(async () => {
       fileCheckbox!.click();
@@ -816,6 +851,7 @@ describe("CompanyImport", () => {
         }),
     );
     mockCompaniesApi.getImportJob.mockResolvedValue(buildSucceededJob("job-final"));
+    await confirmSourceReleaseReview();
     await clickButton((text) => text.startsWith("Import 3 file"));
 
     expect(mockCompaniesApi.importBundleAsync).toHaveBeenLastCalledWith(
@@ -866,11 +902,57 @@ describe("CompanyImport", () => {
     await renderPage();
     await enterGithubUrl();
     await clickButton((text) => text === "Preview import");
+    await confirmSourceReleaseReview();
     await clickButton((text) => text.startsWith("Import 3 file"));
     await settle();
 
     expect(container.textContent).toContain("Import failed: blob mismatch");
     expect(mockPushToast).toHaveBeenCalledWith(expect.objectContaining({ tone: "error" }));
+  });
+
+  it("keeps a reconciliable import job stored and never treats it as completed", async () => {
+    mockCompaniesApi.getImportJob.mockResolvedValue({
+      job: { id: "job-1", status: "needs_reconciliation", error: { code: "import_outcome_unknown" } },
+    });
+
+    await renderPageAndImport();
+
+    expect(container.textContent).toContain("Import outcome unknown");
+    expect(container.textContent).not.toContain("Import failed:");
+    expect(container.textContent).not.toContain("Import complete");
+    expect(mockCompaniesApi.importBundleAsync).toHaveBeenCalledTimes(1);
+    expect(mockAgentsApi.resume).not.toHaveBeenCalled();
+    expect(mockRoutinesApi.update).not.toHaveBeenCalled();
+    expect(findButton((text) => text.startsWith("Import 3 file"))?.disabled).toBe(true);
+    expect(readStoredImportJob("company-1"))
+      .toMatchObject({ jobId: "job-1", pauseAutomations: true });
+  });
+
+  it("does not adopt an unrelated job from an unknown-outcome 409", async () => {
+    mockCompaniesApi.importBundleAsync.mockRejectedValueOnce(
+      new ApiError("Import outcome unknown", 409, {
+        code: "import_outcome_unknown",
+        transferId: "transfer-committed",
+        job: { id: "unrelated-job", status: "running" },
+        statusUrl: "/companies/import/jobs/unrelated-job",
+      }),
+    );
+    mockCompaniesApi.getImportJob.mockResolvedValue(buildSucceededJob("unrelated-job"));
+
+    await renderPage();
+    await enterGithubUrl();
+    await clickButton((text) => text === "Preview import");
+    await confirmSourceReleaseReview();
+    await clickButton((text) => text.startsWith("Import 3 file"));
+    await settle();
+
+    expect(container.textContent).toContain("Import outcome unknown");
+    expect(container.textContent).not.toContain("Import complete");
+    expect(mockCompaniesApi.getImportJob).not.toHaveBeenCalled();
+    expect(mockCompaniesApi.importBundleAsync).toHaveBeenCalledTimes(1);
+    expect(mockAgentsApi.resume).not.toHaveBeenCalled();
+    expect(mockRoutinesApi.update).not.toHaveBeenCalled();
+    expect(findButton((text) => text.startsWith("Import 3 file"))?.disabled).toBe(true);
   });
 
   it("terminates the import when polling hits a permanent auth error", async () => {
@@ -884,6 +966,7 @@ describe("CompanyImport", () => {
     await renderPage();
     await enterGithubUrl();
     await clickButton((text) => text === "Preview import");
+    await confirmSourceReleaseReview();
     await clickButton((text) => text.startsWith("Import 3 file"));
     await settle();
 
@@ -955,9 +1038,9 @@ describe("CompanyImport", () => {
     expect(container.querySelector('[data-testid="import-expired-open-company"]')).toBeNull();
   });
 
-  it("surfaces a first-poll 404 as an error because the job never existed", async () => {
-    // A 404 on the very first poll — before the client ever saw the job
-    // running — means the id never existed. That stays a hard error.
+  it("preserves an accepted job with missing first status as an unknown outcome", async () => {
+    // An accepted operation can be withdrawn or come from an older server.
+    // A missing status does not prove that its import effects never ran.
     mockCompaniesApi.getImportJob.mockRejectedValue(
       new ApiError("Import job not found", 404, { error: "Import job not found" }),
     );
@@ -965,21 +1048,21 @@ describe("CompanyImport", () => {
     await renderPage();
     await enterGithubUrl();
     await clickButton((text) => text === "Preview import");
+    await confirmSourceReleaseReview();
     await clickButton((text) => text.startsWith("Import 3 file"));
     await settle();
 
-    expect(container.textContent).toContain("Import failed:");
-    expect(container.textContent).toContain("it may have restarted while the import ran");
+    expect(container.textContent).toContain("Import outcome unknown:");
+    expect(container.textContent).toContain("Its outcome is unconfirmed");
     expect(container.textContent).not.toContain("Import completed");
+    expect(findButton((text) => text.startsWith("Import 3 file"))?.disabled).toBe(true);
+    expect(readStoredImportJob("company-1")).toMatchObject({ jobId: "job-1" });
     expect(mockPushToast).toHaveBeenCalledWith(expect.objectContaining({ tone: "error" }));
   });
 
-  it("surfaces a running-then-gone job as an error because the server restarted mid-import", async () => {
-    // The first poll finds the job running; the next poll 404s. A running job is
-    // never dropped by the retention sweep (only settled jobs age out), so its
-    // disappearance means the server restarted mid-import — the import never
-    // reached a confirmed success and may not have finished. Report that
-    // honestly instead of masking a possibly-incomplete import as completed.
+  it("retains a disappeared running job as unknown without another import", async () => {
+    // Loss of a previously readable operation is unconfirmed, never a
+    // completed import or permission to repeat a possibly committed effect.
     mockCompaniesApi.getImportJob
       .mockResolvedValueOnce({ job: { id: "job-1", status: "running" } })
       .mockRejectedValue(new ApiError("Import job not found", 404, { error: "Import job not found" }));
@@ -987,12 +1070,15 @@ describe("CompanyImport", () => {
     await renderPage();
     await enterGithubUrl();
     await clickButton((text) => text === "Preview import");
+    await confirmSourceReleaseReview();
     await clickButton((text) => text.startsWith("Import 3 file"));
     await settle();
 
-    expect(container.textContent).toContain("Import failed:");
-    expect(container.textContent).toContain("it may have restarted while the import ran");
+    expect(container.textContent).toContain("Import outcome unknown:");
+    expect(container.textContent).toContain("Its outcome is unconfirmed");
     expect(container.textContent).not.toContain("Import completed");
+    expect(findButton((text) => text.startsWith("Import 3 file"))?.disabled).toBe(true);
+    expect(readStoredImportJob("company-1")).toMatchObject({ jobId: "job-1" });
     expect(mockPushToast).toHaveBeenCalledWith(expect.objectContaining({ tone: "error" }));
   });
 
@@ -1068,6 +1154,7 @@ describe("CompanyImport", () => {
     // The picker shows each agent's source adapter, not a coerced CEO default.
     expect(findAdapterSelects().map((select) => select.value)).toEqual(["claude_local", "codex_local"]);
 
+    await confirmSourceReleaseReview();
     await clickButton((text) => text.startsWith("Import 3 file"));
     await settle();
 
@@ -1088,6 +1175,7 @@ describe("CompanyImport", () => {
     });
     await flushReact();
 
+    await confirmSourceReleaseReview();
     await clickButton((text) => text.startsWith("Import 3 file"));
     await settle();
 
@@ -1134,6 +1222,7 @@ describe("CompanyImport", () => {
     expect(container.textContent).toContain("will use Claude Code");
     expect(findAdapterSelects().map((select) => select.value)).toEqual(["claude_local", "claude_local"]);
 
+    await confirmSourceReleaseReview();
     await clickButton((text) => text.startsWith("Import 3 file"));
     await settle();
 
@@ -1154,6 +1243,7 @@ describe("CompanyImport", () => {
     expect(container.textContent).toContain("source adapter codex_local is not installed here");
     expect(findAdapterSelects().map((select) => select.value)).toEqual(["gemini_local", "gemini_local"]);
 
+    await confirmSourceReleaseReview();
     await clickButton((text) => text.startsWith("Import 3 file"));
     await settle();
 
@@ -1172,6 +1262,7 @@ describe("CompanyImport", () => {
     expect(container.textContent).not.toContain("is not installed here");
     expect(findAdapterSelects().map((select) => select.value)).toEqual(["claude_local", "codex_local"]);
 
+    await confirmSourceReleaseReview();
     await clickButton((text) => text.startsWith("Import 3 file"));
     await settle();
 

@@ -1,0 +1,18 @@
+Listing tests:
+  [chromium] › aw-v9-experience.spec.ts:17:1 › V9 Home, feedback recovery and rollback preserve native state
+  [chromium] › aw-v9-experience.spec.ts:354:1 › V9 workflow review preserves the account gate, separates revisions and keeps Advanced rollback
+  [chromium] › aw-v9-experience.spec.ts:831:1 › feedback recovers an actually committed lost acknowledgement by reading its Original request
+  [chromium] › aw-v9-insight-experiments.spec.ts:25:1 › Insights reads a stopped experiment without inventing an effect or exposing unit registers
+  [chromium] › aw-v9-insight-scenarios.spec.ts:21:1 › Insights reads conditional scenario comparisons and loses private results after Source withdrawal
+  [chromium] › aw-v9-project-draft.spec.ts:16:1 › an explicit project draft recovers a lost Native acknowledgement after reload through reads without creating another project or running work
+  [chromium] › aw-v9-runtime-candidates.spec.ts:15:1 › saved runtime selection survives reload and an unknown qualification uses only its Original receipt
+  [chromium] › aw-v9-workflow-publication.spec.ts:13:1 › reviewed internal publication recovers a lost native receipt without publishing twice
+  [chromium] › aw-v9-workflow-test.spec.ts:14:1 › an unpublished internal test recovers its original receipt after reload and preserves native test purpose
+  [chromium] › conference-room-typing-intro.spec.ts:142:3 › First-task launch after onboarding wizard › creates the first task and opens its detail page
+  [chromium] › conference-room-typing-intro.spec.ts:157:3 › First-task launch after onboarding wizard › lands on the first task even when a company already exists
+  [chromium] › paused-composer.spec.ts:13:3 › paused composer: task chat preserves drafts and requires resume
+  [chromium] › paused-composer.spec.ts:13:3 › paused composer: classic preserves drafts and requires resume
+  [chromium] › pipelines-tutorial-flow.spec.ts:284:3 › Pipelines tutorial UI flow › covers agent fan-out, drift acknowledgement gates, child-terminal gates, and stale approvals
+  [chromium] › pipelines-tutorial-flow.spec.ts:439:3 › Pipelines tutorial UI flow › walks setup, intake, board moves, item detail, review queue, and learnings
+  [chromium] › smoke-lab.shared.ts:316:3 › Smoke Lab scenario catalog mirror (P1-P4) › records the P1-P4 CI-safe Smoke Lab lifecycle into the results API @smoke-lab
+Total: 16 tests in 11 files

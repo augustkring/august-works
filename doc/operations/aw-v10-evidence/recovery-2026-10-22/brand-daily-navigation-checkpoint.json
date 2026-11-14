@@ -1,0 +1,59 @@
+{
+  "scope": "Canonical identity and first-party feedback entry in original daily UI owners",
+  "sources": {
+    "ui/src/pages/Dashboard.tsx": "52e1bc2e0badb80e7dda77da337ef763f1293d2b59a7dfa48684dc75209fe7f2",
+    "ui/src/pages/CompanyAccess.tsx": "5d7485022184d7fafab2107cd16ef2bb0f2b066780a51ac9d65e66270f11237f",
+    "ui/src/components/SidebarAccountMenu.tsx": "b49303a813639b526a331dcba820c0430cdca12d2d2633ffae25ceee90de662f",
+    "ui/src/components/SidebarAccountMenu.production.tsx": "9d4eb0c33dc1bdb5fd5dac41635e6ba05f4541ac6eee52900e8ec36fb3b5afe4",
+    "ui/src/components/Layout.production.tsx": "576c6eae3118999ad274a87a7e098b5cee31c0f0e05527d626828d2daa81cae7",
+    "ui/src/components/SidebarAccountMenu.test.tsx": "fc2518ffda798d8fe8eabc411c80c7c93ec374cab6d0da27b73a7137e726f172"
+  },
+  "implementation": "Dashboard welcome and Company Access explanatory product label use PRODUCT_IDENTITY. Both account menus use intended canonical docs origin. Both feedback controls use existing enabled-policy event and existing first-party composer; production layout mounts that original composer. Remove implicit upstream external feedback fallback. Existing composer account/source/preview/API behavior remains.",
+  "baseline": {
+    "failed": 1,
+    "filtered": 6,
+    "seconds": 16.58,
+    "exit": 1,
+    "log": "brand-navigation-composer-baseline.log",
+    "finding": "Actual original production menu has upstream anchor and no first-party button, so new menu-plus-real-dialog test fails. Exact failed test and source pins retained."
+  },
+  "verification": {
+    "firstCombined": {
+      "failed": 14,
+      "passed": 47,
+      "seconds": 144.61,
+      "exit": 1,
+      "log": "brand-daily-navigation-tests.log",
+      "finding": "Original CompanyAccess five-second timeout followed by12 cascading failures; Root added standard-menu parameter but used wrong accessible label (Feedback vs Share feedback). Correct only that selector. No production policy or deadlines relaxed."
+    },
+    "originalAccountIsolated": {
+      "passed": 29,
+      "seconds": 27.4,
+      "exit": 0,
+      "log": "brand-daily-navigation-account-isolated.log"
+    },
+    "finalOtherOriginalSuites": {
+      "files": 3,
+      "passed": 32,
+      "seconds": 117.18,
+      "exit": 0,
+      "log": "brand-daily-navigation-final-2.log",
+      "finding": "Both menu variants actually open mounted real first-party dialog. Existing complete composer suite and Dashboard tests included. This is component assembly, not a full production-layout/browser journey."
+    },
+    "finalUiTypecheck": {
+      "exit": 0,
+      "log": "brand-daily-navigation-final-ui-types.log"
+    },
+    "tokenGates": {
+      "exit": 0,
+      "log": "brand-daily-navigation-token-gates.log"
+    },
+    "pinsMatch": true,
+    "processesClosed": true
+  },
+  "review": "Bounded gpt-6-luna original UI assistance; Root reviewed actual links/layout/composer, reproduced old behavior, extended real-composer check to both menus, corrected label fixture and ran/closed checks.",
+  "limits": [
+    "Intended docs origin does not prove deployed documentation availability.",
+    "Complete bilingual customer journeys, full latest workspace/tests/build and V10/PR/release gates remain open."
+  ]
+}

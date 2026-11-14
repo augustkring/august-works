@@ -3,7 +3,13 @@ import { supervisionPolicySchema } from "./supervision.js";
 import { READINESS_ACTIONS } from "./readiness.js";
 export const orchestrationCompletionSchema = z.object({
   objective: z.string().trim().min(10).max(4000),
-  requiredOutputs: z.array(z.object({ key: z.string().regex(/^[a-z][a-z0-9_-]{0,79}$/), jsonSchema: z.record(z.string(), z.unknown()).nullable().default(null) }).strict()).min(1).max(16),
+  requiredOutputs: z.array(z.object({ kind: z.enum(["task_document", "private_project"]).default("task_document"),
+    key: z.string().regex(/^[a-z][a-z0-9_-]{0,79}$/),
+    jsonSchema: z.record(z.string(), z.unknown()).nullable().default(null) }).strict()
+    .superRefine((output, ctx) => {
+      if (output.kind === "private_project" && output.jsonSchema !== null)
+        ctx.addIssue({ code: "custom", message: "Private Project outputs do not accept a document JSON schema" });
+    })).min(1).max(16),
   businessInvariants: z.array(z.string().trim().min(5).max(1000)).min(1).max(16),
   evidenceRequirements: z.array(z.string().trim().min(5).max(1000)).max(16).default([]),
   prohibitedOutcomes: z.array(z.string().trim().min(5).max(1000)).max(16).default([]),

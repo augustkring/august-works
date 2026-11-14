@@ -4,7 +4,10 @@ import { eq } from "drizzle-orm";
 import {
   activityLog,
   agents,
+  authSessions,
+  authUsers,
   companies,
+  companyMemberships,
   createDb,
   documentRevisions,
   documents,
@@ -12,6 +15,7 @@ import {
   heartbeatRuns,
   issues,
   projectWorkspaces,
+  principalPermissionGrants,
   projects,
   summarySlots,
 } from "@paperclipai/db";
@@ -22,6 +26,7 @@ import {
 import { summarySlotService } from "../services/summary-slots.ts";
 import { withBuiltInAgentMarker } from "../services/built-in-agent-metadata.ts";
 import { issueService } from "../services/issues.ts";
+import { createCanonicalHumanProject, seedCurrentHumanSourceActor } from "./helpers/current-human-source-fixture.js";
 
 const embeddedPostgresSupport = await getEmbeddedPostgresTestSupport();
 const describeEmbeddedPostgres = embeddedPostgresSupport.supported ? describe : describe.skip;
@@ -39,6 +44,7 @@ if (!embeddedPostgresSupport.supported) {
 describeEmbeddedPostgres("summary slot service", () => {
   let db!: ReturnType<typeof createDb>;
   let tempDb: Awaited<ReturnType<typeof startEmbeddedPostgresTestDatabase>> | null = null;
+  const sourceActors = new Map<string, Awaited<ReturnType<typeof seedCurrentHumanSourceActor>>>();
 
   beforeAll(async () => {
     tempDb = await startEmbeddedPostgresTestDatabase("paperclip-summary-slots-");
@@ -56,7 +62,12 @@ describeEmbeddedPostgres("summary slot service", () => {
     await db.delete(projects);
     await db.delete(activityLog);
     await db.delete(agents);
+    await db.delete(principalPermissionGrants);
+    await db.delete(companyMemberships);
+    await db.delete(authSessions);
     await db.delete(companies);
+    await db.delete(authUsers);
+    sourceActors.clear();
   });
 
   afterAll(async () => {
@@ -69,15 +80,16 @@ describeEmbeddedPostgres("summary slot service", () => {
       id: companyId,
       name: "Paperclip",
       issuePrefix: issuePrefix(companyId),
-      defaultResponsibleUserId: "responsible-user",
+      defaultResponsibleUserId: "board-user",
     });
+    sourceActors.set(companyId, await seedCurrentHumanSourceActor(db, [companyId], "board-user"));
     return companyId;
   }
 
   async function seedProject(companyId: string) {
-    const projectId = randomUUID();
-    await db.insert(projects).values({ id: projectId, companyId, name: "Paperclip App" });
-    return projectId;
+    const actor = sourceActors.get(companyId);
+    if (!actor) throw new Error("A current Human source actor is required for the Project fixture");
+    return (await createCanonicalHumanProject(db, companyId, actor, "Paperclip App")).id;
   }
 
   async function seedProjectWorkspace(companyId: string, projectId: string) {

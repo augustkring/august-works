@@ -49,8 +49,26 @@ const mockIssueReferenceService = vi.hoisted(() => ({
 const mockSecretService = vi.hoisted(() => ({
   normalizeEnvBindingsForPersistence: vi.fn(async (_companyId: string, env: Record<string, unknown>) => env),
 }));
+const mockAccessDecision = vi.hoisted(() => vi.fn(async () => ({ allowed: true })));
+const mockCanReadIssuePrivacy = vi.hoisted(() => vi.fn(async () => true));
+const mockCanReadProjectPrivacy = vi.hoisted(() => vi.fn(async () => true));
+const mockAnalyticalPayloadAccess = vi.hoisted(() => vi.fn(async () => undefined));
 
 const mockLogActivity = vi.hoisted(() => vi.fn());
+let lastRouteError: unknown = null;
+
+function routeErrorSummary() {
+  if (!(lastRouteError instanceof Error)) return String(lastRouteError);
+  const cause = lastRouteError.cause;
+  return JSON.stringify({
+    name: lastRouteError.name,
+    message: lastRouteError.message,
+    stack: lastRouteError.stack?.split("\n").slice(0, 8),
+    cause: cause instanceof Error
+      ? { name: cause.name, message: cause.message, code: (cause as NodeJS.ErrnoException).code }
+      : cause == null ? null : String(cause).slice(0, 200),
+  });
+}
 
 vi.mock("../services/index.js", () => ({
   projectService: () => mockProjectService,
@@ -63,6 +81,7 @@ vi.mock("../services/index.js", () => ({
   accessService: () => ({
     canUser: vi.fn(),
     hasPermission: vi.fn(),
+    decide: mockAccessDecision,
   }),
   agentService: () => ({
     getById: vi.fn(),
@@ -115,8 +134,40 @@ vi.mock("../services/secrets.js", () => ({
   secretService: () => mockSecretService,
 }));
 
+// The route factories create instance settings directly rather than through
+// services/index. These tests use placeholder DB objects, so the setting read
+// used by issue/project write side effects must remain fixture-backed.
+vi.mock("../services/instance-settings.js", () => ({
+  instanceSettingsService: () => ({
+    getExperimental: vi.fn(async () => ({
+      enableExternalObjects: false,
+      enableManagedSandboxOnly: false,
+    })),
+  }),
+}));
+
 vi.mock("../services/issue-assignment-wakeup.js", () => ({
   queueIssueAssignmentWakeup: vi.fn(),
+}));
+
+// Keep authorization explicit at this route-unit boundary; database-backed
+// privacy qualification has separate PostgreSQL integration coverage.
+vi.mock("../services/authorization.js", async () => ({
+  ...await vi.importActual<typeof import("../services/authorization.js")>("../services/authorization.js"),
+  canActorReadIssuePrivacy: mockCanReadIssuePrivacy,
+  canActorReadProjectPrivacy: mockCanReadProjectPrivacy,
+}));
+
+vi.mock("../services/analytical-context-authority.js", async () => ({
+  ...await vi.importActual<typeof import("../services/analytical-context-authority.js")>("../services/analytical-context-authority.js"),
+  assertAnalyticalContextPayloadAccess: mockAnalyticalPayloadAccess,
+}));
+
+// Project creation's privacy-tree lock is covered by service integration
+// tests. This suite isolates environment selection and uses a placeholder DB.
+vi.mock("../services/issues.js", async () => ({
+  ...await vi.importActual<typeof import("../services/issues.js")>("../services/issues.js"),
+  lockIssuePrivacyTree: vi.fn(async () => undefined),
 }));
 
 function buildApp(routerFactory: (app: express.Express) => void) {
@@ -131,7 +182,10 @@ function buildApp(routerFactory: (app: express.Express) => void) {
     next();
   });
   routerFactory(app);
-  app.use(errorHandler);
+  app.use((err, req, res, next) => {
+    lastRouteError = err;
+    errorHandler(err, req, res, next);
+  });
   return app;
 }
 
@@ -173,6 +227,7 @@ describe.sequential("execution environment route guards", () => {
   });
 
   beforeEach(() => {
+    lastRouteError = null;
     mockProjectService.create.mockReset();
     mockProjectService.getById.mockReset();
     mockProjectService.update.mockReset();
@@ -199,6 +254,10 @@ describe.sequential("execution environment route guards", () => {
     mockIssueReferenceService.syncIssue.mockClear();
     mockSecretService.normalizeEnvBindingsForPersistence.mockClear();
     mockLogActivity.mockReset();
+    mockAccessDecision.mockReset().mockResolvedValue({ allowed: true });
+    mockCanReadIssuePrivacy.mockReset().mockResolvedValue(true);
+    mockCanReadProjectPrivacy.mockReset().mockResolvedValue(true);
+    mockAnalyticalPayloadAccess.mockReset().mockResolvedValue(undefined);
   });
 
   it("accepts sandbox environments on project create", async () => {
@@ -208,12 +267,10 @@ describe.sequential("execution environment route guards", () => {
       driver: "sandbox",
       config: { provider: "fake-plugin" },
     });
-    mockProjectService.create.mockResolvedValue({
+    mockProjectService.create.mockImplementation(async (_companyId, data) => ({
       id: "project-1",
-      companyId: "company-1",
-      name: "Sandboxed Project",
-      status: "backlog",
-    });
+      ...data,
+    }));
     const app = createProjectApp();
 
     const res = await request(app)
@@ -227,7 +284,7 @@ describe.sequential("execution environment route guards", () => {
       });
 
     expect(res.status).not.toBe(422);
-    expect(mockProjectService.create).toHaveBeenCalled();
+    expect(mockProjectService.create, `route returned ${res.status}: ${routeErrorSummary()}`).toHaveBeenCalled();
   });
 
   it("accepts sandbox environments on project update", async () => {
@@ -262,7 +319,25 @@ describe.sequential("execution environment route guards", () => {
       });
 
     expect(res.status).not.toBe(422);
-    expect(mockProjectService.update).toHaveBeenCalled();
+    expect(mockProjectService.update, `route returned ${res.status}: ${routeErrorSummary()}`).toHaveBeenCalled();
+  });
+
+  it("does not mutate a project when its privacy check denies the actor", async () => {
+    mockProjectService.getById.mockResolvedValue({
+      id: "project-1",
+      companyId: "company-1",
+      name: "Sandboxed Project",
+      status: "backlog",
+      archivedAt: null,
+    });
+    mockCanReadProjectPrivacy.mockResolvedValue(false);
+
+    const res = await request(createProjectApp())
+      .patch("/api/projects/project-1")
+      .send({ executionWorkspacePolicy: { environmentId: sandboxEnvironmentId } });
+
+    expect(res.status).toBe(404);
+    expect(mockProjectService.update).not.toHaveBeenCalled();
   });
 
   it("accepts sandbox environments on issue create", async () => {
@@ -402,6 +477,26 @@ describe.sequential("execution environment route guards", () => {
       });
 
     expect(res.status).not.toBe(422);
-    expect(mockIssueService.update).toHaveBeenCalled();
+    expect(mockIssueService.update, `route returned ${res.status}: ${routeErrorSummary()}`).toHaveBeenCalled();
+  });
+
+  it("does not mutate an issue when its privacy check denies the actor", async () => {
+    mockIssueService.getById.mockResolvedValue({
+      id: "issue-1",
+      companyId: "company-1",
+      status: "todo",
+      assigneeAgentId: null,
+      assigneeUserId: null,
+      createdByUserId: null,
+      identifier: "PAPA-999",
+    });
+    mockCanReadIssuePrivacy.mockResolvedValue(false);
+
+    const res = await request(createIssueApp())
+      .patch("/api/issues/issue-1")
+      .send({ title: "Denied update" });
+
+    expect(res.status).toBe(404);
+    expect(mockIssueService.update).not.toHaveBeenCalled();
   });
 });

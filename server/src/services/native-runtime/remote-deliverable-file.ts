@@ -1,6 +1,7 @@
 import { createHash } from "node:crypto";
 import { posix } from "node:path";
 import type { CommandManagedRuntimeRunner } from "@paperclipai/adapter-utils/command-managed-runtime";
+import type { RuntimeSandboxExecRelayRequest } from "@paperclipai/shared";
 
 import { MAX_ATTACHMENT_BYTES } from "../../attachment-types.js";
 
@@ -70,6 +71,30 @@ async function noSymlinks(root, relative) {
   process.exitCode = 1;
 });
 `;
+
+/** Parse only the exact server readback command used after a Native remote
+ * attachment stage. The caller still proves the nonce against current intent. */
+export function parseNativeRemoteWorkspaceAttachmentReadback(request: Pick<RuntimeSandboxExecRelayRequest, "cwd" | "argv" | "env" | "stdinBase64">,
+  expectedWorkspaceRoot: string): { runId: string; stageNonce: string; relativePath: string; byteSize: number; sha256: string } | null {
+  const env = request.env && typeof request.env === "object" && !Array.isArray(request.env) ? request.env : {};
+  if (request.cwd !== expectedWorkspaceRoot || request.argv.length !== 5 || request.argv[0] !== "node" ||
+      request.argv[1] !== "--input-type=commonjs" || request.argv[2] !== "-e" || request.argv[3] !== READ_REMOTE_FILE ||
+      request.stdinBase64 !== "" || Object.keys(env).sort().join(",") !== "NODE_OPTIONS,NODE_PATH" ||
+      env.NODE_OPTIONS !== "" || env.NODE_PATH !== "") return null;
+  let value: unknown;
+  try { value = JSON.parse(request.argv[4]!); } catch { return null; }
+  if (!value || typeof value !== "object" || Array.isArray(value)) return null;
+  const input = value as Record<string, unknown>;
+  if (Object.keys(input).sort().join(",") !== "byteSize,contentRef,sha256,workspaceRoot" ||
+      input.workspaceRoot !== expectedWorkspaceRoot || typeof input.contentRef !== "string" ||
+      posix.normalize(input.contentRef) !== input.contentRef || typeof input.byteSize !== "number" ||
+      !Number.isSafeInteger(input.byteSize) || input.byteSize < 1 || input.byteSize > MAX_REMOTE_DELIVERABLE_BYTES ||
+      typeof input.sha256 !== "string" || !/^[a-f0-9]{64}$/u.test(input.sha256)) return null;
+  const match = /^\.paperclip-inbound\/([a-f0-9]{8}-[a-f0-9]{4}-[a-f0-9]{4}-[a-f0-9]{4}-[a-f0-9]{12})\/([a-f0-9]{8}-[a-f0-9]{4}-[a-f0-9]{4}-[a-f0-9]{4}-[a-f0-9]{12})\/payload$/i.exec(input.contentRef);
+  if (!match) return null;
+  return { runId: match[1]!, stageNonce: match[2]!, relativePath: input.contentRef,
+    byteSize: input.byteSize, sha256: input.sha256 };
+}
 
 /** The caller supplies the authorized lease runner and remote workspace root. */
 export async function readVerifiedRemoteWorkspaceFile(input: {

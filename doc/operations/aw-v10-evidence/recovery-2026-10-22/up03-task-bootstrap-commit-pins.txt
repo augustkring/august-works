@@ -1,0 +1,3 @@
+1c599d28a37ccfe9a2070a9958cf36c42434437ece814fbf4dc8fe83d235f261  server/src/services/heartbeat.ts
+d433686366127dff776b3f38bc8e5f61c890aa40528b5df8b4ff495b7882e1aa  server/src/services/issues.ts
+977dac0997b681692719d5c407fd595fba061ff4e1598a449cdd803532e0c891  server/src/__tests__/heartbeat-process-recovery.test.ts

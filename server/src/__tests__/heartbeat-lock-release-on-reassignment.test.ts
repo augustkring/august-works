@@ -6,6 +6,8 @@ import {
   agentRuntimeState,
   agentWakeupRequests,
   companies,
+  companyMemberships,
+  principalPermissionGrants,
   createDb,
   heartbeatRunEvents,
   heartbeatRuns,
@@ -16,6 +18,7 @@ import {
   startEmbeddedPostgresTestDatabase,
 } from "./helpers/embedded-postgres.js";
 import { drainHeartbeatRunsToQuiescence } from "./helpers/drain-heartbeat-runs.js";
+import { seedCurrentHumanMembership } from "./helpers/current-human-membership-fixture.js";
 
 const mockTelemetryClient = vi.hoisted(() => ({ track: vi.fn() }));
 const mockTrackAgentTaskRun = vi.hoisted(() => vi.fn());
@@ -64,6 +67,8 @@ describeEmbeddedPostgres("heartbeat lock release on cross-agent reassignment", (
     await db.delete(issues);
     await db.delete(agentRuntimeState);
     await db.delete(agents);
+    await db.delete(principalPermissionGrants);
+    await db.delete(companyMemberships);
     await db.delete(companies);
     vi.clearAllMocks();
   });
@@ -88,6 +93,7 @@ describeEmbeddedPostgres("heartbeat lock release on cross-agent reassignment", (
       requireBoardApprovalForNewAgents: false,
       defaultResponsibleUserId: "responsible-user",
     });
+    await seedCurrentHumanMembership(db, companyId, "responsible-user");
 
     await db.insert(agents).values([
       {

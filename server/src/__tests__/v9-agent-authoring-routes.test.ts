@@ -28,20 +28,23 @@ const tests = vi.hoisted(() => ({ review: vi.fn(), start: vi.fn(), get: vi.fn(),
 vi.mock("../services/agents/authoring-tests.js", () => ({ agentAuthoringTestService: () => tests }));
 const publications = vi.hoisted(() => ({ review: vi.fn(), publish: vi.fn(), receipt: vi.fn() }));
 vi.mock("../services/agents/authoring-publication.js", () => ({ agentAuthoringPublicationService: () => publications }));
+const migrationMonitor = vi.hoisted(() => ({ current: vi.fn(), review: vi.fn(), receipt: vi.fn(), record: vi.fn() }));
+vi.mock("../services/agents/authoring-model-migration-monitor.js", () => ({ agentAuthoringModelMigrationMonitorService: () => migrationMonitor }));
 const companyId = "10000000-0000-4000-8000-000000000001",
   id = "10000000-0000-4000-8000-000000000002",
   requestId = "10000000-0000-4000-8000-000000000003";
-function app() {
+function app(actor: Express.Request["actor"] = {
+  type: "board",
+  source: "session",
+  userId: "author",
+  sessionId: "current-session",
+  companyIds: [companyId],
+  isInstanceAdmin: false,
+}) {
   const app = express();
   app.use(express.json());
   app.use((req, _res, next) => {
-    req.actor = {
-      type: "board",
-      source: "session",
-      userId: "author",
-      companyIds: [companyId],
-      isInstanceAdmin: false,
-    };
+    req.actor = actor;
     next();
   });
   app.use("/api", agentAuthoringRoutes({} as Db));
@@ -182,6 +185,30 @@ describe("native authoring HTTP boundary", () => {
       )
       .expect(403);
     expect(service.get).not.toHaveBeenCalled();
+  });
+  it("requires a current Human session on every model migration monitor route", async () => {
+    const root = `/api/companies/${companyId}/agent-configuration-drafts/${id}/model-migrations`;
+    const command = { requestId, expectedReviewHash: "a".repeat(64), confirmMonitoring: true };
+    const routes = [
+      { method: "get", path: `${root}/current/monitor-review` },
+      { method: "get", path: `${root}/${requestId}/monitor-review` },
+      { method: "get", path: `${root}/${requestId}/monitor-receipt` },
+      { method: "post", path: `${root}/${requestId}/monitor`, body: command },
+    ] as const;
+    const deniedActors: Express.Request["actor"][] = [
+      { type: "board", source: "board_key", userId: "author", companyIds: [companyId] },
+      { type: "agent", source: "agent_key", agentId: id, companyId },
+      { type: "board", source: "session", userId: "author", sessionId: null, companyIds: [companyId] },
+    ];
+    for (const route of routes) for (const actor of deniedActors) {
+      const client = request(app(actor));
+      if (route.method === "get") await client.get(route.path).expect(403);
+      else await client.post(route.path).send(route.body).expect(403);
+    }
+    expect(migrationMonitor.current).not.toHaveBeenCalled();
+    expect(migrationMonitor.review).not.toHaveBeenCalled();
+    expect(migrationMonitor.receipt).not.toHaveBeenCalled();
+    expect(migrationMonitor.record).not.toHaveBeenCalled();
   });
   it("uses private no-store receipts and forwards current native identity and cursor", async () => {
     service.list.mockResolvedValue({ items: [], nextCursor: null });

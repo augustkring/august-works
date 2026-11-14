@@ -1,0 +1,36 @@
+(!) Your Vite config uses features that are unsupported by `configLoader: 'native'`, which is planned to become the default in a future major version of Vite:
+  - `__dirname` (vitest.config.ts:7:25). Use `import.meta.dirname` instead
+Set `VITE_CONFIG_NATIVE_IGNORE_WARNING=true` to suppress this warning.
+
+ RUN  v4.1.11 /workspace/blentera-v10
+
+ ❯ |@paperclipai/server| src/__tests__/v10-support-cases.integration.test.ts (53 tests | 1 failed | 52 skipped) 10448ms
+     × retains one quota window when another application clock is an hour ahead 169ms
+
+⎯⎯⎯⎯⎯⎯⎯ Failed Tests 1 ⎯⎯⎯⎯⎯⎯⎯
+
+ FAIL  |@paperclipai/server| src/__tests__/v10-support-cases.integration.test.ts > V10 authenticated support cases > retains one quota window when another application clock is an hour ahead
+AssertionError: expected 1 to be 2 // Object.is equality
+
+- Expected
++ Received
+
+- 2
++ 1
+
+ ❯ src/__tests__/v10-support-cases.integration.test.ts:351:28
+    349|     const rows = await db.select().from(authRateLimits);
+    350|     expect(rows).toHaveLength(1);
+    351|     expect(rows[0]!.count).toBe(2);
+       |                            ^
+    352|     expect(rows[0]!.lastRequest).toBeLessThan(at + 60000);
+    353|   });
+
+⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯[1/1]⎯
+
+
+ Test Files  1 failed (1)
+      Tests  1 failed | 52 skipped (53)
+   Start at  20:33:41
+   Duration  55.10s (transform 29.22s, setup 257ms, import 43.77s, tests 10.45s, environment 0ms)
+

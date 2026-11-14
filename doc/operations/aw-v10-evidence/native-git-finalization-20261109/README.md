@@ -1,0 +1,11 @@
+# Native Git finalization and retained Context — 2026-11-09
+
+The three legacy mocked-Codex branch finalization cases now run through the installed Native Text HTTP transport, canonical current-Human Project/workspace and Task creation, Plan authorization and actual temporary Git repositories. The assertion map preserves every original branch inspection, repair/adoption, persisted branch and workspace-operation check. Exact parent fixture bytes are retained in the archive. A literal isolated/shared workspace mode can be captured as manual related Task input; existing runtime IDs, strategy, environment, reuse and other settings remain rejected.
+
+Live Context bootstrap still validates current rendered facts and exact Source versions. A retained output can preserve the historical facts it actually consumed after lifecycle metadata advances. Its unchanged body, captured Source snapshot, canonical audit chain and current reader authorization remain checked. Only the producing Run's exact audited workspace-binding suffix can extend that snapshot. Current body edits, source withdrawal, forged transforms and revoked reader membership remain rejected.
+
+The archive contains 115 unique passing local cases, exact invocation Source pins, resource bounds, clean process exits and the final full server TypeScript check. The new Git cases are included in the complete 25-case Native Text suite; they do not replace Human completion authorization. The retired fixture's mocked direct Done write is replaced by the existing canonical Human review regression. Prior exploratory and compiler failures are diagnostic entries, never passing evidence.
+
+Additional SDK fixture corrections keep Project and serial Task completion behind canonical Human Plan review, read the actual wire receipt within its callback lifetime, and distinguish bootstrap Context from a later private read. Safe phase markers, replay error projections and finalization causes identify remaining CI failures without relaxing assertions, timeouts, Stop, budget, Source, privacy or paid-provider gates. These SDK changes are compile-checked and await the next actual managed SDK execution.
+
+PR 42 remains draft. Current-head full CI, remaining V10 acceptance, external Host/provider and representative Human qualification are still open. This evidence does not authorize merge, deployment or release.

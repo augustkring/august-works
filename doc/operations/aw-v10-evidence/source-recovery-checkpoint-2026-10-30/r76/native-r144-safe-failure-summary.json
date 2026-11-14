@@ -1,0 +1,11 @@
+{
+  "c7EffectReached": false,
+  "failedCaseCount": 1,
+  "firstObservedCode": "native_session_interrupted",
+  "intentionallyUnselected": 4,
+  "passedCaseCount": 0,
+  "rawActualC7LogExcluded": true,
+  "reason": "Raw runtime log may contain private run data; receipt and exit marker preserve the bounded result.",
+  "restore": "pinned sources restored to pre-snapshot source bytes and modes; compiled outputs and tsbuildinfo restored byte-for-byte",
+  "sourceReceipt": "native-stopped-session-erasure-actual-c7-r144/qualification-receipt.json"
+}

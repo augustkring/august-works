@@ -1,0 +1,60 @@
+{
+  "purpose": "RECOVERY ONLY; not application activation or qualification",
+  "capturedAtUtc": "2026-11-01T17:54:25.418691+00:00",
+  "mainHead": "3a683e245e19d3aa987d33fde3dc915a4bdbfdc1",
+  "mainDirtyPatchSha256": "d54ecc657147be02958b154994a755b0d6fbb42c5008572f84a9118708c0605d",
+  "sourceFileCount": 42,
+  "archive": {
+    "path": "private-candidates.tar.gz",
+    "bytes": 174784,
+    "sha256": "89a2fbe0de6030619dc74cd6c3bb1aa2abbe71260bd0aa4e5a416ff5960435c5",
+    "verifiedEntries": 42
+  },
+  "host53Delta": {
+    "baseCheckpoint": "R66",
+    "baseHost50SourcePinsSha256": "443ed46ca65f9dd6fb621dea18c9cb869fe62d0058b9a2ea731609ce88ee889c",
+    "candidateHost53SourcePinsSha256": "94b075fdda7788ed9d907d9678d7ca9d83c82ac6a4cba87c18957d7f994184e1",
+    "pathCounts": {
+      "base": 104,
+      "candidate": 104,
+      "added": 0,
+      "deleted": 0,
+      "changed": 2
+    },
+    "added": [],
+    "deleted": [],
+    "changed": [
+      {
+        "path": "deploy/v6/host-agent/openshell.mjs",
+        "baseSha256": "189881a59e03cb8a56c0c4ad06bb00810b380e76c61179d9975552d67efe1349",
+        "candidateSha256": "4d849b448f95c26853cc25a05ea3cd740c3a9194b031f5d4dea8f061719cebc8",
+        "bytes": 223003
+      },
+      {
+        "path": "deploy/v6/host-agent/openshell.test.mjs",
+        "baseSha256": "ff7b80d5470a60aeff591985b27eabf74f423c0e6c0342adc7f2060d2c5b76d0",
+        "candidateSha256": "ef9953341bcfdfedce18ea478949e40295f17902a9a1fd50d3b2630cb31ee0ba",
+        "bytes": 188674
+      }
+    ]
+  },
+  "references": {
+    "R66ManifestSha256": "c739ab40e87a6189f6b3cd34ad54a0119cbc645d89f4efb20589fb96e6769ed1",
+    "R66ArchiveSha256": "bd72f03a604e1342c6a0a69d0c94c0297a30ea971ce23322b1e46af243234503",
+    "R66Host50PinsSha256": "443ed46ca65f9dd6fb621dea18c9cb869fe62d0058b9a2ea731609ce88ee889c",
+    "Host53PinsSha256": "94b075fdda7788ed9d907d9678d7ca9d83c82ac6a4cba87c18957d7f994184e1",
+    "Host53RunnerSha256": "8d864859a208d82196bacb3c2e8283e03351bc2bee49df59149f2bac6e1a30da",
+    "R2Inventory54FilePins": {
+      "updated-owner-plan-r2.json": "902666c0f02c13f6f777ad265d443f5103833e8adc3453b879dc0eeaa27b824a",
+      "updated-owner-plan-r2-pins.json": "44461bcae15a24d64d4ebc43a617aee8e0934cd05bc09a159f5177348268d378",
+      "updated-owner-plan-r2-audit.json": "74eef210045902af4afe1a8ff42cf308066dd530922406e331eb8b44f4bee68b",
+      "edit-frozen-source-inventory-r2.py": "9f0619291221763b1e1d59e94af791d266672a7e5276d21bbda0414625135d29",
+      "edit-frozen-source-inventory-r2.patch": "3ccde1f179367e1423092e48f985e8cdc30f3e87acfa5fc716ac2c8d75708914",
+      "README.md": "f80091038dafee92c02dceec5549e7239c4f3c3d40e08436ee5c0369c27f5789",
+      "SHA256SUMS": "c2a5ddd7c36f42978ed35d2456ef7ea9918196efe4a3b6f0b6a5f4e6d4fa4754"
+    },
+    "FinalFreezePlanSha256": "d87da5c533394770c5de88efdadb59b0b6f9ef979298496518226285f9ed0a54",
+    "R4READMEsha256": "96c780ba81eab75b20c3f87f75eabe19531e54774bbaa3753cf677d0f0f9118a"
+  },
+  "qualificationStatus": "Recovery delta only. Host53 source pins and runner are frozen; active Host53 qualification output is excluded. Host50\u201352 statuses are compact and preserve route failures/no-test status. R2 inventory54 work is private preparation only; helper syntax was parsed, not executed. No final aggregate or application qualification is claimed."
+}

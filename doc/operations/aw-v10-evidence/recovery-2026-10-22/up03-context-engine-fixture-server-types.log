@@ -1,0 +1,4 @@
+src/services/context/context-engine-integration.test.ts(291,161): error TS2339: Property 'error' does not exist on type 'WorkflowStepRun'.
+undefined
+/workspace/blentera-v10/server:
+ ERR_PNPM_RECURSIVE_EXEC_FIRST_FAIL  Command failed with exit code 1: tsc --noEmit --singleThreaded

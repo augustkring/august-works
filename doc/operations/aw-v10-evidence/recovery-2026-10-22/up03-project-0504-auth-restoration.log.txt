@@ -1,0 +1,3 @@
+server/src/services/authorization.ts: OK
+server/src/__tests__/authorization-service.test.ts: OK
+packages/db/src/migrations/0504_conscious_sleepwalker.sql: OK

@@ -1,0 +1,38 @@
+(!) Your Vite config uses features that are unsupported by `configLoader: 'native'`, which is planned to become the default in a future major version of Vite:
+  - `__dirname` (vitest.config.ts:7:25). Use `import.meta.dirname` instead
+Set `VITE_CONFIG_NATIVE_IGNORE_WARNING=true` to suppress this warning.
+
+ RUN  v4.1.11 /workspace/blentera-v10
+
+ ❯ |@paperclipai/server| src/services/native-runtime/native-model-input-dispatch.integration.test.ts (10 tests | 1 failed | 9 skipped) 10419ms
+     × rejects a database update that silently suppresses the dispatch intent 234ms
+
+⎯⎯⎯⎯⎯⎯⎯ Failed Tests 1 ⎯⎯⎯⎯⎯⎯⎯
+
+ FAIL  |@paperclipai/server| src/services/native-runtime/native-model-input-dispatch.integration.test.ts > native model input dispatch intent > rejects a database update that silently suppresses the dispatch intent
+AssertionError: promise resolved "undefined" instead of rejecting
+
+- Expected:
+Error {
+  "message": "rejected promise",
+}
+
++ Received:
+undefined
+
+ ❯ src/services/native-runtime/native-model-input-dispatch.integration.test.ts:235:90
+    233|       for each row execute function public.${sql.identifier(functionNa…
+    234|     try {
+    235|       await expect(recordNativeModelInputDispatchIntent(dispatchArgs(s…
+       |                                                                                          ^
+    236|         .rejects.toThrow("native_model_input_dispatch_persistence_fail…
+    237|       const [run] = await db.select().from(heartbeatRuns).where(eq(hea…
+
+⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯[1/1]⎯
+
+
+ Test Files  1 failed (1)
+      Tests  1 failed | 9 skipped (10)
+   Start at  07:08:40
+   Duration  41.02s (transform 21.64s, setup 133ms, import 30.20s, tests 10.42s, environment 0ms)
+

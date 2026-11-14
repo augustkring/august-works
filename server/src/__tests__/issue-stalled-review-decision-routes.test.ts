@@ -1,12 +1,13 @@
 import { randomUUID } from "node:crypto";
 import express from "express";
 import request from "supertest";
-import { eq } from "drizzle-orm";
+import { and, eq } from "drizzle-orm";
 import { afterAll, afterEach, beforeAll, describe, expect, it, vi } from "vitest";
 import {
   activityLog,
   agentWakeupRequests,
   agents,
+  authUsers,
   approvals,
   companies,
   companyMemberships,
@@ -21,6 +22,7 @@ import {
 } from "@paperclipai/db";
 import { errorHandler } from "../middleware/index.js";
 import { issueRoutes } from "../routes/issues.js";
+import { accessService } from "../services/access.js";
 import {
   getEmbeddedPostgresTestSupport,
   startEmbeddedPostgresTestDatabase,
@@ -59,6 +61,7 @@ describeEmbeddedPostgres("stalled review decision routes", () => {
     await db.delete(issues);
     await db.delete(companyMemberships);
     await db.delete(agents);
+    await db.delete(authUsers);
     await db.delete(companies);
   });
 
@@ -73,6 +76,12 @@ describeEmbeddedPostgres("stalled review decision routes", () => {
     const memberUserId = `${prefix.toLowerCase()}-member`;
     const peerUserId = `${prefix.toLowerCase()}-peer`;
     const viewerUserId = `${prefix.toLowerCase()}-viewer`;
+    const now = new Date();
+    await db.insert(authUsers).values([
+      { id: memberUserId, name: `${prefix} Member`, email: `${memberUserId}@test.invalid`, emailVerified: true, createdAt: now, updatedAt: now },
+      { id: peerUserId, name: `${prefix} Peer`, email: `${peerUserId}@test.invalid`, emailVerified: true, createdAt: now, updatedAt: now },
+      { id: viewerUserId, name: `${prefix} Viewer`, email: `${viewerUserId}@test.invalid`, emailVerified: true, createdAt: now, updatedAt: now },
+    ]);
     await db.insert(companies).values({
       id: companyId,
       name: `${prefix} Company`,
@@ -126,6 +135,18 @@ describeEmbeddedPostgres("stalled review decision routes", () => {
         membershipRole: "viewer",
       },
     ]);
+    const [member] = await db.select({ id: authUsers.id }).from(authUsers).where(eq(authUsers.id, memberUserId));
+    const [membership] = await db.select({ id: companyMemberships.id }).from(companyMemberships).where(and(
+      eq(companyMemberships.companyId, companyId), eq(companyMemberships.principalType, "user"),
+      eq(companyMemberships.principalId, memberUserId), eq(companyMemberships.status, "active"),
+    ));
+    if (!member || !membership) throw new Error("Stalled-review fixture must seed its current member principal.");
+    const memberAccess = await accessService(db).decide({
+      actor: { type: "board", source: "session", userId: memberUserId },
+      action: "company_scope:read",
+      resource: { type: "company", companyId },
+    });
+    if (!memberAccess.allowed) throw new Error(`Stalled-review member access fixture was denied: ${JSON.stringify(memberAccess)}`);
     return { companyId, assigneeAgentId, peerAgentId, memberUserId, peerUserId, viewerUserId };
   }
 
@@ -186,17 +207,19 @@ describeEmbeddedPostgres("stalled review decision routes", () => {
     };
   }
 
-  function agentActor(companyId: string, agentId: string, runId = randomUUID()) {
+  function agentActor(companyId: string, agentId: string, onBehalfOfUserId: string, runId = randomUUID()) {
     return {
       type: "agent",
       source: "agent_key",
       companyId,
       agentId,
       runId,
+      onBehalfOfUserId,
+      onBehalfOfMemberships: [{ companyId, status: "active", membershipRole: "operator" }],
     };
   }
 
-  async function seedRun(companyId: string, agentId: string, issueId: string) {
+  async function seedRun(companyId: string, agentId: string, issueId: string, responsibleUserId: string) {
     const runId = randomUUID();
     await db.insert(heartbeatRuns).values({
       id: runId,
@@ -205,6 +228,7 @@ describeEmbeddedPostgres("stalled review decision routes", () => {
       invocationSource: "assignment",
       triggerDetail: "system",
       status: "running",
+      responsibleUserId,
       contextSnapshot: { issueId, wakeReason: "issue_assigned" },
     });
     return runId;
@@ -219,11 +243,11 @@ describeEmbeddedPostgres("stalled review decision routes", () => {
       identifier: "SRD-1",
     });
 
-    await request(app(agentActor(primary.companyId, primary.assigneeAgentId)))
+    await request(app(agentActor(primary.companyId, primary.assigneeAgentId, primary.memberUserId)))
       .post(`/api/issues/${issueId}/stalled-review-decision`)
       .send({ action: "approve" })
       .expect(403);
-    await request(app(agentActor(primary.companyId, primary.peerAgentId)))
+    await request(app(agentActor(primary.companyId, primary.peerAgentId, primary.memberUserId)))
       .post(`/api/issues/${issueId}/stalled-review-decision`)
       .send({ action: "approve" })
       .expect(403);
@@ -243,8 +267,8 @@ describeEmbeddedPostgres("stalled review decision routes", () => {
       .expect(404);
     expect(crossCompany.body).toEqual(missing.body);
 
-    const selfRunId = await seedRun(primary.companyId, primary.assigneeAgentId, issueId);
-    const selfApproval = await request(app(agentActor(primary.companyId, primary.assigneeAgentId, selfRunId)))
+    const selfRunId = await seedRun(primary.companyId, primary.assigneeAgentId, issueId, primary.memberUserId);
+    const selfApproval = await request(app(agentActor(primary.companyId, primary.assigneeAgentId, primary.memberUserId, selfRunId)))
       .patch(`/api/issues/${issueId}`)
       .send({ status: "done" });
     expect(selfApproval.status, JSON.stringify(selfApproval.body)).toBe(200);
@@ -285,9 +309,9 @@ describeEmbeddedPostgres("stalled review decision routes", () => {
         lastDecisionOutcome: null,
       },
     }).where(eq(issues.id, issueId));
-    const stageRunId = await seedRun(seeded.companyId, seeded.assigneeAgentId, issueId);
+    const stageRunId = await seedRun(seeded.companyId, seeded.assigneeAgentId, issueId, seeded.memberUserId);
 
-    const res = await request(app(agentActor(seeded.companyId, seeded.assigneeAgentId, stageRunId)))
+    const res = await request(app(agentActor(seeded.companyId, seeded.assigneeAgentId, seeded.memberUserId, stageRunId)))
       .patch(`/api/issues/${issueId}`)
       .send({ status: "done", comment: "Stage signoff." });
 
@@ -314,7 +338,7 @@ describeEmbeddedPostgres("stalled review decision routes", () => {
       details: { status: "in_review", _previous: { status: "in_progress" } },
     });
 
-    const requesterVerdict = await request(app(agentActor(seeded.companyId, seeded.assigneeAgentId)))
+    const requesterVerdict = await request(app(agentActor(seeded.companyId, seeded.assigneeAgentId, seeded.memberUserId)))
       .patch(`/api/issues/${issueId}`)
       .send({ status: "done" });
     expect(requesterVerdict.status).toBe(403);
@@ -328,8 +352,8 @@ describeEmbeddedPostgres("stalled review decision routes", () => {
       },
     });
 
-    const peerRunId = await seedRun(seeded.companyId, seeded.peerAgentId, issueId);
-    const peerVerdict = await request(app(agentActor(seeded.companyId, seeded.peerAgentId, peerRunId)))
+    const peerRunId = await seedRun(seeded.companyId, seeded.peerAgentId, issueId, seeded.memberUserId);
+    const peerVerdict = await request(app(agentActor(seeded.companyId, seeded.peerAgentId, seeded.memberUserId, peerRunId)))
       .patch(`/api/issues/${issueId}`)
       .send({ status: "done" });
     expect(peerVerdict.status, JSON.stringify(peerVerdict.body)).toBe(200);
@@ -345,7 +369,7 @@ describeEmbeddedPostgres("stalled review decision routes", () => {
       reviewPolicy: "human_only",
     });
 
-    const agentVerdict = await request(app(agentActor(seeded.companyId, seeded.assigneeAgentId)))
+    const agentVerdict = await request(app(agentActor(seeded.companyId, seeded.assigneeAgentId, seeded.memberUserId)))
       .patch(`/api/issues/${issueId}`)
       .send({ status: "cancelled" });
     expect(agentVerdict.status).toBe(403);
@@ -374,9 +398,9 @@ describeEmbeddedPostgres("stalled review decision routes", () => {
       identifier: "RLP-1",
       reviewPolicy: "human_only",
     });
-    const runId = await seedRun(seeded.companyId, seeded.assigneeAgentId, issueId);
+    const runId = await seedRun(seeded.companyId, seeded.assigneeAgentId, issueId, seeded.memberUserId);
 
-    const verdict = await request(app(agentActor(seeded.companyId, seeded.assigneeAgentId, runId)))
+    const verdict = await request(app(agentActor(seeded.companyId, seeded.assigneeAgentId, seeded.memberUserId, runId)))
       .patch(`/api/issues/${issueId}`)
       .send({ status: "done", reviewPolicy: "anyone" });
 
@@ -414,9 +438,9 @@ describeEmbeddedPostgres("stalled review decision routes", () => {
       entityId: issueId,
       details: { status: "in_review", _previous: { status: "in_progress" } },
     });
-    const runId = await seedRun(seeded.companyId, seeded.assigneeAgentId, issueId);
+    const runId = await seedRun(seeded.companyId, seeded.assigneeAgentId, issueId, seeded.memberUserId);
 
-    const verdict = await request(app(agentActor(seeded.companyId, seeded.assigneeAgentId, runId)))
+    const verdict = await request(app(agentActor(seeded.companyId, seeded.assigneeAgentId, seeded.memberUserId, runId)))
       .patch(`/api/issues/${issueId}`)
       .send({ status: "done", reviewPolicy: "anyone" });
 
@@ -444,9 +468,9 @@ describeEmbeddedPostgres("stalled review decision routes", () => {
       identifier: "RSP-1",
       reviewPolicy: "human_only",
     });
-    const runId = await seedRun(seeded.companyId, seeded.assigneeAgentId, issueId);
+    const runId = await seedRun(seeded.companyId, seeded.assigneeAgentId, issueId, seeded.memberUserId);
 
-    const relaxation = await request(app(agentActor(seeded.companyId, seeded.assigneeAgentId, runId)))
+    const relaxation = await request(app(agentActor(seeded.companyId, seeded.assigneeAgentId, seeded.memberUserId, runId)))
       .patch(`/api/issues/${issueId}`)
       .send({ reviewPolicy: "anyone" });
 

@@ -1,0 +1,208 @@
+(!) Your Vite config uses features that are unsupported by `configLoader: 'native'`, which is planned to become the default in a future major version of Vite:
+  - `__dirname` (vitest.config.ts:7:25). Use `import.meta.dirname` instead
+Set `VITE_CONFIG_NATIVE_IGNORE_WARNING=true` to suppress this warning.
+
+ RUN  v4.1.11 /workspace/blentera-v10
+
+stderr | src/__tests__/better-auth-credential-signup.integration.test.ts > Better Auth credential sign-up against the real schema > does not reserve confirmation attempts past a held native user lock
+2026-10-24T00:34:26.640Z ERROR [Better Auth]: Error DrizzleQueryError: Failed query: 
+        select id from "user" where id=$1
+          and authenticator_version=$2 and not two_factor_enabled
+          and not exists (select 1 from account_deletion_operations where user_id=$3)
+        for share nowait
+      
+params: vT6q58vlfIoKPssOjrkxOFYVe5Qn7Ecn,1,vT6q58vlfIoKPssOjrkxOFYVe5Qn7Ecn
+    at PostgresJsPreparedQuery.queryWithCache (file:///workspace/blentera-v10/node_modules/.pnpm/drizzle-orm@0.45.2_@opentelemetry+api@1.9.1_kysely@0.29.5_pg@8.18.0_postgres@3.4.9_patch_hash_uil4xuf7icnddjurbgy2qn5oo4/node_modules/drizzle-orm/pg-core/session.js:41:15)
+    at processTicksAndRejections (node:internal/process/task_queues:104:5)
+    at /workspace/blentera-v10/server/src/auth/native-authentication-assurance.ts:16:22
+    at scope (file:///workspace/blentera-v10/node_modules/.pnpm/postgres@3.4.9_patch_hash=sryle6qd5qfmnxvoebal4gashi/node_modules/postgres/src/index.js:279:18)
+    at sql.begin (file:///workspace/blentera-v10/node_modules/.pnpm/postgres@3.4.9_patch_hash=sryle6qd5qfmnxvoebal4gashi/node_modules/postgres/src/index.js:257:14)
+    at /workspace/blentera-v10/server/src/auth/native-authentication-assurance.ts:67:14
+    at file:///workspace/blentera-v10/node_modules/.pnpm/@better-auth+core@1.7.2_@better-auth+utils@0.4.2_@better-fetch+fetch@1.3.1_@opentelemetry+api_onmda644f4wli46wkagn4waika/node_modules/@better-auth/core/dist/api/index.mjs:56:11
+    at internalHandler (file:///workspace/blentera-v10/node_modules/.pnpm/better-call@1.4.0_zod@4.4.3/node_modules/better-call/dist/endpoint.mjs:29:20)
+    at file:///workspace/blentera-v10/node_modules/.pnpm/better-auth@1.7.2_@opentelemetry+api@1.9.1_drizzle-kit@0.31.10_drizzle-orm@0.45.2_@openteleme_23cjdjyuzchmpfced6ypg62tfq/node_modules/better-auth/dist/api/dispatch.mjs:228:18
+    at processRequest (file:///workspace/blentera-v10/node_modules/.pnpm/better-call@1.4.0_zod@4.4.3/node_modules/better-call/dist/router.mjs:82:11) {
+  query: '\n' +
+    '        select id from "user" where id=$1\n' +
+    '          and authenticator_version=$2 and not two_factor_enabled\n' +
+    '          and not exists (select 1 from account_deletion_operations where user_id=$3)\n' +
+    '        for share nowait\n' +
+    '      ',
+  params: [
+    'vT6q58vlfIoKPssOjrkxOFYVe5Qn7Ecn',
+    1,
+    'vT6q58vlfIoKPssOjrkxOFYVe5Qn7Ecn'
+  ],
+  cause: PostgresError: could not obtain lock on row in relation "user"
+      at ErrorResponse (file:///workspace/blentera-v10/node_modules/.pnpm/postgres@3.4.9_patch_hash=sryle6qd5qfmnxvoebal4gashi/node_modules/postgres/src/connection.js:819:30)
+      at handle (file:///workspace/blentera-v10/node_modules/.pnpm/postgres@3.4.9_patch_hash=sryle6qd5qfmnxvoebal4gashi/node_modules/postgres/src/connection.js:493:6)
+      at Socket.data (file:///workspace/blentera-v10/node_modules/.pnpm/postgres@3.4.9_patch_hash=sryle6qd5qfmnxvoebal4gashi/node_modules/postgres/src/connection.js:324:9)
+      at Socket.emit (node:events:514:28)
+      at addChunk (node:internal/streams/readable:568:12)
+      at readableAddChunkPushByteMode (node:internal/streams/readable:519:3)
+      at Socket.Readable.push (node:internal/streams/readable:399:5)
+      at TCP.onStreamRead (node:internal/stream_base_commons:189:23) {
+    severity_local: 'ERROR',
+    severity: 'ERROR',
+    code: '55P03',
+    file: 'heapam.c',
+    line: '5027',
+    routine: 'heap_lock_tuple'
+  }
+}
+
+stderr | src/__tests__/better-auth-credential-signup.integration.test.ts > Better Auth credential sign-up against the real schema > does not reserve confirmation attempts past a held native user lock
+# SERVER_ERROR:  DrizzleQueryError: Failed query: 
+        select id from "user" where id=$1
+          and authenticator_version=$2 and not two_factor_enabled
+          and not exists (select 1 from account_deletion_operations where user_id=$3)
+        for share nowait
+      
+params: vT6q58vlfIoKPssOjrkxOFYVe5Qn7Ecn,1,vT6q58vlfIoKPssOjrkxOFYVe5Qn7Ecn
+    at PostgresJsPreparedQuery.queryWithCache (file:///workspace/blentera-v10/node_modules/.pnpm/drizzle-orm@0.45.2_@opentelemetry+api@1.9.1_kysely@0.29.5_pg@8.18.0_postgres@3.4.9_patch_hash_uil4xuf7icnddjurbgy2qn5oo4/node_modules/drizzle-orm/pg-core/session.js:41:15)
+    at processTicksAndRejections (node:internal/process/task_queues:104:5)
+    at /workspace/blentera-v10/server/src/auth/native-authentication-assurance.ts:16:22
+    at scope (file:///workspace/blentera-v10/node_modules/.pnpm/postgres@3.4.9_patch_hash=sryle6qd5qfmnxvoebal4gashi/node_modules/postgres/src/index.js:279:18)
+    at sql.begin (file:///workspace/blentera-v10/node_modules/.pnpm/postgres@3.4.9_patch_hash=sryle6qd5qfmnxvoebal4gashi/node_modules/postgres/src/index.js:257:14)
+    at /workspace/blentera-v10/server/src/auth/native-authentication-assurance.ts:67:14
+    at file:///workspace/blentera-v10/node_modules/.pnpm/@better-auth+core@1.7.2_@better-auth+utils@0.4.2_@better-fetch+fetch@1.3.1_@opentelemetry+api_onmda644f4wli46wkagn4waika/node_modules/@better-auth/core/dist/api/index.mjs:56:11
+    at internalHandler (file:///workspace/blentera-v10/node_modules/.pnpm/better-call@1.4.0_zod@4.4.3/node_modules/better-call/dist/endpoint.mjs:29:20)
+    at file:///workspace/blentera-v10/node_modules/.pnpm/better-auth@1.7.2_@opentelemetry+api@1.9.1_drizzle-kit@0.31.10_drizzle-orm@0.45.2_@openteleme_23cjdjyuzchmpfced6ypg62tfq/node_modules/better-auth/dist/api/dispatch.mjs:228:18
+    at processRequest (file:///workspace/blentera-v10/node_modules/.pnpm/better-call@1.4.0_zod@4.4.3/node_modules/better-call/dist/router.mjs:82:11) {
+  query: '\n' +
+    '        select id from "user" where id=$1\n' +
+    '          and authenticator_version=$2 and not two_factor_enabled\n' +
+    '          and not exists (select 1 from account_deletion_operations where user_id=$3)\n' +
+    '        for share nowait\n' +
+    '      ',
+  params: [
+    'vT6q58vlfIoKPssOjrkxOFYVe5Qn7Ecn',
+    1,
+    'vT6q58vlfIoKPssOjrkxOFYVe5Qn7Ecn'
+  ],
+  cause: PostgresError: could not obtain lock on row in relation "user"
+      at ErrorResponse (file:///workspace/blentera-v10/node_modules/.pnpm/postgres@3.4.9_patch_hash=sryle6qd5qfmnxvoebal4gashi/node_modules/postgres/src/connection.js:819:30)
+      at handle (file:///workspace/blentera-v10/node_modules/.pnpm/postgres@3.4.9_patch_hash=sryle6qd5qfmnxvoebal4gashi/node_modules/postgres/src/connection.js:493:6)
+      at Socket.data (file:///workspace/blentera-v10/node_modules/.pnpm/postgres@3.4.9_patch_hash=sryle6qd5qfmnxvoebal4gashi/node_modules/postgres/src/connection.js:324:9)
+      at Socket.emit (node:events:514:28)
+      at addChunk (node:internal/streams/readable:568:12)
+      at readableAddChunkPushByteMode (node:internal/streams/readable:519:3)
+      at Socket.Readable.push (node:internal/streams/readable:399:5)
+      at TCP.onStreamRead (node:internal/stream_base_commons:189:23) {
+    severity_local: 'ERROR',
+    severity: 'ERROR',
+    code: '55P03',
+    file: 'heapam.c',
+    line: '5027',
+    routine: 'heap_lock_tuple'
+  }
+}
+
+ ❯ |@paperclipai/server| src/__tests__/better-auth-credential-signup.integration.test.ts (13 tests | 2 failed | 11 skipped) 8290ms
+     × denies erased identity markers despite restored password material and stale native sessions 505ms
+     × does not reserve confirmation attempts past a held native user lock 564ms
+
+⎯⎯⎯⎯⎯⎯⎯ Failed Tests 2 ⎯⎯⎯⎯⎯⎯⎯
+
+ FAIL  |@paperclipai/server| src/__tests__/better-auth-credential-signup.integration.test.ts > Better Auth credential sign-up against the real schema > denies erased identity markers despite restored password material and stale native sessions
+AssertionError: expected [ { …(4) } ] to deeply equal []
+
+- Expected
++ Received
+
+- []
++ [
++   {
++     "count": 1,
++     "id": "e0418811-0969-4e60-99a4-ddfb41909a10",
++     "key": "password-reauth:20f8ecdc36850f5c5b13b0e72ec8b6a1004b36ad929dc349cb9eb1d86433ea5d",
++     "lastRequest": 1792802066219,
++   },
++ ]
+
+ ❯ src/__tests__/better-auth-credential-signup.integration.test.ts:356:87
+    354|     expect(reauth.status).toBe(401);
+    355|     const key = "password-reauth:" + createHash("sha256").update(fixtu…
+    356|     expect(await db.select().from(authRateLimits).where(eq(authRateLim…
+       |                                                                                       ^
+    357|     const signin = await request(app).post("/api/auth/sign-in/email").…
+    358|       .send({ email: fixture.email, password: PASSWORD });
+
+⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯[1/4]⎯
+
+ FAIL  |@paperclipai/server| src/__tests__/better-auth-credential-signup.integration.test.ts > Better Auth credential sign-up against the real schema > does not reserve confirmation attempts past a held native user lock
+AssertionError: expected 500 to be 409 // Object.is equality
+
+- Expected
++ Received
+
+- 409
++ 500
+
+ ❯ src/__tests__/better-auth-credential-signup.integration.test.ts:407:36
+    405|       const response = await request(app).post("/api/auth/reauthentica…
+    406|         .set("Origin", ORIGIN).set("Cookie", fixture.cookie).send({ pa…
+    407|       expect.soft(response.status).toBe(409);
+       |                                    ^
+    408|       expect.soft(await db.select().from(authRateLimits).where(eq(auth…
+    409|     });
+ ❯ scope ../node_modules/.pnpm/postgres@3.4.9_patch_hash=sryle6qd5qfmnxvoebal4gashi/node_modules/postgres/src/index.js:279:18
+ ❯ sql.begin ../node_modules/.pnpm/postgres@3.4.9_patch_hash=sryle6qd5qfmnxvoebal4gashi/node_modules/postgres/src/index.js:257:14
+ ❯ src/__tests__/better-auth-credential-signup.integration.test.ts:403:5
+
+⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯[2/4]⎯
+
+ FAIL  |@paperclipai/server| src/__tests__/better-auth-credential-signup.integration.test.ts > Better Auth credential sign-up against the real schema > does not reserve confirmation attempts past a held native user lock
+AssertionError: expected [ { …(4) } ] to deeply equal []
+
+- Expected
++ Received
+
+- []
++ [
++   {
++     "count": 1,
++     "id": "7f31e3c0-5ded-4509-8cd7-1360de3b705e",
++     "key": "password-reauth:0529fc4ab680f50697a3f8b8745857d93af41afd97dc70c87e9cea5db35f141b",
++     "lastRequest": 1792802066519,
++   },
++ ]
+
+ ❯ src/__tests__/better-auth-credential-signup.integration.test.ts:408:94
+    406|         .set("Origin", ORIGIN).set("Cookie", fixture.cookie).send({ pa…
+    407|       expect.soft(response.status).toBe(409);
+    408|       expect.soft(await db.select().from(authRateLimits).where(eq(auth…
+       |                                                                                              ^
+    409|     });
+    410|     const retried = await request(app).post("/api/auth/reauthenticate/…
+ ❯ scope ../node_modules/.pnpm/postgres@3.4.9_patch_hash=sryle6qd5qfmnxvoebal4gashi/node_modules/postgres/src/index.js:279:18
+ ❯ sql.begin ../node_modules/.pnpm/postgres@3.4.9_patch_hash=sryle6qd5qfmnxvoebal4gashi/node_modules/postgres/src/index.js:257:14
+ ❯ src/__tests__/better-auth-credential-signup.integration.test.ts:403:5
+
+⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯[3/4]⎯
+
+ FAIL  |@paperclipai/server| src/__tests__/better-auth-credential-signup.integration.test.ts > Better Auth credential sign-up against the real schema > does not reserve confirmation attempts past a held native user lock
+AssertionError: expected 2 to be 1 // Object.is equality
+
+- Expected
++ Received
+
+- 1
++ 2
+
+ ❯ src/__tests__/better-auth-credential-signup.integration.test.ts:414:26
+    412|     expect(retried.status).toBe(200);
+    413|     const [budget] = await db.select().from(authRateLimits).where(eq(a…
+    414|     expect(budget.count).toBe(1);
+       |                          ^
+    415|   });
+    416| });
+
+⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯[4/4]⎯
+
+
+ Test Files  1 failed (1)
+      Tests  2 failed | 11 skipped (13)
+   Start at  00:33:42
+   Duration  44.07s (transform 24.03s, setup 186ms, import 35.22s, tests 8.29s, environment 0ms)
+

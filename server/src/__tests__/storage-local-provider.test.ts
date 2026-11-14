@@ -106,6 +106,31 @@ describe("local disk storage provider", () => {
     expect(await fs.readFile(path.join(directory, "image.png2.tmp-unrelated"), "utf8")).toBe("private copy");
   });
 
+  it("physically erases only the exact key and records deletion after confirmation", async () => {
+    const root = await fs.mkdtemp(path.join(os.tmpdir(), "paperclip-storage-"));
+    tempRoots.push(root);
+    const directory = path.join(root, "company-1/private");
+    await fs.mkdir(directory, { recursive: true });
+    await fs.writeFile(path.join(directory, "image.png"), "target");
+    await fs.writeFile(path.join(directory, "image.png.tmp-interrupted"), "target copy");
+    await fs.writeFile(path.join(directory, "image.png-extra"), "neighbor");
+    const transitions: string[] = [];
+    const service = createStorageService(createLocalDiskStorageProvider(root), {
+      async reserve() {}, async stored() {},
+      async deleting(_companyId, key) { transitions.push(`deleting:${key}`); },
+      async deleted(_companyId, key) { transitions.push(`deleted:${key}`); },
+    });
+
+    await service.eraseObject!("company-1", "company-1/private/image.png");
+
+    expect(await fs.readdir(directory)).toEqual(["image.png-extra"]);
+    expect(await fs.readFile(path.join(directory, "image.png-extra"), "utf8")).toBe("neighbor");
+    expect(transitions).toEqual([
+      "deleting:company-1/private/image.png",
+      "deleted:company-1/private/image.png",
+    ]);
+  });
+
   it("refuses deletion acknowledgement when a temporary copy cannot be removed", async () => {
     const root = await fs.mkdtemp(path.join(os.tmpdir(), "paperclip-storage-"));
     tempRoots.push(root);

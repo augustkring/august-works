@@ -1,15 +1,125 @@
-import { randomUUID } from "node:crypto";
-import { and, asc, desc, eq } from "drizzle-orm";
+import { createHash, randomUUID } from "node:crypto";
+import { isDeepStrictEqual } from "node:util";
+import { and, asc, desc, eq, isNull, sql } from "drizzle-orm";
 import type { Db } from "@paperclipai/db";
-import { documentRevisions, documents, issueDocuments, issues } from "@paperclipai/db";
-import { isSystemIssueDocumentKey, issueDocumentKeySchema } from "@paperclipai/shared";
-import { conflict, notFound, unprocessable } from "../errors.js";
+import { documentRevisions, documents, issueDocuments, issues, heartbeatRuns, orchestrationModelReservations } from "@paperclipai/db";
+import { conversationModelBindingSchema, isSystemIssueDocumentKey, issueDocumentKeySchema, nativePayloadSourceInputSchema, nativePayloadSourceSnapshotSchema,
+  nativeRunInputSourceReceiptSchema, type NativePayloadSourceInput, type NativePayloadSourceSnapshot } from "@paperclipai/shared";
+import { conflict, forbidden, notFound, unprocessable } from "../errors.js";
 import { isUniqueViolation } from "../db-errors.js";
 import { insertRowsInChunks } from "./batch-insert.js";
 import type { ImportIssueDocumentRow } from "./import-write-types.js";
 
 import { lockAnalyticalCompany, suppressAnalyticalSource } from "./analytical-privacy.js";
 import { lockMemoryPrivacy } from "./memory/memory-privacy.js";
+import { authorizationService, canActorReadIssuePrivacy, pinCurrentBoardActor, type AuthorizationActor } from "./authorization.js";
+import { lockIssuePrivacyTree, pinIssueMutationHuman } from "./issues.js";
+import { assertHumanAuthentication } from "../auth/authenticator-assurance.js";
+import { assertDirectInputSessionCurrent, assertNativeModelOutputCaptureCurrent, directHumanPayloadSnapshotSql } from "./native-direct-input.js";
+export { assertNativeDocumentRevisionCurrentSourceAccess } from "./native-direct-input.js";
+import { persistActivity, publishActivity, type ActivityPublication } from "./activity-log.js";
+import { logger } from "../middleware/logger.js";
+import type { NativeModelOutputCapture } from "./native-runtime/native-execution-input.js";
+
+type DocumentTx = Parameters<Parameters<Db["transaction"]>[0]>[0];
+
+/** Persist the exact AW dispatch alongside the source closure captured by the
+ * Native run. It remains useful evidence only when all current source owners
+ * continue to validate the retained inputs. */
+async function persistNativeAwDocumentCapture(tx: DocumentTx, input: {
+  companyId: string; issueId: string; documentId: string; revisionId: string; runId: string;
+  capture: NativeModelOutputCapture;
+}) {
+  const capture = input.capture;
+  if (capture.runId !== input.runId || capture.dispatch.runId !== input.runId ||
+    (capture.dispatch.kind !== "worker_model_dispatch" && capture.dispatch.kind !== "conversation_model_dispatch") ||
+    !nativePayloadSourceInputSchema.safeParse(capture.dispatch).success ||
+    (!capture.managedOpenCodeToolUse && capture.dispatch.callId !== `aw-draft:${input.runId}`) ||
+    (capture.managedOpenCodeToolUse && (capture.managedOpenCodeToolUse.toolName !== "write_document" ||
+      !/^[\x21-\x7e]{1,240}$/.test(capture.managedOpenCodeToolUse.callId) ||
+      !/^[0-9a-f]{64}$/.test(capture.managedOpenCodeToolUse.argumentsHash) ||
+      !/^[0-9a-f]{64}$/.test(capture.managedOpenCodeToolUse.responseContentHash))) ||
+    !capture.sourceSet.inputs.some(source => source.kind === "task" && source.issueId === input.issueId))
+    throw forbidden("The Native draft output capture is not bound to its Task and run");
+  const [run] = await tx.select().from(heartbeatRuns).where(and(
+    eq(heartbeatRuns.companyId, input.companyId), eq(heartbeatRuns.id, input.runId),
+    eq(heartbeatRuns.nativeIssueId, input.issueId), eq(heartbeatRuns.runtimeMode, "native"),
+  )).for("share");
+  const profile = run?.runnerProfileJson && typeof run.runnerProfileJson === "object" && !Array.isArray(run.runnerProfileJson)
+    ? run.runnerProfileJson as Record<string, unknown> : null;
+  const receipt = profile && nativeRunInputSourceReceiptSchema.safeParse(profile.nativeInputSourceReceipt);
+  const intents = profile?.nativeAwModelWireIntents;
+  const intent = Array.isArray(intents) ? intents.find((value) => value && typeof value === "object" && !Array.isArray(value) &&
+    (value as Record<string, unknown>).reservationId === capture.dispatch.reservationId) as Record<string, unknown> | undefined : undefined;
+  const purpose = capture.dispatch.kind === "conversation_model_dispatch" ? "conversation_model" : "worker_model";
+  const [reservation] = await tx.select().from(orchestrationModelReservations).where(and(
+    eq(orchestrationModelReservations.companyId, input.companyId),
+    eq(orchestrationModelReservations.id, capture.dispatch.reservationId),
+    eq(orchestrationModelReservations.purpose, purpose),
+    eq(orchestrationModelReservations.status, "completed"),
+  )).for("share");
+  const conversationBinding = capture.dispatch.kind === "conversation_model_dispatch"
+    ? conversationModelBindingSchema.safeParse(intent?.conversationModelBinding) : null;
+  const bootstrap = receipt?.success ? receipt.data.bootstrap : null;
+  const managed = capture.managedOpenCodeToolUse;
+  let managedSourceProof = false;
+  if (managed) {
+    await assertNativeModelOutputCaptureCurrent(tx as unknown as Db, input.companyId, input.issueId, capture, "write_document");
+    managedSourceProof = true;
+  }
+  const awSourceProof = purpose === "worker_model" && !managed && !!bootstrap && !!intent &&
+    isDeepStrictEqual(bootstrap.policy, capture.sourceSet.policy) &&
+    isDeepStrictEqual(bootstrap.inputs, capture.sourceSet.inputs) &&
+    intent.endpoint === "https://api.anthropic.com/v1/messages" && intent.method === "POST";
+  const expectedReservationKey = managed
+    ? `${purpose === "conversation_model" ? "conversation-model" : "worker-model"}-messages:${input.runId}:${capture.dispatch.requestHash}`
+    : `worker-model:${input.runId}:${capture.dispatch.callId}`;
+  if (!run || !receipt?.success || !bootstrap || !intent || !reservation ||
+    reservation.inputHash !== capture.dispatch.requestHash || reservation.providerResponseHash !== capture.dispatch.responseHash ||
+    reservation.idempotencyKey !== expectedReservationKey ||
+    (capture.dispatch.kind === "conversation_model_dispatch" && (!conversationBinding?.success ||
+      reservation.conversationAgentId !== capture.dispatch.agentId || reservation.conversationRunId !== capture.dispatch.runId ||
+      reservation.conversationIssueId !== capture.dispatch.issueId ||
+      reservation.conversationSessionGeneration !== capture.dispatch.conversationSessionGeneration ||
+      reservation.executionManifestId !== capture.dispatch.executionManifestId ||
+      reservation.executionManifestHash !== capture.dispatch.executionManifestHash ||
+      intent.modelPurpose !== "conversation_model" || intent.agentId !== capture.dispatch.agentId ||
+      conversationBinding.data.issueId !== capture.dispatch.issueId ||
+      conversationBinding.data.conversationSessionGeneration !== capture.dispatch.conversationSessionGeneration ||
+      conversationBinding.data.executionManifestId !== capture.dispatch.executionManifestId ||
+      conversationBinding.data.executionManifestHash !== capture.dispatch.executionManifestHash)) ||
+    intent.callId !== capture.dispatch.callId || intent.requestHash !== capture.dispatch.requestHash ||
+    intent.wireBodyHash !== capture.dispatch.wireBodyHash || intent.endpoint !== "https://api.anthropic.com/v1/messages" ||
+    intent.method !== "POST" || !(awSourceProof || managedSourceProof))
+    throw forbidden("The Native draft source or exact wire receipt changed before document capture");
+
+  const inputs = [...capture.sourceSet.inputs, capture.dispatch];
+  const parsedInputs = nativePayloadSourceInputSchema.array().safeParse(inputs);
+  if (!parsedInputs.success) throw forbidden("The Native draft source set is malformed");
+  const value = sql`jsonb_build_object('version',1,'owner',jsonb_build_object(
+    'kind','document_revision','companyId',${documentRevisions.companyId}::text,'id',${documentRevisions.id}::text,
+    'contentHash',public.aw_native_payload_body_hash('document_revision',to_jsonb(${documentRevisions}))),
+    'policy',${JSON.stringify(capture.sourceSet.policy)}::jsonb,'inputs',${JSON.stringify(parsedInputs.data)}::jsonb)`;
+  const snapshot = sql`(with captured as (select ${value} as value)
+    select value || jsonb_build_object('digest',encode(sha256(convert_to(value::text,'UTF8')),'hex')) from captured)`;
+  const [stored] = await tx.update(documentRevisions).set({ payloadSourceSnapshot: snapshot })
+    .where(and(eq(documentRevisions.companyId, input.companyId), eq(documentRevisions.id, input.revisionId),
+      eq(documentRevisions.documentId, input.documentId), eq(documentRevisions.payloadSourceProtocolVersion, 1),
+      isNull(documentRevisions.payloadSourceSnapshot), eq(documentRevisions.payloadSourceSnapshotInvalidated, false)))
+    .returning({ payloadSourceSnapshot: documentRevisions.payloadSourceSnapshot });
+  if (!stored?.payloadSourceSnapshot || !nativePayloadSourceSnapshotSchema.safeParse(stored.payloadSourceSnapshot).success)
+    throw forbidden("The Native draft output source snapshot could not be stored");
+}
+
+/** Selected native revision data, separate from every public document DTO.
+ * A matching rendition and hash identify input bytes, never current access. */
+export interface DocumentRevisionSourceCapture {
+  readonly input: Extract<NativePayloadSourceInput, { kind: "document_revision" }>;
+  readonly payloadSourceSnapshot: NativePayloadSourceSnapshot | null;
+  /** Hash of the exact public read_document result built from this selected row.
+   * This binds source evidence to returned bytes; it is not a permission grant. */
+  readonly returnedResultDigest?: string;
+}
 
 function normalizeDocumentKey(key: string) {
   const normalized = key.trim().toLowerCase();
@@ -33,6 +143,8 @@ function nextAvailableDocumentKey(sourceKey: string, existingKeys: string[]) {
   }
   throw conflict("Unable to choose a new document key for locked document", { key: sourceKey });
 }
+
+type ImportDbTransaction = Parameters<Parameters<Db["transaction"]>[0]>[0];
 
 export function extractLegacyPlanBody(description: string | null | undefined) {
   if (!description) return null;
@@ -161,15 +273,30 @@ export function documentService(db: Db) {
       return filterSystemDocuments(rows, options.includeSystem ?? false).map((row) => mapIssueDocumentRow(row, true));
     },
 
-    getIssueDocumentByKey: async (issueId: string, rawKey: string) => {
+    getIssueDocumentByKey: async (issueId: string, rawKey: string, options: {
+      onSourceCapture?: (capture: DocumentRevisionSourceCapture | null) => void;
+    } = {}) => {
       const key = normalizeDocumentKey(rawKey);
       const row = await db
-        .select(issueDocumentSelect)
+        .select({ ...issueDocumentSelect, sourceRevision: { id: documentRevisions.id, body: documentRevisions.body,
+          title: documentRevisions.title, format: documentRevisions.format, revisionNumber: documentRevisions.revisionNumber,
+          payloadSourceSnapshot: documentRevisions.payloadSourceSnapshot } })
         .from(issueDocuments)
         .innerJoin(documents, eq(issueDocuments.documentId, documents.id))
+        .leftJoin(documentRevisions, and(eq(documentRevisions.id, documents.latestRevisionId),
+          eq(documentRevisions.documentId, documents.id), eq(documentRevisions.companyId, documents.companyId)))
         .where(and(eq(issueDocuments.issueId, issueId), eq(issueDocuments.key, key)))
         .then((rows) => rows[0] ?? null);
-      return row ? mapIssueDocumentRow(row, true) : null;
+      const revision = row?.sourceRevision;
+      const result = row ? mapIssueDocumentRow(row, true) : null;
+      options.onSourceCapture?.(row && revision && result && revision.body === row.latestBody && revision.title === row.title &&
+        revision.format === row.format && revision.revisionNumber === row.latestRevisionNumber
+        ? { input: { kind: "document_revision", documentId: row.id, revisionId: revision.id, issueId: row.issueId,
+            contentHash: createHash("sha256").update(row.latestBody, "utf8").digest("hex") },
+            payloadSourceSnapshot: revision.payloadSourceSnapshot,
+            returnedResultDigest: createHash("sha256").update(JSON.stringify({ document: result }), "utf8").digest("hex") }
+        : null);
+      return result;
     },
 
     listIssueDocumentRevisions: async (issueId: string, rawKey: string) => {
@@ -210,7 +337,22 @@ export function documentService(db: Db) {
       createdByRunId?: string | null;
       sourceTrust?: typeof documents.$inferInsert.sourceTrust;
       lockedDocumentStrategy?: "conflict" | "create_new_document";
+      /** Actual request actor; author attribution alone is not input capture. */
+      manualInputActor?: AuthorizationActor;
+      /** Server-only output witness supplied by the fixed AW text backend. */
+      nativeAwOutputCapture?: NativeModelOutputCapture;
+      /** Server-only output witness supplied by the pinned managed OpenCode tool boundary. */
+      nativeModelOutputCapture?: NativeModelOutputCapture;
     }) => {
+      const candidate = input.manualInputActor;
+      if (input.nativeAwOutputCapture && input.nativeModelOutputCapture)
+        throw forbidden("A Native document can carry only one model output capture");
+      const outputCapture = input.nativeModelOutputCapture ?? input.nativeAwOutputCapture;
+      if (outputCapture && (candidate || !input.createdByRunId || !input.createdByAgentId || outputCapture.runId !== input.createdByRunId))
+        throw forbidden("The AW Native output capture requires its original agent run");
+      const manualActor = candidate?.type === "board" && candidate.source === "session" && candidate.userId && candidate.sessionId &&
+        candidate.userId === input.createdByUserId && !candidate.runId && !input.createdByAgentId && !input.createdByRunId &&
+        !input.baseRevisionId && input.lockedDocumentStrategy !== "create_new_document" ? { ...candidate } : null;
       const key = normalizeDocumentKey(input.key);
       const issue = await db
         .select({ id: issues.id, companyId: issues.companyId })
@@ -222,7 +364,35 @@ export function documentService(db: Db) {
       const maxAttempts = input.lockedDocumentStrategy === "create_new_document" ? 3 : 1;
       for (let attempt = 0; attempt < maxAttempts; attempt += 1) {
         try {
-          return await db.transaction(async (tx) => {
+          let sourcePublication: ActivityPublication | null = null;
+          const result = await db.transaction(async (tx) => {
+          let sourceExpiresAt: number | null = null, sourceOperator = false;
+          const finishManualInput = async () => {
+            if (manualActor && sourceExpiresAt !== null) {
+              if (sourceOperator) await assertHumanAuthentication(tx, manualActor, { requireRecent: true, phishingResistant: true });
+              await assertDirectInputSessionCurrent(tx, manualActor, sourceExpiresAt);
+            }
+          };
+          if (manualActor) {
+            const pinned = await pinCurrentBoardActor(tx, manualActor);
+            if (!pinned || pinned.credentialExpiresAt === null || !Number.isFinite(pinned.credentialExpiresAt))
+              throw forbidden("The current manual input session is unavailable");
+            sourceExpiresAt = pinned.credentialExpiresAt;
+            sourceOperator = await pinIssueMutationHuman(tx, manualActor, issue.companyId, true) === "instance_admin";
+            await finishManualInput();
+            await lockIssuePrivacyTree(tx, issue.companyId);
+            const [current] = await tx.select({ id: issues.id, companyId: issues.companyId, status: issues.status,
+              assigneeAgentId: issues.assigneeAgentId, assigneeUserId: issues.assigneeUserId }).from(issues)
+              .where(and(eq(issues.id, issue.id), eq(issues.companyId, issue.companyId))).for("update");
+            if (!current) throw notFound("Issue not found");
+            await finishManualInput();
+            const actor = { ...manualActor, isInstanceAdmin: false, ignoreInstanceAdmin: !sourceOperator };
+            const decision = await authorizationService(tx).decide({ actor, action: "issue:mutate",
+              resource: { type: "issue", companyId: issue.companyId, issueId: issue.id, status: current.status,
+                assigneeAgentId: current.assigneeAgentId, assigneeUserId: current.assigneeUserId }, enforceResponsibleUserIntersection: true });
+            if (!decision.allowed || !await canActorReadIssuePrivacy(tx, actor, current))
+              throw forbidden("Current document write authority is required");
+          }
           const now = new Date();
           const existing = await tx
             .select({
@@ -288,6 +458,7 @@ export function documentService(db: Db) {
                     companyId: issue.companyId,
                     documentId: document.id,
                     revisionNumber: 1,
+                    ...(outputCapture ? { payloadSourceProtocolVersion: 1 } : {}),
                     title: input.title ?? null,
                     format: input.format,
                     body: input.body,
@@ -298,6 +469,11 @@ export function documentService(db: Db) {
                     createdAt: now,
                   })
                   .returning();
+
+                if (outputCapture) await persistNativeAwDocumentCapture(tx, {
+                  companyId: issue.companyId, issueId: issue.id, documentId: document.id, revisionId: revision.id,
+                  runId: input.createdByRunId!, capture: outputCapture,
+                });
 
                 await tx
                   .update(documents)
@@ -368,6 +544,7 @@ export function documentService(db: Db) {
                 companyId: issue.companyId,
                 documentId: existing.id,
                 revisionNumber: nextRevisionNumber,
+                  ...(outputCapture ? { payloadSourceProtocolVersion: 1 } : {}),
                 title: input.title ?? null,
                 format: input.format,
                 body: input.body,
@@ -378,6 +555,11 @@ export function documentService(db: Db) {
                 createdAt: now,
               })
               .returning();
+
+            if (outputCapture) await persistNativeAwDocumentCapture(tx, {
+              companyId: issue.companyId, issueId: issue.id, documentId: existing.id, revisionId: revision.id,
+              runId: input.createdByRunId!, capture: outputCapture,
+            });
 
             await tx
               .update(documents)
@@ -451,6 +633,7 @@ export function documentService(db: Db) {
               companyId: issue.companyId,
               documentId: document.id,
               revisionNumber: 1,
+              ...(manualActor || outputCapture ? { payloadSourceProtocolVersion: 1 } : {}),
               title: input.title ?? null,
               format: input.format,
               body: input.body,
@@ -461,6 +644,11 @@ export function documentService(db: Db) {
               createdAt: now,
             })
             .returning();
+
+          if (outputCapture) await persistNativeAwDocumentCapture(tx, {
+            companyId: issue.companyId, issueId: issue.id, documentId: document.id, revisionId: revision.id,
+            runId: input.createdByRunId!, capture: outputCapture,
+          });
 
           await tx
             .update(documents)
@@ -475,6 +663,23 @@ export function documentService(db: Db) {
             createdAt: now,
             updatedAt: now,
           });
+
+          if (manualActor) {
+            const [captured] = await tx.update(documentRevisions)
+              .set({ payloadSourceSnapshot: directHumanPayloadSnapshotSql("document_revision") })
+              .where(and(eq(documentRevisions.id, revision.id), eq(documentRevisions.companyId, issue.companyId),
+                eq(documentRevisions.documentId, document.id), eq(documentRevisions.createdByUserId, manualActor.userId!),
+                eq(documentRevisions.payloadSourceProtocolVersion, 1), isNull(documentRevisions.payloadSourceSnapshot),
+                eq(documentRevisions.payloadSourceSnapshotInvalidated, false))).returning();
+            if (!captured?.payloadSourceSnapshot) throw conflict("Manual document source capture was not stored");
+            const snapshot = nativePayloadSourceSnapshotSchema.parse(captured.payloadSourceSnapshot);
+            const source = await persistActivity(tx as unknown as Db, { companyId: issue.companyId, actorType: "user",
+              actorId: manualActor.userId!, action: "document_revision.payload_source_captured", entityType: "issue", entityId: issue.id,
+              details: { documentId: document.id, revisionId: revision.id, key, producer: "direct_manual_input",
+                contentHash: snapshot.owner.contentHash, digest: snapshot.digest } });
+            sourcePublication = source.publication;
+            await finishManualInput();
+          }
 
           return {
             created: true as const,
@@ -501,6 +706,11 @@ export function documentService(db: Db) {
             },
           };
           });
+          if (sourcePublication) {
+            try { publishActivity(sourcePublication); }
+            catch (err) { logger.warn({ err }, "Failed to publish committed document source activity"); }
+          }
+          return result;
         } catch (error) {
           if (isUniqueViolation(error, "issue_documents_company_issue_key_uq")) {
             if (input.lockedDocumentStrategy === "create_new_document" && attempt < maxAttempts - 1) {
@@ -524,7 +734,7 @@ export function documentService(db: Db) {
      * `latest_revision_id` can be written inline. Documents, their initial
      * revisions, and the issue links are each inserted in chunked statements.
      */
-    createIssueDocumentsForImport: async (rows: ImportIssueDocumentRow[]): Promise<void> => {
+    createIssueDocumentsForImport: async (rows: ImportIssueDocumentRow[], dbOrTx: Db | ImportDbTransaction = db): Promise<void> => {
       if (rows.length === 0) return;
       const now = new Date();
       const documentRows: Array<Record<string, unknown>> = [];
@@ -576,7 +786,7 @@ export function documentService(db: Db) {
           updatedAt: now,
         });
       }
-      await db.transaction(async (tx) => {
+      await dbOrTx.transaction(async (tx) => {
         await insertRowsInChunks(tx, documents, documentRows);
         await insertRowsInChunks(tx, documentRevisions, revisionRows);
         await insertRowsInChunks(tx, issueDocuments, linkRows);

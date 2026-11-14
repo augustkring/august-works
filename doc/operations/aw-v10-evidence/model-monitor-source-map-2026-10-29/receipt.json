@@ -1,0 +1,36 @@
+{
+  "purpose": "Source traceability and regression selection only; no readiness or acceptance upgrade",
+  "checks": {
+    "securityRegressionTests": "6 passed, 0 failed",
+    "capabilityProjectionCase": "1 passed, 0 failed",
+    "capabilityCatalogRegeneration": "matches all source inputs",
+    "securityMap": "9 groups, 20 protected mappings"
+  },
+  "selectedSource": [
+    {
+      "path": "doc/experience/v9/coverage.json",
+      "sha256": "0a1cec608a81513c4362009a192e430dc58448947d6027504d3e29cbd2defe68"
+    },
+    {
+      "path": "scripts/generate-v10-capability-projection.ts",
+      "sha256": "d22c9376526b94329be069f3de923f0b0951c4b70e91402af7d01a37bb55030d"
+    },
+    {
+      "path": "doc/operations/v10-capability-projection.json",
+      "sha256": "fbf0e4b06e2f0d7c74e7274260b3e2636c79abe1195a0f4cdc62ccb371ece221"
+    },
+    {
+      "path": "doc/operations/v10-security-fast-path.json",
+      "sha256": "089e46b29257bb15d29d005cb66798511ee25f702be0a69a8c49beb9f518a7f4"
+    },
+    {
+      "path": "scripts/check-v10-security-fast-path.test.mjs",
+      "sha256": "d13a4b59a09a15582557c4dce6fa1dc0031c37799122cd90f1911bed58abe9a7"
+    },
+    {
+      "path": "scripts/v10-product-artifacts.test.mjs",
+      "sha256": "dec4e3239bd7dc8be01f2df246f169251f9fcc12ed2b923eff54c8abfd8fef43",
+      "qualification": "Only capability-sourcePaths assertions staged; unrelated pending Safe Change graph assertions remain in working tree. The capability case passed on the working tree."
+    }
+  ]
+}

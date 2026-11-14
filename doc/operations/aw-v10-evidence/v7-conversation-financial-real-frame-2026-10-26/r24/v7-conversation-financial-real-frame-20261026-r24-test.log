@@ -1,0 +1,39 @@
+
+ RUN  v4.1.11 /workspace/v10-dep-qualification/server
+
+ ❯ src/__tests__/v7-model-reservations.integration.test.ts (31 tests | 1 failed | 30 skipped) 29173ms
+     × settles the actual qualified conversation usage once and preserves the exact debit in canonical purge 24678ms
+
+⎯⎯⎯⎯⎯⎯⎯ Failed Tests 1 ⎯⎯⎯⎯⎯⎯⎯
+
+ FAIL  src/__tests__/v7-model-reservations.integration.test.ts > native model reservation ledger and dispatch boundary > settles the actual qualified conversation usage once and preserves the exact debit in canonical purge
+AssertionError: expected undefined to match object { completed: '1', …(4) }
+
+- Expected:
+{
+  "completed": "1",
+  "settledCostEvents": "1",
+  "settledCostMinor": "1",
+  "settledInputTokens": "100",
+  "settledOutputTokens": "32",
+}
+
++ Received:
+undefined
+
+ ❯ src/__tests__/v7-model-reservations.integration.test.ts:800:101
+    798|       if (!operation) throw new Error("conversation_known_cost_purge_m…
+    799|       const [erasureReceipt] = await db.select().from(companyDeletionO…
+    800|       expect((erasureReceipt?.evidence as Record<string, unknown>)?.na…
+       |                                                                                                     ^
+    801|         completed: "1", settledInputTokens: String(facts.usage.inputTo…
+    802|         settledCostEvents: "1", settledCostMinor: String(expectedMinor…
+
+⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯[1/1]⎯
+
+
+ Test Files  1 failed (1)
+      Tests  1 failed | 30 skipped (31)
+   Start at  18:04:38
+   Duration  44.66s (transform 10.78s, setup 77ms, import 15.28s, tests 29.17s, environment 0ms)
+

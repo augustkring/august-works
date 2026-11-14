@@ -1,0 +1,23 @@
+{
+  "recordedAt": "2026-10-22T23:04:04.217094+00:00",
+  "sourcePins": {
+    "recordedBeforeCapture": "2026-10-22T23:02:28.508883+00:00",
+    "files": {
+      "server/src/__tests__/learning-deleted-memory-source.integration.test.ts": "4b78919a634eced7cec9ad0f960d91f6aa912cd91026b21bc9094cb202bcc793",
+      "server/src/services/learning/learning-analytical-sources.ts": "d866a84b51773948e0c52094a95b9b41085f7d9d319343647e21a8a377cc41c4",
+      "server/src/services/memory/derived-memory.ts": "596ade491fbd79ac542dc292d3558717b08a17553f8e123aaf031b4f63a6fa1f",
+      "server/src/services/memory/memory-privacy.ts": "b2923f165509c6e6ccfb58775f38355bcc42ce2b2b993c228e7908ca952f0897",
+      "packages/db/src/schema/learning.ts": "fba85dd7f78f27a9e3d7e53256ffe3437ff7397f31f003069d19d26352c01dca",
+      "packages/db/src/schema/derived_memory.ts": "a78a99518cf53eb9b0e692e1d5564d86da6698b0c90193a03dfd1e165699e4b4"
+    }
+  },
+  "sessionId": 28783,
+  "exitCode": 1,
+  "failedTests": 1,
+  "failedAssertions": 6,
+  "durationSeconds": 57.22,
+  "log": "up03-learning-derived-deleted-memory-red.log.txt",
+  "finding": "Expanded migrated PostgreSQL case qualifies owner access and Bob denial before actual private-source deletion for Learning, observationLineage and modelLineage. Cascading deletion removes the private UUID from all three native evidence tables; each canonical consumer then accepts the remaining public source. Three lost-UUID assertions and three required-denial assertions fail.",
+  "scope": "Original native source guards, no paid model/provider/host proof.",
+  "disposition": "Open reproduced source-retention failure; no correction/GREEN yet."
+}

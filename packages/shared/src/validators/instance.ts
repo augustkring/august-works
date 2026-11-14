@@ -1,3 +1,4 @@
+import { resourceGovernancePolicySchema } from "../resource-governance.js";
 import { v8FeatureFlagShape } from "../v8-feature-flags.js";
 import { v9FeatureFlagShape } from "../v9-feature-flags.js";
 import { v6FeatureFlagShape } from "../v6-feature-flags.js";
@@ -28,6 +29,7 @@ export const backupRetentionPolicySchema = z.object({
 });
 
 export const instanceGeneralSettingsSchema = z.object({
+  resourceGovernance: resourceGovernancePolicySchema.optional(),
   censorUsernameInLogs: z.boolean().default(false),
   keyboardShortcuts: z.boolean().default(false),
   feedbackDataSharingPreference: feedbackDataSharingPreferenceSchema.default(

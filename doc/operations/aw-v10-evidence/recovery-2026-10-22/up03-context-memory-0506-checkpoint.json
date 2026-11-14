@@ -1,0 +1,92 @@
+{
+  "recordedAt": "2026-10-22T21:39:28.305263+00:00",
+  "status": "partial_UP03_software_checkpoint_not_source_complete_not_PR_ready",
+  "sourcePins": {
+    "recordedDuringRunningCapture": "2026-10-22T21:33:37.048817+00:00",
+    "files": {
+      "packages/db/src/schema/memory.ts": "7ab9c8fbcc6c3cb771551f05608376ad3119b9f3b0005b9bcb4b97d4ae1dcaf2",
+      "packages/db/src/schema/heartbeat_runs.ts": "123c7093b5209c36f3c3c9f4bb9ebc2e7975b469aa8d2a934b849d9b073d299c",
+      "packages/db/src/schema/projects.ts": "6090059ad8aade7f635f96a40943139927fb4461702d38e22910c53b80a2a202",
+      "packages/db/src/migrations/0506_wild_thanos.sql": "37cc0e72b1ad77f659b918fdd1333602dfb2a21b54b75a6896ed8c7dcf5b4bd0",
+      "server/src/services/authorization.ts": "fc306dea21e6cbe992da30714a218e4c1ec92d8d80378e8df83f7affd3d4addb",
+      "server/src/services/analytical-context-authority.ts": "4de35b517fdb14dbd9d4fda5974c335c9c06c1161689383f09735c1522f90502",
+      "server/src/services/context/context-manifest.ts": "429c9f292664d941d2a00e6e19c643b831f7979aebdd80f3483e3f32702b8cf8",
+      "server/src/services/memory/memory-privacy.ts": "9d0f9aabe3ea343529a58ff50e4e24e6c42838027a6638e0b25f23b2f5c9180d",
+      "server/src/services/memory/memory-service.ts": "ff012e23e5eb0c87dce2d4cca134807299b34886aeb42c92f7326f4006eae617",
+      "server/src/services/memory/memory-resolution.ts": "6963c20f058fa99cf6011538ab7ba311cf4f828d54276e3b157aa059f24d1012",
+      "server/src/services/memory/derived-memory.ts": "596ade491fbd79ac542dc292d3558717b08a17553f8e123aaf031b4f63a6fa1f",
+      "server/src/services/memory/memory-maintenance.ts": "1992f09ea0998bd28f347ba3ac0bb303ba018cddcc748f6e2bf937ebb8202511",
+      "server/src/services/memory/memory-jobs.ts": "aa1bc205b3132fc0f451a303dc9d10b7f213d86bde49a43361f14a6e8435acae",
+      "server/src/__tests__/v10-private-payload.integration.test.ts": "506a5380c74127a6853220d5a8026a8de511265393b5e0012e9de2f2bf763614",
+      "server/src/services/context/context-manifest.test.ts": "092f826db596fd58106126233cc944c3fd8a07b7d2f648550cd82a1c48f08c7d",
+      "server/src/services/memory/memory-maintenance.test.ts": "d3ecbf73c265996c36c8e84e243758eb4e74c2f5b2488bc92a592423900cb2e1"
+    }
+  },
+  "pinQualification": "Named sources hashed during running final capture under acknowledged owner source holds, then all16 verified unchanged after actual exit and before commit; this is not an upfront whole dependency graph hash claim.",
+  "runs": [
+    {
+      "log": "up03-ordinary-context-memory-red.log.txt",
+      "sha256": "8912bd2080fa20e5462405bfb6a1cf55c909fdbd2f89dcb063ace3065bb182d8",
+      "exitCode": 1,
+      "result": "Actual PostgreSQL:3 failed/16 deselected. Both public destination Task/run disclosed ordinary private Memory Context; run-only manifest omitted actual Task binding."
+    },
+    {
+      "log": "up03-private-memory-scope-red.log.txt",
+      "sha256": "94e67af4650bb3a9a9078c4dfcf7fbaaa9a2650cbfbe1e2886d60543337df529",
+      "exitCode": 1,
+      "result": "Actual PostgreSQL:2 failed/22 deselected. Private company-scope producer Memory disclosed across Humans on same Agent, and another Agent Context accepted the original Agent private Memory."
+    },
+    {
+      "log": "up03-memory-metadata-roots-red.log.txt",
+      "sha256": "d3091caa1985e60a44859dedf74cc7cec253c146eb49d6dae47f8f9df104b0d3",
+      "exitCode": 1,
+      "result": "Actual PostgreSQL:1 failed/26 deselected. derived:true and empty metadata roots admitted a direct private Memory Context under another Human."
+    },
+    {
+      "log": "up03-context-memory-0506-green-attempt.log.txt",
+      "sha256": "100c43918056d9b3483d2f2a1e28e2a5122f05ffba10ab3ac06f7c9c7f3ac63a",
+      "exitCode": 0,
+      "result": "Actual PostgreSQL:49 passed across31 private payload tests,4 original Context tests,14 original native maintenance tests;162.65 seconds."
+    },
+    {
+      "log": "up03-joint-0506-db-generate.log.txt",
+      "sha256": "8a2d59b33b699072493172a493a925129380dd13ee2539bf5946ef2ce57156ec",
+      "exitCode": 0,
+      "result": "Normal joint Drizzle migration generation.43 unrelated historical snapshot deletions restored exactly by schema owner."
+    },
+    {
+      "log": "up03-joint-0506-migration-check.log.txt",
+      "sha256": "142d22a4401bbc5f65ffe90cd630da9032e3baf2bebe7b288d9c6eba1b5d1532",
+      "exitCode": 0,
+      "result": "Normal migration numbering/safety checks;20 historical baseline findings and1 stale baseline ignored."
+    }
+  ],
+  "commands": {
+    "green": "GOMEMLIMIT=1GiB GOMAXPROCS=2 node --max-old-space-size=2048 node_modules/vitest/vitest.mjs run server/src/__tests__/v10-private-payload.integration.test.ts server/src/services/context/context-manifest.test.ts server/src/services/memory/memory-maintenance.test.ts --maxWorkers=1",
+    "contextRedFilter": "ordinary private Memory Context|run-only manifest",
+    "privateScopeRedFilter": "Human even when|another agent.s private Memory",
+    "metadataRedFilter": "claimed derived metadata"
+  },
+  "fixtureVersionNotes": [
+    "An exact copy of the19-case fixture at the original3RED checkpoint is archived as up03-ordinary-context-memory-red.fixture.ts.txt; SHA256 1385f61c4869c91f53f14dba973e301fa634a0f97992c763bd173e05efd74c6e.",
+    "Final49 run includes additional independent native lock/list-wait, steering, derived lineage, immutable owner/erasure tests. The public-destination synthetic Memory URI was corrected from memory://private/UUID to the real native provider memory://record/UUID when canonical URI parsing was added; denial assertions were preserved.",
+    "Exact standalone24/27-case intermediate fixture byte snapshots were not archived upfront; their authentic raw logs record actual semantic failures and fixture counts, not an independently reproduced old-source receipt."
+  ],
+  "changes": [
+    "Private Memory stores immutable actual Human snapshot without an auth foreign key. Same-run steering cannot transfer earlier private Memory; original native erasure clears the personal reference. Unknown private historical owners remain unavailable.",
+    "Original Context binds to actual persisted run Task, refuses caller substitution, persists copied Task roots into original issue_privacy_sources, and repeats actual run Agent/Human checks after insert-trigger waits.",
+    "Native Memory URI and original model/observation lineage owners determine complete Context roots; descriptive metadata cannot shrink them. Actual native Memory source versions are pinned under row locks and rechecked after waits.",
+    "Original payload admission checks retained ordinary Memory/Foundation Context even with zero analytical roots; existing native analytical permit remains required for actual analytical roots.",
+    "Memory reads/mutations and native maintenance/derived operations acquire original BusinessEvent then Memory locks. Lists use native Memory transaction, apply source authority before public result bounds, and recheck after waits.",
+    "Joint0506 stores retained Context UUIDs at original heartbeat run owner, stamps matching Context insertion and prevents ordinary source rewrites. The new run qualification bit remains defaultfalse and currently unused by reader/producer gates; this storage alone earns no run-completeness claim."
+  ],
+  "limits": [
+    "Not whole UP03/V10 source completion or private feature release; temporary original HTTP admission remains closed.",
+    "Private Agent ancestor narrowing through copied shared Memory is a separately identified open gap after this49 checkpoint. Learning cross-owner ordinary source admission and cycle/diamond qualification remain pending.",
+    "Task/Project SQL list/count/search and realtime/import/all derivative source closure remains incomplete; async payload guard alone does not qualify those channels.",
+    "No current whole server typecheck/build/test:run; normal diagnostic typecheck pending complete portability integration.",
+    "Current membership/account/effect pinning through all mutations, final paid-transport checks, mixed writer/rollback/restore admission, source publication and all physical/provider/native/browser acceptance remain open.",
+    "Actual steering tests invoke native persisted identity owners and acknowledgement effect callback in disposable PostgreSQL; they do not claim provider transport acknowledgement.",
+    "The native lock-order test proves its concrete observed company lock wait and successful Memory try-lock; it does not qualify every original caller or global deadlock freedom."
+  ]
+}

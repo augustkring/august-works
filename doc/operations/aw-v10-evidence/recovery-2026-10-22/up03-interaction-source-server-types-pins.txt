@@ -1,0 +1,7 @@
+f8148495a9a0ff284e76ec27a475bc293b831f9b4c98297c9690f6d6768e0a7c  server/src/services/issue-thread-interactions.ts
+d2ce49fbe1369258675f45251b626800bba368ab99e4e99bd8ededc612f5eef5  server/src/services/native-runtime/native-interaction-bridge.ts
+94c7daed86381c84f056a215426691710524e2b120ad54bc3a88e99d5fd1e0bf  server/src/services/native-runtime/external-chat-question-response-input.ts
+133e233a894d70282af3628aca83ee51168f4843daa27c48fe5f335aaac15b87  server/src/services/heartbeat.ts
+6e2331eabd18041788b67f238a0e88403ffb5793b46e4e8de6c2a3ca21fb26bf  server/src/__tests__/heartbeat-process-recovery.test.ts
+753919d6825ccf3789206a83c912ca2ee7400564795153dc05b29dcb8be80256  server/src/__tests__/native-interaction-bridge.test.ts
+7e7b5cb55a9fd3ccc612b925461e8a5c2e7bd487cf197510e9163597785f63e2  server/src/services/native-runtime/external-chat-wait.integration.test.ts

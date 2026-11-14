@@ -1,0 +1,257 @@
+{
+  "purpose": "recovery_only_not_qualification",
+  "savedAtUtc": "2026-10-30T06:23:26.683954+00:00",
+  "baseCommit": "a3ddabbb1686dcfc8edd2e1c2dc15d822c1977bb",
+  "patchBytes": 1876939,
+  "patchSha256": "1ddbe90e7614dc812e58c9674789929733453cbde68cf8bbe9ea9cccae1fbd25",
+  "archiveSha256": "5b71f4b56acd5811a224c3e74ec4cc0b3f45c72c98cf6cc259cc5b14fc89b67c",
+  "untrackedSourceFiles": [],
+  "privateCandidateFiles": [
+    {
+      "path": "preparation/agent-native-tool-alias-root-current-20261030/check.log",
+      "bytes": 114,
+      "sha256": "6ac7390c9f977ab19829960ee16e54dc1e80e7e03f9b9145271c08779c4d2f46"
+    },
+    {
+      "path": "preparation/agent-native-tool-alias-root-current-20261030/pin-refresh.json",
+      "bytes": 567,
+      "sha256": "d666c1ba02e9e1ecd70d3072687b43f6294217fa20feb8fe4e20b44b236d6986"
+    },
+    {
+      "path": "preparation/agent-native-tool-alias-root-current-20261030/test.log",
+      "bytes": 757,
+      "sha256": "50b2468619b759049d7d9ead32199f5dabf957352eff4225bc667367f304b0e1"
+    },
+    {
+      "path": "preparation/agent-native-tool-alias-transition-r3-20261030/README.md",
+      "bytes": 2576,
+      "sha256": "1c0c2b489c865e085a8b4f0daa0ab1b83cb589951056d8984a7c6cff5537565e"
+    },
+    {
+      "path": "preparation/agent-native-tool-alias-transition-r3-20261030/STAGE-LIST.txt",
+      "bytes": 188,
+      "sha256": "f46a0317695405c5bef6148f0c46f0ddc49726b1d379271750f22ddb05f091bb"
+    },
+    {
+      "path": "preparation/agent-native-tool-alias-transition-r3-20261030/candidate/doc/operations/agent-native-tool-alias-compatibility.json",
+      "bytes": 59029,
+      "sha256": "758f2b0169713ce5def56f2f8faeb1e5843c6741193c6e349b538d1a1c0476c1"
+    },
+    {
+      "path": "preparation/agent-native-tool-alias-transition-r3-20261030/candidate/package.json",
+      "bytes": 14972,
+      "sha256": "631b595ef1b57251c2d6f8218ad1a367705072b3d2ec14a6f2010fc9abb9b6f7"
+    },
+    {
+      "path": "preparation/agent-native-tool-alias-transition-r3-20261030/candidate/scripts/check-agent-native-tool-alias-compatibility.mjs",
+      "bytes": 9216,
+      "sha256": "7beefb4611e1c82f2836ba2ab6a99cc95a4347ffcf68236724b4be4791817237"
+    },
+    {
+      "path": "preparation/agent-native-tool-alias-transition-r3-20261030/candidate/scripts/check-agent-native-tool-alias-compatibility.test.mjs",
+      "bytes": 5710,
+      "sha256": "3bb95fd62ea815422987e93634301b97af87efca739df3ce9d2e69fae261f0e4"
+    },
+    {
+      "path": "preparation/agent-native-tool-alias-transition-r3-20261030/owned.patch",
+      "bytes": 78115,
+      "sha256": "f3309a34021e911f60b0e55c3e78f1b87aa695160f362eb82b364706989322e4"
+    },
+    {
+      "path": "preparation/agent-native-tool-alias-transition-r3-20261030/package-after.sha256",
+      "bytes": 79,
+      "sha256": "10143a14c8d4139951bc99499b484bbda080c98619c27227b67e1fd1443728f8"
+    },
+    {
+      "path": "preparation/agent-native-tool-alias-transition-r3-20261030/package-before.sha256",
+      "bytes": 79,
+      "sha256": "6d1d90b2e7805abe55c0360b6e1caf37f52edbff6f553774752b9cfb2b7034f0"
+    },
+    {
+      "path": "preparation/agent-native-tool-alias-transition-r3-20261030/qualification/README.md",
+      "bytes": 2576,
+      "sha256": "1c0c2b489c865e085a8b4f0daa0ab1b83cb589951056d8984a7c6cff5537565e"
+    },
+    {
+      "path": "preparation/agent-native-tool-alias-transition-r3-20261030/qualification/SHA256SUMS",
+      "bytes": 669,
+      "sha256": "49a47875822ebd7c5d8286f1e601ead6a178fa20afde92ffcad7a0cea46033b3"
+    },
+    {
+      "path": "preparation/agent-native-tool-alias-transition-r3-20261030/qualification/captured-source-files.tar.gz",
+      "bytes": 16906,
+      "sha256": "8f8a081231d66d39d99b2c33ceff470b3adbdee9ffe9b6dd398ad9f8c1e88187"
+    },
+    {
+      "path": "preparation/agent-native-tool-alias-transition-r3-20261030/qualification/package-after.sha256",
+      "bytes": 79,
+      "sha256": "10143a14c8d4139951bc99499b484bbda080c98619c27227b67e1fd1443728f8"
+    },
+    {
+      "path": "preparation/agent-native-tool-alias-transition-r3-20261030/qualification/package-before.sha256",
+      "bytes": 79,
+      "sha256": "6d1d90b2e7805abe55c0360b6e1caf37f52edbff6f553774752b9cfb2b7034f0"
+    },
+    {
+      "path": "preparation/agent-native-tool-alias-transition-r3-20261030/qualification/r3-source.patch",
+      "bytes": 78190,
+      "sha256": "d4865c486f2577ae5818649f9537b9358c0e18df10ebbce1194904458ba8b2d7"
+    },
+    {
+      "path": "preparation/agent-native-tool-alias-transition-r3-20261030/qualification/runner.txt",
+      "bytes": 934,
+      "sha256": "a962c0c0978a92e7f65486f11cae5c63d6cbb791b0d8c0324b97d7883be11ae8"
+    },
+    {
+      "path": "preparation/agent-native-tool-alias-transition-r3-20261030/qualification/source-pins.json",
+      "bytes": 26747,
+      "sha256": "45c434aace76be2eea26714a461c54b2925b273344efce46cd2c20c3a56a0eec"
+    },
+    {
+      "path": "preparation/agent-native-tool-alias-transition-r3-20261030/qualification/stage-list.txt",
+      "bytes": 188,
+      "sha256": "f46a0317695405c5bef6148f0c46f0ddc49726b1d379271750f22ddb05f091bb"
+    },
+    {
+      "path": "preparation/build-v10-safe-change-inventory-draft-current.py",
+      "bytes": 16820,
+      "sha256": "3f592094dce0180b2e9cec40ea78d9952fba6e246a19fd4d9514e97bac92f9f4"
+    },
+    {
+      "path": "preparation/check-private-safe-change-merge.mjs",
+      "bytes": 11838,
+      "sha256": "f76278970632e8d857c990632cc52481135d99631b185b4c4c06813d4839f715"
+    },
+    {
+      "path": "preparation/merge-safe-change-inventory-current.py",
+      "bytes": 4668,
+      "sha256": "2bf22e2e018d7945a64bcbead4826056a8fd5663fd315406047a0fc0b7e70227"
+    },
+    {
+      "path": "preparation/native-checkpoint-store-bridge-r41-candidate/candidate.diff",
+      "bytes": 7300,
+      "sha256": "5560d34476ae29802f3c96976e43ae28fe0779ebff3a10e8473b8b251699805d"
+    },
+    {
+      "path": "preparation/native-checkpoint-store-bridge-r41-candidate/manifest.json",
+      "bytes": 235,
+      "sha256": "e181f83950092b336e935c3ee7b3a4ee9a6eaeaaa1f71709fe805f992fb27133"
+    },
+    {
+      "path": "preparation/native-proof-reader-selection-r42-candidate/candidate.diff",
+      "bytes": 10676,
+      "sha256": "44a537ccebb91ea50a739c12c5eb1dbe89a31c110c908bde779863d6fdda8d52"
+    },
+    {
+      "path": "preparation/native-proof-reader-selection-r42-candidate/manifest.json",
+      "bytes": 235,
+      "sha256": "4903566bbaf5349cb1a696dcf95f8d4c9945db4c1b6f98462df08b344e7eeddb"
+    },
+    {
+      "path": "preparation/native-readonly-memory-seal-r40-candidate/candidate.diff",
+      "bytes": 7475,
+      "sha256": "2b3b41db505f94f5479cd60de4c21fa87e11d484a64f24e9e420c46253a6d265"
+    },
+    {
+      "path": "preparation/native-readonly-memory-seal-r40-candidate/manifest.json",
+      "bytes": 731,
+      "sha256": "1b3556a3015ba532033c4b5b2a2c0525d0d0f4428ef240be2289b2bc01346561"
+    },
+    {
+      "path": "preparation/pr42-body-current-20261030-0535.md",
+      "bytes": 7868,
+      "sha256": "b418935384c59715d725d0972e3f13b297f1e1ec1bd093d08eae4e74bfb2ba5f"
+    },
+    {
+      "path": "preparation/preserve-r44.py",
+      "bytes": 3137,
+      "sha256": "0644e64a1b9a0f6a9c73c217f41521fce480e603a6008e4425f676c6ec290b2a"
+    },
+    {
+      "path": "preparation/root-continuation-20261030-0618.md",
+      "bytes": 14554,
+      "sha256": "85f0b80e1cac5e4e1ca8467544e51944c0a88c028810955c5945d7ab4393111d"
+    },
+    {
+      "path": "preparation/root-continuation-latest.md",
+      "bytes": 14554,
+      "sha256": "85f0b80e1cac5e4e1ca8467544e51944c0a88c028810955c5945d7ab4393111d"
+    },
+    {
+      "path": "preparation/snapshot-current-source-for-dependency-check.py",
+      "bytes": 7027,
+      "sha256": "df80e1647511fef43169a05eac7447309bc41223aadbbd9647e8ab246dec0003"
+    },
+    {
+      "path": "preparation/v10-001-060-current-gap-audit-20261030.json",
+      "bytes": 75616,
+      "sha256": "5252b00226e2db01e9041a9806e28da75905d82aad8806a65a02bc7fd8e0cab3"
+    },
+    {
+      "path": "preparation/v10-169-061-120-current-gap-audit-luna-20261030.json",
+      "bytes": 267129,
+      "sha256": "a890d05a099d5d410e0dee2c990cebd92fc069b780ff9366f52591acd0c90d0e"
+    },
+    {
+      "path": "preparation/v10-169-current-assessment-overlay-20261030.SHA256SUMS",
+      "bytes": 228,
+      "sha256": "5eb0b4f3ba244b44c75c143377a58ca4bb3abe97c9aa2d5ef178551c8be947bf"
+    },
+    {
+      "path": "preparation/v10-169-current-assessment-overlay-20261030.json",
+      "bytes": 51731,
+      "sha256": "67ef0579d562007331c153debbdbfbad7e36f621cec2ae1b6000293f92e7d345"
+    },
+    {
+      "path": "preparation/v10-169-current-assessment-overlay-20261030.json.pre-current-update.bak",
+      "bytes": 40243,
+      "sha256": "a9962c011755bcc94b880efc533b62a0ed701bc1e5b625430702f41307bade25"
+    },
+    {
+      "path": "preparation/v10-169-current-assessment-overlay-20261030.md",
+      "bytes": 6896,
+      "sha256": "3caf0d4ad7a18e3a33ecc2206d38e16e3db76c92ffea480e6fc874b33d2c978e"
+    },
+    {
+      "path": "preparation/v10-169-current-assessment-overlay-20261030.md.pre-current-update.bak",
+      "bytes": 3860,
+      "sha256": "6a29fa12b71c5662cbe984f144c27a1aaacbc7e983971dd6d1cef4eebeb4c8d1"
+    },
+    {
+      "path": "preparation/v10-169-current-gap-audit-20261030.md",
+      "bytes": 14355,
+      "sha256": "df06754e85628d692883bf915fd3c997989b394b7d990a567b63fdc5a4f88e53"
+    },
+    {
+      "path": "preparation/v10-169-full-current-evidence-map-20261030.SHA256SUMS",
+      "bytes": 335,
+      "sha256": "d5c299493f5048b7c8b99b979b02caa8d90b4c0bf50a4841556c248a51ea22ce"
+    },
+    {
+      "path": "preparation/v10-169-full-current-evidence-map-20261030.json",
+      "bytes": 1325269,
+      "sha256": "7b3889c9c3a7ff8d3b4fbc86c93661fb3562873655c5dd56c41e103be1d167be"
+    },
+    {
+      "path": "preparation/v10-169-full-current-evidence-map-20261030.md",
+      "bytes": 1588,
+      "sha256": "d56aefe8048911b4815f5b8398c143cb8a5fb2d0abc871d9f2af13bf495f295c"
+    },
+    {
+      "path": "preparation/v10-169-full-current-gap-audit-20261030.SHA256SUMS",
+      "bytes": 326,
+      "sha256": "ac3b2d46cfe50bf8818cf7b0f0155ec6fcece0ad19ba2d6c18de68ddf9a7a1f8"
+    },
+    {
+      "path": "preparation/v10-169-full-current-gap-audit-20261030.json",
+      "bytes": 846921,
+      "sha256": "c1292ce5bdebce9664c02e593733dd79d0e6e41d1573ba56831e650730f9d2fc"
+    },
+    {
+      "path": "preparation/v10-169-full-current-gap-audit-20261030.md",
+      "bytes": 2470,
+      "sha256": "3b356c6aa89e46f05556719e7785fb0177dc65807e8c9747648d2cc513ba457a"
+    }
+  ],
+  "privateCandidateArchiveSha256": "872dba9acc38e3183c2f8142dae06ac83f372bcd69efbdeaf021f1edfd50b2fd"
+}

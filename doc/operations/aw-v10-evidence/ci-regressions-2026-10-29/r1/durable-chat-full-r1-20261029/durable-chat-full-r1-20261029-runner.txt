@@ -1,0 +1,3 @@
+timeout_seconds=240
+test_file=src/__tests__/durable-chat-wakeup.test.ts
+test_pattern=durable inbound chat scheduler receipts

@@ -1,0 +1,35 @@
+{
+  "version": 1,
+  "classificationGate": "PASS",
+  "scope": "Mounted UI write/unknown-call classification and source-backed mapping only.",
+  "materialApiContractQualification": "UNQUALIFIED_SOURCE_ONLY",
+  "apiContractQualificationNote": "The 159 API-only entries document existing mounted-client routes, current cited authority evidence, reviewed callsite rationale, and exact owner routes. They do not claim qualified preconditions, postconditions, idempotency, approval, recovery, tests, or MCP exposure.",
+  "toolCatalogExposure": "API-only contracts have toolId null, no aliases, and mcpExposed false.",
+  "counts": {
+    "mountedUiCallsites": 990,
+    "classificationByMode": {
+      "HUMAN_ONLY": 577,
+      "DIRECT_AGENT": 335,
+      "NOT_APPLICABLE": 15,
+      "OPERATOR_ONLY": 37,
+      "PROPOSAL_ONLY": 10,
+      "HUMAN_CONFIRMATION": 12,
+      "QUERY_POST": 2,
+      "NON_MUTATING_PREVIEW": 2
+    },
+    "toolOperations": 6,
+    "existingApiOnlyContracts": 159
+  },
+  "manifestHash": "24b568c81d493c84218a55e8efdea6c9cce5b77b5107b5a1c62e7322fce198b8",
+  "toolCatalogContractHash": "5c9b1372bf12ad8b962b3249d2ce6e3679f33ba681f5cbc407d1459bee335825",
+  "check": "check.log",
+  "tests": "test.log",
+  "sourcePins": "source-pins.sha256",
+  "reviewEvidence": [
+    "review-root.json",
+    "review-security.json",
+    "review-readiness.json",
+    "review-supplement.json",
+    "review-merged.json"
+  ]
+}

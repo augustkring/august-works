@@ -1,0 +1,109 @@
+import { randomUUID } from "node:crypto";
+import { and, eq, sql } from "drizzle-orm";
+import { afterAll, beforeAll, describe, expect, it } from "vitest";
+import { agents, agentApiKeys, authUsers, companies, companyMemberships, createDb,
+  EMBEDDED_POSTGRES_TEST_TIMEOUT_MS, heartbeatRuns, issues, principalPermissionGrants } from "@paperclipai/db";
+import { authorizationService, type AuthorizationActor } from "../services/authorization.js";
+import { startEmbeddedPostgresTestDatabase } from "./helpers/embedded-postgres.js";
+
+function deferred() { let resolve!: () => void; const promise = new Promise<void>(r => { resolve = r; }); return { promise, resolve }; }
+function pgCode(error: unknown): string | undefined {
+  for (let depth = 0; error && typeof error === "object" && depth < 8; depth++, error = (error as { cause?: unknown }).cause) {
+    if (typeof (error as { code?: unknown }).code === "string") return (error as { code: string }).code;
+  }
+}
+describe("Foundation native Source authority lifetime", () => {
+  let database: Awaited<ReturnType<typeof startEmbeddedPostgresTestDatabase>>, db: ReturnType<typeof createDb>;
+  beforeAll(async () => { database = await startEmbeddedPostgresTestDatabase("foundation-source-authority-");
+    db = createDb(database.connectionString, { maxConnections: 3 }); }, EMBEDDED_POSTGRES_TEST_TIMEOUT_MS);
+  afterAll(async () => { await database?.cleanup(); }, 30000);
+  async function seed() {
+    const companyId = randomUUID(), userId = randomUUID(), agentId = randomUUID(), runId = randomUUID(), keyId = randomUUID();
+    await db.insert(companies).values({ id: companyId, name: "Foundation Source facts", issuePrefix: randomUUID() });
+    await db.insert(authUsers).values({ id: userId, name: "Actual Human", email: `${userId}@example.test`, createdAt: new Date(), updatedAt: new Date() });
+    await db.insert(agents).values({ id: agentId, companyId, name: "Actual Agent", role: "engineer", status: "idle", adapterType: "process" });
+    await db.insert(companyMemberships).values([{ companyId, principalType: "user", principalId: userId, status: "active", membershipRole: "member" },
+      { companyId, principalType: "agent", principalId: agentId, status: "active" }]);
+    await db.insert(principalPermissionGrants).values([{ companyId, principalType: "user", principalId: userId, permissionKey: "foundation:read" },
+      { companyId, principalType: "agent", principalId: agentId, permissionKey: "foundation:read" }]);
+    await db.insert(heartbeatRuns).values({ id: runId, companyId, agentId, responsibleUserId: userId, status: "running", runtimeMode: "native" });
+    await db.insert(agentApiKeys).values({ id: keyId, companyId, agentId, responsibleUserId: userId, name: "Actual credential", keyHash: randomUUID() });
+    const actor: AuthorizationActor = { type: "agent", source: "agent_key", agentId, companyId, keyId, runId, onBehalfOfUserId: userId };
+    const human: AuthorizationActor = { type: "board", source: "session", userId };
+    return { companyId, userId, agentId, runId, keyId, actor, human };
+  }
+  type Seed = Awaited<ReturnType<typeof seed>>;
+  const input = (s: Seed, actor = s.actor) => ({ actor, action: "foundation:read" as const,
+    resource: { type: "company" as const, companyId: s.companyId }, enforceResponsibleUserIntersection: true });
+  async function scoped(s: Seed, actor = s.actor) {
+    return db.transaction(tx => authorizationService(tx).withReadSources(s.companyId, [], [], owner => owner.decide(input(s, actor))));
+  }
+  it("admits canonical same-company Foundation permission only inside the native transaction callback", async () => {
+    const s = await seed();
+    expect((await authorizationService(db).decide(input(s))).allowed).toBe(true);
+    expect.soft((await scoped(s)).allowed).toBe(true);
+    expect.soft((await scoped(s, s.human)).allowed).toBe(true);
+    expect((await authorizationService(db).withReadSources(s.companyId, [], [], owner => owner.decide(input(s)))).allowed).toBe(false);
+    let escaped!: Parameters<Parameters<ReturnType<typeof authorizationService>["withReadSources"]>[3]>[0];
+    await db.transaction(tx => authorizationService(tx).withReadSources(s.companyId, [], [], async owner => {
+      escaped = owner;
+      expect((await owner.decide({ ...input(s), resource: { type: "company", companyId: randomUUID() } })).allowed).toBe(false);
+      expect((await owner.decide({ ...input(s), action: "foundation:manage" as never })).allowed).toBe(false);
+    }));
+    await expect(escaped.decide(input(s))).rejects.toThrow("scope has ended");
+  });
+  it("requires both current grants, actual Human existence, and native key scope instead of actor hints", async () => {
+    const s = await seed(); expect.soft((await scoped(s)).allowed).toBe(true);
+    await db.delete(principalPermissionGrants).where(and(eq(principalPermissionGrants.companyId, s.companyId), eq(principalPermissionGrants.principalType, "user")));
+    expect((await scoped(s)).allowed).toBe(false);
+    await db.insert(principalPermissionGrants).values({ companyId: s.companyId, principalType: "user", principalId: s.userId, permissionKey: "foundation:read" });
+    await db.update(agentApiKeys).set({ revokedAt: new Date() }).where(eq(agentApiKeys.id, s.keyId));
+    expect((await scoped(s)).allowed).toBe(false);
+    await db.update(agentApiKeys).set({ revokedAt: null }).where(eq(agentApiKeys.id, s.keyId));
+    await db.delete(authUsers).where(eq(authUsers.id, s.userId));
+    expect((await scoped(s, { ...s.actor, onBehalfOfMemberships: [{ companyId: s.companyId, status: "active", membershipRole: "admin" }] })).allowed).toBe(false);
+    expect((await scoped(s, { ...s.human, isInstanceAdmin: true })).allowed).toBe(false);
+  });
+  it("holds every positive Agent/Human/grant/key/run fact through the outer commit", async () => {
+    const s = await seed(), ready = deferred(), release = deferred();
+    const outer = db.transaction(async tx => {
+      const decision = await authorizationService(tx).withReadSources(s.companyId, [], [], owner => owner.decide(input(s)));
+      ready.resolve(); await release.promise; return decision;
+    });
+    try {
+      await ready.promise;
+      const probes = [sql`select id from "user" where id=${s.userId} for update nowait`,
+        sql`select id from agents where id=${s.agentId} for update nowait`,
+        sql`select id from heartbeat_runs where id=${s.runId} for update nowait`,
+        sql`select id from agent_api_keys where id=${s.keyId} for update nowait`,
+        sql`select id from company_memberships where company_id=${s.companyId} for update nowait`,
+        sql`select id from principal_permission_grants where company_id=${s.companyId} for update nowait`];
+      for (const query of probes) {
+        let error: unknown; try { await db.transaction(tx => tx.execute(query)); } catch (caught) { error = caught; }
+        expect.soft(pgCode(error)).toBe("55P03");
+      }
+    } finally { release.resolve(); }
+    expect((await outer).allowed).toBe(true);
+    await db.transaction(tx => tx.execute(sql`select id from principal_permission_grants where company_id=${s.companyId} for update nowait`));
+  });
+  it("reauthorizes a grant withdrawn while native Source row acquisition is pending", async () => {
+    const s = await seed(), issueId = randomUUID(), held = deferred(), release = deferred();
+    await db.insert(issues).values({ id: issueId, companyId: s.companyId, title: "Held source", createdByUserId: s.userId });
+    expect((await authorizationService(db).decide(input(s))).allowed).toBe(true);
+    let holderPid = 0;
+    const holder = db.transaction(async tx => { const result = await tx.execute(sql`select pg_backend_pid() as pid`); holderPid = Number(result[0]!.pid);
+      await tx.execute(sql`select id from issues where id=${issueId} for update`); held.resolve(); await release.promise; });
+    await held.promise;
+    const pending = db.transaction(tx => authorizationService(tx).withReadSources(s.companyId, [issueId], [], owner => owner.decide(input(s))));
+    try {
+      let blocked = false;
+      for (let i = 0; i < 100 && !blocked; i++) {
+        const result = await db.execute(sql`select exists(select 1 from pg_stat_activity where ${holderPid}=any(pg_blocking_pids(pid))) as blocked`);
+        blocked = result[0]!.blocked === true; if (!blocked) await new Promise(r => setTimeout(r, 10));
+      }
+      expect(blocked).toBe(true);
+      await db.delete(principalPermissionGrants).where(and(eq(principalPermissionGrants.companyId, s.companyId), eq(principalPermissionGrants.principalType, "user")));
+    } finally { release.resolve(); await holder; }
+    expect((await pending).allowed).toBe(false);
+  });
+});

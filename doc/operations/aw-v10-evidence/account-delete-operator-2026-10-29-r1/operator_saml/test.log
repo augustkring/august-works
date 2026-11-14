@@ -1,0 +1,80 @@
+
+ RUN  v4.1.11 /workspace/v10-dep-qualification/server
+
+stderr | src/__tests__/account-deletion-saml-freshness.integration.test.ts > passwordless account deletion through signed fresh SAML reauthentication
+Construct identity  provider - missing endpoint of SingleLogoutService
+
+stderr | src/__tests__/account-deletion-saml-freshness.integration.test.ts > passwordless account deletion through signed fresh SAML reauthentication > forces SP-initiated fresh authentication and accepts only its exact signed signed assertion
+Construct identity  provider - missing endpoint of SingleLogoutService
+
+stderr | src/__tests__/account-deletion-saml-freshness.integration.test.ts > passwordless account deletion through signed fresh SAML reauthentication > forces SP-initiated fresh authentication and accepts only its exact signed signed assertion
+Construct identity  provider - missing endpoint of SingleLogoutService
+
+stderr | src/__tests__/account-deletion-saml-freshness.integration.test.ts > passwordless account deletion through signed fresh SAML reauthentication > forces SP-initiated fresh authentication and accepts only its exact signed signed assertion
+Construct identity  provider - missing endpoint of SingleLogoutService
+Construct identity  provider - missing endpoint of SingleLogoutService
+
+stderr | src/__tests__/account-deletion-saml-freshness.integration.test.ts > passwordless account deletion through signed fresh SAML reauthentication > forces SP-initiated fresh authentication and accepts only its exact signed signed assertion
+Construct identity  provider - missing endpoint of SingleLogoutService
+
+stderr | src/__tests__/account-deletion-saml-freshness.integration.test.ts > passwordless account deletion through signed fresh SAML reauthentication > forces SP-initiated fresh authentication and accepts only its exact signed signed assertion
+Construct identity  provider - missing endpoint of SingleLogoutService
+
+[07:41:43] [31mERROR[39m: [36mNative authentication provider event[39m [90m{"component":"native-authentication"}[39m
+stderr | src/__tests__/account-deletion-saml-freshness.integration.test.ts > passwordless account deletion through signed fresh SAML reauthentication > forces SP-initiated fresh authentication and accepts only its exact signed signed assertion
+Construct identity  provider - missing endpoint of SingleLogoutService
+
+stderr | src/__tests__/account-deletion-saml-freshness.integration.test.ts > passwordless account deletion through signed fresh SAML reauthentication > forces SP-initiated fresh authentication and accepts only its exact signed signed assertion
+Construct identity  provider - missing endpoint of SingleLogoutService
+
+[07:41:44] [31mERROR[39m: [36mNative authentication provider event[39m [90m{"component":"native-authentication"}[39m
+stderr | src/__tests__/account-deletion-saml-freshness.integration.test.ts > passwordless account deletion through signed fresh SAML reauthentication > forces SP-initiated fresh authentication and accepts only its exact signed signed assertion
+Construct identity  provider - missing endpoint of SingleLogoutService
+
+stderr | src/__tests__/account-deletion-saml-freshness.integration.test.ts > passwordless account deletion through signed fresh SAML reauthentication > forces SP-initiated fresh authentication and accepts only its exact signed signed assertion
+Construct identity  provider - missing endpoint of SingleLogoutService
+
+[07:41:44] [31mERROR[39m: [36mNative authentication provider event[39m [90m{"component":"native-authentication"}[39m
+stderr | src/__tests__/account-deletion-saml-freshness.integration.test.ts > passwordless account deletion through signed fresh SAML reauthentication > forces SP-initiated fresh authentication and accepts only its exact signed signed assertion
+Construct identity  provider - missing endpoint of SingleLogoutService
+
+stderr | src/__tests__/account-deletion-saml-freshness.integration.test.ts > passwordless account deletion through signed fresh SAML reauthentication > forces SP-initiated fresh authentication and accepts only its exact signed signed assertion
+Construct identity  provider - missing endpoint of SingleLogoutService
+
+[07:41:44] [31mERROR[39m: [36mNative authentication provider event[39m [90m{"component":"native-authentication"}[39m
+stderr | src/__tests__/account-deletion-saml-freshness.integration.test.ts > passwordless account deletion through signed fresh SAML reauthentication > forces SP-initiated fresh authentication and accepts only its exact signed signed assertion
+Construct identity  provider - missing endpoint of SingleLogoutService
+
+stderr | src/__tests__/account-deletion-saml-freshness.integration.test.ts > passwordless account deletion through signed fresh SAML reauthentication > forces SP-initiated fresh authentication and accepts only its exact signed signed assertion
+Construct identity  provider - missing endpoint of SingleLogoutService
+
+[07:41:44] [31mERROR[39m: [36mNative authentication provider event[39m [90m{"component":"native-authentication"}[39m
+stderr | src/__tests__/account-deletion-saml-freshness.integration.test.ts > passwordless account deletion through signed fresh SAML reauthentication > forces SP-initiated fresh authentication and accepts only its exact signed signed assertion
+Construct identity  provider - missing endpoint of SingleLogoutService
+
+stderr | src/__tests__/account-deletion-saml-freshness.integration.test.ts > passwordless account deletion through signed fresh SAML reauthentication > forces SP-initiated fresh authentication and accepts only its exact signed signed assertion
+Construct identity  provider - missing endpoint of SingleLogoutService
+
+[07:41:44] [31mERROR[39m: [36mNative authentication provider event[39m [90m{"component":"native-authentication"}[39m
+stderr | src/__tests__/account-deletion-saml-freshness.integration.test.ts > passwordless account deletion through signed fresh SAML reauthentication > forces SP-initiated fresh authentication and accepts only its exact signed signed assertion
+Construct identity  provider - missing endpoint of SingleLogoutService
+
+stderr | src/__tests__/account-deletion-saml-freshness.integration.test.ts > passwordless account deletion through signed fresh SAML reauthentication > forces SP-initiated fresh authentication and accepts only its exact signed signed assertion
+Construct identity  provider - missing endpoint of SingleLogoutService
+
+stderr | src/__tests__/account-deletion-saml-freshness.integration.test.ts > passwordless account deletion through signed fresh SAML reauthentication > forces SP-initiated fresh authentication and accepts only its exact signed signed assertion
+Construct identity  provider - missing endpoint of SingleLogoutService
+Construct identity  provider - missing endpoint of SingleLogoutService
+
+[07:41:44] [31mERROR[39m: [36mNative authentication provider event[39m [90m{"component":"native-authentication"}[39m
+stderr | src/__tests__/account-deletion-saml-freshness.integration.test.ts > passwordless account deletion through signed fresh SAML reauthentication > forces SP-initiated fresh authentication and accepts only its exact signed signed assertion
+Construct identity  provider - missing endpoint of SingleLogoutService
+
+[07:41:44] [31mERROR[39m: [36mNative authentication provider event[39m [90m{"component":"native-authentication"}[39m
+ ✓ src/__tests__/account-deletion-saml-freshness.integration.test.ts > passwordless account deletion through signed fresh SAML reauthentication > forces SP-initiated fresh authentication and accepts only its exact signed signed assertion 859ms
+
+ Test Files  1 passed (1)
+      Tests  1 passed (1)
+   Start at  07:41:25
+   Duration  19.58s (transform 9.52s, setup 73ms, import 14.32s, tests 5.07s, environment 0ms)
+

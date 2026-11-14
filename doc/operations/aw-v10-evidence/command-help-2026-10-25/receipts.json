@@ -1,0 +1,178 @@
+{
+  "status": "in_progress",
+  "sourceCommit": "2eb615224eb2a7b8e1322588c47117ad89fd3a12",
+  "meaning": "Cmd+K reuses original company Find Help source, current account/session/source-authority fences and checked docs-origin/slug destinations; stale current and late valid canary results are withheld. Help newtab preserves original Work and invoker focus. EN/DA chrome. UI13PASS and nativeHTTP/PG7PASS including original deadline; actual productionUI/cookie/PG/Chromium1PASS37.7sec includes Cmd+K/newtab/focus plus native Help/support recovery. Only external docs navigation is intercepted; hosted docs are NOT qualified. Fullworkspace typecheck0 at recorded preceding checkpoint; current focusedUI compiler/token0. Earlier scoped UI assertion failures retained, including too-early focus assertion corrected by waiting actual close-auto-focus. Not all UniversalFind domains, grounded assistant, DA article corpus or full V10 qualification.",
+  "logs": [
+    {
+      "name": "command-help-ui-tests-final3",
+      "exitCode": 0,
+      "rawSha256": "3e845bd7d294e9e8b8a27fd1497ae29edadeb5bf9b00b62a7dd0774aed595c45",
+      "sanitizedSha256": "3e845bd7d294e9e8b8a27fd1497ae29edadeb5bf9b00b62a7dd0774aed595c45",
+      "archiveSha256": "1f6a9b01d9a8cf4a820efeb4df2b495fc03e6ccc97c6e9c11dad8b09acb84746",
+      "redactions": {
+        "ansi": 0,
+        "bearer": 0,
+        "jwt": 0,
+        "credential_field": 0,
+        "url_credential": 0
+      },
+      "summary": [
+        "Test Files  1 passed (1)",
+        "Tests  12 passed (12)",
+        "Duration  6.19s (transform 1.51s, setup 21ms, import 2.58s, tests 2.90s, environment 571ms)"
+      ]
+    },
+    {
+      "name": "command-help-ui-tests-final6",
+      "exitCode": 0,
+      "rawSha256": "8a399dd6571e593bad735c468c689d200d89bf1e5a39d8be3a053ce4b2b768fc",
+      "sanitizedSha256": "8a399dd6571e593bad735c468c689d200d89bf1e5a39d8be3a053ce4b2b768fc",
+      "archiveSha256": "9b928e9c33003b1fc4505bd0d4890e1e9204e18440ac3b925b27308be5e278ca",
+      "redactions": {
+        "ansi": 0,
+        "bearer": 0,
+        "jwt": 0,
+        "credential_field": 0,
+        "url_credential": 0
+      },
+      "summary": [
+        "Test Files  1 passed (1)",
+        "Tests  13 passed (13)",
+        "Duration  6.49s (transform 1.59s, setup 20ms, import 2.64s, tests 3.20s, environment 516ms)"
+      ]
+    },
+    {
+      "name": "command-help-ui-tests-final7",
+      "exitCode": 1,
+      "rawSha256": "12168fdddbcdffd884060d1162d48fe25b99bb641d27ed8c3bf3a64058b454d9",
+      "sanitizedSha256": "12168fdddbcdffd884060d1162d48fe25b99bb641d27ed8c3bf3a64058b454d9",
+      "archiveSha256": "c7b77adc5feccb878cbfeea1e39ce2b1bba717b15f1cabeae8b342e5999863ee",
+      "redactions": {
+        "ansi": 0,
+        "bearer": 0,
+        "jwt": 0,
+        "credential_field": 0,
+        "url_credential": 0
+      },
+      "summary": [
+        "\u23af\u23af\u23af\u23af\u23af\u23af\u23af Failed Tests 1 \u23af\u23af\u23af\u23af\u23af\u23af\u23af",
+        "Test Files  1 failed (1)",
+        "Tests  1 failed | 12 passed (13)",
+        "Duration  6.41s (transform 1.51s, setup 21ms, import 2.55s, tests 3.17s, environment 544ms)"
+      ]
+    },
+    {
+      "name": "command-help-ui-tests-final8",
+      "exitCode": 0,
+      "rawSha256": "acbc7bf4d2b3be566ef2608b9ad3c5d29a11a3de06923c6a740f13f3d080e04a",
+      "sanitizedSha256": "acbc7bf4d2b3be566ef2608b9ad3c5d29a11a3de06923c6a740f13f3d080e04a",
+      "archiveSha256": "9a44edfbe16ef24d3a1f2521c218705216824d3a0ed5c8b74bcf4a38472e8396",
+      "redactions": {
+        "ansi": 0,
+        "bearer": 0,
+        "jwt": 0,
+        "credential_field": 0,
+        "url_credential": 0
+      },
+      "summary": [
+        "Test Files  1 passed (1)",
+        "Tests  13 passed (13)",
+        "Duration  6.53s (transform 1.51s, setup 21ms, import 2.57s, tests 3.27s, environment 548ms)"
+      ]
+    },
+    {
+      "name": "command-help-native-tests-final2",
+      "exitCode": 0,
+      "rawSha256": "666fad3131268e85c2ec509415f690fd71a8a6e776ad5d82630ba09c8b5b5bda",
+      "sanitizedSha256": "666fad3131268e85c2ec509415f690fd71a8a6e776ad5d82630ba09c8b5b5bda",
+      "archiveSha256": "a470e3389389794e74a69a99e82b81b3af80f21f0fae699397341d5fa8f288c3",
+      "redactions": {
+        "ansi": 0,
+        "bearer": 0,
+        "jwt": 0,
+        "credential_field": 0,
+        "url_credential": 0
+      },
+      "summary": [
+        "Test Files  1 passed (1)",
+        "Tests  7 passed (7)",
+        "Duration  24.37s (transform 9.86s, setup 71ms, import 13.49s, tests 10.69s, environment 0ms)"
+      ]
+    },
+    {
+      "name": "command-help-ui-typecheck",
+      "exitCode": 0,
+      "rawSha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+      "sanitizedSha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+      "archiveSha256": "f61f27bd17de546264aa58f40f3aafaac7021e0ef69c17f6b1b4cd7664a037ec",
+      "redactions": {
+        "ansi": 0,
+        "bearer": 0,
+        "jwt": 0,
+        "credential_field": 0,
+        "url_credential": 0
+      },
+      "summary": []
+    },
+    {
+      "name": "command-help-ui-typecheck-final",
+      "exitCode": 0,
+      "rawSha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+      "sanitizedSha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+      "archiveSha256": "f61f27bd17de546264aa58f40f3aafaac7021e0ef69c17f6b1b4cd7664a037ec",
+      "redactions": {
+        "ansi": 0,
+        "bearer": 0,
+        "jwt": 0,
+        "credential_field": 0,
+        "url_credential": 0
+      },
+      "summary": []
+    },
+    {
+      "name": "command-help-token-gates",
+      "exitCode": 0,
+      "rawSha256": "e593d94fd920c3403cbfc7b0a549ae3b06c78d6ec0d2be065e5e056d2f309d11",
+      "sanitizedSha256": "e593d94fd920c3403cbfc7b0a549ae3b06c78d6ec0d2be065e5e056d2f309d11",
+      "archiveSha256": "b2acf30d7116322e944203f8bc1d232e1bfdc22cab71a2fe1f8c2a38f13664e2",
+      "redactions": {
+        "ansi": 0,
+        "bearer": 0,
+        "jwt": 0,
+        "credential_field": 0,
+        "url_credential": 0
+      },
+      "summary": []
+    },
+    {
+      "name": "command-help-native-browser",
+      "exitCode": 0,
+      "rawSha256": "8e13d1ebe3857dc7115d2e87df8ce0017460c94931acc82b4f9b86a402f9e176",
+      "sanitizedSha256": "8e13d1ebe3857dc7115d2e87df8ce0017460c94931acc82b4f9b86a402f9e176",
+      "archiveSha256": "d238c9bbf5f1510768b913839ca5dbcd0ff0c1235609f60366cc58c1221bd680",
+      "redactions": {
+        "ansi": 0,
+        "bearer": 0,
+        "jwt": 0,
+        "credential_field": 0,
+        "url_credential": 0
+      },
+      "summary": []
+    },
+    {
+      "name": "workspace-current-native-admission-typecheck",
+      "exitCode": 0,
+      "rawSha256": "2a3d66f3d557da139f41c7c9e5967ee3a7fa106b5f6747b36bafc07900fdbc6e",
+      "sanitizedSha256": "2a3d66f3d557da139f41c7c9e5967ee3a7fa106b5f6747b36bafc07900fdbc6e",
+      "archiveSha256": "4c127729ceb78a1b8b510938bcf5e60acb58df1999c8d728e9b9bc1509448b75",
+      "redactions": {
+        "ansi": 0,
+        "bearer": 0,
+        "jwt": 0,
+        "credential_field": 0,
+        "url_credential": 0
+      },
+      "summary": []
+    }
+  ]
+}

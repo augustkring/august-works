@@ -1,0 +1,126 @@
+(!) Your Vite config uses features that are unsupported by `configLoader: 'native'`, which is planned to become the default in a future major version of Vite:
+  - `__dirname` (vitest.config.ts:7:25). Use `import.meta.dirname` instead
+Set `VITE_CONFIG_NATIVE_IGNORE_WARNING=true` to suppress this warning.
+
+ RUN  v4.1.11 /workspace/blentera-v10
+
+ ❯ |@paperclipai/server| src/__tests__/learning-private-sources.integration.test.ts (6 tests | 5 failed) 12601ms
+     × requires the current Memory reader before the zero-analytical cycle return 226ms
+     × discovers ordinary retained Skill and Foundation cycles and checks candidate review 103ms
+     × rejects missing readers, missing evidence and erased cycles 65ms
+     × does not retain a successful read after membership withdrawal or Memory revision 41ms
+     × denies an actual Memory to Foundation to Learning to Memory cycle 258ms
+
+⎯⎯⎯⎯⎯⎯⎯ Failed Tests 5 ⎯⎯⎯⎯⎯⎯⎯
+
+ FAIL  |@paperclipai/server| src/__tests__/learning-private-sources.integration.test.ts > Learning retains ordinary private Memory authority without analytical signals > requires the current Memory reader before the zero-analytical cycle return
+AssertionError: promise resolved "null" instead of rejecting
+
+- Expected:
+Error {
+  "message": "rejected promise",
+}
+
++ Received:
+null
+
+ ❯ src/__tests__/learning-private-sources.integration.test.ts:83:78
+     81|     const source = await memory(), parent = await cycle([source.id]);
+     82|     await expect(assertLearningAnalyticalSources(db, human(ownerId), p…
+     83|     await expect(assertLearningAnalyticalSources(db, human(otherId), p…
+       |                                                                              ^
+     84|   });
+     85|   it("discovers ordinary retained Skill and Foundation cycles and chec…
+
+⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯[1/5]⎯
+
+ FAIL  |@paperclipai/server| src/__tests__/learning-private-sources.integration.test.ts > Learning retains ordinary private Memory authority without analytical signals > discovers ordinary retained Skill and Foundation cycles and checks candidate review
+AssertionError: promise resolved "{ cycles: [], sourceSensitivity: null }" instead of rejecting
+
+- Expected
++ Received
+
+- Error {
+-   "message": "rejected promise",
++ {
++   "cycles": [],
++   "sourceSensitivity": null,
+  }
+
+ ❯ src/__tests__/learning-private-sources.integration.test.ts:91:99
+     89|       const admitted = await assertLearnedAssetAnalyticalSources(db, c…
+     90|       expect(admitted.cycles).toEqual([]); // Ordinary roots do not be…
+     91|       await expect(assertLearnedAssetAnalyticalSources(db, companyId, …
+       |                                                                                                   ^
+     92|     }
+     93|     await expect(assertLearningCandidateAnalyticalSources(db, companyI…
+
+⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯[2/5]⎯
+
+ FAIL  |@paperclipai/server| src/__tests__/learning-private-sources.integration.test.ts > Learning retains ordinary private Memory authority without analytical signals > rejects missing readers, missing evidence and erased cycles
+AssertionError: promise resolved "null" instead of rejecting
+
+- Expected:
+Error {
+  "message": "rejected promise",
+}
+
++ Received:
+null
+
+ ❯ src/__tests__/learning-private-sources.integration.test.ts:98:73
+     96|   it("rejects missing readers, missing evidence and erased cycles", as…
+     97|     const parent = await cycle([(await memory()).id]);
+     98|     await expect(assertLearningAnalyticalSources(db, undefined, parent…
+       |                                                                         ^
+     99|     await expect(assertLearningAnalyticalSources(db, human(ownerId), a…
+    100|     await db.update(learningCycles).set({ erasedAt: new Date() }).wher…
+
+⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯[3/5]⎯
+
+ FAIL  |@paperclipai/server| src/__tests__/learning-private-sources.integration.test.ts > Learning retains ordinary private Memory authority without analytical signals > does not retain a successful read after membership withdrawal or Memory revision
+AssertionError: promise resolved "null" instead of rejecting
+
+- Expected:
+Error {
+  "message": "rejected promise",
+}
+
++ Received:
+null
+
+ ❯ src/__tests__/learning-private-sources.integration.test.ts:107:69
+    105|     await assertLearningAnalyticalSources(db, actor, parent);
+    106|     await db.update(companyMemberships).set({ status: "suspended" }).w…
+    107|     await expect(assertLearningAnalyticalSources(db, actor, parent)).r…
+       |                                                                     ^
+    108|     await db.update(companyMemberships).set({ status: "active" }).wher…
+    109|     await db.update(memoryRecords).set({ updatedAt: new Date(source.up…
+
+⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯[4/5]⎯
+
+ FAIL  |@paperclipai/server| src/__tests__/learning-private-sources.integration.test.ts > Learning retains ordinary private Memory authority without analytical signals > denies an actual Memory to Foundation to Learning to Memory cycle
+AssertionError: expected true to be false // Object.is equality
+
+- Expected
++ Received
+
+- false
++ true
+
+ ❯ src/__tests__/learning-private-sources.integration.test.ts:117:87
+    115|     expect((await authorizationService(db).decide({ actor: human(owner…
+    116|       resource: { type: "company", companyId }, enforceResponsibleUser…
+    117|     expect(await canActorReadMemorySources(db, companyId, human(ownerI…
+       |                                                                                       ^
+    118|   });
+    119|   it("allows a completed diamond through the same ordinary learned Mem…
+
+⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯[5/5]⎯
+
+
+ Test Files  1 failed (1)
+      Tests  5 failed | 1 passed (6)
+   Start at  21:40:26
+   Duration  24.76s (transform 7.15s, setup 145ms, import 11.63s, tests 12.60s, environment 0ms)
+

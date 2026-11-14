@@ -1,0 +1,101 @@
+Copied and verified source files 120
+
+ RUN  v4.1.11 /workspace/v10-dep-qualification/server
+
+stderr | src/services/native-runtime/native-model-input-dispatch.integration.test.ts > native model input dispatch intent > qualifies only the current PG attachment bytes staged by executor admission
+native input protocol gate diagnostics {
+  oldProtocolZero: true,
+  newProtocolOne: true,
+  nativeRuntime: true,
+  running: true,
+  oldExecutionInput: true,
+  executionInputEqual: true,
+  oldDispatchIntentsAbsent: true,
+  oldToolAssociationsAbsent: true,
+  oldToolResultsAbsent: true,
+  stagePresent: true,
+  receiptPresent: true,
+  intentsArray: true,
+  oneIntent: true,
+  triggerNotSynthetic: true,
+  storedBootstrapPredicate: true,
+  predicateTerms: { launchEvent: true, liveAttempt: true, currentAttachment: true },
+  receiptInputMatchesClosure: true,
+  stageEventSeq: 1,
+  dispatchEventSeq: 1,
+  stageAttempt: 2,
+  dispatchAttempt: 2,
+  stageCurrentIdentity: true,
+  authorityActive: false,
+  authorityInputHashMatches: false,
+  authorityStageHashMatches: false
+}
+
+stderr | src/services/native-runtime/native-model-input-dispatch.integration.test.ts > native model input dispatch intent > qualifies only the current PG attachment bytes staged by executor admission
+native input protocol gate diagnostics {
+  oldProtocolZero: true,
+  newProtocolOne: true,
+  nativeRuntime: true,
+  running: true,
+  oldExecutionInput: true,
+  executionInputEqual: true,
+  oldDispatchIntentsAbsent: true,
+  oldToolAssociationsAbsent: true,
+  oldToolResultsAbsent: true,
+  stagePresent: true,
+  receiptPresent: true,
+  intentsArray: true,
+  oneIntent: true,
+  triggerNotSynthetic: true,
+  storedBootstrapPredicate: false,
+  predicateTerms: { launchEvent: true, liveAttempt: true, currentAttachment: false },
+  receiptInputMatchesClosure: true,
+  stageEventSeq: 1,
+  dispatchEventSeq: 1,
+  stageAttempt: 2,
+  dispatchAttempt: 2,
+  stageCurrentIdentity: true,
+  authorityActive: false,
+  authorityInputHashMatches: false,
+  authorityStageHashMatches: false
+}
+
+stderr | src/services/native-runtime/native-model-input-dispatch.integration.test.ts > native model input dispatch intent > qualifies only the current PG attachment bytes staged by executor admission
+native dispatch persistence diagnostic {
+  stage: 'intent_persist',
+  pgCode: '23514',
+  constraint: null,
+  safeMessageIndices: [ 25 ]
+}
+
+ ❯ src/services/native-runtime/native-model-input-dispatch.integration.test.ts (42 tests | 1 failed | 41 skipped) 8416ms
+     × qualifies only the current PG attachment bytes staged by executor admission 4379ms
+
+⎯⎯⎯⎯⎯⎯⎯ Failed Tests 1 ⎯⎯⎯⎯⎯⎯⎯
+
+ FAIL  src/services/native-runtime/native-model-input-dispatch.integration.test.ts > native model input dispatch intent > qualifies only the current PG attachment bytes staged by executor admission
+Error: native_model_input_attachment_stage_rejected
+ ❯ src/services/native-runtime/native-session-executor.ts:7625:11
+    7623|       safeMessageIndices });
+    7624|     const message = error instanceof Error ? error.message : "";
+    7625|     throw new Error([
+       |           ^
+    7626|       "native_session_lease_lost", "native_session_lease_ttl_invalid",
+    7627|       "native_model_input_run_binding_changed", "native_model_input_la…
+ ❯ recordNativeModelInputDispatchIntent src/services/native-runtime/native-session-executor.ts:7409:3
+ ❯ Object.onTurnInput src/services/native-runtime/native-session-executor.ts:9675:34
+ ❯ executeNativeSession ../packages/paperclip-runner/src/native-session-runtime.ts:2382:30
+ ❯ trace.measure.parentName src/services/native-runtime/native-session-executor.ts:9590:24
+ ❯ Object.measure src/services/native-runtime/native-run-trace.ts:481:14
+ ❯ executePaperclipNativeSessionWithinScope src/services/native-runtime/native-session-executor.ts:9582:14
+ ❯ executePaperclipNativeSession src/services/native-runtime/native-session-executor.ts:8562:12
+ ❯ executeVerifiedAttachmentCase src/services/native-runtime/native-model-input-dispatch.integration.test.ts:349:7
+
+⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯[1/1]⎯
+
+
+ Test Files  1 failed (1)
+      Tests  1 failed | 41 skipped (42)
+   Start at  03:02:18
+   Duration  21.78s (transform 9.60s, setup 77ms, import 13.14s, tests 8.42s, environment 0ms)
+

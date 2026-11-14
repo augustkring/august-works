@@ -12,6 +12,9 @@ import { RoutineDetailContext, type RoutineDetailContextValue, type SecretMessag
 
 const api = vi.hoisted(() => ({ get: vi.fn(), createTrigger: vi.fn(), updateTrigger: vi.fn() }));
 vi.mock("@/api/routines", () => ({ routinesApi: api }));
+vi.mock("@/context/CompanyContext", () => ({
+  useCompany: () => ({ selectedCompany: { id: "company-1", timezone: "UTC" } }),
+}));
 vi.mock("@/context/SidebarContext", () => ({ useSidebar: () => ({ isMobile: false, setSidebarOpen: vi.fn() }) }));
 vi.mock("../MarkdownEditor", () => ({ MarkdownEditor: () => null }));
 (globalThis as Record<string, unknown>).IS_REACT_ACT_ENVIRONMENT = true;

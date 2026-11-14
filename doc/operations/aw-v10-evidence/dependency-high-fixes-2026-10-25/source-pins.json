@@ -1,0 +1,124 @@
+{
+  "schema": "aw.v10.dependency-audit-source-pins.v1",
+  "capturedAt": "2026-10-25",
+  "mainWorkspace": "/workspace/blentera-v10",
+  "mainWorkspaceHead": "886014cae5a7d6ed5a9ab99d62613ec7646308cb",
+  "mainWorkspaceWasDirty": true,
+  "qualificationWorktree": "/workspace/v10-dep-qualification",
+  "qualificationWorktreeHead": "886014cae5a7d6ed5a9ab99d62613ec7646308cb",
+  "qualificationSourceQualification": "Detached worktree at the same HEAD as main. Dependency manifests and lockfile below were copied from the dirty main workspace after edits; unrelated uncommitted source edits from main were not copied.",
+  "manifestAndLockFiles": {
+    "package.json": {
+      "qualificationSha256": "dd176b5d872614c7269da5dc1119e8ff60522e217e842533ae10a765217283e7",
+      "mainWorkspaceSha256": "dd176b5d872614c7269da5dc1119e8ff60522e217e842533ae10a765217283e7",
+      "matchAtArchiveTime": true
+    },
+    "pnpm-workspace.yaml": {
+      "qualificationSha256": "a710365e54bf19dc0511042cd7e7582c89491bbfb9eec657d01a5255a1c3c82e",
+      "mainWorkspaceSha256": "a710365e54bf19dc0511042cd7e7582c89491bbfb9eec657d01a5255a1c3c82e",
+      "matchAtArchiveTime": true
+    },
+    "pnpm-lock.yaml": {
+      "qualificationSha256": "6bce79ea6e951c5c96a0cf93b93eb3abb853495a7e38c6a6aa7633bd138b1bb2",
+      "mainWorkspaceSha256": "6bce79ea6e951c5c96a0cf93b93eb3abb853495a7e38c6a6aa7633bd138b1bb2",
+      "matchAtArchiveTime": true
+    },
+    "server/package.json": {
+      "qualificationSha256": "302937840cc0b0ded39dbf3e2bc19444dc8f30d2528e4179cc5e072c21efad71",
+      "mainWorkspaceSha256": "302937840cc0b0ded39dbf3e2bc19444dc8f30d2528e4179cc5e072c21efad71",
+      "matchAtArchiveTime": true
+    },
+    "ui/package.json": {
+      "qualificationSha256": "5e84ab58534a6d6340b0925a7d24d35f50c21432422a44d0c22189c1aeaf834e",
+      "mainWorkspaceSha256": "5e84ab58534a6d6340b0925a7d24d35f50c21432422a44d0c22189c1aeaf834e",
+      "matchAtArchiveTime": true
+    },
+    "packages/adapters/claude-local/package.json": {
+      "qualificationSha256": "22ad853fb08bfe01b1b8ee4fe73c480abb9f160a7fabe95db12e94b5e3832e90",
+      "mainWorkspaceSha256": "22ad853fb08bfe01b1b8ee4fe73c480abb9f160a7fabe95db12e94b5e3832e90",
+      "matchAtArchiveTime": true
+    },
+    "packages/paperclip-runner/package.json": {
+      "qualificationSha256": "dae589d7d800bc0e063f9e77b481a2d81090c10f660d5d704c3557e73a57329a",
+      "mainWorkspaceSha256": "dae589d7d800bc0e063f9e77b481a2d81090c10f660d5d704c3557e73a57329a",
+      "matchAtArchiveTime": true
+    }
+  },
+  "qualificationInstall": {
+    "manager": "pnpm@9.15.4",
+    "node": "v24.19.0",
+    "command": "pnpm install --frozen-lockfile --ignore-scripts --package-import-method=hardlink --store-dir=/workspace/.cloud-setup/pnpm-store/v3 --cache-dir=/tmp/blentera-preserved-pnpm-metadata-cache",
+    "exitCode": 0,
+    "lockfileUpToDate": true,
+    "originalMainNodeModulesTouched": false
+  },
+  "resolvedVersions": {
+    "@modelcontextprotocol/sdk": "1.32.0",
+    "@cursor/sdk": "1.0.36",
+    "@cursor/sdk -> zod": "4.6.6",
+    "@azure/msal-node": "7.1.0",
+    "vite": "8.3.5",
+    "multer": "2.5.0",
+    "undici": [
+      "6.29.1",
+      "8.12.3"
+    ]
+  },
+  "audits": {
+    "before": {
+      "file": "audit-before.json",
+      "info": 0,
+      "low": 5,
+      "moderate": 16,
+      "high": 8,
+      "critical": 0
+    },
+    "lockfileAfter": {
+      "file": "audit-lockfile.json",
+      "info": 0,
+      "low": 4,
+      "moderate": 7,
+      "high": 0,
+      "critical": 0
+    },
+    "installed": {
+      "file": "audit-installed.json",
+      "info": 0,
+      "low": 4,
+      "moderate": 7,
+      "high": 0,
+      "critical": 0
+    }
+  },
+  "mainWorkspaceDirtyPathsAtArchive": [
+    " M .github/docker-context-checks.Dockerfile",
+    " M package.json",
+    " M packages/adapters/claude-local/package.json",
+    " M packages/paperclip-runner/package.json",
+    " M pnpm-lock.yaml",
+    " M pnpm-workspace.yaml",
+    " M server/package.json",
+    " M server/src/__tests__/heartbeat-process-recovery.test.ts",
+    " M server/src/__tests__/tool-access-service.test.ts",
+    " M server/src/__tests__/v7-learning.integration.test.ts",
+    " M server/src/services/heartbeat.ts",
+    " M server/src/services/knowledge/connected-knowledge.test.ts",
+    " M server/src/services/native-runtime/native-execution-input.test.ts",
+    " M server/src/services/native-runtime/native-execution-input.ts",
+    " M server/src/services/native-runtime/native-model-input-dispatch.integration.test.ts",
+    " M server/src/services/native-runtime/native-opencode-managed-source.integration.test.ts",
+    " M server/src/services/native-runtime/native-session-executor.ts",
+    " M ui/package.json",
+    "?? doc/operations/aw-v10-evidence/dependency-high-fixes-2026-10-25/",
+    "?? doc/operations/aw-v10-evidence/native-interaction-checkpoint-2026-10-25/"
+  ],
+  "qualificationDirtyPathsAtArchive": [
+    " M package.json",
+    " M packages/adapters/claude-local/package.json",
+    " M packages/paperclip-runner/package.json",
+    " M pnpm-lock.yaml",
+    " M pnpm-workspace.yaml",
+    " M server/package.json",
+    " M ui/package.json"
+  ]
+}

@@ -1,0 +1,8 @@
+# Responsibility contacts Human-only route + privacy-safe UI closure
+server/src/routes/companies.ts
+server/src/__tests__/company-branding-route.test.ts
+ui/src/pages/CompanySettings.tsx
+ui/src/api/companies.ts
+ui/src/api/client.ts
+ui/src/pages/CompanySettingsRenameHint.test.tsx
+ui/src/api/companies.test.ts

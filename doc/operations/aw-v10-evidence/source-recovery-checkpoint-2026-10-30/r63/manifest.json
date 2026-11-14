@@ -1,0 +1,61 @@
+{
+  "purpose": "RECOVERY ONLY; not application activation or qualification",
+  "capturedAtUtc": "2026-11-01T16:21:34.553289+00:00",
+  "mainHead": "7897d34ee909dfdfdb2ecbf8be95fa6b17a57cc4",
+  "mainDirtyPatchSha256": "d54ecc657147be02958b154994a755b0d6fbb42c5008572f84a9118708c0605d",
+  "sourceFileCount": 31,
+  "archive": {
+    "path": "private-candidates.tar.gz",
+    "bytes": 141470,
+    "sha256": "6eedd0b7c9ef49608512027c60a24d821b68f2aece91e203b4104a03338f8c11",
+    "verifiedEntries": 31
+  },
+  "host37Delta": {
+    "baseCheckpoint": "R62",
+    "baseHost33SourcePinsSha256": "44a599d932b2fa3ab23ef00c6b169ed64001f5a85c9f7fb9d06eb6105b83e1a2",
+    "candidateHost37SourcePinsSha256": "6a77db9fccf5063c0ab8062ed483a160d6ca4015cd15093b6392da10e35a539c",
+    "pathCounts": {
+      "base": 100,
+      "candidate": 102,
+      "added": 2,
+      "deleted": 0,
+      "changed": 2
+    },
+    "added": [
+      {
+        "path": "server/src/__tests__/v7-sandbox-qualification-faults.test.ts",
+        "candidateSha256": "ee838e05f4f34714a63f1dba583efb5c6fb16e02a6093f20fec1330cee789fb0"
+      },
+      {
+        "path": "server/src/services/execution-sandbox/qualification.ts",
+        "candidateSha256": "7c39a6e7f0de97c97e31d1a39362d2438e6fc4d53278b32ef21dcf8fb51eab5c"
+      }
+    ],
+    "deleted": [],
+    "changed": [
+      {
+        "path": "server/src/__tests__/helpers/managed-native-conversation-sandbox-host.ts",
+        "baseSha256": "03baf7e2fe1a312d050aa2fe92fa6be533a4e1299060057b3c20f35d3111f035",
+        "candidateSha256": "1fa40e6f995018ad653de5bc81908f691b707182508bacd66576a54d048b31c7",
+        "bytes": 147151
+      },
+      {
+        "path": "server/src/services/execution-sandbox/sandbox-service.ts",
+        "baseSha256": "92c3f09a09895486daa7da9ecb6c0a63afe5c825aeee2e4dab16e36eddccbd08",
+        "candidateSha256": "f6008e027d2f31b394a3fa2a2c4418cf40405397f60fa70181d14d452af70765",
+        "bytes": 89132
+      }
+    ]
+  },
+  "references": {
+    "R62ManifestSha256": "869ad7ce903c1a73a3a93681bc19071b68644740d48ab43bcfd1af16824c9d3a",
+    "R62ArchiveSha256": "9c65435228a5436e895b805598eaac5cabd8d632afbf056c837dd10a63963932",
+    "R62Host33PinsSha256": "44a599d932b2fa3ab23ef00c6b169ed64001f5a85c9f7fb9d06eb6105b83e1a2",
+    "Host35ManagedSourceLogSha256": "e9d26e1b697616172b56d0619b29ff868f6859a4aa6fee284aac6381adb981a4",
+    "PGArchiveSha256": "0b82d08afecb745a09d69ae6175736d03ac8e63746b2b5d6fcd8e79427c908eb",
+    "PGArchivePath": "stopped-pgdata.tar.gz",
+    "HostSourceDedupArchiveSha256": "8439ad5da504e7424332394b1010dfb2efec3174cff802f04ad07eb855ad34b3",
+    "HostSourceDedupArchivePath": "/workspace/v10-preparation/durable-closed-host-source-r17-35-recovery-20261101/duplicate-content-recovery.tar.gz"
+  },
+  "qualificationStatus": "Recovery delta only. Host37 source pins and runners are frozen, but the active Host37 qualification output is excluded. Host35/36 receipts are scoped status/restore only; the 19-row Host35 report summary is not an overall pass. No paid-model call or final aggregate qualification is claimed."
+}

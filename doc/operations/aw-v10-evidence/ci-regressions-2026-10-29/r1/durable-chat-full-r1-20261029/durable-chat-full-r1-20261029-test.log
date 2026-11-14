@@ -1,0 +1,93 @@
+
+ RUN  v4.1.11 /workspace/v10-dep-qualification/server
+
+ ✓ src/__tests__/durable-chat-wakeup.test.ts > durable inbound chat scheduler receipts > defers held inbound chat exactly once and keeps its authority separate from a generic wake 240ms
+ ✓ src/__tests__/durable-chat-wakeup.test.ts > durable inbound chat scheduler receipts > fails closed for a persisted retry when its live authority is unavailable 71ms
+ ✓ src/__tests__/durable-chat-wakeup.test.ts > durable inbound chat scheduler receipts > does not turn a forged retry selector into authority 41ms
+ ✓ src/__tests__/durable-chat-wakeup.test.ts > durable inbound chat scheduler receipts > preserves exact retry provenance and a deeply frozen server-only selector 71ms
+ ✓ src/__tests__/durable-chat-wakeup.test.ts > durable inbound chat scheduler receipts > cannot coalesce an exact retry into active or deferred ordinary work 59ms
+ ✓ src/__tests__/durable-chat-wakeup.test.ts > durable inbound chat scheduler receipts > rediscovers a retry from durable provenance even if its hint was stripped 17ms
+ ✓ src/__tests__/durable-chat-wakeup.test.ts > durable inbound chat scheduler receipts > an older service disposer cannot remove a newer retry authority 46ms
+ ✓ src/__tests__/durable-chat-wakeup.test.ts > durable inbound chat scheduler receipts > cancels a revoked deferred retry without reopening its batch (execution hold=false) 86ms
+[07:07:25] [31mERROR[39m: [36mheartbeat execution setup failed[39m [90m{"runId":"377f6056-207b-4350-8db9-df0f2d0baf88","failureCode":"chat_failed_run_retry_not_authorized"}[39m
+ ✓ src/__tests__/durable-chat-wakeup.test.ts > durable inbound chat scheduler receipts > cancels a revoked deferred retry without reopening its batch (execution hold=true) 71ms
+ ✓ src/__tests__/durable-chat-wakeup.test.ts > durable inbound chat scheduler receipts > denies a queued retry at execution when current authority is revoked 258ms
+ ✓ src/__tests__/durable-chat-wakeup.test.ts > durable inbound chat scheduler receipts > preserves the exact retry column and comment batch during promotion (execution hold=false) 90ms
+ ✓ src/__tests__/durable-chat-wakeup.test.ts > durable inbound chat scheduler receipts > preserves the exact retry column and comment batch during promotion (execution hold=true) 90ms
+[07:07:27] [33mWARN[39m: [36mruntime connection tools could not be delivered[39m [90m{"companyId":"acee00bd-5b50-44ba-b4f4-9325eabdc372","agentId":"799c9f93-3b0f-4f8b-a996-6fb5b724a581","runId":"d478903a-e7c1-44b9-ae5e-28b0b225eb2d"}[39m
+ ✓ src/__tests__/durable-chat-wakeup.test.ts > durable inbound chat scheduler receipts > rechecks current retry authority immediately before dispatch (revoked=false) 1605ms
+[07:07:28] [33mWARN[39m: [36mruntime connection tools could not be delivered[39m [90m{"companyId":"f3942074-d372-4e50-829f-0e9c7c6be011","agentId":"47869e97-3a38-4694-94b5-6275a495954b","runId":"6b19a6f9-21e1-45e7-8091-aef30a243d1b"}[39m
+[07:07:29] [31mERROR[39m: [36mheartbeat execution failed[39m [90m{"runId":"6b19a6f9-21e1-45e7-8091-aef30a243d1b","failureCode":"chat_failed_run_retry_not_authorized"}[39m
+ ✓ src/__tests__/durable-chat-wakeup.test.ts > durable inbound chat scheduler receipts > rechecks current retry authority immediately before dispatch (revoked=true) 1329ms
+ ✓ src/__tests__/durable-chat-wakeup.test.ts > durable inbound chat scheduler receipts > does not admit routing overrides on an exact retry ({"forceFreshSession":true}) 37ms
+ ✓ src/__tests__/durable-chat-wakeup.test.ts > durable inbound chat scheduler receipts > does not admit routing overrides on an exact retry ({"resumeFromRunId":"97237cce-64f8-4094-895d-9c6734dfbfdb"}) 37ms
+ ✓ src/__tests__/durable-chat-wakeup.test.ts > durable inbound chat scheduler receipts > does not admit routing overrides on an exact retry ({"resumeSessionParams":{"sessionId":"unrelated-provider-session"}}) 35ms
+ ✓ src/__tests__/durable-chat-wakeup.test.ts > durable inbound chat scheduler receipts > does not admit routing overrides on an exact retry ({"resumeSessionDisplayId":"unrelated-provider-session"}) 39ms
+[07:07:30] [33mWARN[39m: [36mruntime connection tools could not be delivered[39m [90m{"companyId":"e6f0da40-7b19-4013-ba90-a88843e46d4b","agentId":"86318db8-d6b3-4c5a-ab8c-d43483d952d4","runId":"e0ddf528-50f9-4845-8dc2-18a2abc29bc3"}[39m
+[07:07:30] [31mERROR[39m: [36mheartbeat execution failed[39m [90m{"runId":"e0ddf528-50f9-4845-8dc2-18a2abc29bc3","failureCode":"adapter_failed"}[39m
+[07:07:31] [33mWARN[39m: [36mruntime connection tools could not be delivered[39m [90m{"companyId":"a124792e-bcbb-4635-b428-a530e57bbb3c","agentId":"eb38ca06-9f19-4b1e-afa1-5503a71beedb","runId":"06f58e3e-0ee3-45fb-989e-ba5717390c81"}[39m
+ ✓ src/__tests__/durable-chat-wakeup.test.ts > durable inbound chat scheduler receipts > fences generic recovery by actual original chat ownership ('inbound_wakeup', deferred=false, pre-provider=false) 1179ms
+[07:07:32] [33mWARN[39m: [36mruntime connection tools could not be delivered[39m [90m{"companyId":"22aac0df-6e93-4959-acc1-19b175f9bff6","agentId":"478434e5-b5aa-48ca-b828-90dc188e1a3a","runId":"e0ace1c5-e274-4e42-81ae-4f4a5ee2d228"}[39m
+[07:07:32] [31mERROR[39m: [36mheartbeat execution failed[39m [90m{"runId":"e0ace1c5-e274-4e42-81ae-4f4a5ee2d228","failureCode":"adapter_failed"}[39m
+ ✓ src/__tests__/durable-chat-wakeup.test.ts > durable inbound chat scheduler receipts > fences generic recovery by actual original chat ownership ('inbound_wakeup', deferred=false, pre-provider=true) 1196ms
+ ✓ src/__tests__/durable-chat-wakeup.test.ts > durable inbound chat scheduler receipts > fences generic recovery by actual original chat ownership ('inbound_wakeup', deferred=true, pre-provider=false) 1175ms
+[07:07:33] [33mWARN[39m: [36mruntime connection tools could not be delivered[39m [90m{"companyId":"1b03f11b-831d-4cdc-9ea5-45df1a85dc50","agentId":"a73af4a8-33e8-4100-ad98-57f861a2ef7d","runId":"214fc56b-99de-4a89-91b9-1be9f580fd27"}[39m
+[07:07:34] [33mWARN[39m: [36mruntime connection tools could not be delivered[39m [90m{"companyId":"1b03f11b-831d-4cdc-9ea5-45df1a85dc50","agentId":"a73af4a8-33e8-4100-ad98-57f861a2ef7d","runId":"d8819b5d-da82-45aa-a068-bb9b4077d82f"}[39m
+ ✓ src/__tests__/durable-chat-wakeup.test.ts > durable inbound chat scheduler receipts > fences generic recovery by actual original chat ownership ('inbound_wakeup', deferred=true, pre-provider=true) 2070ms
+[07:07:35] [33mWARN[39m: [36mruntime connection tools could not be delivered[39m [90m{"companyId":"55667b4b-ae75-42c4-8c34-122a128c6d31","agentId":"121b24f9-6f96-486b-b0ca-d83e1c905b70","runId":"ef15de2a-2c42-45ab-83ae-97abf5261a71"}[39m
+[07:07:35] [31mERROR[39m: [36mheartbeat execution failed[39m [90m{"runId":"ef15de2a-2c42-45ab-83ae-97abf5261a71","failureCode":"adapter_failed"}[39m
+[07:07:37] [33mWARN[39m: [36mruntime connection tools could not be delivered[39m [90m{"companyId":"e58e089e-cc37-4987-9baf-673c509bbe6f","agentId":"53f6c6a5-3c0f-47a5-a8b6-c9edc811c4e9","runId":"89dbecaf-990e-41b4-915f-05fbf11457ec"}[39m
+[07:07:37] [33mWARN[39m: [36mruntime connection tools could not be delivered[39m [90m{"companyId":"e58e089e-cc37-4987-9baf-673c509bbe6f","agentId":"53f6c6a5-3c0f-47a5-a8b6-c9edc811c4e9","runId":"47747cec-92f5-4136-9d91-010a2e7daa2b"}[39m
+ ✓ src/__tests__/durable-chat-wakeup.test.ts > durable inbound chat scheduler receipts > fences generic recovery by actual original chat ownership ('unrelated_action', deferred=false, pre-provider=false) 1104ms
+ ✓ src/__tests__/durable-chat-wakeup.test.ts > durable inbound chat scheduler receipts > fences generic recovery by actual original chat ownership ('unrelated_action', deferred=false, pre-provider=true) 1972ms
+[07:07:38] [33mWARN[39m: [36mruntime connection tools could not be delivered[39m [90m{"companyId":"274360db-efa0-4499-81b4-53a9edae4fb3","agentId":"5cf33e47-3bee-4a6e-8660-683950e253b3","runId":"3d1b364e-3f40-4df6-a957-76ee14f90b10"}[39m
+[07:07:38] [31mERROR[39m: [36mheartbeat execution failed[39m [90m{"runId":"3d1b364e-3f40-4df6-a957-76ee14f90b10","failureCode":"adapter_failed"}[39m
+[07:07:39] [33mWARN[39m: [36mruntime connection tools could not be delivered[39m [90m{"companyId":"3b80a2a5-ed98-42d7-a9d1-54b8ba7e5814","agentId":"d26066ec-0833-4239-9afc-05d732db92d7","runId":"9160a997-0418-43d2-89c8-840d3b3ed37b"}[39m
+[07:07:40] [33mWARN[39m: [36mruntime connection tools could not be delivered[39m [90m{"companyId":"3b80a2a5-ed98-42d7-a9d1-54b8ba7e5814","agentId":"d26066ec-0833-4239-9afc-05d732db92d7","runId":"66fe4fb2-23e2-45ca-b5e7-661ed2cef850"}[39m
+ ✓ src/__tests__/durable-chat-wakeup.test.ts > durable inbound chat scheduler receipts > fences generic recovery by actual original chat ownership ('missing', deferred=false, pre-provider=false) 1034ms
+ ✓ src/__tests__/durable-chat-wakeup.test.ts > durable inbound chat scheduler receipts > fences generic recovery by actual original chat ownership ('missing', deferred=false, pre-provider=true) 2013ms
+ ✓ src/__tests__/durable-chat-wakeup.test.ts > durable inbound chat scheduler receipts > keeps committed-response authority exact-Db scoped and separate from retry hints 3ms
+ ✓ src/__tests__/durable-chat-wakeup.test.ts > durable inbound chat scheduler receipts > preserves the current committed-response authority and exact transient failure 0ms
+ ✓ src/__tests__/durable-chat-wakeup.test.ts > durable inbound chat scheduler receipts > does not discard a deferred retry on transient authority storage failure 72ms
+ ✓ src/__tests__/durable-chat-wakeup.test.ts > durable inbound chat scheduler receipts > retries and competing workers create one queued receipt and one run 79ms
+ ✓ src/__tests__/durable-chat-wakeup.test.ts > durable inbound chat scheduler receipts > records a stable receipt when merging into a deferred wake and never merges the replay twice 68ms
+ ✓ src/__tests__/durable-chat-wakeup.test.ts > durable inbound chat scheduler receipts > keeps different actors in separate deferred receipts 55ms
+[07:07:41] [33mWARN[39m: [36mfailed to wake assignee on issue assignment[39m [90m{"issueId":"0be86261-4160-4835-bc3e-62705b6887b1"}[39m
+    err: {
+      "type": "Error",
+      "location": {
+        "line": 287,
+        "column": 11
+      }
+    }
+ ✓ src/__tests__/durable-chat-wakeup.test.ts > durable inbound chat scheduler receipts > records queued-run coalescence once with the stable receipt ID 97ms
+ ✓ src/__tests__/durable-chat-wakeup.test.ts > durable inbound chat scheduler receipts > rejects a stable receipt ID reused for a different authenticated actor 85ms
+[07:07:41] [33mWARN[39m: [36mfailed to wake assignee on issue assignment[39m [90m{"issueId":"352bbf9f-79ba-4ac0-a298-6b3bdecae1d3"}[39m
+    err: {
+      "type": "Error",
+      "location": {
+        "line": 264,
+        "column": 11
+      }
+    }
+[07:07:41] [33mWARN[39m: [36mfailed to wake assignee on issue assignment[39m [90m{"issueId":"53627744-72d6-461c-af0e-2211061f3ba4"}[39m
+    err: {
+      "type": "Error",
+      "location": {
+        "line": 1096,
+        "column": 39
+      }
+    }
+ ✓ src/__tests__/durable-chat-wakeup.test.ts > durable inbound chat scheduler receipts > never readmits or dispatches a cancelled receipt on replay 69ms
+ ✓ src/__tests__/durable-chat-wakeup.test.ts > durable inbound chat scheduler receipts > does not accept a JSON copy of the internal scheduling capability 16ms
+ ✓ src/__tests__/durable-chat-wakeup.test.ts > durable inbound chat scheduler receipts > rechecks current authorization in the scheduling transaction 27ms
+ ✓ src/__tests__/durable-chat-wakeup.test.ts > durable inbound chat scheduler receipts > rejects generic failed-chat retry before admission ('slack'/'active'; caller markers: false) 92ms
+ ✓ src/__tests__/durable-chat-wakeup.test.ts > durable inbound chat scheduler receipts > rejects generic failed-chat retry before admission ('telegram'/'completed'; caller markers: false) 86ms
+ ✓ src/__tests__/durable-chat-wakeup.test.ts > durable inbound chat scheduler receipts > rejects generic failed-chat retry before admission ('slack'/'active'; caller markers: true) 111ms
+ ✓ src/__tests__/durable-chat-wakeup.test.ts > durable inbound chat scheduler receipts > preserves ordinary non-chat manual retry admission 70ms
+
+ Test Files  1 passed (1)
+      Tests  41 passed (41)
+   Start at  07:07:08
+   Duration  33.47s (transform 9.15s, setup 70ms, import 12.85s, tests 20.44s, environment 0ms)
+

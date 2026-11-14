@@ -112,6 +112,9 @@ export const customerFeedbackEvents = pgTable(
       t.feedbackId,
       t.requestKey,
     ),
+    uniqueIndex("customer_feedback_measure_withdrawal_once_idx")
+      .on(t.companyId, t.feedbackId)
+      .where(sql`${t.linkType} = 'aw_feedback_measure_withdrawal_v1'`),
     index("customer_feedback_events_feedback_idx").on(
       t.companyId,
       t.feedbackId,
@@ -120,6 +123,13 @@ export const customerFeedbackEvents = pgTable(
     check(
       "customer_feedback_events_kind_check",
       sql`${t.kind} in ('customer_follow_up','product_message')`,
+    ),
+    check(
+      "customer_feedback_measure_withdrawal_event_check",
+      sql`${t.linkType} <> 'aw_feedback_measure_withdrawal_v1' OR (
+        ${t.kind} = 'product_message' AND ${t.body} = '' AND ${t.customerVisible} = false
+        AND ${t.linkId} IS NULL AND ${t.internalNote} IS NOT DISTINCT FROM 'Optional experience ratings withdrawn by the submitter.'
+      )`,
     ),
   ],
 );

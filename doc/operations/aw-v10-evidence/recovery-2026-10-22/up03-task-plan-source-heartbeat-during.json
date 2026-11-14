@@ -1,0 +1,7 @@
+{
+  "path": "server/src/services/heartbeat.ts",
+  "sha256": "af0236d3a76615e633e8ab02acf924d60316105d5aab75595e5cabf62bda8695",
+  "recordedAt": "2026-10-23T08:01:55.120617+00:00",
+  "phase": "Recorded during current3case run, after Root reports callback wiring saved; no upfront hash and no unchanged-since-start claim",
+  "scope": "Collector tests do not execute native heartbeat bootstrap wiring"
+}

@@ -1,0 +1,87 @@
+{
+  "status": "in_progress",
+  "sourceSha256": {
+    "server/src/services/built-in-agents.ts": "b5b240cd1aeb62f6f4b6a1875b097d9cbaa01cd54c3fa2c550d41ab21d9b666d",
+    "server/src/services/routines.ts": "88de9a881c5ad5422b59a141e3ad53a0613ed176c0441ca80f44f1c40ec99296",
+    "server/src/services/pipelines.ts": "88c8e5a3bace02452be47b552fe3b587dc011dfdd6a40c096893348bcfede621",
+    "server/src/__tests__/built-in-agents.test.ts": "7e8ff25abb18c2c855f886c22bdadab1b94b73599517e7cbc463b9548b668c6c",
+    "server/src/__tests__/pipelines-service.test.ts": "fd07688ae0a026139612e69d54531cec57c4d0cf3446f0995b71ffb9a73a6feb",
+    "server/src/__tests__/ai-connections.test.ts": "43c28ba9c069706da766ad07650a844b2d24c120d813dc04fbbb9f1106abac8f",
+    "server/src/services/native-runtime/external-chat-wait.integration.test.ts": "963502702266f382006276f62b021dd1f68d583e73d4bd2f56f3c68a7f114c9b"
+  },
+  "receipts": [
+    {
+      "log": "repair-ai-connections-focused.log",
+      "sha256": "07b3431995cdd7d35084e0774b598bfb75f4e5adb5c91a0a047e59a996a9de49",
+      "exitCode": 0,
+      "summary": [
+        "Test Files  1 passed (1)",
+        "Tests  1 passed | 43 skipped (44)",
+        "Start at  22:15:05",
+        "Duration  25.58s (transform 14.86s, setup 85ms, import 19.65s, tests 5.69s, environment 0ms)"
+      ]
+    },
+    {
+      "log": "repair-ai-connections-full.log",
+      "sha256": "a06f1eebf4c85317a802887c0cbb07444edbbe6f72718a31e61d51391ee83750",
+      "exitCode": 0,
+      "summary": [
+        "Test Files  1 passed (1)",
+        "Tests  44 passed (44)",
+        "Start at  22:15:34",
+        "Duration  27.97s (transform 14.95s, setup 80ms, import 18.89s, tests 8.85s, environment 0ms)"
+      ]
+    },
+    {
+      "log": "repair-chat-parent-focused.log",
+      "sha256": "135c75c0efb05557df450b92b00a9dd26c6126b0f48cc5b2190c7a95638e24e1",
+      "exitCode": 0,
+      "summary": [
+        "Test Files  1 passed (1)",
+        "Tests  1 passed | 141 skipped (142)",
+        "Start at  22:20:08",
+        "Duration  20.57s (transform 11.74s, setup 79ms, import 15.93s, tests 4.43s, environment 0ms)"
+      ]
+    },
+    {
+      "log": "repair-chat-parent-full-resumed.log",
+      "sha256": "d18d1c8a20f75d8e2ad3980b16e60e552a7debebe559075ea3554500f9e60905",
+      "exitCode": 0,
+      "summary": [
+        "Test Files  1 passed (1)",
+        "Tests  142 passed (142)",
+        "Start at  22:24:08",
+        "Duration  84.49s (transform 9.94s, setup 71ms, import 13.67s, tests 70.62s, environment 0ms)"
+      ]
+    },
+    {
+      "log": "repair-bundles-pipelines-final.log",
+      "sha256": "0ee7356d4c211c87785886a02c29f4bbf73b1324b01d1be1106ef6156c33516a",
+      "exitCode": 1,
+      "summary": [
+        "Test Files  1 failed | 1 passed (2)",
+        "Tests  2 failed | 65 passed (67)",
+        "Start at  22:22:46",
+        "Duration  37.39s (transform 10.40s, setup 142ms, import 18.39s, tests 18.60s, environment 0ms)"
+      ]
+    },
+    {
+      "log": "repair-server-typecheck.log",
+      "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+      "exitCode": 0,
+      "summary": []
+    }
+  ],
+  "changes": [
+    "Create actual auth Users alongside existing Human membership fixtures for connection recovery and accepted coaching proposals.",
+    "Bind native built-in bundle origin at Routine INSERT; keep immutable identity through subsequent reset/revision writers.",
+    "Do not retarget manual Routine identity when linking/unlinking pipeline automation; only reuse generated routines already owned by the same pipeline.",
+    "Generated pipeline snapshot matches the strict retained revision schema; origin remains in immutable native Routine row.",
+    "Foreign chat parent negative case creates a genuine separate Task and insert-bound native Run, and supplies consistent child references; final denial assertions remain."
+  ],
+  "remaining": [
+    "Two of 34 pipeline tests still deny generated Routine Task source access. These are genuine remaining source authority gaps; no bypass is added.",
+    "Private typed Routine source owner tests and selected private Memory/temporal source regressions remain unresolved.",
+    "Full workspace run interrupted with 21 observed failed suites; complete V10 and PR gates are open."
+  ]
+}

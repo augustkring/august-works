@@ -1,0 +1,4 @@
+
+ RUN  v4.1.11 /workspace/v10-dep-qualification/server
+
+Vitest executed zero tests (all skipped or summary missing)

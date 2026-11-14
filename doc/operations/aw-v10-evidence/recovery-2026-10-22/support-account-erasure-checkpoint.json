@@ -1,0 +1,42 @@
+{
+  "date": "2026-10-23",
+  "scope": "Native account request/worker and quarantine replay share support erasure and profile scrub; no support intake/gateway admission.",
+  "baseline": {
+    "failed": 3,
+    "passed": 1,
+    "skipped": 20,
+    "seconds": 253.55,
+    "exit": 1,
+    "details": [
+      "Local case remains after native account request.",
+      "Held profile retains locale.",
+      "Quarantine replay attempts to delete referenced account and violates actual support author FK."
+    ],
+    "control": "Authored reply with uncertain sibling delivery already stays present; preserved positive control."
+  },
+  "final": {
+    "files": 3,
+    "passed": 44,
+    "seconds": 258.07,
+    "exit": 0,
+    "coverage": [
+      "All original account cases plus three native support account cases.",
+      "All original support storage cases plus actual isolated quarantine replay twice, hold release and erasure markers.",
+      "Original feedback retention/erasure suite remains green.",
+      "Native session/password credential rows revoked even when support erasure is pending; unknown outcome remains pending after hold release."
+    ]
+  },
+  "serverTypecheck": {
+    "observedExit": 0,
+    "durableExit": 0
+  },
+  "files": {
+    "server/src/services/saas/account-deletion.ts": "040385e8e92fe1e16b5cf1ff674f9ae533d652ec7cd797c0737b7ad643327c85",
+    "server/src/services/saas/quarantine.ts": "3e52b8a4858d060e76216ba4db6b7630a9da59d06d68128cd60216611e32c5ab",
+    "server/src/__tests__/v6-account-deletion.integration.test.ts": "adf730caa2cf7e9e456e9db7fa58d8d2007f6762691ecf42ff8680edc965b6d2",
+    "server/src/__tests__/support-case-storage.integration.test.ts": "90d62794484b88ed9d1ab5193a95ef082b1a492a26370e582727ed1d8bc7a8f9"
+  },
+  "runtimeInterruption": "Cloud transport briefly disconnected while final tests ran. Same process and exact source hashes survived; actual final command exited zero.",
+  "open": "No complete support case API/UI/gateway/retention/provider execution qualification. Source privacy, full latest workspace and complete V10/PR/release gates remain open.",
+  "allSessionsClosed": true
+}

@@ -1,0 +1,54 @@
+{
+  "cacheAdvice": [
+    {
+      "elapsedSeconds": 3.8310004850209225,
+      "filesAdvised": 620086,
+      "memoryAfter": 6082371584,
+      "contentChanged": false
+    }
+  ],
+  "steps": [
+    {
+      "command": [
+        "node",
+        "node_modules/vitest/vitest.mjs",
+        "run",
+        "--config",
+        "/workspace/blentera-v10/packages/paperclip-runner/vitest.config.ts",
+        "--root",
+        "packages/paperclip-runner",
+        "--maxWorkers=1",
+        "src/tools/capability-semantic-tools.test.ts",
+        "src/catalog/protocol-action-contracts.test.ts"
+      ],
+      "exit": 0,
+      "seconds": 1.7573129030060954,
+      "peakGroupRssBytes": 509927424,
+      "stopped": null
+    },
+    {
+      "command": [
+        "node",
+        "packages/paperclip-runner/scripts/generate-semantic-contracts.mjs",
+        "--check"
+      ],
+      "exit": 0,
+      "seconds": 0.44048068500705995,
+      "peakGroupRssBytes": 70221824,
+      "stopped": null
+    },
+    {
+      "command": [
+        "node",
+        "packages/paperclip-runner/scripts/generate-semantic-action-catalog.mjs",
+        "--check"
+      ],
+      "exit": 0,
+      "seconds": 0.21812508100993,
+      "peakGroupRssBytes": 22142976,
+      "stopped": null
+    }
+  ],
+  "memoryBefore": "low 0\nhigh 0\nmax 0\noom 0\noom_kill 0\noom_group_kill 0\n",
+  "memoryAfter": "low 0\nhigh 0\nmax 0\noom 0\noom_kill 0\noom_group_kill 0\n"
+}

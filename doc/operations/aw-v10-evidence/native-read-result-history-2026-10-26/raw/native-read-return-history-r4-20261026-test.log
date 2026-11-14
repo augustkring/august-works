@@ -1,0 +1,29 @@
+
+ RUN  v4.1.11 /workspace/v10-dep-qualification/server
+
+ ❯ src/services/native-runtime/native-model-input-dispatch.integration.test.ts (43 tests | 1 failed | 42 skipped) 5873ms
+     × appends only an actual acknowledged Native history read with current source owners 1269ms
+
+⎯⎯⎯⎯⎯⎯⎯ Failed Tests 1 ⎯⎯⎯⎯⎯⎯⎯
+
+ FAIL  src/services/native-runtime/native-model-input-dispatch.integration.test.ts > native model input dispatch intent > appends only an actual acknowledged Native history read with current source owners
+Error: native_tool_result_capture_persistence_failed
+ ❯ recordNativeInputToolResultIntent src/services/native-runtime/native-session-executor.ts:8532:11
+    8530|   } catch (error: unknown) {
+    8531|     const message = error instanceof Error ? error.message : "";
+    8532|     throw new Error(["native_session_lease_lost", "native_session_leas…
+       |           ^
+    8533|       ? message : "native_tool_result_capture_persistence_failed");
+    8534|   }
+ ❯ src/services/native-runtime/paperclip-runner-tool-authority.ts:590:9
+ ❯ runRead src/services/native-runtime/native-model-input-dispatch.integration.test.ts:947:22
+ ❯ src/services/native-runtime/native-model-input-dispatch.integration.test.ts:955:22
+
+⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯[1/1]⎯
+
+
+ Test Files  1 failed (1)
+      Tests  1 failed | 42 skipped (43)
+   Start at  06:54:35
+   Duration  19.80s (transform 9.89s, setup 71ms, import 13.72s, tests 5.87s, environment 0ms)
+

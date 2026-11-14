@@ -1,6 +1,6 @@
 import { Router, type Request, type Response } from "express";
 import type { Db } from "@paperclipai/db";
-import { upsertSidebarOrderPreferenceSchema } from "@paperclipai/shared";
+import { setPreferredCoworkerPreferenceSchema, upsertSidebarOrderPreferenceSchema } from "@paperclipai/shared";
 import { validate } from "../middleware/validate.js";
 import { logActivity, sidebarPreferenceService } from "../services/index.js";
 import { assertBoard, assertCompanyAccess, getActorInfo } from "./authz.js";
@@ -63,6 +63,41 @@ export function sidebarPreferenceRoutes(db: Db) {
           userId,
           orderedIds: result.orderedIds,
         },
+      });
+      res.json(result);
+    },
+  );
+
+  router.get("/companies/:companyId/sidebar-preferences/preferred-coworker/me", async (req, res) => {
+    const companyId = req.params.companyId as string;
+    assertCompanyAccess(req, companyId);
+    const userId = requireBoardUserId(req, res);
+    if (!userId) return;
+    res.setHeader("Cache-Control", "private, no-store");
+    res.json(await svc.getPreferredCoworker(companyId, userId));
+  });
+
+  router.put(
+    "/companies/:companyId/sidebar-preferences/preferred-coworker/me",
+    validate(setPreferredCoworkerPreferenceSchema),
+    async (req, res) => {
+      const companyId = req.params.companyId as string;
+      assertCompanyAccess(req, companyId);
+      const userId = requireBoardUserId(req, res);
+      if (!userId) return;
+      const result = await svc.setPreferredCoworker(companyId, userId, req.body.agentId);
+      const actor = getActorInfo(req);
+      await logActivity(db, {
+        companyId,
+        actorType: actor.actorType,
+        actorId: actor.actorId,
+        agentId: actor.agentId,
+        runId: actor.runId,
+        agentApiKeyId: actor.agentApiKeyId,
+        action: "sidebar_preferences.preferred_coworker_updated",
+        entityType: "company",
+        entityId: companyId,
+        details: { userId, preferredAgentId: result.agentId },
       });
       res.json(result);
     },

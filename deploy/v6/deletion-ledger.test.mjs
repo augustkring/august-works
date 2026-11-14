@@ -9,7 +9,7 @@ const base = {
   exportedAt: new Date(now).toISOString(),
   companies: [{ company_id: "00000000-0000-4000-8000-000000000001" }],
   memory: [],
-  businessEvents: [], analyticalSources: [], feedback: [],
+  businessEvents: [], analyticalSources: [], feedback: [], supportCases: [],
 };
 function sign(value) {
   const payload = JSON.stringify(value);
@@ -38,6 +38,46 @@ test("V9 restore requires exact bounded authenticated feedback erasure identitie
   ]) assert.throws(() => authenticateDeletionLedger(sign(invalid), key, "staging", now));
   assert.deepEqual(authenticateDeletionLedger(sign({ ...base, feedback: [{ ...marker, target_kind: "image",
     feedback_id: base.companies[0].company_id }] }), key, "staging", now).feedback[0].target_kind, "image");
+});
+test("support restore requires exact bounded case and event erasure identities", () => {
+  const caseId = "00000000-0000-4000-8000-000000000010";
+  const caseMarker = {
+    subject_id: caseId,
+    company_id: base.companies[0].company_id,
+    case_id: caseId,
+    target_kind: "case",
+    erased_at: base.exportedAt,
+    retain_until: new Date(now + 86400000).toISOString(),
+  };
+  const eventMarker = {
+    ...caseMarker,
+    subject_id: "00000000-0000-4000-8000-000000000011",
+    target_kind: "event",
+  };
+  const valid = { ...base, supportCases: [caseMarker, eventMarker] };
+  assert.deepEqual(authenticateDeletionLedger(sign(valid), key, "staging", now), valid);
+  const { supportCases, ...legacy } = base;
+  for (const invalid of [
+    legacy,
+    { ...base, supportCases: {} },
+    { ...base, supportCases: [{ ...caseMarker, subject_id: "bad" }] },
+    { ...base, supportCases: [{ ...caseMarker, subject_id: [caseId] }] },
+    { ...base, supportCases: [{ ...caseMarker, company_id: "bad" }] },
+    { ...base, supportCases: [{ ...caseMarker, case_id: "bad" }] },
+    { ...base, supportCases: [{ ...caseMarker, target_kind: "message" }] },
+    { ...base, supportCases: [{ ...caseMarker, subject_id: eventMarker.subject_id }] },
+    { ...base, supportCases: [{ ...eventMarker, subject_id: caseId }] },
+    { ...base, supportCases: [{ ...eventMarker, subject_id: "AAAAAAAA-AAAA-4AAA-8AAA-AAAAAAAAAAAA", case_id: "aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaaa" }] },
+    { ...base, supportCases: [{ ...caseMarker, erased_at: "invalid" }] },
+    { ...base, supportCases: [{ ...caseMarker, erased_at: 2026 }] },
+    { ...base, supportCases: [{ ...caseMarker, erased_at: new Date(now + 1).toISOString() }] },
+    { ...base, supportCases: [{ ...caseMarker, retain_until: "invalid" }] },
+    { ...base, supportCases: [{ ...caseMarker, retain_until: base.exportedAt }] },
+    { ...base, supportCases: [{ ...caseMarker, body: "private content" }] },
+    { ...base, supportCases: [{ ...caseMarker, contact_email: "person@example.test" }] },
+    { ...base, supportCases: [{ ...caseMarker, vendor_case_ref: "external-123" }] },
+    { ...base, supportCases: Array(100001).fill(caseMarker) },
+  ]) assert.throws(() => authenticateDeletionLedger(sign(invalid), key, "staging", now));
 });
 test("restore rejects forged, stale, cross-environment and invalid-date ledgers", () => {
   assert.deepEqual(

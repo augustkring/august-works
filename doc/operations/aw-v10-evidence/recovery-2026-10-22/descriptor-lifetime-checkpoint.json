@@ -1,0 +1,56 @@
+{
+  "date": "2026-10-22",
+  "requirement": "UP-02 descriptor lifetime correction",
+  "upstreamCommit": "2befcd9a0a087ef82506e1649140dd307b90e96a",
+  "sourceHashesObservedAtCheckpoint": {
+    "packages/adapter-utils/src/execution-target.ts": "c961a2fde4b77cdea6596fedfa2c9bf607c1f1b21b084b988b1f720ffadb6310",
+    "packages/adapter-utils/src/execution-target-stdin-race.test.ts": "5dcb03bcce4776aed6dd29bed515cf20e0cc86c195d07da35b813d5ab1b7438e"
+  },
+  "runs": [
+    {
+      "command": "node node_modules/vitest/vitest.mjs run packages/adapter-utils/src/execution-target-stdin-race.test.ts --maxWorkers=1 -t 'T26'",
+      "source": "original owner plus regression",
+      "result": "FAIL",
+      "testsFailed": 3,
+      "testsPassed": 1,
+      "deselectedByNameFilter": 34,
+      "log": "up02-descriptor-original-red.log.txt"
+    },
+    {
+      "command": "node node_modules/vitest/vitest.mjs run packages/adapter-utils/src/execution-target-stdin-race.test.ts --maxWorkers=1 -t 'T2[0-6]'",
+      "result": "PASS",
+      "testsPassed": 10,
+      "deselectedByNameFilter": 28,
+      "log": "up02-descriptor-green.log.txt"
+    },
+    {
+      "command": "pnpm --filter @paperclipai/adapter-utils typecheck",
+      "result": "PASS",
+      "log": "up02-descriptor-typecheck.log.txt"
+    }
+  ],
+  "logs": [
+    {
+      "path": "doc/operations/aw-v10-evidence/recovery-2026-10-22/up02-descriptor-original-red.log.txt",
+      "sha256": "d3cb282bb5558c0006c884742e4672962e5032eb9009932d97849928ea839c7c",
+      "sizeBytes": 2464
+    },
+    {
+      "path": "doc/operations/aw-v10-evidence/recovery-2026-10-22/up02-descriptor-green.log.txt",
+      "sha256": "6b3021f516fc5bb335124e34370ecd8c7d11cd1185fe571030fd71e3c780a59a",
+      "sizeBytes": 530
+    },
+    {
+      "path": "doc/operations/aw-v10-evidence/recovery-2026-10-22/up02-descriptor-typecheck.log.txt",
+      "sha256": "d1a0f0190d11eea481468daea20d1eb79e76ba197ed903c4ea2aacf55e6876b8",
+      "sizeBytes": 109
+    }
+  ],
+  "review": "Root read original probe, full correction and real descriptor regression. Descriptor held through identity-based cleanup; each exit closes it.",
+  "limitations": [
+    "Node final lstat\u2192remove operations are not atomic; residual path replacement gap is retained explicitly",
+    "No physical runtime qualification or whole-V10 acceptance is inferred"
+  ],
+  "sourceComplete": false,
+  "prReady": false
+}

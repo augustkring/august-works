@@ -1,0 +1,102 @@
+{
+  "purpose": "RECOVERY ONLY; not application activation or qualification",
+  "capturedAtUtc": "2026-11-01T17:36:03.402151+00:00",
+  "mainHead": "25180b7cf49b6e242ef4914505d5a0885c8d3cc4",
+  "mainDirtyPatchSha256": "d54ecc657147be02958b154994a755b0d6fbb42c5008572f84a9118708c0605d",
+  "sourceFileCount": 38,
+  "archive": {
+    "path": "private-candidates.tar.gz",
+    "bytes": 230715,
+    "sha256": "bd72f03a604e1342c6a0a69d0c94c0297a30ea971ce23322b1e46af243234503",
+    "verifiedEntries": 38
+  },
+  "host50Delta": {
+    "baseCheckpoint": "R65",
+    "baseHost47SourcePinsSha256": "484150475d92d3e611b87bd46b5f1f89c5b97cfc57c226c4e09d7bb96b57bedd",
+    "candidateHost50SourcePinsSha256": "443ed46ca65f9dd6fb621dea18c9cb869fe62d0058b9a2ea731609ce88ee889c",
+    "pathCounts": {
+      "base": 102,
+      "candidate": 104,
+      "added": 2,
+      "deleted": 0,
+      "changed": 8
+    },
+    "added": [
+      {
+        "path": "server/src/__tests__/sandbox-endpoint-network-selectors.test.ts",
+        "candidateSha256": "1f3b10ba8a071b67d438f450df62db1be85db17c70b11134b8ed14ab7fcf9dc3"
+      },
+      {
+        "path": "server/src/services/execution-sandbox/openshell-policy.ts",
+        "candidateSha256": "0e1edc3c816f6dad184a41b413f8fc1c12a25a738f98952ff12ac73f050da97e"
+      }
+    ],
+    "deleted": [],
+    "changed": [
+      {
+        "path": "deploy/v6/host-agent/broker-profiles.mjs",
+        "baseSha256": "0ebdc81341631950672ae3f88512c0f34df538f279094af7e5bb413a7a9f4f69",
+        "candidateSha256": "4aca01725d68f7a2b0c66a5804defaaaaa8a1865e4780e0b02d362cfae858888",
+        "bytes": 5602
+      },
+      {
+        "path": "deploy/v6/host-agent/broker-profiles.test.mjs",
+        "baseSha256": "d53fc93a073caaf84a8c9c1e0af1dfe26d4edd6ab603700dd34236bcfe336ae1",
+        "candidateSha256": "674b9a59df19c82ddef530ea891434f666643895a7b83067576806325a1714c4",
+        "bytes": 8554
+      },
+      {
+        "path": "deploy/v6/host-agent/openshell.test.mjs",
+        "baseSha256": "6543648569c4aea8bb3cec90a56b4137fbdfb3007670615b131029ffa7b6e7f7",
+        "candidateSha256": "ff7b80d5470a60aeff591985b27eabf74f423c0e6c0342adc7f2060d2c5b76d0",
+        "bytes": 183398
+      },
+      {
+        "path": "packages/shared/src/execution-sandbox.ts",
+        "baseSha256": "8aa41c536821cd43e41fb9d8df5c99ea7e9d536c4223b364800397dbf220bd87",
+        "candidateSha256": "0b56917850ab0a3989ae2d2b8929b05252fdd65e1b58f36a32e7cb6c4fec1c69",
+        "bytes": 14698
+      },
+      {
+        "path": "server/src/__tests__/helpers/managed-native-conversation-sandbox-host.ts",
+        "baseSha256": "022fa9e48b6fa27f1ba7cc17ee8637f77a2315bfb02d591085a6433c3f7f6bbd",
+        "candidateSha256": "8156f7d9ce87015e21cbf21716cd3297fa764102494470c2324b4d418aa6c339",
+        "bytes": 144736
+      },
+      {
+        "path": "server/src/__tests__/helpers/managed-native-opencode-e2e-fixture.ts",
+        "baseSha256": "9bf01d02ea240925036677aa7196aefa095b593023c9279711d80f6fb070687f",
+        "candidateSha256": "ab60327090de9330886606778e2baeb530ef3bd0bcff23c1d5b03feaf3e1bd56",
+        "bytes": 221083
+      },
+      {
+        "path": "server/src/services/execution-sandbox/openshell-backend.ts",
+        "baseSha256": "57b17c311c77d40142bb146410cde87783e2f5ece208b3b03d5cf0633e170156",
+        "candidateSha256": "9f2880b9302b36e8fd2c81988f61b9e055b2c15831031834c40c6d118d1bee59",
+        "bytes": 23891
+      },
+      {
+        "path": "server/src/services/execution-sandbox/policy-compiler.ts",
+        "baseSha256": "25605f5ac26dd2d2e20579776f894967beaf582cbccbedda8be97dae47785534",
+        "candidateSha256": "cdb3d1e46c35556a081ef96f19eaa7dc214f3db6629e4704712bf67e4402e202",
+        "bytes": 20352
+      }
+    ]
+  },
+  "references": {
+    "R65ManifestSha256": "3d52cf17a78ad4467abf7405667502f3797b1c3b09c78297febc9673d5d65ef8",
+    "R65ArchiveSha256": "eb4493eb2ce28e0752f3e3773e8c21af53325fbecd6a639c83afd7d4d765bf5f",
+    "R65Host47PinsSha256": "484150475d92d3e611b87bd46b5f1f89c5b97cfc57c226c4e09d7bb96b57bedd",
+    "ServerSelectorPatchSha256": "78e7cae2e5af5ca422b3622419420288eaba39743c72857cc3f10c6f247292ff",
+    "ServerSelectorPinsSha256": "6c27fdb7fd2b73ed4ec189949a2cac0d2a265dd74ccdc82730c26bec9373e5d5",
+    "ImmutabilityPatchSha256": "535bd85ddff1a7b25bd522b737daf8842f85c034c99bd9ed818fda594c86bc13",
+    "ImmutabilityPinsSha256": "a24f48668174c159275f8000099c91183225e2d11409eaf457ff069ea8649e7b",
+    "Host49ProducerPatchSha256": "1e7e0eeb5c3708f2f86ed16bd16029721586b6120717e7e01ec36a18be5da4f4",
+    "Host49ProducerPinsSha256": "4874dc8bc276a8f0e497df9987de30d0baa8241a19464ab3177cfdc8a9f8bd62",
+    "Host48PinsSha256": "51928231f699e6f473a0d532e2679ad6d11e33ef73dae3b06167f15e52bb989a",
+    "StorageDedupReceiptSha256": "548978fc91bef3c253bd6404bc38f2caa7b3f094162ee3dd1ef0431ac06c03e5",
+    "StorageDedupArchiveSha256": "ea1f96e397af7f0f7e815c033438efac1a6036732293c2ff70b2e0014cbd8644",
+    "StorageDedupArchivePath": "/workspace/v10-preparation/closed-host36-48-and-tmp30-48-recovery-20261101/duplicate-content-recovery.tar.gz"
+  },
+  "qualificationStatus": "Recovery delta only. Host50 frozen pins and runner are preserved; all Host50 qualification outputs excluded. Selector component and immutable followup component evidence are scoped component-level only; independent review is summarized without a persisted authored receipt. Host48 route work has actual model and Worker projection failures before model dispatch despite 19/19 report rows. No final aggregate qualification is claimed."
+}

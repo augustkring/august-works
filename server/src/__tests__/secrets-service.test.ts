@@ -24,7 +24,7 @@ import {
 } from "@paperclipai/db";
 import { LOW_TRUST_REVIEW_PRESET } from "@paperclipai/shared";
 import { getEmbeddedPostgresTestSupport, startEmbeddedPostgresTestDatabase } from "./helpers/embedded-postgres.js";
-import { awsSecretsManagerProvider } from "../secrets/aws-secrets-manager-provider.js";
+import { awsSecretsManagerProvider, createAwsSecretsManagerProvider } from "../secrets/aws-secrets-manager-provider.js";
 import { localEncryptedProvider } from "../secrets/local-encrypted-provider.js";
 import { SecretProviderClientError } from "../secrets/types.js";
 import { secretService } from "../services/secrets.js";
@@ -4309,7 +4309,7 @@ describeEmbeddedPostgres("secretService", () => {
     expect(persisted).toBeNull();
   });
 
-  it("renames name and key during removal before provider deletion", async () => {
+  it("retains the original remote name and key while provider deletion is pending", async () => {
     const companyId = await seedCompany();
     const svc = secretService(db);
     const externalRef =
@@ -4362,8 +4362,8 @@ describeEmbeddedPostgres("secretService", () => {
 
     expect(persisted).toMatchObject({
       status: "deleted",
-      key: `remove-failure__deleted__${secret.id}`,
-      name: `Remove Failure__deleted__${secret.id}`,
+      key: "remove-failure",
+      name: "Remove Failure",
     });
     expect(recreated.id).not.toBe(secret.id);
   });
@@ -4377,8 +4377,8 @@ describeEmbeddedPostgres("secretService", () => {
     await db.insert(companySecrets).values({
       id: secretId,
       companyId,
-      key: `retry-delete__deleted__${secretId}`,
-      name: `Retry Delete__deleted__${secretId}`,
+      key: "retry-delete",
+      name: "Retry Delete",
       provider: "aws_secrets_manager",
       managedMode: "paperclip_managed",
       externalRef,
@@ -4420,7 +4420,62 @@ describeEmbeddedPostgres("secretService", () => {
     expect(persisted).toBeNull();
   });
 
-  it("removes DB rows even when the attached provider vault is disabled", async () => {
+  it("retains an interrupted managed remote reservation instead of accepting missing material as deletion", async () => {
+    const companyId = await seedCompany();
+    const svc = secretService(db);
+    const [secret] = await db.insert(companySecrets).values({ companyId, key: "unknown-create-reservation",
+      name: "Unknown create reservation", provider: "aws_secrets_manager", managedMode: "paperclip_managed",
+      status: "archived", latestVersion: 0 }).returning();
+    const deletion = vi.spyOn(awsSecretsManagerProvider, "deleteOrArchive");
+    await expect(svc.remove(secret!.id)).rejects.toMatchObject({ details: {
+      code: "secret_provider_erasure_identity_unresolved" } });
+    expect(deletion).not.toHaveBeenCalled();
+    expect(await svc.getById(secret!.id)).toMatchObject({ status: "deleted", key: "unknown-create-reservation",
+      latestVersion: 0, deletedAt: expect.any(Date) });
+  });
+
+  it("retains legacy renamed managed deletion pins for explicit identity reconciliation", async () => {
+    const companyId = await seedCompany();
+    const svc = secretService(db);
+    const externalRef =
+      "arn:aws:secretsmanager:us-east-1:123456789012:secret:paperclip/prod-use1/company-1/retry-delete";
+    const secretId = randomUUID();
+    await db.insert(companySecrets).values({
+      id: secretId,
+      companyId,
+      key: `retry-delete__deleted__${secretId}`,
+      name: `Retry Delete__deleted__${secretId}`,
+      provider: "aws_secrets_manager",
+      managedMode: "paperclip_managed",
+      externalRef,
+      latestVersion: 1,
+      status: "deleted",
+      deletedAt: new Date(),
+    });
+    await db.insert(companySecretVersions).values({
+      secretId,
+      version: 1,
+      material: {
+        scheme: "aws_secrets_manager_v1",
+        secretId: externalRef,
+        versionId: "aws-version-1",
+        source: "managed",
+      },
+      valueSha256: "value-sha-1",
+      fingerprintSha256: "fingerprint-sha-1",
+      providerVersionRef: "aws-version-1",
+      status: "current",
+    });
+    const deleteSpy = vi.spyOn(awsSecretsManagerProvider, "deleteOrArchive");
+    await expect(svc.remove(secretId)).rejects.toMatchObject({ status: 409,
+      details: { code: "secret_provider_erasure_identity_unresolved" } });
+    expect(deleteSpy).not.toHaveBeenCalled();
+    expect(await svc.getById(secretId)).toMatchObject({ status: "deleted", externalRef,
+      key: `retry-delete__deleted__${secretId}`, latestVersion: 1 });
+    expect(await db.select().from(companySecretVersions).where(eq(companySecretVersions.secretId, secretId))).toHaveLength(1);
+  });
+
+  it("retains the fenced managed namespace until its original disabled vault can acknowledge deletion", async () => {
     const companyId = await seedCompany();
     const svc = secretService(db);
     const vault = await svc.createProviderConfig(companyId, {
@@ -4432,7 +4487,7 @@ describeEmbeddedPostgres("secretService", () => {
       },
     });
     const externalRef =
-      "arn:aws:secretsmanager:us-east-1:123456789012:secret:paperclip/prod/company-1/openai-api-key";
+      `arn:aws:secretsmanager:us-east-1:123456789012:secret:paperclip/prod/${companyId}/openai-api-key`;
     const secret = await db
       .insert(companySecrets)
       .values({
@@ -4464,18 +4519,136 @@ describeEmbeddedPostgres("secretService", () => {
       status: "current",
     });
     await svc.disableProviderConfig(vault.id);
-    const deleteSpy = vi.spyOn(awsSecretsManagerProvider, "deleteOrArchive").mockResolvedValue();
-
-    await expect(svc.remove(secret.id)).resolves.toMatchObject({ id: secret.id });
-    const persisted = await db
-      .select()
-      .from(companySecrets)
-      .where(eq(companySecrets.id, secret.id))
-      .then((rows) => rows[0] ?? null);
-
+    let scheduled = false, absent = false;
+    const deleteWire = vi.fn(async (_input: { SecretId: string; RecoveryWindowInDays?: number }) => { scheduled = true; return {}; })
+      .mockRejectedValueOnce(new Error("controlled AWS deletion failure"));
+    const unreachable = async () => { throw new Error("unexpected AWS operation during erasure"); };
+    const realProvider = createAwsSecretsManagerProvider({ gateway: {
+      createSecret: unreachable, putSecretValue: unreachable, getSecretValue: unreachable,
+      deleteSecret: deleteWire,
+      describeSecret: async input => {
+        if (absent) throw Object.assign(new Error("Original secret is absent"), { name: "ResourceNotFoundException" });
+        return { ARN: input.SecretId, ...(scheduled ? { DeletedDate: 1_800_000_000 } : {}) };
+      },
+    } });
+    // Execute the actual AWS namespace validator; replace only its wire gateway.
+    const deleteSpy = vi.spyOn(awsSecretsManagerProvider, "deleteOrArchive")
+      .mockImplementation(realProvider.deleteOrArchive);
+    const createSpy = vi.spyOn(awsSecretsManagerProvider, "createSecret")
+      .mockImplementation(unreachable);
+    await expect(svc.remove(secret.id)).rejects.toMatchObject({ status: 409,
+      details: { code: "secret_provider_erasure_pending" } });
+    const persisted = await svc.getById(secret.id);
+    expect(persisted).toMatchObject({ status: "deleted", deletedAt: expect.any(Date),
+      key: "openai-api-key", name: "OpenAI API Key", providerConfigId: vault.id,
+      externalRef, latestVersion: 1 });
+    expect(await svc.list(companyId)).toEqual([]);
+    await expect(svc.resolveSecretValue(companyId, secret.id, "latest")).rejects.toMatchObject({ status: 404 });
+    const [retainedVersion] = await db.select().from(companySecretVersions)
+      .where(eq(companySecretVersions.secretId, secret.id));
+    expect(retainedVersion).toMatchObject({ version: 1, material: { secretId: externalRef,
+      versionId: "aws-version-1", source: "managed" } });
     expect(deleteSpy).not.toHaveBeenCalled();
-    expect(persisted).toBeNull();
+    expect(deleteWire).not.toHaveBeenCalled();
+    await expect(svc.removeProviderConfig(vault.id)).rejects.toMatchObject({ status: 409,
+      details: { code: "secret_provider_erasure_pending" } });
+    expect(await svc.getProviderConfigById(vault.id)).toMatchObject({ id: vault.id, status: "disabled", config: vault.config });
+    await expect(svc.create(companyId, { name: "Replacement", key: "openai-api-key",
+      provider: "aws_secrets_manager", providerConfigId: vault.id, value: "replacement" }))
+      .rejects.toMatchObject({ status: 409 });
+    expect(createSpy).not.toHaveBeenCalled();
+
+    await svc.updateProviderConfig(vault.id, { status: "ready" });
+    await expect(svc.remove(secret.id)).rejects.toMatchObject({ code: "provider_error", operation: "deleteSecret" });
+    expect(await svc.getById(secret.id)).toMatchObject({ status: "deleted", key: "openai-api-key",
+      providerConfigId: vault.id, externalRef, latestVersion: 1 });
+    await expect(svc.create(companyId, { name: "Replacement", key: "openai-api-key",
+      provider: "aws_secrets_manager", providerConfigId: vault.id, value: "replacement" }))
+      .rejects.toMatchObject({ status: 409 });
+    expect(createSpy).not.toHaveBeenCalled();
+    await expect(svc.remove(secret.id)).rejects.toMatchObject({ code: "conflict", operation: "deleteSecret" });
+    expect(await svc.getById(secret.id)).toMatchObject({ status: "deleted", externalRef, providerConfigId: vault.id });
+    await expect(svc.remove(secret.id)).rejects.toMatchObject({ code: "conflict" });
+    expect(deleteWire).toHaveBeenCalledTimes(2);
+    absent = true;
+    await expect(svc.remove(secret.id)).resolves.toMatchObject({ id: secret.id });
+    expect(deleteSpy).toHaveBeenCalledTimes(4);
+    expect(deleteSpy).toHaveBeenCalledWith(expect.objectContaining({ externalRef,
+      providerConfig: expect.objectContaining({ id: vault.id, config: vault.config }),
+      context: expect.objectContaining({ companyId, secretKey: "openai-api-key", version: 1 }) }));
+    expect(deleteWire).toHaveBeenCalledTimes(2);
+    expect(deleteWire.mock.calls.map(([input]) => input.SecretId)).toEqual([externalRef, externalRef]);
+    expect(await svc.getById(secret.id)).toBeNull();
+    expect(await db.select().from(companySecretVersions).where(eq(companySecretVersions.secretId, secret.id))).toEqual([]);
   });
+
+  it("still unlinks an unmanaged external reference with a disabled vault without deleting external data", async () => {
+    const companyId = await seedCompany();
+    const svc = secretService(db);
+    const vault = await svc.createProviderConfig(companyId, { provider: "aws_secrets_manager",
+      displayName: "External reference vault", config: { region: "us-east-1", namespace: "prod" } });
+    const [secret] = await db.insert(companySecrets).values({ companyId, key: "external-only",
+      name: "External only", provider: "aws_secrets_manager", providerConfigId: vault.id,
+      managedMode: "external_reference", externalRef: "arn:aws:secretsmanager:us-east-1:123456789012:secret:outside/customer-owned",
+      latestVersion: 0, status: "active" }).returning();
+    await svc.disableProviderConfig(vault.id);
+    const deleteSpy = vi.spyOn(awsSecretsManagerProvider, "deleteOrArchive");
+    await expect(svc.remove(secret!.id)).resolves.toMatchObject({ id: secret!.id });
+    expect(deleteSpy).not.toHaveBeenCalled();
+    expect(await svc.getById(secret!.id)).toBeNull();
+  });
+
+  it("keeps a full unique user namespace with a 120-character definition while an older value awaits erasure", async () => {
+    const companyId = await seedCompany(), userId = "long-definition-user";
+    await seedCompanyMember(companyId, userId, "owner");
+    const svc = secretService(db);
+    const vault = await svc.createProviderConfig(companyId, { provider: "aws_secrets_manager",
+      displayName: "User namespace vault", config: { region: "us-east-1", namespace: "user-namespace" } });
+    const definition = await svc.createUserSecretDefinition(companyId, { key: "k".repeat(120),
+      name: "Long user definition", provider: "aws_secrets_manager", providerConfigId: vault.id });
+    const physical = new Set<string>(), deleted: string[] = [];
+    const unreachable = async () => { throw new Error("unexpected AWS operation during namespace check"); };
+    const provider = createAwsSecretsManagerProvider({ gateway: {
+      createSecret: async input => {
+        const arn = `arn:aws:secretsmanager:us-east-1:123456789012:secret:${input.Name}`;
+        if (physical.has(arn)) throw new Error("duplicate physical secret namespace");
+        physical.add(arn); return { ARN: arn, VersionId: "user-version-1" };
+      },
+      putSecretValue: unreachable, getSecretValue: unreachable,
+      describeSecret: async input => {
+        if (!physical.has(input.SecretId)) throw Object.assign(new Error("Original secret is absent"), { name: "ResourceNotFoundException" });
+        return { ARN: input.SecretId };
+      },
+      deleteSecret: async input => {
+        if (!physical.delete(input.SecretId)) throw new Error("foreign secret deletion");
+        deleted.push(input.SecretId); return {};
+      },
+    } });
+    vi.spyOn(awsSecretsManagerProvider, "createSecret").mockImplementation(provider.createSecret);
+    vi.spyOn(awsSecretsManagerProvider, "deleteOrArchive").mockImplementation(provider.deleteOrArchive);
+    const first = await svc.createCurrentUserSecretValue(companyId, userId,
+      { definitionId: definition.id, value: "first-controlled-value" });
+    expect(first.key.length).toBeLessThanOrEqual(120);
+    expect(first.key).toMatch(/\.[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/);
+    await svc.disableProviderConfig(vault.id);
+    await expect(svc.remove(first.id)).rejects.toMatchObject({ details: { code: "secret_provider_erasure_pending" } });
+    expect(physical.size).toBe(1);
+    await svc.updateProviderConfig(vault.id, { status: "ready" });
+    const second = await svc.createCurrentUserSecretValue(companyId, userId,
+      { definitionId: definition.id, value: "second-controlled-value" });
+    expect(second.key).not.toBe(first.key);
+    expect(second.externalRef).not.toBe(first.externalRef);
+    expect(second.key).toMatch(/\.[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/);
+    expect(physical.size).toBe(2);
+    await svc.remove(first.id);
+    expect(deleted).toEqual([first.externalRef]);
+    expect(physical.has(second.externalRef!)).toBe(true);
+    expect(await svc.getById(second.id)).toMatchObject({ status: "active", externalRef: second.externalRef });
+    await svc.remove(second.id);
+    expect(deleted).toEqual([first.externalRef, second.externalRef]);
+    expect(physical.size).toBe(0);
+  });
+
 
   it("refuses to resolve secrets once they are disabled or archived", async () => {
     const companyId = await seedCompany();

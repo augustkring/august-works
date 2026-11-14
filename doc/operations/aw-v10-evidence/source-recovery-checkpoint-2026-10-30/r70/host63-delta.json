@@ -1,0 +1,22 @@
+{
+  "baseCheckpoint": "R69 / Host61",
+  "baseHost61SourcePinsSha256": "ba86bef12c35883826529b8164812de1ea6f06b8942074ff32215b9fd4a8dcc8",
+  "candidateHost63SourcePinsSha256": "cff18656ce91a19a93a407eb1f9c0b898cb364919bb60e9006dcd7e6a3a9f707",
+  "sourcePathCounts": {
+    "base": 107,
+    "candidate": 107,
+    "added": 0,
+    "deleted": 0,
+    "changed": 1
+  },
+  "added": [],
+  "deleted": [],
+  "changed": [
+    {
+      "path": "server/src/__tests__/helpers/managed-native-opencode-e2e-fixture.ts",
+      "baseSha256": "61035078d069a2df31df00289417db7038f9b30c0f1c6990c9e6b92a78ecf87e",
+      "candidateSha256": "d69212faf7be8b1e0632502e53ac08fca34ce51f892bf2cec32348b42e13f9b6",
+      "bytes": 225006
+    }
+  ]
+}

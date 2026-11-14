@@ -1,0 +1,72 @@
+{
+  "retiredSource": {
+    "path": "server/src/__tests__/heartbeat-workspace-finalize-branch.test.ts",
+    "parentCommit": "649211d3bb0185eced851355b39db7b36d7b638b",
+    "sha256": "2673d42e7616cfbb9b35ce0fa794f1ca4e0b5d34bd1288feb716aa08ed08dd01",
+    "sourceBaseCommit": "81d3445b98b1cd80ff400ede6bd44ea71d88d735",
+    "sourceBaseSha256": "c7c74c8636bbba8578f07011f8738648cdd4c9438664fc69f40b9a1008fc1fb5",
+    "preservation": "Exact parent source will be retained in this batch archive; base and parent Git blobs remain available."
+  },
+  "replacementSource": "server/src/__tests__/heartbeat-dependency-draft-controller.integration.test.ts",
+  "assertions": [
+    {
+      "oldCase": "repairs clean unrecorded branch drift before recording workspace finalization",
+      "newCase": "repairs clean Native Text branch drift before successful workspace finalization",
+      "retained": [
+        "one provider dispatch and successful error-free Run",
+        "runtime state lastRunId equals the exact Run",
+        "actual Git HEAD restored to the original recorded branch",
+        "worktree_prepare git checkout command succeeds for the exact execution workspace",
+        "repair metadata pins original and publish branches, source Task and workspace IDs",
+        "one succeeded workspace_finalize operation",
+        "final branch inspection valid with null reason and exact expected/actual branch",
+        "repair attempted/succeeded with original branch_mismatch and exact branches"
+      ]
+    },
+    {
+      "oldCase": "adopts unrecorded forward branch drift for finalization without persisting it",
+      "newCase": "adopts a Native Text forward branch with commits without persisting the workspace branch",
+      "retained": [
+        "one provider dispatch and successful error-free Run",
+        "runtime state lastRunId equals the exact Run",
+        "real publish branch with an added commit",
+        "persisted workspace branch remains the original branch",
+        "one succeeded workspace_finalize operation for the exact workspace",
+        "inspection valid with null reason and exact publish branch",
+        "branch repair/adoption attempted and succeeds",
+        "publish branch differs from the original recorded branch"
+      ]
+    },
+    {
+      "oldCase": "allows a successful adapter run when the branch transition is recorded before finalization",
+      "newCase": "allows Native Text finalization after the branch transition is persisted",
+      "retained": [
+        "one provider dispatch and successful error-free Run",
+        "runtime state lastRunId equals the exact Run",
+        "real Git branch transition persisted before finalization",
+        "persisted branch is the exact publish branch",
+        "one succeeded workspace_finalize operation for the exact workspace",
+        "branch inspection valid with null reason and exact expected/actual publish branch"
+      ]
+    }
+  ],
+  "qualification": {
+    "invocation": "native-git-literal-mode-three-r6",
+    "newNativeCases": 3,
+    "additionalGuardCases": 3,
+    "result": "6 selected cases pass through actual embedded PostgreSQL, canonical current-Human Task/Project/Plan and installed aw_text_only HTTP transport. Exact invocation source/resource/cleanup receipts remain authoritative.",
+    "extraNativeProof": [
+      "Task Source receipt and exact accountable principal",
+      "one accepted retained Native result",
+      "canonical worker attempt/execution manifest/reservation tuple",
+      "declared document body and original worker-model source input"
+    ]
+  },
+  "scopeDifference": "The legacy mocked Codex callback wrote Task done directly. The installed Text controller has no completion authority and leaves the Task for review. Its separate canonical Human Plan-review regression in parent649 proves completion after Human review; these Git invariants do not depend on bypassing that guard. The HTTP callback simulates an observed concurrent workspace transition, not model shell authority.",
+  "notClaimed": [
+    "live paid provider",
+    "SSH or physical Host qualification",
+    "all workspace contention cases",
+    "full V10 acceptance"
+  ]
+}

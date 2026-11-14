@@ -1,0 +1,152 @@
+(!) Your Vite config uses features that are unsupported by `configLoader: 'native'`, which is planned to become the default in a future major version of Vite:
+  - `__dirname` (vitest.config.ts:7:25). Use `import.meta.dirname` instead
+Set `VITE_CONFIG_NATIVE_IGNORE_WARNING=true` to suppress this warning.
+
+ RUN  v4.1.11 /workspace/blentera-v10
+
+ ❯ |@paperclipai/server| src/__tests__/foundation-read-source-authority.integration.test.ts (4 tests | 4 failed) 44218ms
+     × admits canonical same-company Foundation permission only inside the native transaction callback 227ms
+     × requires both current grants, actual Human existence, and native key scope instead of actor hints 140ms
+     × holds every positive Agent/Human/grant/key/run fact through the outer commit 118ms
+     × reauthorizes a grant withdrawn while native Source row acquisition is pending 30041ms
+
+⎯⎯⎯⎯⎯⎯⎯ Failed Tests 4 ⎯⎯⎯⎯⎯⎯⎯
+
+ FAIL  |@paperclipai/server| src/__tests__/foundation-read-source-authority.integration.test.ts > Foundation native Source authority lifetime > admits canonical same-company Foundation permission only inside the native transaction callback
+AssertionError: expected false to be true // Object.is equality
+
+- Expected
++ Received
+
+- true
++ false
+
+ ❯ src/__tests__/foundation-read-source-authority.integration.test.ts:44:44
+     42|     const s = await seed();
+     43|     expect((await authorizationService(db).decide(input(s))).allowed).…
+     44|     expect.soft((await scoped(s)).allowed).toBe(true);
+       |                                            ^
+     45|     expect.soft((await scoped(s, s.human)).allowed).toBe(true);
+     46|     expect((await authorizationService(db).withReadSources(s.companyId…
+
+⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯[1/11]⎯
+
+ FAIL  |@paperclipai/server| src/__tests__/foundation-read-source-authority.integration.test.ts > Foundation native Source authority lifetime > admits canonical same-company Foundation permission only inside the native transaction callback
+AssertionError: expected false to be true // Object.is equality
+
+- Expected
++ Received
+
+- true
++ false
+
+ ❯ src/__tests__/foundation-read-source-authority.integration.test.ts:45:53
+     43|     expect((await authorizationService(db).decide(input(s))).allowed).…
+     44|     expect.soft((await scoped(s)).allowed).toBe(true);
+     45|     expect.soft((await scoped(s, s.human)).allowed).toBe(true);
+       |                                                     ^
+     46|     expect((await authorizationService(db).withReadSources(s.companyId…
+     47|     let escaped!: Parameters<Parameters<ReturnType<typeof authorizatio…
+
+⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯[2/11]⎯
+
+ FAIL  |@paperclipai/server| src/__tests__/foundation-read-source-authority.integration.test.ts > Foundation native Source authority lifetime > requires both current grants, actual Human existence, and native key scope instead of actor hints
+AssertionError: expected false to be true // Object.is equality
+
+- Expected
++ Received
+
+- true
++ false
+
+ ❯ src/__tests__/foundation-read-source-authority.integration.test.ts:56:68
+     54|   });
+     55|   it("requires both current grants, actual Human existence, and native…
+     56|     const s = await seed(); expect.soft((await scoped(s)).allowed).toB…
+       |                                                                    ^
+     57|     await db.delete(principalPermissionGrants).where(and(eq(principalP…
+     58|     expect((await scoped(s)).allowed).toBe(false);
+
+⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯[3/11]⎯
+
+ FAIL  |@paperclipai/server| src/__tests__/foundation-read-source-authority.integration.test.ts > Foundation native Source authority lifetime > holds every positive Agent/Human/grant/key/run fact through the outer commit
+ FAIL  |@paperclipai/server| src/__tests__/foundation-read-source-authority.integration.test.ts > Foundation native Source authority lifetime > holds every positive Agent/Human/grant/key/run fact through the outer commit
+ FAIL  |@paperclipai/server| src/__tests__/foundation-read-source-authority.integration.test.ts > Foundation native Source authority lifetime > holds every positive Agent/Human/grant/key/run fact through the outer commit
+ FAIL  |@paperclipai/server| src/__tests__/foundation-read-source-authority.integration.test.ts > Foundation native Source authority lifetime > holds every positive Agent/Human/grant/key/run fact through the outer commit
+ FAIL  |@paperclipai/server| src/__tests__/foundation-read-source-authority.integration.test.ts > Foundation native Source authority lifetime > holds every positive Agent/Human/grant/key/run fact through the outer commit
+ FAIL  |@paperclipai/server| src/__tests__/foundation-read-source-authority.integration.test.ts > Foundation native Source authority lifetime > holds every positive Agent/Human/grant/key/run fact through the outer commit
+AssertionError: expected undefined to be '55P03' // Object.is equality
+
+- Expected:
+"55P03"
+
++ Received:
+undefined
+
+ ❯ src/__tests__/foundation-read-source-authority.integration.test.ts:83:36
+     81|       for (const query of probes) {
+     82|         let error: unknown; try { await db.transaction(tx => tx.execut…
+     83|         expect.soft(pgCode(error)).toBe("55P03");
+       |                                    ^
+     84|       }
+     85|     } finally { release.resolve(); }
+
+⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯[4/11]⎯
+
+ FAIL  |@paperclipai/server| src/__tests__/foundation-read-source-authority.integration.test.ts > Foundation native Source authority lifetime > holds every positive Agent/Human/grant/key/run fact through the outer commit
+AssertionError: expected false to be true // Object.is equality
+
+- Expected
++ Received
+
+- true
++ false
+
+ ❯ src/__tests__/foundation-read-source-authority.integration.test.ts:86:35
+     84|       }
+     85|     } finally { release.resolve(); }
+     86|     expect((await outer).allowed).toBe(true);
+       |                                   ^
+     87|     await db.transaction(tx => tx.execute(sql`select id from principal…
+     88|   });
+
+⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯[5/11]⎯
+
+ FAIL  |@paperclipai/server| src/__tests__/foundation-read-source-authority.integration.test.ts > Foundation native Source authority lifetime > reauthorizes a grant withdrawn while native Source row acquisition is pending
+Error: Test timed out in 30000ms.
+If this is a long-running test, pass a timeout value as the last argument or configure it globally with "testTimeout".
+ ❯ src/__tests__/foundation-read-source-authority.integration.test.ts:89:3
+     87|     await db.transaction(tx => tx.execute(sql`select id from principal…
+     88|   });
+     89|   it("reauthorizes a grant withdrawn while native Source row acquisiti…
+       |   ^
+     90|     const s = await seed(), issueId = randomUUID(), held = deferred(),…
+     91|     await db.insert(issues).values({ id: issueId, companyId: s.company…
+
+⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯[6/11]⎯
+
+⎯⎯⎯⎯⎯⎯ Unhandled Errors ⎯⎯⎯⎯⎯⎯
+
+Vitest caught 1 unhandled error during the test run.
+This might cause false positive tests. Resolve unhandled errors to make sure your tests are not affected.
+
+⎯⎯⎯⎯ Unhandled Rejection ⎯⎯⎯⎯⎯
+TypeError: Cannot read properties of undefined (reading '0')
+ ❯ server/src/__tests__/foundation-read-source-authority.integration.test.ts:94:145
+ ❯ processTicksAndRejections node:internal/process/task_queues:104:5
+ ❯ scope node_modules/.pnpm/postgres@3.4.9_patch_hash=sryle6qd5qfmnxvoebal4gashi/node_modules/postgres/src/index.js:279:18
+ ❯ sql.begin node_modules/.pnpm/postgres@3.4.9_patch_hash=sryle6qd5qfmnxvoebal4gashi/node_modules/postgres/src/index.js:257:14
+
+This error originated in "server/src/__tests__/foundation-read-source-authority.integration.test.ts" test file. It doesn't mean the error was thrown inside the file itself, but while it was running.
+The latest test that might've caused the error is "reauthorizes a grant withdrawn while native Source row acquisition is pending". It might mean one of the following:
+- The error was thrown, while Vitest was running this test.
+- If the error occurred after the test had been completed, this was the last documented test before it was thrown.
+⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯
+
+
+ Test Files  1 failed (1)
+      Tests  4 failed (4)
+     Errors  1 error
+   Start at  00:47:04
+   Duration  58.69s (transform 7.86s, setup 240ms, import 13.08s, tests 44.22s, environment 0ms)
+

@@ -1,0 +1,22 @@
+[
+  {
+    "path": "cost-receipt-namespace-r1-20261026-source-pins.json",
+    "rawSha256": "64a3d3eaa50c8ff7969356bda6b90a7922e2be1a0b5f52d69305965822ebecdb",
+    "rawBytes": 35729
+  },
+  {
+    "path": "cost-receipt-namespace-r1-20261026-snapshot.log.gz",
+    "rawSha256": "63781390938fe93cee226bbf0bc55aed644f18d93e9caf9ed75b7672d8d93fd6",
+    "rawBytes": 37
+  },
+  {
+    "path": "cost-receipt-namespace-r1-20261026-test.log.gz",
+    "rawSha256": "e5589c85d4d25f4ea8391d26a739b62b9ec8f8cee0e6b5af3af5a9efc7f691ce",
+    "rawBytes": 228
+  },
+  {
+    "path": "cost-receipt-namespace-r1-20261026-test.exit",
+    "rawSha256": "9a271f2a916b0b6ee6cecb2426f0b3206ef074578be55d9bc94f6f3fe3ab86aa",
+    "rawBytes": 2
+  }
+]

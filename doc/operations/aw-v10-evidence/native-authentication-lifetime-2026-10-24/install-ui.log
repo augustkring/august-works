@@ -1,0 +1,31 @@
+(node:155030) [DEP0169] DeprecationWarning: `url.parse()` behavior is not standardized and prone to errors that have security implications. Use the WHATWG URL API instead. CVEs are not issued for `url.parse()` vulnerabilities.
+(Use `node --trace-deprecation ...` to show where the warning was created)
+.                                        |  WARN  `node_modules` is present. Lockfile only installation will make it out-of-date
+Progress: resolved 1, reused 0, downloaded 0, added 0
+Progress: resolved 63, reused 0, downloaded 0, added 0
+Progress: resolved 77, reused 0, downloaded 0, added 0
+Progress: resolved 89, reused 0, downloaded 0, added 0
+server                                   |  WARN  deprecated @types/sharp@0.32.0
+Progress: resolved 100, reused 0, downloaded 0, added 0
+Progress: resolved 136, reused 0, downloaded 0, added 0
+Progress: resolved 159, reused 0, downloaded 0, added 0
+Progress: resolved 328, reused 0, downloaded 0, added 0
+Progress: resolved 473, reused 0, downloaded 0, added 0
+Progress: resolved 520, reused 0, downloaded 0, added 0
+Progress: resolved 853, reused 0, downloaded 0, added 0
+Progress: resolved 1037, reused 0, downloaded 0, added 0
+Progress: resolved 1184, reused 0, downloaded 0, added 0
+Progress: resolved 1405, reused 0, downloaded 0, added 0
+Progress: resolved 1563, reused 0, downloaded 0, added 0
+ WARN  5 deprecated subdependencies found: @esbuild-kit/core-utils@3.3.2, @esbuild-kit/esm-loader@2.6.5, @ungap/structured-clone@1.3.0, glob@10.5.0, node-domexception@1.0.0
+Progress: resolved 1603, reused 0, downloaded 0, added 0
+Progress: resolved 1603, reused 0, downloaded 0, added 0, done
+ WARN  Issues with peer dependencies found
+ui
+├─┬ @better-auth/core 1.7.2
+│ └── ✕ unmet peer @better-auth/utils@0.4.2: found 0.5.0
+└─┬ @better-auth/passkey 1.7.2
+  └── ✕ unmet peer @better-auth/utils@0.4.2: found 0.5.0
+
+.                                        |   +9 +
+Done in 20.2s

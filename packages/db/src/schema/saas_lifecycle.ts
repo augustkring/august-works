@@ -285,6 +285,8 @@ export const authSecurityEvents = pgTable(
     id: uuid("id").primaryKey().defaultRandom(),
     userId: text("user_id"),
     companyId: uuid("company_id").references(() => companies.id),
+    // Opaque attribution survives key/account erasure; never retain credential material.
+    boardApiKeyId: uuid("board_api_key_id"),
     action: text("action").notNull(),
     createdAt: timestamp("created_at", { withTimezone: true })
       .notNull()
@@ -293,9 +295,15 @@ export const authSecurityEvents = pgTable(
   },
   (t) => [
     index("auth_security_events_user_idx").on(t.userId, t.createdAt),
+    index("auth_security_events_expiry_idx").on(t.expiresAt, t.id),
     check(
       "auth_security_events_action_ck",
-      sql`${t.action} in ('verification_requested','email_verified','password_reset_requested','password_reset_completed','sessions_revoked','invite_accepted')`,
+      sql`${t.action} in ('verification_requested','email_verified','password_reset_requested','password_reset_completed','sessions_revoked','invite_accepted','board_api_key_created','board_api_key_revoked')`,
+    ),
+    check(
+      "auth_security_events_board_key_ck",
+      sql`(${t.action} in ('board_api_key_created','board_api_key_revoked') and ${t.boardApiKeyId} is not null and ${t.userId} is not null and ${t.companyId} is null)
+        or (${t.action} not in ('board_api_key_created','board_api_key_revoked') and ${t.boardApiKeyId} is null)`,
     ),
   ],
 );
@@ -320,6 +328,7 @@ export const accountDeletionOperations = pgTable(
     userId: text("user_id").primaryKey(),
     id: uuid("id").notNull().defaultRandom(),
     idempotencyKey: text("idempotency_key").notNull(),
+    receiptKeyHash: text("receipt_key_hash"),
     status: text("status").notNull().default("requested"),
     errorCode: text("error_code"),
     notBefore: timestamp("not_before", { withTimezone: true })
@@ -332,6 +341,9 @@ export const accountDeletionOperations = pgTable(
   },
   (t) => [
     uniqueIndex("account_deletion_operations_id_uq").on(t.id),
+    uniqueIndex("account_deletion_operations_receipt_key_uq").on(t.receiptKeyHash),
+    check("account_deletion_operations_receipt_key_ck",
+      sql`${t.receiptKeyHash} is null or ${t.receiptKeyHash} ~ '^[a-f0-9]{64}$'`),
     index("account_deletion_operations_work_idx").on(t.status, t.notBefore),
     check(
       "account_deletion_operations_status_ck",

@@ -36,7 +36,7 @@ import { ApiError, api as defaultApi } from "./client";
 export interface AgentKey {
   id: string;
   name: string;
-  scope: AgentApiKeyScope;
+  scope: AgentApiKeyScope | null;
   createdAt: Date;
   revokedAt: Date | null;
 }

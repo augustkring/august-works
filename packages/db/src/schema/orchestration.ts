@@ -1,15 +1,19 @@
 import { sql } from "drizzle-orm";
 import { pgTable, uuid, text, integer, jsonb, timestamp, foreignKey, unique, uniqueIndex, check, index } from "drizzle-orm/pg-core";
-import type { ExecutionPrincipal, SupervisionPolicy, OrchestrationBudget, ModelReservationQuote } from "@paperclipai/shared";
+import type { ExecutionPrincipal, SupervisionPolicy, OrchestrationBudget, ModelReservationQuote, ModelTariffCeiling, ModelProviderWireReceipt } from "@paperclipai/shared";
 import { documentRevisions } from "./document_revisions.js";
 import { workflowRevisions } from "./workflows.js";
 import { toolInvocations } from "./tool_access.js";
 import { companies } from "./companies.js";
 import { issues } from "./issues.js";
+import { issueThreadInteractions } from "./issue_thread_interactions.js";
+import { nativeRunResults } from "./native_run_results.js";
+import { statusDecisions } from "./status_decisions.js";
 import { agents } from "./agents.js";
 import { completionContracts } from "./completion_contracts.js";
 import { agentExecutionManifests } from "./execution_manifests.js";
 import { heartbeatRuns } from "./heartbeat_runs.js";
+import { agentPackageVersions } from "./agent_packages.js";
 import { workflowRuns, workflows } from "./workflows.js";
 const times = () => ({ createdAt: timestamp("created_at", { withTimezone: true }).notNull().defaultNow(), updatedAt: timestamp("updated_at", { withTimezone: true }).notNull().defaultNow() });
 export const orchestrationPlans = pgTable("orchestration_plans", {
@@ -45,26 +49,104 @@ export const orchestrationWorkers = pgTable("orchestration_workers", {
 }, t => ({ tenantUq: unique("orchestration_worker_tenant_uq").on(t.companyId, t.id), planWorkerUq: unique("orchestration_worker_plan_id_uq").on(t.companyId, t.planId, t.id), keyUq: unique("orchestration_worker_key_uq").on(t.planId, t.workerKey), contractFk: foreignKey({ columns: [t.companyId, t.issueId, t.completionContractId], foreignColumns: [completionContracts.companyId, completionContracts.issueId, completionContracts.id] }), taskUq: unique("orchestration_worker_plan_task_uq").on(t.planId, t.issueId), planFk: foreignKey({ columns: [t.companyId, t.planId], foreignColumns: [orchestrationPlans.companyId, orchestrationPlans.id] }).onDelete("cascade"), taskFk: foreignKey({ columns: [t.companyId, t.issueId], foreignColumns: [issues.companyId, issues.id] }), agentFk: foreignKey({ columns: [t.companyId, t.agentId], foreignColumns: [agents.companyId, agents.id] }), stateCheck: check("orchestration_worker_state_check", sql`${t.status} in ('waiting','running','completed','failed','cancelled')`), counterCheck: check("orchestration_worker_counter_check", sql`${t.attemptCount}>=0`), liveTaskUq: uniqueIndex("orchestration_worker_live_task_uq").on(t.companyId, t.issueId).where(sql`${t.status} in ('waiting','running')`) }));
 export const orchestrationWorkerAttempts = pgTable("orchestration_worker_attempts", {
   id: uuid("id").primaryKey().defaultRandom(), companyId: uuid("company_id").notNull(), planId: uuid("plan_id").notNull(), workerId: uuid("worker_id").notNull(), agentId: uuid("agent_id"), runId: uuid("run_id"), workflowRunId: uuid("workflow_run_id"), attempt: integer("attempt").notNull(), status: text("status").notNull().default("running"), executionManifestId: uuid("execution_manifest_id"), startedAt: timestamp("started_at", { withTimezone: true }).notNull().defaultNow(), finishedAt: timestamp("finished_at", { withTimezone: true }), ...times(),
-}, t => ({ planAttemptUq: unique("orchestration_attempt_plan_id_uq").on(t.companyId,t.planId,t.id), workerFk: foreignKey({ columns: [t.companyId, t.planId, t.workerId], foreignColumns: [orchestrationWorkers.companyId, orchestrationWorkers.planId, orchestrationWorkers.id] }).onDelete("cascade"), runFk: foreignKey({ columns: [t.companyId, t.agentId, t.runId], foreignColumns: [heartbeatRuns.companyId, heartbeatRuns.agentId, heartbeatRuns.id] }), workflowRunFk: foreignKey({ columns: [t.companyId, t.workflowRunId], foreignColumns: [workflowRuns.companyId, workflowRuns.id] }), manifestFk: foreignKey({ columns: [t.companyId, t.executionManifestId], foreignColumns: [agentExecutionManifests.companyId, agentExecutionManifests.id] }), attemptUq: unique("orchestration_worker_attempt_number_uq").on(t.workerId, t.attempt), runUq: unique("orchestration_worker_attempt_run_uq").on(t.companyId, t.runId), workflowRunUq: unique("orchestration_worker_attempt_workflow_uq").on(t.companyId, t.workflowRunId), liveWorkerUq: uniqueIndex("orchestration_worker_attempt_live_uq").on(t.workerId).where(sql`${t.status}='running'`), kindCheck: check("orchestration_attempt_kind_check", sql`num_nonnulls(${t.runId},${t.workflowRunId})=1 and (${t.runId} is null or ${t.agentId} is not null)`), stateCheck: check("orchestration_attempt_state_check", sql`${t.status} in ('running','succeeded','failed','cancelled')`), countCheck: check("orchestration_attempt_number_check", sql`${t.attempt}>0`) }));
+}, t => ({ planAttemptUq: unique("orchestration_attempt_plan_id_uq").on(t.companyId,t.planId,t.id),
+  planWorkerAttemptOwnerUq: unique("orchestration_attempt_plan_worker_owner_uq").on(t.companyId,t.planId,t.workerId,t.id), workerFk: foreignKey({ columns: [t.companyId, t.planId, t.workerId], foreignColumns: [orchestrationWorkers.companyId, orchestrationWorkers.planId, orchestrationWorkers.id] }).onDelete("cascade"), runFk: foreignKey({ columns: [t.companyId, t.agentId, t.runId], foreignColumns: [heartbeatRuns.companyId, heartbeatRuns.agentId, heartbeatRuns.id] }), workflowRunFk: foreignKey({ columns: [t.companyId, t.workflowRunId], foreignColumns: [workflowRuns.companyId, workflowRuns.id] }), manifestFk: foreignKey({ columns: [t.companyId, t.executionManifestId], foreignColumns: [agentExecutionManifests.companyId, agentExecutionManifests.id] }), attemptUq: unique("orchestration_worker_attempt_number_uq").on(t.workerId, t.attempt), runUq: unique("orchestration_worker_attempt_run_uq").on(t.companyId, t.runId), workflowRunUq: unique("orchestration_worker_attempt_workflow_uq").on(t.companyId, t.workflowRunId), liveWorkerUq: uniqueIndex("orchestration_worker_attempt_live_uq").on(t.workerId).where(sql`${t.status}='running'`), kindCheck: check("orchestration_attempt_kind_check", sql`num_nonnulls(${t.runId},${t.workflowRunId})=1 and (${t.runId} is null or ${t.agentId} is not null)`), stateCheck: check("orchestration_attempt_state_check", sql`${t.status} in ('running','succeeded','failed','cancelled')`), countCheck: check("orchestration_attempt_number_check", sql`${t.attempt}>0`) }));
 
 export const orchestrationToolCharges = pgTable("orchestration_tool_charges", {
   invocationId: uuid("invocation_id").primaryKey().references(() => toolInvocations.id, { onDelete: "cascade" }), companyId: uuid("company_id").notNull(), planId: uuid("plan_id").notNull(), createdAt: timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),
 }, t => ({ planFk: foreignKey({ columns: [t.companyId, t.planId], foreignColumns: [orchestrationPlans.companyId, orchestrationPlans.id] }) }));
 
 export const orchestrationModelReservations = pgTable("orchestration_model_reservations", {
-  id: uuid("id").primaryKey().defaultRandom(), companyId: uuid("company_id").notNull(), planId: uuid("plan_id").notNull(), workerId: uuid("worker_id"), workerAttemptId: uuid("worker_attempt_id"),
-  purpose: text("purpose").$type<"worker_model" | "read_only_verification" | "read_only_trajectory" | "provider_conformance" | "agent_safe_test">().notNull(),
+  id: uuid("id").primaryKey().defaultRandom(), companyId: uuid("company_id").notNull(), planId: uuid("plan_id"), workerId: uuid("worker_id"), workerAttemptId: uuid("worker_attempt_id"),
+  conversationAgentId: uuid("conversation_agent_id"), conversationRunId: uuid("conversation_run_id"), conversationIssueId: uuid("conversation_issue_id"),
+  conversationSessionGeneration: integer("conversation_session_generation"), executionManifestId: uuid("execution_manifest_id"), executionManifestHash: text("execution_manifest_hash"),
+  reviewIssueId: uuid("review_issue_id"), reviewInteractionId: uuid("review_interaction_id"), reviewDecisionId: uuid("review_decision_id"),
+  reviewSourceRunId: uuid("review_source_run_id"), reviewSourceResultId: uuid("review_source_result_id"), reviewSourceWorkerId: uuid("review_source_worker_id"), reviewSourceAgentId: uuid("review_source_agent_id"), reviewSourceAttemptId: uuid("review_source_attempt_id"), reviewSourceReceiptDigest: text("review_source_receipt_digest"), reviewSourceResultCanonicalSha256: text("review_source_result_canonical_sha256"),
+  reviewAgentId: uuid("review_agent_id"), reviewRunId: uuid("review_run_id"), reviewExecutionManifestId: uuid("review_execution_manifest_id"), reviewPlanVersion: integer("review_plan_version"),
+  conversationTariffSnapshot: jsonb("conversation_tariff_snapshot").$type<ModelTariffCeiling | null>(),
+  purpose: text("purpose").$type<"worker_model" | "review_model" | "conversation_model" | "read_only_verification" | "read_only_trajectory" | "provider_conformance" | "agent_safe_test" | "decision_shadow">().notNull(),
   principalUserId: text("principal_user_id").notNull(), idempotencyKey: text("idempotency_key").notNull(), requestHash: text("request_hash").notNull(), inputHash: text("input_hash").notNull(), authorityHash: text("authority_hash").notNull(),
   quote: jsonb("quote").$type<ModelReservationQuote>().notNull(), maximumMinor: integer("maximum_minor").notNull(),
   status: text("status").$type<"reserved" | "dispatched" | "completed" | "failed" | "unknown" | "cancelled">().notNull().default("reserved"),
-  providerResponseHash: text("provider_response_hash"), usage: jsonb("usage").$type<{ inputTokens: number; outputTokens: number } | null>(),
+  providerResponseHash: text("provider_response_hash"), providerWireReceipt: jsonb("provider_wire_receipt").$type<ModelProviderWireReceipt | null>(), usage: jsonb("usage").$type<{ inputTokens: number; outputTokens: number } | null>(),
   expiresAt: timestamp("expires_at", { withTimezone: true }).notNull(), dispatchedAt: timestamp("dispatched_at", { withTimezone: true }), completedAt: timestamp("completed_at", { withTimezone: true }), createdAt: timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),
 }, t => ({
   tenantUq: unique("orchestration_model_reservation_tenant_uq").on(t.companyId, t.id), keyUq: unique("orchestration_model_reservation_key_uq").on(t.companyId, t.planId, t.idempotencyKey),
+  conversationKeyUq: uniqueIndex("orchestration_model_reservation_conversation_key_uq").on(t.companyId, t.conversationRunId, t.idempotencyKey).where(sql`${t.conversationRunId} is not null`),
   planFk: foreignKey({ columns: [t.companyId, t.planId], foreignColumns: [orchestrationPlans.companyId, orchestrationPlans.id] }).onDelete("cascade"), workerFk: foreignKey({ columns: [t.companyId, t.planId, t.workerId], foreignColumns: [orchestrationWorkers.companyId, orchestrationWorkers.planId, orchestrationWorkers.id] }), attemptFk: foreignKey({ columns: [t.companyId, t.planId, t.workerAttemptId], foreignColumns: [orchestrationWorkerAttempts.companyId, orchestrationWorkerAttempts.planId, orchestrationWorkerAttempts.id] }),
+  conversationRunFk: foreignKey({ name: "orchestration_model_reservations_conversation_run_fk", columns: [t.companyId, t.conversationAgentId, t.conversationRunId], foreignColumns: [heartbeatRuns.companyId, heartbeatRuns.agentId, heartbeatRuns.id] }).onDelete("restrict"),
+  conversationIssueFk: foreignKey({ name: "orchestration_model_reservations_conversation_issue_fk", columns: [t.companyId, t.conversationIssueId], foreignColumns: [issues.companyId, issues.id] }).onDelete("restrict"),
+  conversationManifestFk: foreignKey({ name: "orchestration_model_reservations_conversation_manifest_fk", columns: [t.companyId, t.executionManifestId], foreignColumns: [agentExecutionManifests.companyId, agentExecutionManifests.id] }).onDelete("restrict"),
+  reviewIssueFk: foreignKey({ name: "orchestration_model_reservations_review_issue_fk", columns: [t.companyId, t.reviewIssueId], foreignColumns: [issues.companyId, issues.id] }).onDelete("restrict"),
+  reviewInteractionFk: foreignKey({ name: "orchestration_model_reservations_review_interaction_fk", columns: [t.companyId, t.reviewIssueId, t.reviewInteractionId], foreignColumns: [issueThreadInteractions.companyId, issueThreadInteractions.issueId, issueThreadInteractions.id] }).onDelete("restrict"),
+  reviewDecisionFk: foreignKey({ name: "orchestration_model_reservations_review_decision_fk", columns: [t.companyId, t.reviewIssueId, t.reviewDecisionId], foreignColumns: [statusDecisions.companyId, statusDecisions.issueId, statusDecisions.id] }).onDelete("restrict"),
+  reviewSourceResultFk: foreignKey({ name: "orchestration_model_reservations_review_source_result_fk", columns: [t.companyId, t.reviewIssueId, t.reviewSourceRunId, t.reviewSourceResultId], foreignColumns: [nativeRunResults.companyId, nativeRunResults.issueId, nativeRunResults.runId, nativeRunResults.id] }).onDelete("restrict"),
+  reviewSourceRunFk: foreignKey({ name: "orchestration_model_reservations_review_source_run_fk", columns: [t.companyId, t.reviewSourceAgentId, t.reviewSourceRunId], foreignColumns: [heartbeatRuns.companyId, heartbeatRuns.agentId, heartbeatRuns.id] }).onDelete("restrict"),
+  reviewSourceAttemptFk: foreignKey({ name: "orchestration_model_reservations_review_source_attempt_fk", columns: [t.companyId, t.planId, t.reviewSourceWorkerId, t.reviewSourceAttemptId], foreignColumns: [orchestrationWorkerAttempts.companyId, orchestrationWorkerAttempts.planId, orchestrationWorkerAttempts.workerId, orchestrationWorkerAttempts.id] }).onDelete("restrict"),
+  reviewReviewerRunFk: foreignKey({ name: "orchestration_model_reservations_review_reviewer_run_fk", columns: [t.companyId, t.reviewAgentId, t.reviewRunId], foreignColumns: [heartbeatRuns.companyId, heartbeatRuns.agentId, heartbeatRuns.id] }).onDelete("restrict"),
+  reviewManifestFk: foreignKey({ name: "orchestration_model_reservations_review_manifest_fk", columns: [t.companyId, t.reviewAgentId, t.reviewRunId, t.reviewExecutionManifestId], foreignColumns: [agentExecutionManifests.companyId, agentExecutionManifests.agentId, agentExecutionManifests.runId, agentExecutionManifests.id] }).onDelete("restrict"),
+  scopeCheck: check("orchestration_model_reservation_scope_ck", sql`(
+    ${t.purpose}='conversation_model' and ${t.planId} is null and ${t.workerId} is null and ${t.workerAttemptId} is null and
+    ${t.conversationAgentId} is not null and ${t.conversationRunId} is not null and ${t.conversationIssueId} is not null and
+    ${t.conversationSessionGeneration} is not null and ${t.conversationSessionGeneration}>=0 and ${t.executionManifestId} is not null and
+    ${t.executionManifestHash} is not null and ${t.executionManifestHash} ~ '^[a-f0-9]{64}$' and ${t.conversationTariffSnapshot} is not null and jsonb_typeof(${t.conversationTariffSnapshot})='object' and
+    ${t.reviewIssueId} is null and ${t.reviewInteractionId} is null and ${t.reviewDecisionId} is null and ${t.reviewSourceRunId} is null and ${t.reviewSourceResultId} is null and
+    ${t.reviewSourceWorkerId} is null and ${t.reviewSourceAgentId} is null and ${t.reviewSourceAttemptId} is null and ${t.reviewSourceReceiptDigest} is null and ${t.reviewSourceResultCanonicalSha256} is null and
+    ${t.reviewAgentId} is null and ${t.reviewRunId} is null and ${t.reviewExecutionManifestId} is null and ${t.reviewPlanVersion} is null
+  ) or (
+    ${t.purpose}='review_model' and ${t.planId} is not null and ${t.workerId} is null and ${t.workerAttemptId} is null and
+    ${t.reviewIssueId} is not null and ${t.reviewInteractionId} is not null and ${t.reviewDecisionId} is not null and
+    ${t.reviewSourceRunId} is not null and ${t.reviewSourceResultId} is not null and ${t.reviewSourceWorkerId} is not null and ${t.reviewSourceAgentId} is not null and ${t.reviewSourceAttemptId} is not null and ${t.reviewSourceReceiptDigest} is not null and ${t.reviewSourceReceiptDigest} ~ '^[a-f0-9]{64}$' and ${t.reviewSourceResultCanonicalSha256} is not null and ${t.reviewSourceResultCanonicalSha256} ~ '^(sha256:)?[a-f0-9]{64}$' and
+    ${t.reviewAgentId} is not null and ${t.reviewRunId} is not null and ${t.reviewExecutionManifestId} is not null and ${t.reviewPlanVersion} is not null and ${t.reviewPlanVersion}>0 and
+    ${t.conversationAgentId} is null and ${t.conversationRunId} is null and ${t.conversationIssueId} is null and
+    ${t.conversationSessionGeneration} is null and ${t.executionManifestId} is null and ${t.executionManifestHash} is null and ${t.conversationTariffSnapshot} is null
+  ) or (
+    ${t.purpose} not in ('conversation_model','review_model') and ${t.planId} is not null and ${t.conversationAgentId} is null and
+    ${t.conversationRunId} is null and ${t.conversationIssueId} is null and ${t.conversationSessionGeneration} is null and
+    ${t.executionManifestId} is null and ${t.executionManifestHash} is null and ${t.conversationTariffSnapshot} is null and
+    ${t.reviewIssueId} is null and ${t.reviewInteractionId} is null and ${t.reviewDecisionId} is null and ${t.reviewSourceRunId} is null and ${t.reviewSourceResultId} is null and
+    ${t.reviewSourceWorkerId} is null and ${t.reviewSourceAgentId} is null and ${t.reviewSourceAttemptId} is null and ${t.reviewSourceReceiptDigest} is null and ${t.reviewSourceResultCanonicalSha256} is null and ${t.reviewAgentId} is null and ${t.reviewRunId} is null and ${t.reviewExecutionManifestId} is null and ${t.reviewPlanVersion} is null
+  )`),
   statusCheck: check("orchestration_model_reservation_status_ck", sql`${t.status} in ('reserved','dispatched','completed','failed','unknown','cancelled')`),
-  purposeCheck: check("orchestration_model_reservation_purpose_ck", sql`${t.purpose} in ('worker_model','read_only_verification','read_only_trajectory','provider_conformance','agent_safe_test')`),
+  purposeCheck: check("orchestration_model_reservation_purpose_ck", sql`${t.purpose} in ('worker_model','review_model','conversation_model','read_only_verification','read_only_trajectory','provider_conformance','agent_safe_test','decision_shadow')`),
   costCheck: check("orchestration_model_reservation_cost_ck", sql`${t.maximumMinor} between 0 and 1000000 and (${t.quote}->>'maximumMinor')::int=${t.maximumMinor} and ${t.expiresAt}>${t.createdAt}`),
   hashCheck: check("orchestration_model_reservation_hash_ck", sql`${t.requestHash} ~ '^[a-f0-9]{64}$' and ${t.inputHash} ~ '^[a-f0-9]{64}$' and ${t.authorityHash} ~ '^[a-f0-9]{64}$' and (${t.providerResponseHash} is null or ${t.providerResponseHash} ~ '^[a-f0-9]{64}$')`),
   pendingIdx: index("orchestration_model_reservation_pending_idx").on(t.status, t.expiresAt),
+}));
+
+/** A separate, taskless ledger owner for explicitly operator-funded first-party
+ * support calls. It does not weaken or share the plan-backed reservation FK. */
+export const orchestrationCompanyPurposeBudgets = pgTable("orchestration_company_purpose_budgets", {
+  id: uuid("id").primaryKey().defaultRandom(), companyId: uuid("company_id").notNull().references(() => companies.id, { onDelete: "restrict" }),
+  purpose: text("purpose").$type<"first_party_support" | "decision_skill_suggestion">().notNull(), funder: text("funder").notNull(), profileId: text("profile_id").notNull(), profileHash: text("profile_hash").notNull(), providerAccountId: text("provider_account_id").notNull(), credentialBindingHash: text("credential_binding_hash").notNull(), periodKey: text("period_key").notNull(),
+  periodStartsAt: timestamp("period_starts_at", { withTimezone: true }).notNull(), periodEndsAt: timestamp("period_ends_at", { withTimezone: true }).notNull(),
+  provider: text("provider").notNull(), model: text("model").notNull(), sourceSha: text("source_sha").notNull(), qualificationHash: text("qualification_hash").notNull(), tariffHash: text("tariff_hash").notNull(),
+  maxCostMinor: integer("max_cost_minor").notNull(), reservedMinor: integer("reserved_minor").notNull().default(0), maxCalls: integer("max_calls").notNull(), reservedCalls: integer("reserved_calls").notNull().default(0), createdAt: timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),
+}, t => ({
+  tenantUq: unique("orchestration_company_purpose_budget_tenant_uq").on(t.companyId, t.id),
+  periodUq: unique("orchestration_company_purpose_budget_period_uq").on(t.companyId, t.purpose, t.profileId, t.periodKey),
+  contractCheck: check("orchestration_company_purpose_budget_contract_ck", sql`${t.purpose} in ('first_party_support','decision_skill_suggestion') and ((${t.purpose}='first_party_support' and ${t.funder}='blentera_platform') or (${t.purpose}='decision_skill_suggestion' and ${t.funder}='company_connection')) and ${t.profileId} ~ '^[a-zA-Z0-9._:-]{1,120}$' and ${t.profileHash} ~ '^[a-f0-9]{64}$' and ${t.providerAccountId} ~ '^[a-zA-Z0-9._:-]{1,160}$' and ${t.credentialBindingHash} ~ '^[a-f0-9]{64}$' and ${t.periodKey} ~ '^[a-zA-Z0-9._:-]{1,120}$' and ${t.periodStartsAt}<${t.periodEndsAt} and ${t.periodEndsAt}<=${t.periodStartsAt}+interval '366 days' and ${t.provider} in ('openai','anthropic','openrouter') and length(${t.model}) between 1 and 200 and ${t.sourceSha} ~ '^[a-f0-9]{40}$' and ${t.qualificationHash} ~ '^[a-f0-9]{64}$' and ${t.tariffHash} ~ '^[a-f0-9]{64}$'`),
+  amountCheck: check("orchestration_company_purpose_budget_amount_ck", sql`${t.maxCostMinor} between 1 and 1000000 and ${t.reservedMinor} between 0 and ${t.maxCostMinor} and ${t.maxCalls} between 1 and 10000 and ${t.reservedCalls} between 0 and ${t.maxCalls}`),
+  periodIdx: index("orchestration_company_purpose_budget_period_idx").on(t.periodEndsAt),
+}));
+export const orchestrationCompanyPurposeReservations = pgTable("orchestration_company_purpose_reservations", {
+  id: uuid("id").primaryKey().defaultRandom(), companyId: uuid("company_id").notNull(), budgetId: uuid("budget_id").notNull(), purpose: text("purpose").$type<"first_party_support" | "decision_skill_suggestion">().notNull().default("first_party_support"), principalUserId: text("principal_user_id").notNull(),
+  /** Exact globally published first-party support package release pinned by
+   * the trusted server. Null is retained only for pre-feature legacy rows. */
+  packageVersionId: uuid("package_version_id"),
+  idempotencyKey: text("idempotency_key").notNull(), requestHash: text("request_hash").notNull(), inputHash: text("input_hash").notNull(), authorityHash: text("authority_hash").notNull(),
+  quote: jsonb("quote").$type<ModelReservationQuote>().notNull(), maximumMinor: integer("maximum_minor").notNull(),
+  status: text("status").$type<"reserved" | "dispatched" | "completed" | "failed" | "unknown" | "cancelled">().notNull().default("reserved"),
+  providerResponseHash: text("provider_response_hash"), providerWireReceipt: jsonb("provider_wire_receipt").$type<ModelProviderWireReceipt | null>(), usage: jsonb("usage").$type<{ inputTokens: number; outputTokens: number } | null>(),
+  expiresAt: timestamp("expires_at", { withTimezone: true }).notNull(), dispatchedAt: timestamp("dispatched_at", { withTimezone: true }), completedAt: timestamp("completed_at", { withTimezone: true }), createdAt: timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),
+}, t => ({
+  tenantUq: unique("orchestration_company_purpose_reservation_tenant_uq").on(t.companyId, t.id),
+  purposeCheck: check("orchestration_company_purpose_reservation_purpose_ck", sql`${t.purpose} in ('first_party_support','decision_skill_suggestion')`),
+  keyUq: unique("orchestration_company_purpose_reservation_key_uq").on(t.companyId, t.idempotencyKey),
+  budgetFk: foreignKey({ columns: [t.companyId, t.budgetId], foreignColumns: [orchestrationCompanyPurposeBudgets.companyId, orchestrationCompanyPurposeBudgets.id] }).onDelete("restrict"),
+  packageVersionFk: foreignKey({ columns: [t.packageVersionId], foreignColumns: [agentPackageVersions.id] }).onDelete("restrict"),
+  statusCheck: check("orchestration_company_purpose_reservation_status_ck", sql`${t.status} in ('reserved','dispatched','completed','failed','unknown','cancelled')`),
+  costCheck: check("orchestration_company_purpose_reservation_cost_ck", sql`${t.maximumMinor} between 0 and 1000000 and (${t.quote}->>'maximumMinor')::int=${t.maximumMinor} and ${t.expiresAt}>${t.createdAt}`),
+  hashCheck: check("orchestration_company_purpose_reservation_hash_ck", sql`${t.requestHash} ~ '^[a-f0-9]{64}$' and ${t.inputHash} ~ '^[a-f0-9]{64}$' and ${t.authorityHash} ~ '^[a-f0-9]{64}$' and (${t.providerResponseHash} is null or ${t.providerResponseHash} ~ '^[a-f0-9]{64}$')`),
+  pendingIdx: index("orchestration_company_purpose_reservation_pending_idx").on(t.status, t.expiresAt),
 }));

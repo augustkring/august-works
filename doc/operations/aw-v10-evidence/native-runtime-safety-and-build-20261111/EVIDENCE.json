@@ -1,0 +1,85 @@
+{
+  "schema": "blentera.software-evidence.v1",
+  "preparedAtUtc": "2026-11-11T08:08:59.920751+00:00",
+  "sourceParent": "8a5895389dc6d36d5eca6a09db0c6534f1953fb7",
+  "sourceBase": "81d3445b98b1cd80ff400ede6bd44ea71d88d735",
+  "runs": [
+    {
+      "label": "native-prelaunch-occupancy-planner-r448",
+      "scope": "One actual software Host prelaunch-container cleanup case, including five contradictory-evidence probes; no Native process admission or paid model call.",
+      "exit": 0,
+      "seconds": 128.78668034399743
+    },
+    {
+      "label": "managed-token-receipt-regressions-r444",
+      "scope": "15 selected token and managed model receipt component cases; no SDK or external provider proof.",
+      "exit": 0,
+      "seconds": 17.962966332997894
+    },
+    {
+      "label": "model-budget-support-regressions-r446",
+      "scope": "Six selected native model-budget and first-party Help grounding cases; 27 unselected cases are not qualified by this run.",
+      "exit": 0,
+      "seconds": 60.889486849016976
+    },
+    {
+      "label": "native-stop-observer-typecheck-r449",
+      "scope": "Full server TypeScript check.",
+      "exit": 0,
+      "seconds": 101.11012366900104
+    },
+    {
+      "label": "workspace-typecheck-current-r450",
+      "scope": "Full workspace typecheck with serial package scheduling.",
+      "exit": 0,
+      "seconds": 283.65269839798566
+    },
+    {
+      "label": "workspace-build-current-r451",
+      "scope": "Required root pnpm build, including workspace link preflight.",
+      "exit": 0,
+      "seconds": 186.02664730499964
+    },
+    {
+      "label": "native-review-prelaunch-typecheck-r437",
+      "scope": "Earlier unsuccessful iteration; not qualification.",
+      "reason": "Incomplete supplemental-test brace; corrected before later compiler passes."
+    },
+    {
+      "label": "native-prelaunch-occupancy-r438",
+      "scope": "Earlier unsuccessful iteration; not qualification.",
+      "reason": "Custom SQL delimiter syntax error; corrected before actual PG qualification."
+    },
+    {
+      "label": "native-review-prelaunch-typecheck-r439",
+      "scope": "Earlier unsuccessful iteration; not qualification.",
+      "reason": "Eight type/credential-plumbing errors; corrected before final server/workspace checks."
+    },
+    {
+      "label": "native-prelaunch-occupancy-r440",
+      "scope": "Earlier unsuccessful iteration; not qualification.",
+      "reason": "Missing SQL UUID text casts retained occupancy; corrected."
+    },
+    {
+      "label": "native-prelaunch-occupancy-diagnostic-r442",
+      "scope": "Earlier unsuccessful iteration; not qualification.",
+      "reason": "Read-only diagnostic surfaced SQLSTATE 42883; diagnostic code subsequently removed."
+    },
+    {
+      "label": "native-prelaunch-occupancy-current-r443",
+      "scope": "Earlier unsuccessful iteration; not qualification.",
+      "reason": "Test observed occupancy after the genuine cleanup had already settled it; observation moved to actual Stop boundary."
+    },
+    {
+      "label": "native-prelaunch-occupancy-final-r445",
+      "scope": "Earlier unsuccessful iteration; not qualification.",
+      "reason": "Normal serial fixture did not forward its Stop observer; shared fixture wiring corrected."
+    },
+    {
+      "label": "native-prelaunch-occupancy-owner-r447",
+      "scope": "Earlier unsuccessful iteration; not qualification.",
+      "reason": "300-second case timeout while PostgreSQL planned the large proof query; function-local join planning limits corrected it without changing predicates or raising time limits."
+    }
+  ],
+  "boundary": "Each receipt binds its own exact source hashes. Earlier component runs are not a claim that every current path or all V10 work was executed. No production Host, external paid provider, deployed migration, representative Human, GA, release, merge, or complete V10 qualification."
+}

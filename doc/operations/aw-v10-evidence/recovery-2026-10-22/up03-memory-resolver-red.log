@@ -1,0 +1,98 @@
+(!) Your Vite config uses features that are unsupported by `configLoader: 'native'`, which is planned to become the default in a future major version of Vite:
+  - `__dirname` (vitest.config.ts:7:25). Use `import.meta.dirname` instead
+Set `VITE_CONFIG_NATIVE_IGNORE_WARNING=true` to suppress this warning.
+
+ RUN  v4.1.11 /workspace/blentera-v10
+
+ ❯ |@paperclipai/server| src/__tests__/memory-resolver-private-lineage.integration.test.ts (4 tests | 4 failed) 20111ms
+     × does not commit a self-root after native Context then duplicate/corroboration (novel=false) 1364ms
+     × does not commit a self-root after native Context then duplicate/corroboration (novel=true) 967ms
+     × keeps fresh private authority consequences even when the claim and evidence duplicate 1395ms
+     × rejects in-place attachment through a distinct native descendant without corrupting the target 1545ms
+
+⎯⎯⎯⎯⎯⎯⎯ Failed Tests 4 ⎯⎯⎯⎯⎯⎯⎯
+
+ FAIL  |@paperclipai/server| src/__tests__/memory-resolver-private-lineage.integration.test.ts > Native Memory resolution preserves private lineage without self-corruption > does not commit a self-root after native Context then duplicate/corroboration (novel=false)
+AssertionError: expected [ …(2) ] to not include '841c38f8-ea79-4f62-ba54-1c90dfdd2969'
+ ❯ src/__tests__/memory-resolver-private-lineage.integration.test.ts:90:44
+     88|     const [persisted] = await db.select().from(memoryRecords).where(eq…
+     89|     // Inspect the committed row even when the post-transaction respon…
+     90|     expect(persisted!.sourceMemoryIds).not.toContain(persisted!.id);
+       |                                            ^
+     91|     expect(outcome).toMatchObject({ value: { record: { id: detail.reco…
+     92|     if (!novel) expect(persisted!.updatedAt).toEqual(detail.record.upd…
+
+⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯[1/4]⎯
+
+ FAIL  |@paperclipai/server| src/__tests__/memory-resolver-private-lineage.integration.test.ts > Native Memory resolution preserves private lineage without self-corruption > does not commit a self-root after native Context then duplicate/corroboration (novel=true)
+AssertionError: expected [ …(2) ] to not include '5b8afacd-f44a-46e8-8232-681968f737f2'
+ ❯ src/__tests__/memory-resolver-private-lineage.integration.test.ts:90:44
+     88|     const [persisted] = await db.select().from(memoryRecords).where(eq…
+     89|     // Inspect the committed row even when the post-transaction respon…
+     90|     expect(persisted!.sourceMemoryIds).not.toContain(persisted!.id);
+       |                                            ^
+     91|     expect(outcome).toMatchObject({ value: { record: { id: detail.reco…
+     92|     if (!novel) expect(persisted!.updatedAt).toEqual(detail.record.upd…
+
+⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯[2/4]⎯
+
+ FAIL  |@paperclipai/server| src/__tests__/memory-resolver-private-lineage.integration.test.ts > Native Memory resolution preserves private lineage without self-corruption > keeps fresh private authority consequences even when the claim and evidence duplicate
+AssertionError: expected [ …(3) ] to not include '7ae372de-489a-4311-b198-aaf1447fb540'
+ ❯ src/__tests__/memory-resolver-private-lineage.integration.test.ts:103:44
+    101|     const outcome = await service.createCandidate(companyId, candidate…
+    102|     const [persisted] = await db.select().from(memoryRecords).where(eq…
+    103|     expect(persisted!.sourceMemoryIds).not.toContain(persisted!.id);
+       |                                            ^
+    104|     expect(persisted!.sourceMemoryIds).toContain(extra.detail.record.i…
+    105|     expect(outcome).toMatchObject({ value: { record: { id: first.detai…
+
+⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯[3/4]⎯
+
+ FAIL  |@paperclipai/server| src/__tests__/memory-resolver-private-lineage.integration.test.ts > Native Memory resolution preserves private lineage without self-corruption > rejects in-place attachment through a distinct native descendant without corrupting the target
+AssertionError: expected { …(44) } to deeply equal { …(44) }
+
+- Expected
++ Received
+
+@@ -35,10 +35,12 @@
+    "sensitivityLabel": "internal",
+    "sourceFoundationRevisionIds": [],
+    "sourceIssueIds": [],
+    "sourceMemoryIds": [
+      "1b92dc8c-c8bf-493f-a78e-7887385440a9",
++     "479a82b4-0f60-4804-8683-1f80fbbbd083",
++     "66ea05e6-c9aa-4046-9bf4-e4411cdf2de1",
+    ],
+    "sourceProjectIds": [],
+    "sourceProvenanceQualified": true,
+    "sourceRunIds": [
+      "efe632da-86be-4b08-aac2-ec85e8947614",
+@@ -47,10 +49,10 @@
+    "subjectType": null,
+    "summary": null,
+    "supersededByRecordId": null,
+    "supersedesRecordId": null,
+    "title": "PRIVATE original lesson",
+-   "updatedAt": 2026-10-22T21:55:47.357Z,
++   "updatedAt": 2026-10-22T21:55:48.389Z,
+    "validFrom": null,
+    "validUntil": null,
+    "verificationState": "human_verified",
+  }
+
+ ❯ src/__tests__/memory-resolver-private-lineage.integration.test.ts:123:23
+    121|     const outcome = await service.createCandidate(companyId, candidate…
+    122|     const [persisted] = await db.select().from(memoryRecords).where(eq…
+    123|     expect(persisted).toEqual(detail.record);
+       |                       ^
+    124|     expect(await db.select().from(memoryEvidence).where(eq(memoryEvide…
+    125|     expect(outcome).toMatchObject({ error: { status: 409 } });
+
+⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯[4/4]⎯
+
+
+ Test Files  1 failed (1)
+      Tests  4 failed (4)
+   Start at  21:54:51
+   Duration  60.89s (transform 25.33s, setup 177ms, import 35.78s, tests 20.11s, environment 0ms)
+

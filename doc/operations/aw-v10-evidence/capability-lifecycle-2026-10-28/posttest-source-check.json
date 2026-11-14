@@ -1,0 +1,11 @@
+{
+  "kind": "feature-lifecycle-posttest-source-check",
+  "scope": "final retirement check; lifecycle implementation and focused test sources only",
+  "finalCheck": {
+    "pretestPins": "pretest-source-pins-retirement-final.json",
+    "sourceHead": "e8dcdf53e6d72ddf1859daf80aee7f23386cefa5",
+    "scopedPathsChecked": 9,
+    "scopedSourceChanged": []
+  },
+  "result": "scoped-match"
+}

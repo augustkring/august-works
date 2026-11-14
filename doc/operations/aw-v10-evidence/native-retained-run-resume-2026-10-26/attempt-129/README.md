@@ -1,0 +1,7 @@
+# Retained concurrent Native chat attempt 129
+
+This was a diagnostic-only rerun of the single retained concurrent first-send Playwright case. It failed the existing 60-second idle assertion (exit 1); no timeout or privacy check was relaxed.
+
+The first run (`34baa29d-b5e6-44ba-af54-db8f324c00e3`) emitted 20 append timings with 24.7 seconds cumulative append lifecycle time: 10.5 seconds in source admission, 0.4 seconds in event write/transaction-only overhead, and 13.7 seconds in the post-commit callback. The resumed run (`550d93b7-d074-4b66-ac33-70f099bf6861`) emitted 17 committed events before the consumer waited for another iterator event. Its 16 complete append timings totaled 35.2 seconds: 17.0 seconds source admission, 0.5 seconds event write/transaction-only overhead, and 17.5 seconds post-commit callbacks. Individual source admissions ranged from about 0.6–1.7 seconds; callbacks ranged from about 0.5–2.4 seconds. Provider diagnostics recorded turn completion, but the test timed out before the chat consumer observed a terminal event.
+
+The logs contain only test identifiers and source-free event metadata; they include no retained analytical source payload. The input source pins capture the tested source, and the provider NDJSON records content-free lifecycle facts. The test-owned leftover Runnerd/provider pair was stopped after being verified against this completed attempt's run ID.

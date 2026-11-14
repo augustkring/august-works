@@ -12,7 +12,6 @@ export const reportProgressAction = {
     "requiredClaims": [],
     "taskModes": [
       "standard",
-      "ask",
       "planning",
       "skill_test"
     ],
@@ -75,7 +74,6 @@ export const reportProgressAction = {
       "requiredClaims": [],
       "allowedModes": [
         "standard",
-        "ask",
         "planning",
         "skill_test"
       ],
@@ -227,7 +225,6 @@ export const reportProgressAction = {
       "requiredClaims": [],
       "taskModes": [
         "standard",
-        "ask",
         "planning",
         "skill_test"
       ],

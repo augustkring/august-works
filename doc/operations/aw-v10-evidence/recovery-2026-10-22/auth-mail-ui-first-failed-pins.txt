@@ -1,0 +1,13 @@
+4b961f495f4b5fce4a60add503fd218f9feb0515565311cbfc834241ce74e815  ui/src/api/auth.ts
+3b4949f0e2243cf9a28ec935e3ac8ef9964262068cb0faa81b271ac3aea844ed  ui/src/api/auth.test.ts
+6e4042fd96d79554385be81645a2d30b46621523d0981d8823d0efbc4a132625  ui/src/api/saas.ts
+4f4a9d2da6eec3b57515a072134ba20bad6f1411559d58e2b22e3c123dead355  ui/src/api/saas-auth.test.ts
+8edb0ca3c45c7a25ef46f9cb63f8fd3f9944be7aad27a900b2ffe355d583a4c4  ui/src/i18n/index.ts
+8f2c154b64fb84a0edf14a744069aa30dce89deb327d6c3cfd3b3a39994555e4  ui/src/i18n/experience-locale-preference.ts
+ffefbc4b3aee0777e29b0279f305e8bea71c1ff27ab9cc3a94360e6c623e9b44  ui/src/i18n/experience-locale-preference.test.ts
+36ebe49c4c92facadc6b04156b6c2e3ba9fe5003dc98394d0f8c0eb14e79d748  ui/src/i18n/experience/en.json
+2f133a4404ced12e0994561ac40df741e83cb9140aeae26f75714cb58dbe9283  ui/src/i18n/experience/da.json
+0d358b4d29fd5c927a93f30f46b32a0d5aab761b4a2d1bda55cbffacea4c65af  ui/src/pages/Activation.tsx
+9fa87467557db094bd55f00752e396b1be042683043a2ef3e65a3c3aabb006ff  ui/src/pages/SaasWelcome.tsx
+44eff3763c72d12549b3e78b04f6bd05415c27bdfe775d9b650736f2b3ead2a3  ui/src/pages/SaasWelcome.test.tsx
+23dba75031e4d9f8d0ed0a877b19abc441768ac51329fd49ded5fa92041e311c  packages/shared/src/auth-mail-copy.ts

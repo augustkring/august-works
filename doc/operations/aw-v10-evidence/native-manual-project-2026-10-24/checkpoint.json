@@ -1,0 +1,77 @@
+{
+  "parentCommit": "145a11449b82493aaeb44dd58dccaae71deb19f3",
+  "requirements": [
+    "KRN-01"
+  ],
+  "sourcePinsFile": "source-pins.json",
+  "checks": {
+    "ownerAndPublicProjectionBeforeDtoTypeFix": {
+      "exit": 0,
+      "passed": 32,
+      "suites": 3,
+      "log": "native-manual-project-owned.log"
+    },
+    "taskReplayDeadlines": {
+      "exit": 0,
+      "passed": 2,
+      "suites": 1,
+      "log": "native-manual-replay-deadline-checked.log"
+    },
+    "finalProjectDtoProjection": {
+      "exit": 0,
+      "passed": 13,
+      "suites": 1,
+      "log": "native-manual-project-projection.log"
+    },
+    "builtCookieAndAuthenticatorBrowserBeforeDtoTypeFix": {
+      "exit": 0,
+      "passed": 1,
+      "log": "native-manual-project-browser.log"
+    },
+    "finalServerCompiler": {
+      "exit": 0,
+      "log": "native-manual-project-types-fixed.log"
+    },
+    "originalReplayDeadlineControl": {
+      "exit": 1,
+      "failed": 2,
+      "log": "native-manual-replay-deadline-red.log"
+    },
+    "earlierBodyBindingStage": {
+      "exit": 0,
+      "passed": 59,
+      "suites": 4,
+      "log": "native-manual-project-final.log",
+      "limit": "Before successful Task replay finalizer and Project replay operator-recency guard; not a final-source qualification."
+    },
+    "interruptedNativeSetup": {
+      "exit": 130,
+      "log": "native-manual-project-checked.log",
+      "limit": "Actual DB setup timed out at 90 seconds; remaining worker interrupted. Skipped cases are not passes. No established infrastructure root cause."
+    },
+    "initialFixtures": {
+      "exit": 1,
+      "failed": 3,
+      "passed": 23,
+      "log": "native-manual-project-initial.log"
+    },
+    "initialCompiler": {
+      "exit": 1,
+      "log": "native-manual-project-types.log",
+      "limit": "Raw DB projection replaced the normalized Project execution-workspace policy. Final change preserves the normalized DTO and replaces only proof metadata."
+    }
+  },
+  "observations": [
+    "Only the original HTTP constructor for an independent open direct Human Project can create this capture. The actual native User, source session and current non-viewer membership or recent native passkey-qualified instance role are pinned before privacy locks. Attribution, Board keys, missing sessions, workspace/repository/goal/source/environment/policy inputs and historical receipts cannot acquire known source proof.",
+    "A closed shared SQL expression binds the actual stored Task or Project body with canonical native DB hash and digest. The source audit retains the actual Human UID plus hashes, without body prose, in the same transaction. Audit failure rolls back the Project and its activity. This expression supplies neither resource permission nor full Native input completeness.",
+    "Two original Task replay controls reproduced success after source-session expiry or operator authentication recency expired during an observed real privacy advisory-lock wait. All successful Task create/dedup/reuse returns now share the final guard. Project successful replay likewise rechecks operator recency and source expiry.",
+    "The Project lifecycle controls verify operational edits preserve source proof and body edits invalidate it monotonically. Public HTTP DTOs omit all three internal payload-source fields.",
+    "Final Project13 tests and server compilation include the small DTO normalization fix. Current Task13/public6 and replay2 tests precede only that Project-only projection fix. The built localhost native cookie/TOTP/recovery/software virtual-UV passkey browser also verifies actual stored Task and Project source hashes, digests and Human audits; it precedes only that same projection fix."
+  ],
+  "limits": [
+    "Native domain fixtures use actual PostgreSQL User/session/membership/source rows with a structural HTTP actor carrier. Seeded passkey proof in replay controls is not a WebAuthn ceremony. The separate built browser provides maintained cookie and software virtual-authenticator evidence, not physical hardware or provider qualification.",
+    "The final source-pins file identifies current bytes. Earlier failed, interrupted and successful stages are retained with their stated limits; no retroactive final-source qualification is claimed.",
+    "Other source-bearing constructors/mutations, six typed/private-Memory/temporal failures, complete Native input receipts and source-aware read lifetimes remain open. No run protocol or private-work readiness admission is activated.",
+    "Full V10, portability/Context/readiness, remaining authentication/recovery and release/PR acceptance remain open. No PR, merge or deployment occurred."
+  ]
+}

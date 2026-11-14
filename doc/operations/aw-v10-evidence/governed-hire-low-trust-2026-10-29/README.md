@@ -1,0 +1,3 @@
+Two separate source snapshots execute their full selected files: hired-agent connection tests40/40 and low-trust route tests11/11. The hire fixture provides the managed runtime API origin before constructing heartbeat services and restores it afterwards. The low-trust fake provider implements actual governed Skill upload/readback and platform bind/status/unbind, while a route-only authorization case isolates unrelated background wakes. Production guards and expected denial statuses remain active.
+
+Each directory retains exact source pins, selection and exits. Decompress source-pins.source.patch.gz for the original reconstruction bytes. Test logs are sanitized; raw hashes/redaction counts are recorded. This is not a final unchanged-head aggregate.

@@ -1,0 +1,11 @@
+{
+  "recordedAt": "2026-10-28",
+  "finding": "The original source snapshot helper generated sourceHeadDiffPatch against a mirror index at an older commit. Newer source-head files could consequently appear deleted despite being present and copied. These original raw patch bytes are retained, but must not be used as complete source reconstruction.",
+  "stillValid": "copiedFiles SHA-256 values, locked dependency module pins, actually executed test logs and test exit codes. Independent cohorts do not prove final-head acceptance.",
+  "correction": "The helper now builds a disposable Git index at sourceHead before recording the exact mirror worktree diff. Future cohorts preserve accurate reconstruction. The affected historical cohorts have not been requalified by this metadata correction.",
+  "affectedCohorts": [
+    "root-v6-cost-generation-r1-20261028",
+    "root-historical-replay-schema-r1-20261028",
+    "relay-process-marker-provenance-20261028-r3"
+  ]
+}

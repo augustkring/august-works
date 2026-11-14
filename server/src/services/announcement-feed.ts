@@ -1,8 +1,8 @@
 import { createHash } from "node:crypto";
 import {
   ANNOUNCEMENT_IMAGE_MAX_BYTES, ANNOUNCEMENT_MANIFEST_MAX_BYTES, ANNOUNCEMENT_ANIMATION_MAX_BYTES,
-  DEFAULT_ANNOUNCEMENT_FEED_URL, announcementManifestSchema, isAnnouncementEligible,
-  type AnnouncementManifest,
+  announcementManifestSchema, isAnnouncementEligible,
+  type Announcement, type AnnouncementManifest, type CustomerChangelog,
 } from "@paperclipai/shared";
 import { guardedRemoteHttpFetch } from "./remote-http-fetch.js";
 import { validateAnnouncementAnimation } from "./announcement-animation.js";
@@ -25,6 +25,14 @@ export interface AnnouncementFeedOptions {
   version: string;
   now?: () => number;
   fetch?: (url: URL, init: RequestInit) => Promise<Response>;
+}
+export interface SearchableAnnouncement {
+  announcement: Announcement;
+  historical: boolean;
+}
+export interface AnnouncementSearchProjection {
+  state: "unconfigured" | "unavailable" | "available";
+  items: SearchableAnnouncement[];
 }
 
 export async function readAnnouncementBytes(response: Response, maximum: number): Promise<Buffer> {
@@ -69,7 +77,7 @@ export function announcementFeedService(options: AnnouncementFeedOptions) {
   };
 
   function endpoint() {
-    const url = new URL(options.feedUrl ?? DEFAULT_ANNOUNCEMENT_FEED_URL);
+    const url = new URL(options.feedUrl!);
     if (url.protocol !== "https:" || url.username || url.password || url.hash || url.search) {
       throw new Error("Announcement feed must be an HTTPS URL without credentials, query, or fragment");
     }
@@ -132,15 +140,63 @@ export function announcementFeedService(options: AnnouncementFeedOptions) {
     }
   }
 
-  async function current() {
-    if (options.enabled === false) return null;
+  async function ensureLoaded() {
+    if (options.enabled !== true || !options.feedUrl?.trim()) return false;
     if (pending) await pending;
     else if (now() >= nextCheck) {
       pending = refresh().finally(() => { pending = null; });
       await pending;
     }
+    return available;
+  }
+
+  async function current() {
+    if (!await ensureLoaded()) return null;
     const announcement = available ? manifest?.announcement : null;
-    return announcement && isAnnouncementEligible(announcement, options.version, now()) ? announcement : null;
+    return announcement && isOptionalUnscoped(announcement, now()) && isAnnouncementEligible(announcement, options.version, now()) ? announcement : null;
+  }
+
+  async function searchable(): Promise<AnnouncementSearchProjection> {
+    const configured = options.enabled === true && Boolean(options.feedUrl?.trim());
+    if (!configured) return { state: "unconfigured", items: [] };
+    if (!await ensureLoaded()) return { state: "unavailable", items: [] };
+    const items: SearchableAnnouncement[] = [];
+    const currentAnnouncement = manifest?.announcement;
+    if (currentAnnouncement && isOptionalUnscoped(currentAnnouncement, now()) && isAnnouncementEligible(currentAnnouncement, options.version, now())) {
+      items.push({ announcement: currentAnnouncement, historical: false });
+    }
+    for (const announcement of manifest?.history ?? []) {
+      // Historical items may have expired as current notices. Keep them
+      // searchable as history, but never show them to versions below their
+      // declared minimum.
+      const { expiresAt: _expiresAt, ...versionedAnnouncement } = announcement;
+      if (isOptionalUnscoped(announcement, now()) && isAnnouncementEligible(versionedAnnouncement, options.version, now())) {
+        items.push({ announcement, historical: true });
+      }
+    }
+    return { state: "available", items };
+  }
+
+  async function changelog(locale: "en" | "da"): Promise<CustomerChangelog> {
+    const empty = { coverage: "configured_publication_window" as const, entries: [] };
+    if (options.enabled !== true || !options.feedUrl?.trim()) return { ...empty, state: "unconfigured" };
+    if (!await ensureLoaded()) return { ...empty, state: "unavailable" };
+    const entries = new Map<string, CustomerChangelog["entries"][number]>();
+    let incomplete = false;
+    for (const item of [manifest?.announcement, ...(manifest?.history ?? [])]) {
+      if (!item || item.kind !== "release" || (item.notice?.affectedCompanyIds?.length || item.notice?.affectedProfiles?.length)) continue;
+      const { expiresAt: _expiresAt, ...historical } = item;
+      if (!isAnnouncementEligible(historical, options.version, now())) continue;
+      if (item.publishedAt && Date.parse(item.publishedAt) > now()) continue;
+      if (!item.releaseNote || !item.publishedAt) { incomplete = true; continue; }
+      const prior = entries.get(item.releaseNote.releaseId);
+      if (!prior || item.releaseNote.locale === locale && prior.releaseNote.locale !== locale) {
+        entries.set(item.releaseNote.releaseId, { id: item.id, title: item.title,
+          description: item.description, publishedAt: item.publishedAt, releaseNote: item.releaseNote });
+      }
+    }
+    return { coverage: "configured_publication_window", state: incomplete ? "incomplete" : "available",
+      entries: [...entries.values()].sort((a, b) => Date.parse(b.publishedAt) - Date.parse(a.publishedAt) || a.id.localeCompare(b.id)) };
   }
 
   async function asset(id: string, kind: "image" | "animation") {
@@ -180,5 +236,10 @@ export function announcementFeedService(options: AnnouncementFeedOptions) {
     finally { if (slot.pending === entry) slot.pending = null; }
   }
 
-  return { current, image: (id: string) => asset(id, "image"), animation: (id: string) => asset(id, "animation") };
+  return { current, searchable, changelog, image: (id: string) => asset(id, "image"), animation: (id: string) => asset(id, "animation") };
+}
+
+function isOptionalUnscoped(announcement: Announcement, currentTime: number) {
+  return announcement.notice?.actionRequired !== true && !announcement.notice?.affectedCompanyIds?.length &&
+    !announcement.notice?.affectedProfiles?.length && (!announcement.notice?.effectiveAt || Date.parse(announcement.notice.effectiveAt) <= currentTime);
 }

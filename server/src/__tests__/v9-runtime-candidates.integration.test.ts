@@ -3,7 +3,7 @@ import { randomUUID } from "node:crypto";
 import { and, eq } from "drizzle-orm";
 import { afterAll, beforeAll, beforeEach, describe, expect, it } from "vitest";
 import { activityLog, agentConfigurationRuntimeCandidates, agentPresenceRuntimeBindings, agents, authUsers,
-  createDb, heartbeatRuns, orchestrationModelReservations } from "@paperclipai/db";
+  createDb, heartbeatRuns, orchestrationModelReservations, workflowRevisions, workflows } from "@paperclipai/db";
 import { agentRuntimeCandidateService } from "../services/agents/authoring-runtime-candidates.js";
 import { agentAuthoringService } from "../services/agents/authoring-drafts.js";
 import { agentProviderBindingService } from "../services/agent-provider-bindings.js";
@@ -19,6 +19,7 @@ describe("Canonical saved runtime proposals have no live effect", () => {
   let database: Awaited<ReturnType<typeof startEmbeddedPostgresTestDatabase>>, db: ReturnType<typeof createDb>;
   let f: Awaited<ReturnType<typeof seedV5Presences>>, draft: Awaited<ReturnType<ReturnType<typeof agentAuthoringService>["create"]>>;
   let profile: WorkerModelProfile, service: ReturnType<typeof agentRuntimeCandidateService>;
+  let currentProfileConfig: { workerModelProfileId: string; model: string };
   const sourceSha = "a".repeat(40), origin = "https://protected.test.invalid";
   beforeAll(async () => {
     database = await startEmbeddedPostgresTestDatabase("aw-v9-runtime-candidates-"); db = createDb(database.connectionString);
@@ -28,12 +29,14 @@ describe("Canonical saved runtime proposals have no live effect", () => {
   beforeEach(async () => {
     await instanceSettingsService(db).updateExperimental({ agent_packages_v7: true, hire_agent_v9: true, saas_deployment_profile_v6: true, billing_v6: true });
     f = await seedV5Presences(db);
-    const current = { provider: "aw_text_only", model: "current-fixture-model", workerModelProfileId: randomUUID(), maxOutputTokens: 256 };
+    const currentProfileId = randomUUID(), candidateProfileId = randomUUID();
+    const current = { provider: "aw_text_only", model: "current-fixture-model", workerModelProfileId: currentProfileId, maxOutputTokens: 256 };
+    currentProfileConfig = current;
     await db.update(agents).set({ adapterType: "paperclip_runner", adapterConfig: current }).where(eq(agents.id, f.presence.id));
     const providers = agentProviderBindingService(db), binding = await providers.create(f.actor, f.home, f.presence.id,
       { providerType: "paperclip_native", providerAgentRef: f.presence.id, isolationMode: "isolated_per_presence", providerEndpointRef: null });
     const runtime = await providers.attach(f.actor, f.home, f.presence.id, { providerBindingId: binding.id, providerProfileRef: `fixture:${f.presence.id}` });
-    const id = randomUUID(), config = normalizePaperclipRunnerAdapterConfig("paperclip_runner", { ...current, workerModelProfileId: id, model: "alternative-fixture-model" });
+    const id = candidateProfileId, config = normalizePaperclipRunnerAdapterConfig("paperclip_runner", { ...current, workerModelProfileId: id, model: "alternative-fixture-model" });
     const snapshot = makeProviderCapabilitySnapshot(await discoverNativeCapabilities({ companyId: f.home, adapterType: "paperclip_runner", config }));
     profile = { id, companyId: f.home, workerAgentId: f.presence.id, providerBindingId: binding.id, providerSnapshotHash: snapshot.hash,
       providerProfileRef: runtime.providerProfileRef, qualifiedConfigurationHash: hashContextPolicySnapshot({ adapterType: "paperclip_runner", adapterConfig: config }),
@@ -42,8 +45,14 @@ describe("Canonical saved runtime proposals have no live effect", () => {
       inputTokensUpperBound: 1000, maxOutputTokens: 256,
       tariff: { provider: "anthropic", model: String(config.model), currency: "USD", fixedMinor: 3, inputMinorPerMillion: 0, outputMinorPerMillion: 0,
         qualificationHash: "b".repeat(64), sourceSha, testedAt: new Date().toISOString(), expiresAt: new Date(Date.now() + 60000).toISOString() },
-      qualificationEvidenceRef: `${origin}/qualification/software-only.json`, qualificationArtifactSha256: "c".repeat(64) };
-    service = agentRuntimeCandidateService(db, { profiles: [profile], sourceSha, protectedEvidenceOrigin: origin });
+      qualificationEvidenceRef: `${origin}/qualification/software-only.json`, qualificationArtifactSha256: "c".repeat(64),
+      lifecycle: { status: "candidate", owner: "fixture model owner", retirementAt: null, replacementProfileId: null,
+        regionOrRoutingProfile: "fixture-region", dataUseProfile: "fixture-no-training", supportedInputOutput: ["text"],
+        toolUseCapability: false, rateLimits: { requestsPerMinute: 100, tokensPerMinute: 100000 } } };
+    const incumbent = { ...profile, id: currentProfileId, qualifiedConfigurationHash: hashContextPolicySnapshot({ adapterType: "paperclip_runner", adapterConfig: current }),
+      tariff: { ...profile.tariff, model: String(current.model) },
+      lifecycle: { ...profile.lifecycle!, status: "migration_required" as const, replacementProfileId: id } };
+    service = agentRuntimeCandidateService(db, { profiles: [incumbent, profile], sourceSha, protectedEvidenceOrigin: origin });
     draft = await agentAuthoringService(db).create(f.actor, f.home, { requestId: randomUUID(), agentId: f.presence.id });
   });
   const input = () => ({ requestId: randomUUID(), expectedVersion: draft.version, modelProfileId: profile.id });
@@ -51,7 +60,17 @@ describe("Canonical saved runtime proposals have no live effect", () => {
     const agent = (await db.select().from(agents).where(eq(agents.id, f.presence.id)))[0];
     const runtime = await db.select().from(agentPresenceRuntimeBindings).where(eq(agentPresenceRuntimeBindings.agentId, f.presence.id));
     const runs = await db.select().from(heartbeatRuns), liabilities = await db.select().from(orchestrationModelReservations);
+    const workflowId = randomUUID(), revisionId = randomUUID();
+    await db.transaction(async (tx) => {
+      await tx.insert(workflows).values({ id: workflowId, companyId: f.home, name: "Fixture workflow", publishedRevisionId: revisionId });
+      await tx.insert(workflowRevisions).values({ id: revisionId, companyId: f.home, workflowId, revisionNumber: 1, state: "published",
+        graph: { version: 1, nodes: [{ id: "agent-step", type: "agent", name: "Fixture agent", position: { x: 0, y: 0 },
+          config: { agentId: f.presence.id } }], edges: [], variables: [], settings: {} } });
+    });
     const catalog = await service.catalog(f.actor, f.home, draft.id);
+    expect(catalog.lifecycleInventory).toMatchObject({ profileId: currentProfileConfig.workerModelProfileId, model: currentProfileConfig.model,
+      status: "migration_required", replacementProfileId: profile.id, unresolvedProfileReference: false,
+      publishedWorkflows: [{ workflowId, revisionId, name: "Fixture workflow" }] });
     expect(catalog.choices).toEqual([{ modelProfileId: profile.id, model: profile.tariff.model, configurationHash: profile.qualifiedConfigurationHash,
       maxOutputTokens: 256, maximumMinorPerCall: 3, currency: "USD", requiresConformance: true, changesLive: false }]);
     const candidate = await service.create(f.actor, f.home, draft.id, input());
@@ -60,6 +79,15 @@ describe("Canonical saved runtime proposals have no live effect", () => {
     expect((await db.select().from(agents).where(eq(agents.id, f.presence.id)))[0]).toEqual(agent);
     expect(await db.select().from(agentPresenceRuntimeBindings).where(eq(agentPresenceRuntimeBindings.agentId, f.presence.id))).toEqual(runtime);
     expect(await db.select().from(heartbeatRuns)).toEqual(runs); expect(await db.select().from(orchestrationModelReservations)).toEqual(liabilities);
+  });
+  it("reports an unresolved current profile reference without inventing a replacement or dependency link", async () => {
+    const missingProfileId = randomUUID();
+    await db.update(agents).set({ adapterConfig: { provider: "aw_text_only", model: "current-fixture-model",
+      workerModelProfileId: missingProfileId, maxOutputTokens: 256 } }).where(eq(agents.id, f.presence.id));
+    const catalog = await service.catalog(f.actor, f.home, draft.id);
+    expect(catalog.lifecycleInventory).toMatchObject({ profileId: missingProfileId, status: "untracked",
+      unresolvedProfileReference: true, publishedWorkflows: [] });
+    expect(catalog.choices).toEqual([]);
   });
   it("reconciles concurrent original creation without another candidate or activity", async () => {
     const command = input(), result = await Promise.all([service.create(f.actor, f.home, draft.id, command), service.create(f.actor, f.home, draft.id, command)]);

@@ -1,0 +1,219 @@
+{
+  "date": "2026-10-22",
+  "baseCommit": "81d3445b98b1cd80ff400ede6bd44ea71d88d735",
+  "node": "24.21.0",
+  "pnpm": "9.15.4",
+  "vitest": "4.1.11",
+  "softwareEvidenceOnly": true,
+  "sourceHashesObservedAfterTests": {
+    "server/src/middleware/http-log-redaction.ts": "b226a66a6ea4510a3822aa01dec10ab5362e3f265d2208c3d92c17e597e132b2",
+    "server/src/middleware/redact-sensitive.ts": "dc4914ae011c1b165a9114e075cf59ae5aa12ac2669074852582b3616738d88f",
+    "server/src/__tests__/http-log-authentication-boundary.test.ts": "c8bc9844fd66427b7f42e3e528fd763492e45c9aed9afe4a4f0e8a93f85731f4",
+    "ui/src/pages/CompanyAccess.tsx": "2e0070df041a218c44cc7fb31c95f3fde048048208375f318335a7fd561264a5",
+    "ui/src/pages/CompanyAccess.test.tsx": "c2d9362952d2b5cb676ef6c5e517ea406e87812ca1268cdb78fd374ff4d1bbfd",
+    "packages/db/src/client.ts": "a47fa6bf83303012a18ca4c3adb829ddf731a23e1054a3e1f4fb56e3ad187e67",
+    "packages/db/src/transient-write-retry.test.ts": "157fb08b02566a0240313acccf14e69b4f54ae789a28f137dbac0cda30b48c18",
+    "doc/DATABASE.md": "3d3cf2607bbf60748ddeff24f972a5bbd949e8fe67f58dd784090d26318c417d"
+  },
+  "checks": [
+    {
+      "command": "node node_modules/vitest/vitest.mjs run server/src/__tests__/http-log-authentication-boundary.test.ts --maxWorkers=1",
+      "source": "original fork redaction; added regression",
+      "result": "FAIL",
+      "testsFailed": 4,
+      "log": "http-auth-log-boundary-red-1.log.txt"
+    },
+    {
+      "command": "node node_modules/vitest/vitest.mjs run server/src/__tests__/http-log-authentication-boundary.test.ts --maxWorkers=1",
+      "source": "first fix without supported legacy x-openclaw-auth; reviewer regression",
+      "result": "FAIL",
+      "testsFailed": 4,
+      "log": "http-auth-log-legacy-red-1.log.txt"
+    },
+    {
+      "command": "node node_modules/vitest/vitest.mjs run server/src/__tests__/http-log-authentication-boundary.test.ts server/src/__tests__/http-log-redaction.test.ts server/src/__tests__/v9-private-http-logging.test.ts --maxWorkers=1",
+      "source": "final source hashes above",
+      "result": "PASS",
+      "testsPassed": 143,
+      "testFiles": 3,
+      "log": "http-auth-log-boundary-green-2.log.txt"
+    },
+    {
+      "command": "node node_modules/vitest/vitest.mjs run ui/src/pages/CompanyAccess.test.tsx --maxWorkers=1",
+      "source": "original page with new regressions",
+      "result": "FAIL",
+      "testsFailed": 10,
+      "testsPassed": 19,
+      "log": "company-access-red.log.txt"
+    },
+    {
+      "command": "node node_modules/vitest/vitest.mjs run ui/src/pages/CompanyAccess.test.tsx --maxWorkers=1",
+      "source": "final source hashes above",
+      "result": "PASS",
+      "testsPassed": 29,
+      "log": "company-access-final-green.log.txt"
+    },
+    {
+      "command": "node node_modules/vitest/vitest.mjs run packages/db/src/transient-write-retry.test.ts --maxWorkers=1",
+      "source": "original client and retry wrapper; upstream wire regression",
+      "result": "FAIL",
+      "testsFailed": 7,
+      "testsPassed": 1,
+      "log": "db-retry-wire-red.log.txt"
+    },
+    {
+      "command": "node node_modules/vitest/vitest.mjs run packages/db/src/transient-write-retry.test.ts -t \"retains one committed increment\" --maxWorkers=1",
+      "source": "original client and retry wrapper; real PostgreSQL with injected lost acknowledgement",
+      "result": "FAIL",
+      "testsFailed": 1,
+      "deselectedByNameFilter": 8,
+      "observation": "Persisted counter was 3; expected 1.",
+      "log": "db-retry-pg-red.log.txt"
+    },
+    {
+      "command": "node node_modules/vitest/vitest.mjs run packages/db/src/transient-write-retry.test.ts packages/db/src/postgres-connection-recovery.test.ts --maxWorkers=1",
+      "source": "fixed client; before a test-only generic type annotation correction",
+      "result": "PASS",
+      "testsPassed": 21,
+      "testFiles": 2,
+      "log": "db-retry-pg-green.log.txt"
+    },
+    {
+      "command": "pnpm --filter @paperclipai/db typecheck",
+      "result": "FAIL",
+      "reason": "One new test-seam generic PendingQuery type mismatch; retained before correction.",
+      "log": "db-retry-typecheck.log.txt"
+    },
+    {
+      "command": "pnpm --filter @paperclipai/db typecheck",
+      "source": "final source hashes above",
+      "result": "PASS",
+      "log": "db-retry-typecheck-final.log.txt"
+    },
+    {
+      "command": "node node_modules/vitest/vitest.mjs run packages/db/src/transient-write-retry.test.ts -t \"retains one committed increment\" --maxWorkers=1",
+      "source": "final source hashes above",
+      "result": "PASS",
+      "testsPassed": 1,
+      "deselectedByNameFilter": 8,
+      "observation": "Persisted counter remains 1; caller receives ambiguous failure.",
+      "log": "db-retry-pg-final-green.log.txt"
+    },
+    {
+      "command": "pnpm --filter @paperclipai/ui typecheck",
+      "result": "FAIL",
+      "reason": "Existing plugin SDK dist exports had not yet been built after environment replacement.",
+      "log": "recovery-ui-typecheck-1.log.txt"
+    },
+    {
+      "command": "pnpm --filter @paperclipai/plugin-sdk build",
+      "result": "PASS",
+      "log": "recovery-plugin-sdk-build-1.log.txt"
+    },
+    {
+      "command": "pnpm --filter @paperclipai/ui typecheck",
+      "source": "unchanged final CompanyAccess source hashes above",
+      "result": "PASS",
+      "log": "recovery-ui-typecheck-2.log.txt"
+    },
+    {
+      "command": "pnpm check:token-gates",
+      "result": "PASS",
+      "log": "recovery-ui-token-gates-1.log.txt"
+    }
+  ],
+  "logs": [
+    {
+      "path": "doc/operations/aw-v10-evidence/recovery-2026-10-22/http-auth-log-boundary-red-1.log.txt",
+      "sha256": "d916936d56d38e17ccb538902c161e3fd08de67c4cc69f969afd0eb7c85fd477",
+      "sizeBytes": 9153
+    },
+    {
+      "path": "doc/operations/aw-v10-evidence/recovery-2026-10-22/http-auth-log-legacy-red-1.log.txt",
+      "sha256": "1f0442034b557e21f6ae42302c7d6bc8bdc31cbed8f4e98e41dd719c7976f181",
+      "sizeBytes": 8404
+    },
+    {
+      "path": "doc/operations/aw-v10-evidence/recovery-2026-10-22/http-auth-log-boundary-green-2.log.txt",
+      "sha256": "bb4f95942f3d8767268dd0193e951750998ec46b208aa270e89931374fac01bc",
+      "sizeBytes": 521
+    },
+    {
+      "path": "doc/operations/aw-v10-evidence/recovery-2026-10-22/company-access-red.log.txt",
+      "sha256": "b39c898d79d8b5738618bfe2c7548f77e95ccbed0f630a847a1accb1553061a3",
+      "sizeBytes": 7043
+    },
+    {
+      "path": "doc/operations/aw-v10-evidence/recovery-2026-10-22/company-access-final-green.log.txt",
+      "sha256": "cc7b0fb52436ae13e3cfdf417c3ce012e3d31fac71a9e2b6b1f0933a85a16bcf",
+      "sizeBytes": 523
+    },
+    {
+      "path": "doc/operations/aw-v10-evidence/recovery-2026-10-22/db-retry-wire-red.log.txt",
+      "sha256": "bfd84e3076126060981b9711abedbcabeeef7d98220322c60102d8e33aad09b9",
+      "sizeBytes": 3724
+    },
+    {
+      "path": "doc/operations/aw-v10-evidence/recovery-2026-10-22/db-retry-pg-red.log.txt",
+      "sha256": "a4093af5437c07098171840a80490aab1f7d74f0b504e38e2a5cc7893dff956c",
+      "sizeBytes": 1428
+    },
+    {
+      "path": "doc/operations/aw-v10-evidence/recovery-2026-10-22/db-retry-pg-green.log.txt",
+      "sha256": "fdb39c789c04954e0a9c9e84cc08fac6bffedfcc8965e33a36483654ffccac24",
+      "sizeBytes": 518
+    },
+    {
+      "path": "doc/operations/aw-v10-evidence/recovery-2026-10-22/db-retry-pg-final-green.log.txt",
+      "sha256": "c1acd823e96f17991a333aa1713c43ffd87868582629381ba4273ff5ea9500bb",
+      "sizeBytes": 528
+    },
+    {
+      "path": "doc/operations/aw-v10-evidence/recovery-2026-10-22/db-retry-typecheck.log.txt",
+      "sha256": "1aaab87bcf2a89e4f3401864ec9021e9642bad68c6852f80ac26bc0441635b12",
+      "sizeBytes": 2643
+    },
+    {
+      "path": "doc/operations/aw-v10-evidence/recovery-2026-10-22/db-retry-typecheck-final.log.txt",
+      "sha256": "d2be944d049061005c38b2f822647334d1d700a86e136ca6b4e751e84b98aa9d",
+      "sizeBytes": 381
+    },
+    {
+      "path": "doc/operations/aw-v10-evidence/recovery-2026-10-22/recovery-ui-typecheck-1.log.txt",
+      "sha256": "260a75475f3bc3908bfd243bde6314157c3dd618a94e8b9c130d6e89f2c4a3d8",
+      "sizeBytes": 861
+    },
+    {
+      "path": "doc/operations/aw-v10-evidence/recovery-2026-10-22/recovery-plugin-sdk-build-1.log.txt",
+      "sha256": "d6505e5a64c75c793a9bd7c06d1813b73722e4cdf8f23290daa21066c51bef91",
+      "sizeBytes": 307
+    },
+    {
+      "path": "doc/operations/aw-v10-evidence/recovery-2026-10-22/recovery-ui-typecheck-2.log.txt",
+      "sha256": "95d09526415f43fb0567543e66baf52e473a4f2dedb40ab03dc04279fd41a946",
+      "sizeBytes": 72
+    },
+    {
+      "path": "doc/operations/aw-v10-evidence/recovery-2026-10-22/recovery-ui-token-gates-1.log.txt",
+      "sha256": "f1bbe1d658e0e0452af08eeceed4d4965c78193b8d5557fe7e4cd0606a8bff53",
+      "sizeBytes": 539
+    }
+  ],
+  "review": {
+    "model": "gpt-6.1-sol",
+    "reasoning": "medium",
+    "uiReviewer": "db_retry_rebuild (did not author UI)",
+    "loggingReviewer": "account_privacy_rebuild (did not author logging)",
+    "loggingFinding": "Missing supported legacy x-openclaw-auth bearer; fixed, regression reproduced, reviewer closure confirmed.",
+    "scope": "Source review; not independent physical, human usability or staging qualification.",
+    "dbReviewer": "account_privacy_rebuild (did not author DB); raw client, registry preservation, wrapper removal, test seam and documentation reviewed, no concrete blocker found."
+  },
+  "limitations": [
+    "Whole-repository typecheck, test and build have not passed in this reconstructed environment.",
+    "No physical runtime, live provider, browser, accessibility, billing, external channel or beta acceptance is established.",
+    "Earlier lost V10 test receipts are not applied to this source.",
+    "Local PostgreSQL acknowledgement loss is deliberately injected after a real commit; this is not deployed provider or physical network qualification."
+  ],
+  "sourceComplete": false,
+  "prReady": false
+}

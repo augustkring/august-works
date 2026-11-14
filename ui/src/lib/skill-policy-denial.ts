@@ -1,3 +1,4 @@
+import { PRODUCT_IDENTITY } from "@paperclipai/shared/product-identity";
 /**
  * @fileoverview Classifies a failed skill mutation into the four visual states
  * from the Phase 3 UX spec (PAP-13865 / §9.10 Company Skill Policy Contract).
@@ -79,7 +80,7 @@ const PLATFORM_REMEDIATIONS: Record<string, string> = {
   skill_authentication_required: "Sign in and try again.",
   skill_company_boundary_denied: "Open the skill from the organization that owns it.",
   skill_workspace_boundary_denied:
-    "Import from a configured Paperclip workspace or the organization managed-skill directory.",
+    `Import from a configured ${PRODUCT_IDENTITY.productName} workspace or the organization managed-skill directory.`,
   skill_source_validation_failed: "Fix the flagged source and retry.",
   skill_unsafe_content_blocked:
     "Remove the fetch-and-execute or unsafe pattern before saving.",

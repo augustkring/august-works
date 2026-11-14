@@ -1,0 +1,41 @@
+{
+  "cacheAdvice": [
+    {
+      "elapsedSeconds": 4.003349809005158,
+      "filesAdvised": 512086,
+      "memoryAfter": 5942644736,
+      "contentChanged": false
+    }
+  ],
+  "steps": [
+    {
+      "command": [
+        "node",
+        "scripts/check-token-gates.mjs"
+      ],
+      "exit": 0,
+      "seconds": 1.4236237659933977,
+      "peakGroupRssBytes": 42528768,
+      "stopped": null
+    },
+    {
+      "command": [
+        "node",
+        "node_modules/vitest/vitest.mjs",
+        "run",
+        "--config",
+        "/workspace/blentera-v10/ui/vitest.config.ts",
+        "--root",
+        "ui",
+        "--maxWorkers=1",
+        "src/pages/SaasOperations.test.tsx"
+      ],
+      "exit": 0,
+      "seconds": 5.022003512014635,
+      "peakGroupRssBytes": 754692096,
+      "stopped": null
+    }
+  ],
+  "memoryBefore": "low 0\nhigh 0\nmax 0\noom 0\noom_kill 0\noom_group_kill 0\n",
+  "memoryAfter": "low 0\nhigh 0\nmax 0\noom 0\noom_kill 0\noom_group_kill 0\n"
+}

@@ -2,6 +2,7 @@ import { mockedCodexAdapterConfig } from "./helpers/mocked-codex-config.js";
 import { randomUUID } from "node:crypto";
 import { and, eq } from "drizzle-orm";
 import { afterAll, afterEach, beforeAll, describe, expect, it, vi } from "vitest";
+import { admitMockedLegacyDispatch, resetMockedLegacyDispatch } from "./helpers/mocked-legacy-paid-dispatch.js";
 import {
   activityLog,
   agents,
@@ -15,6 +16,7 @@ import {
   heartbeatRuns,
   issueComments,
   issues,
+  principalPermissionGrants,
 } from "@paperclipai/db";
 import {
   getEmbeddedPostgresTestSupport,
@@ -23,6 +25,7 @@ import {
 import { heartbeatService } from "../services/heartbeat.ts";
 import { runningProcesses } from "../adapters/index.ts";
 import { drainHeartbeatRunsToQuiescence } from "./helpers/drain-heartbeat-runs.js";
+import { installHeartbeatApiUrlFixture, seedHeartbeatResponsibleHuman } from "./helpers/heartbeat-runtime-fixtures.js";
 
 const mockAdapterExecute = vi.hoisted(() =>
   vi.fn(async () => ({
@@ -79,12 +82,20 @@ async function deleteHeartbeatRunsAfterEvents(db: ReturnType<typeof createDb>) {
   }
 }
 
+// Mocked legacy dispatch: see helpers/mocked-legacy-paid-dispatch.ts. Tests that
+// check the real refusal of unsupported legacy transports do not opt in.
+vi.mock("../services/native-runtime/paid-transport-admission.js", async (importOriginal) =>
+  (await import("./helpers/mocked-legacy-paid-dispatch.js")).withMockedLegacyDispatchAdmission(await importOriginal()));
+afterEach(() => resetMockedLegacyDispatch());
+
 describeEmbeddedPostgres("heartbeat responsible-user invariant", () => {
   let db!: ReturnType<typeof createDb>;
   let heartbeat!: ReturnType<typeof heartbeatService>;
   let tempDb: Awaited<ReturnType<typeof startEmbeddedPostgresTestDatabase>> | null = null;
+  let restoreApiUrl: (() => void) | null = null;
 
   beforeAll(async () => {
+    restoreApiUrl = installHeartbeatApiUrlFixture();
     tempDb = await startEmbeddedPostgresTestDatabase("paperclip-heartbeat-responsible-user-");
     db = createDb(tempDb.connectionString);
     heartbeat = heartbeatService(db);
@@ -118,10 +129,12 @@ describeEmbeddedPostgres("heartbeat responsible-user invariant", () => {
     await db.delete(agents);
     await db.delete(companySkills);
     await db.delete(companyMemberships);
+    await db.delete(principalPermissionGrants);
     await db.delete(companies);
   });
 
   afterAll(async () => {
+    restoreApiUrl?.();
     await tempDb?.cleanup();
   }, 60_000);
 
@@ -136,13 +149,7 @@ describeEmbeddedPostgres("heartbeat responsible-user invariant", () => {
       issuePrefix: `R${companyId.replace(/-/g, "").slice(0, 6).toUpperCase()}`,
       defaultResponsibleUserId: ownerUserId,
     });
-    await db.insert(companyMemberships).values({
-      companyId,
-      principalType: "user",
-      principalId: ownerUserId,
-      membershipRole: "owner",
-      status: "active",
-    });
+    await seedHeartbeatResponsibleHuman(db, companyId, ownerUserId, "owner");
     await db.insert(agents).values({
       id: agentId,
       companyId,
@@ -159,10 +166,10 @@ describeEmbeddedPostgres("heartbeat responsible-user invariant", () => {
   }
 
   it("dispatches an interrupted queue under the clicking operator through the real startup path", async () => {
+    admitMockedLegacyDispatch(["codex_local"]);
     const { companyId, agentId, ownerUserId } = await seedCompany();
     const operatorId = `operator-${randomUUID()}`, issueId = randomUUID(), commentId = randomUUID(), queueId = randomUUID();
-    await db.insert(companyMemberships).values({ companyId, principalType: "user", principalId: operatorId,
-      membershipRole: "operator", status: "active" });
+    await seedHeartbeatResponsibleHuman(db, companyId, operatorId, "operator");
     await db.insert(issues).values({ id: issueId, companyId, title: "Interrupted queue", status: "todo",
       assigneeAgentId: agentId, responsibleUserId: ownerUserId });
     await db.insert(issueComments).values({ id: commentId, companyId, issueId, authorUserId: ownerUserId, body: "Continue the task" });
@@ -188,10 +195,10 @@ describeEmbeddedPostgres("heartbeat responsible-user invariant", () => {
   });
 
   it("keeps a board manual wake under its caller even when it adopts someone else's queue", async () => {
+    admitMockedLegacyDispatch(["codex_local"]);
     const { companyId, agentId, ownerUserId } = await seedCompany();
     const operatorId = `operator-${randomUUID()}`, issueId = randomUUID(), commentId = randomUUID(), queueId = randomUUID();
-    await db.insert(companyMemberships).values({ companyId, principalType: "user", principalId: operatorId,
-      membershipRole: "operator", status: "active" });
+    await seedHeartbeatResponsibleHuman(db, companyId, operatorId, "operator");
     await db.insert(issues).values({ id: issueId, companyId, title: "Manual wake", status: "todo",
       assigneeAgentId: agentId, responsibleUserId: ownerUserId });
     await db.insert(issueComments).values({ id: commentId, companyId, issueId, authorUserId: ownerUserId, body: "Pending work" });
@@ -211,10 +218,10 @@ describeEmbeddedPostgres("heartbeat responsible-user invariant", () => {
   });
 
   it("keeps the clicking user when a manual wake merges into an older deferred receipt", async () => {
+    admitMockedLegacyDispatch(["codex_local"]);
     const { companyId, agentId, ownerUserId } = await seedCompany();
     const operatorId = `operator-${randomUUID()}`, issueId = randomUUID(), commentId = randomUUID(), queueId = randomUUID();
-    await db.insert(companyMemberships).values({ companyId, principalType: "user", principalId: operatorId,
-      membershipRole: "operator", status: "active" });
+    await seedHeartbeatResponsibleHuman(db, companyId, operatorId, "operator");
     await db.insert(issues).values({ id: issueId, companyId, title: "Deferred manual wake", status: "todo",
       assigneeAgentId: agentId, responsibleUserId: ownerUserId });
     let finish!: () => void;
@@ -248,10 +255,10 @@ describeEmbeddedPostgres("heartbeat responsible-user invariant", () => {
   });
 
   it("starts an unscoped manual wake with its own user instead of joining another user's run", async () => {
+    admitMockedLegacyDispatch(["codex_local"]);
     const { companyId, agentId, ownerUserId } = await seedCompany();
     const operatorId = `operator-${randomUUID()}`;
-    await db.insert(companyMemberships).values({ companyId, principalType: "user", principalId: operatorId,
-      membershipRole: "operator", status: "active" });
+    await seedHeartbeatResponsibleHuman(db, companyId, operatorId, "operator");
     let finish!: () => void;
     const blocked = new Promise<void>(resolve => { finish = resolve; });
     const execute = mockAdapterExecute.getMockImplementation()!;
@@ -284,20 +291,32 @@ describeEmbeddedPostgres("heartbeat responsible-user invariant", () => {
     expect(await db.select().from(heartbeatRuns)).toHaveLength(0);
   });
 
-  it("does not accept a caller-supplied manual-wake authority marker", async () => {
+  it("strips caller-supplied manual authority before refusing an unsupported legacy transport", async () => {
     const { companyId, agentId, ownerUserId } = await seedCompany();
     const run = await heartbeat.wakeup(agentId, { source: "on_demand", triggerDetail: "manual",
       requestedByActorType: "agent", requestedByActorId: agentId, payload: { manualUserWake: true },
       contextSnapshot: { responsibleUserId: ownerUserId } });
-    expect((await waitForRun(db, run!.id))?.status).toBe("succeeded");
+    const completed = await waitForRun(db, run!.id);
+    expect(completed).toMatchObject({ status: "failed", responsibleUserId: ownerUserId,
+      errorCode: "configuration_incomplete", resultJson: {
+        configurationIncomplete: { reason: "paid_transport_unqualified", owner: "Managed model gateway owner",
+          provider: "codex_local" },
+        executionRecovery: { kind: "bootstrap", providerWorkStarted: false },
+      } });
+    expect(mockAdapterExecute).not.toHaveBeenCalled();
     const [wake] = await db.select().from(agentWakeupRequests).where(eq(agentWakeupRequests.id, run!.wakeupRequestId!));
     expect(wake.payload?.manualUserWake).toBeUndefined();
+    expect(wake.requestedByActorType).toBe("agent");
+    expect(await db.select().from(heartbeatRuns)).toHaveLength(1);
   });
 
   it("uses the issue responsible user for automated dependency wakes without a message context", async () => {
+    admitMockedLegacyDispatch(["codex_local"]);
     const { companyId, agentId } = await seedCompany();
     const issueResponsibleUserId = `issue-owner-${randomUUID()}`;
     const commenterUserId = `commenter-${randomUUID()}`;
+    await seedHeartbeatResponsibleHuman(db, companyId, issueResponsibleUserId, "owner");
+    await seedHeartbeatResponsibleHuman(db, companyId, commenterUserId, "owner");
     const issueId = randomUUID();
     await db.insert(issues).values({
       id: issueId,
@@ -348,12 +367,16 @@ describeEmbeddedPostgres("heartbeat responsible-user invariant", () => {
     expect(mockAdapterExecute).toHaveBeenCalledTimes(runs.length);
   });
 
+  // Seed ownership survives unsupported-transport refusal. This does not
+  // admit a Native wake whose requester differs from its persisted author.
   it.each(["issue_commented", "issue_comment_mentioned"])(
-    "uses the persisted message author for %s without changing issue ownership",
+    "keeps the persisted comment author as responsible user and refuses unsupported legacy dispatch for %s",
     async (wakeReason) => {
       const { companyId, agentId } = await seedCompany();
       const issueResponsibleUserId = `issue-owner-${randomUUID()}`;
       const commenterUserId = `commenter-${randomUUID()}`;
+      await seedHeartbeatResponsibleHuman(db, companyId, issueResponsibleUserId, "owner");
+      await seedHeartbeatResponsibleHuman(db, companyId, commenterUserId, "owner");
       const issueId = randomUUID();
       const commentId = randomUUID();
       await db.insert(issues).values({
@@ -385,20 +408,26 @@ describeEmbeddedPostgres("heartbeat responsible-user invariant", () => {
 
       expect(run).not.toBeNull();
       const completed = await waitForRun(db, run!.id);
-      expect(completed?.status).toBe("succeeded");
-      expect(completed?.responsibleUserId).toBe(commenterUserId);
+      expect(completed).toMatchObject({ status: "failed", responsibleUserId: commenterUserId,
+        errorCode: "configuration_incomplete", resultJson: {
+          configurationIncomplete: { reason: "paid_transport_unqualified", owner: "Managed model gateway owner",
+            provider: "codex_local" },
+          executionRecovery: { kind: "bootstrap", providerWorkStarted: false },
+        } });
       const [issue] = await db.select().from(issues).where(eq(issues.id, issueId));
       expect(issue?.responsibleUserId).toBe(issueResponsibleUserId);
       await drainHeartbeatRunsToQuiescence(db, heartbeat);
       const runs = await db.select().from(heartbeatRuns).where(eq(heartbeatRuns.companyId, companyId));
-      expect(runs.every(row => row.responsibleUserId === commenterUserId)).toBe(true);
-      expect(mockAdapterExecute).toHaveBeenCalledTimes(runs.length);
+      expect(runs).toHaveLength(1);
+      expect(runs.map(row => row.responsibleUserId)).toEqual([commenterUserId]);
+      expect(mockAdapterExecute).not.toHaveBeenCalled();
     },
   );
 
   it("uses the triggering user for manual UI/API runs", async () => {
-    const { agentId } = await seedCompany();
+    const { companyId, agentId } = await seedCompany();
     const triggeringUserId = `manual-${randomUUID()}`;
+    await seedHeartbeatResponsibleHuman(db, companyId, triggeringUserId, "owner");
     const run = await heartbeat.wakeup(agentId, {
       source: "on_demand",
       triggerDetail: "manual",

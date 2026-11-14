@@ -8,6 +8,8 @@ import { ensureManagedProjectWorkspace, prepareProjectRepositoryWorkspaces } fro
 import { buildGitAuthInvocation, GIT_CREDENTIAL_TOKEN_ENV_KEY } from "../services/git-credentials.ts";
 import { sanitizeRuntimeServiceBaseEnv } from "../services/workspace-runtime.ts";
 import { resolveManagedProjectWorkspaceDir } from "../home-paths.ts";
+import { materializeManagedProjectWorkspace } from "../services/managed-repository-checkout.js";
+import { forbidden } from "../errors.js";
 
 const execFile = promisify(execFileCallback);
 
@@ -38,6 +40,85 @@ async function createLocalSourceRepo() {
 }
 
 describe("ensureManagedProjectWorkspace clone credentials", () => {
+  it("fails closed when exact-source inspection is requested without a repository URL", async () => {
+    const parent = path.join(tempHome, "inspection-without-source");
+    const destination = path.join(parent, "workspace");
+    const beforePublish = vi.fn(async () => {});
+
+    await expect(materializeManagedProjectWorkspace(destination, {
+      repoUrl: null,
+      beforePublish,
+    })).rejects.toThrow("Exact saved-source inspection requires a repository URL");
+
+    expect(beforePublish).not.toHaveBeenCalled();
+    await expect(fs.access(destination)).rejects.toMatchObject({ code: "ENOENT" });
+    await expect(fs.access(parent)).rejects.toMatchObject({ code: "ENOENT" });
+  });
+
+  it("fails closed rather than adopting a non-Git directory when exact inspection is requested", async () => {
+    const source = await createLocalSourceRepo();
+    const destination = path.join(tempHome, "inspection-existing-non-git");
+    const beforePublish = vi.fn(async () => {});
+    try {
+      await fs.mkdir(destination, { recursive: true });
+      await fs.writeFile(path.join(destination, "operator-data.txt"), "keep this directory\n", "utf8");
+
+      await expect(materializeManagedProjectWorkspace(destination, {
+        repoUrl: source,
+        beforePublish,
+      })).rejects.toThrow("An existing non-Git directory cannot bypass exact saved-source inspection");
+
+      expect(beforePublish).not.toHaveBeenCalled();
+      await expect(fs.readFile(path.join(destination, "operator-data.txt"), "utf8"))
+        .resolves.toBe("keep this directory\n");
+      expect((await fs.readdir(tempHome)).filter(name => name.startsWith(`${path.basename(destination)}.clone-`))).toEqual([]);
+    } finally {
+      await fs.rm(source, { recursive: true, force: true });
+    }
+  });
+
+  it("publishes the exact saved commit after the source advances", async () => {
+    const source = await createLocalSourceRepo();
+    const destination = path.join(tempHome, "exact-saved-commit");
+    try {
+      const saved = (await execFile("git", ["rev-parse", "HEAD"], { cwd: source })).stdout.trim();
+      await fs.writeFile(path.join(source, "README.md"), "later upstream content\n");
+      await execFile("git", ["commit", "-am", "advance upstream"], { cwd: source });
+      await materializeManagedProjectWorkspace(destination, { repoUrl: source,
+        beforePublish: async clone => {
+          expect(clone).not.toBe(destination);
+          await execFile("git", ["checkout", "--detach", saved], { cwd: clone });
+        } });
+      expect((await execFile("git", ["rev-parse", "HEAD"], { cwd: destination })).stdout.trim()).toBe(saved);
+      expect(await fs.readFile(path.join(destination, "README.md"), "utf8")).toBe("hello\n");
+    } finally { await fs.rm(source, { recursive: true, force: true }); }
+  });
+
+  it.each(["source_denied", "competing_checkout"])("preserves existing work when exact publication fails: %s", async failure => {
+    const source = await createLocalSourceRepo();
+    const destination = path.join(tempHome, `publication-${failure}`);
+    try {
+      const pending = materializeManagedProjectWorkspace(destination, { repoUrl: source,
+        beforePublish: async () => {
+          if (failure === "source_denied") throw forbidden("The original source owner rejected publication");
+          await execFile("git", ["clone", source, destination]);
+          await fs.writeFile(path.join(destination, "customer-work.txt"), "preserve the winning checkout\n");
+        } });
+      if (failure === "source_denied") {
+        await expect(pending).rejects.toMatchObject({ status: 403 });
+        await expect(fs.access(destination)).rejects.toMatchObject({ code: "ENOENT" });
+      } else {
+        await expect(pending).rejects.toThrow("Failed to move managed checkout");
+        expect(await fs.readFile(path.join(destination, "customer-work.txt"), "utf8")).toBe("preserve the winning checkout\n");
+        await expect(materializeManagedProjectWorkspace(destination, { repoUrl: source, beforePublish: async () => {} }))
+          .rejects.toThrow("existing checkout requires exact saved-source inspection");
+        expect(await fs.readFile(path.join(destination, "customer-work.txt"), "utf8")).toBe("preserve the winning checkout\n");
+      }
+      expect((await fs.readdir(tempHome)).filter(name => name.startsWith(`${path.basename(destination)}.clone-`))).toEqual([]);
+      expect(await fs.readFile(path.join(source, "README.md"), "utf8")).toBe("hello\n");
+    } finally { await fs.rm(source, { recursive: true, force: true }); }
+  });
+
   it("materializes every repository-only project row inside the task workspace and reuses local edits", async () => {
     const first = await createLocalSourceRepo();
     const second = await createLocalSourceRepo();

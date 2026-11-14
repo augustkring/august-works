@@ -1,0 +1,35 @@
+{
+  "scope": "Factual recipient and explicit operator terms in original feedback UI; canonical sign-out product label",
+  "sources": {
+    "ui/src/components/OutputFeedbackButtons.tsx": "af0e93bb202853bf792cbf693141ff00056f561fc192b3c24203854ccfd09108",
+    "ui/src/components/AgentBubbleActionRow.tsx": "5a5386914dad118da2b80191b05b352743a80552c228a5070fd739e5dfb5cddf",
+    "ui/src/pages/InstanceGeneralSettings.tsx": "e940e487eaa464ee424246abd24f2cb92380786c05abb0e13a1747f1f7f43aac",
+    "ui/src/pages/InstanceGeneralSettings.test.tsx": "22c4079117b228bbc8c6cde4793c50ffa7fa7ddd7feacc1b89666f86f9d6c7e7",
+    "ui/src/pages/IssueDetail.tsx": "8be44f0a61787fe84a5d049ccdcbc2d40ca7fd0626f8f4ef2d062fcd32914af5"
+  },
+  "implementation": "Original two consent dialogs and General Settings describe the operator-selected feedback service, matching the existing explicitly configured export owner. General Settings and Issue Detail retain only explicitly configured VITE_FEEDBACK_TERMS_URL; remove the implicit upstream legal terms fallback. Reuse PRODUCT_IDENTITY for sign-out. Existing local policy gate and vote/save/export behavior unchanged.",
+  "verification": {
+    "existingSuites": {
+      "files": 3,
+      "passed": 134,
+      "seconds": 59.79,
+      "exit": 0,
+      "log": "feedback-recipient-copy-tests.log"
+    },
+    "uiTypecheck": {
+      "exit": 0,
+      "log": "feedback-recipient-copy-ui-types.log"
+    },
+    "tokenGates": {
+      "exit": 0,
+      "log": "feedback-recipient-copy-token-gates.log"
+    },
+    "pinsMatch": true,
+    "processesClosed": true
+  },
+  "limits": [
+    "Existing consent scope and destination-change consent qualification are not established by this wording correction.",
+    "No legal entity, processor approval, hosted export or terms validity is asserted.",
+    "Complete V10 implementation and latest full workspace checks remain open."
+  ]
+}

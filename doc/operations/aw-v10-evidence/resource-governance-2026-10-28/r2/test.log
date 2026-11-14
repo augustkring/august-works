@@ -1,0 +1,19 @@
+(!) Your Vite config uses features that are unsupported by `configLoader: 'native'`, which is planned to become the default in a future major version of Vite:
+  - `__dirname` (vitest.config.ts:7:25). Use `import.meta.dirname` instead
+Set `VITE_CONFIG_NATIVE_IGNORE_WARNING=true` to suppress this warning.
+
+ RUN  v4.1.11 /workspace/blentera-v10
+
+ ↓ |@paperclipai/server| src/__tests__/v7-free-core.integration.test.ts > V7 permanent Free Core and canonical capacity > activates permanent Core without a subscription, checkout or payment card
+ ↓ |@paperclipai/server| src/__tests__/v7-free-core.integration.test.ts > V7 permanent Free Core and canonical capacity > serializes simultaneous run admissions and releases capacity only through canonical status
+ ✓ |@paperclipai/server| src/__tests__/v7-free-core.integration.test.ts > V7 permanent Free Core and canonical capacity > keeps the company run ceiling isolated when one tenant is saturated 134ms
+ ↓ |@paperclipai/server| src/__tests__/v7-free-core.integration.test.ts > V7 permanent Free Core and canonical capacity > composes paid capacity over Free and returns to usable Free on cancellation without deleting state
+ ↓ |@paperclipai/server| src/__tests__/v7-free-core.integration.test.ts > V7 permanent Free Core and canonical capacity > prevents storage expansion above the new allowance while preserving existing customer objects
+ ↓ |@paperclipai/server| src/__tests__/v7-free-core.integration.test.ts > V7 permanent Free Core and canonical capacity > fences only the actual managed presence before remote cancellation and retries a lost acknowledgement
+ ↓ |@paperclipai/server| src/__tests__/v7-free-core.integration.test.ts > V7 permanent Free Core and canonical capacity > does not grant core or paid compute to a suspended billing account
+
+ Test Files  1 passed (1)
+      Tests  1 passed | 6 skipped (7)
+   Start at  10:33:58
+   Duration  19.20s (transform 10.38s, setup 70ms, import 14.94s, tests 4.08s, environment 0ms)
+

@@ -1,0 +1,59 @@
+{
+  "cacheAdvice": [
+    {
+      "elapsedSeconds": 2.5475713620253373,
+      "filesAdvised": 372685,
+      "memoryAfter": 6133100544,
+      "contentChanged": false,
+      "activeTemporaryWorkspacesExcluded": true
+    }
+  ],
+  "harnessSha256": "bafea5850649c61ca27cbe7f37c1f0182382e11d0a38cd14e288f9b9d4fd4649",
+  "command": [
+    "node",
+    "/workspace/blentera-v10/node_modules/vitest/vitest.mjs",
+    "run",
+    "--config",
+    "vitest.config.ts",
+    "src/__tests__/heartbeat-context-summary.test.ts"
+  ],
+  "cwd": "/workspace/blentera-v10/server",
+  "leaseWaitSeconds": 4.260402056388557e-05,
+  "sourceManifest": "bounded-chat-handoff-context-regression-r510-source-manifest.json",
+  "filesystemFloorBytes": {
+    "/workspace": 122880000,
+    "/tmp": 1073741824
+  },
+  "globalMemoryReserveBytes": 2147483648,
+  "exit": 0,
+  "seconds": 15.862845563009614,
+  "stopReason": null,
+  "nodeHeapMiB": 1536,
+  "ownedDescendantRssLimitBytes": 8589934592,
+  "observedPeakOwnedDescendantRssBytes": 1561194496,
+  "processRssAtObservedPeak": [
+    {
+      "pid": 674450,
+      "parentPid": 674398,
+      "executable": "node",
+      "rssBytes": 860131328,
+      "nodeOptions": "--max-old-space-size=1536"
+    },
+    {
+      "pid": 674474,
+      "parentPid": 674450,
+      "executable": "node",
+      "rssBytes": 701063168,
+      "nodeOptions": "--max-old-space-size=1536"
+    }
+  ],
+  "rssAccounting": "sum of per-process RSS, including shared pages in each mapped process; sampled observation, not unique physical memory",
+  "trackedPidCount": 2,
+  "observedPostgresRelatedPids": [],
+  "uniqueTempRoot": "/var/tmp/mpg-t5y5ckzh",
+  "samplingIntervalSeconds": 0.2,
+  "samples": 67,
+  "memoryBefore": "low 0\nhigh 0\nmax 0\noom 0\noom_kill 0\noom_group_kill 0\n",
+  "memoryAfter": "low 0\nhigh 0\nmax 0\noom 0\noom_kill 0\noom_group_kill 0\n",
+  "qualification": "controlled component modules, no PostgreSQL process observed; no external provider/SDK/host proof"
+}

@@ -1,0 +1,302 @@
+(!) Your Vite config uses features that are unsupported by `configLoader: 'native'`, which is planned to become the default in a future major version of Vite:
+  - `__dirname` (vitest.config.ts:7:25). Use `import.meta.dirname` instead
+Set `VITE_CONFIG_NATIVE_IGNORE_WARNING=true` to suppress this warning.
+
+ RUN  v4.1.11 /workspace/blentera-v10
+
+ ❯ |@paperclipai/server| src/__tests__/v10-private-payload.integration.test.ts (11 tests | 4 failed | 7 skipped) 15609ms
+     × rechecks source authority after waiting for the selected task row without a version change 563ms
+     × withholds Memory captured by the same agent for another human, ignoring copied producer metadata 297ms
+     × does not classify unqualified historical Memory as publicly readable 106ms
+     × withholds captured Memory after its source membership is suspended 108ms
+
+⎯⎯⎯⎯⎯⎯⎯ Failed Tests 4 ⎯⎯⎯⎯⎯⎯⎯
+
+ FAIL  |@paperclipai/server| src/__tests__/v10-private-payload.integration.test.ts > Private ordinary payloads retain current source authority without analytical roots > rechecks source authority after waiting for the selected task row without a version change
+AssertionError: expected { value: { manifest: { …(9) }, …(1) } } to match object { error: { status: 403 } }
+(3 matching properties omitted from actual)
+
+- Expected
++ Received
+
+  {
+-   "error": {
+-     "status": 403,
++   "value": {
++     "items": [
++       {
++         "authorityDomain": "task_state",
++         "companyId": "27193d00-9ba2-4d06-8309-93a65ee926e8",
++         "contentHash": "2b14cc34a690bf6a5e1009efc988afabe74621d5d3ff104c3ef05c3ece8a7485",
++         "createdAt": 2026-10-22T20:27:52.845Z,
++         "id": "3d496039-5e63-42f0-9458-1a7874151470",
++         "manifestId": "3ffc5377-820f-41a1-8853-fd37801ba9fa",
++         "rank": 0,
++         "retrievalScore": null,
++         "selectionReason": "preferred_authority",
++         "sensitivity": "internal",
++         "sourceClass": "task",
++         "sourceProvider": "august_works_tasks",
++         "sourceRef": "issue://a31d0607-4931-424f-9071-a254fe360d3f",
++         "sourceVersion": "2026-10-22T20:27:52.625Z",
++         "trustLevel": "high",
++       },
++     ],
++     "manifest": {
++       "agentId": "005b79d6-18cc-46cf-81be-a27cc9039851",
++       "companyId": "27193d00-9ba2-4d06-8309-93a65ee926e8",
++       "createdAt": 2026-10-22T20:27:52.845Z,
++       "id": "3ffc5377-820f-41a1-8853-fd37801ba9fa",
++       "issueId": "a31d0607-4931-424f-9071-a254fe360d3f",
++       "policySnapshotHash": "44136fa355b3678a1146ad16f7e8649e94fb4fc21fe77e8310c060f61caaff8a",
++       "projectId": null,
++       "queryHash": "50d948d8b62e66211540c26a56c919166aed1559407975b06e5b6d5d8b1e97dc",
++       "runId": "957d0581-499d-4bb2-80e8-cadaa57409b5",
++     },
+    },
+  }
+
+ ❯ src/__tests__/v10-private-payload.integration.test.ts:182:27
+    180|       ));
+    181|     }finally{release();await blocker;}
+    182|     expect(await pending).toMatchObject({error:{status:403}});
+       |                           ^
+    183|     expect(await db.select().from(contextManifests).where(eq(contextMa…
+    184|   });
+
+⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯[1/4]⎯
+
+ FAIL  |@paperclipai/server| src/__tests__/v10-private-payload.integration.test.ts > Private ordinary payloads retain current source authority without analytical roots > withholds Memory captured by the same agent for another human, ignoring copied producer metadata
+AssertionError: expected { record: { …(37) }, …(1) } to be null
+
+- Expected:
+null
+
++ Received:
+{
+  "evidence": [
+    {
+      "citationJson": {
+        "label": "Caller citation",
+      },
+      "companyId": "4cf9fc4c-0171-451d-83e8-e124fbddc3cd",
+      "createdAt": 2026-10-22T20:27:53.281Z,
+      "excerptHash": "aecc24132d837e1f307a313ba975bc6c05767893c2fc4756500884015bf5f3e1",
+      "id": "af855b3e-aeaf-4f39-8730-8ba14838eb04",
+      "memoryRecordId": "039e7ad8-2935-4378-9b27-94c0ad07a133",
+      "observedAt": 2026-10-22T20:27:53.272Z,
+      "sourceClass": "task",
+      "sourceProvider": "caller_claim",
+      "sourceRef": "issue://0caeb69c-1a7c-47ac-87f1-6783a1bb2826",
+      "sourceType": "issue",
+      "sourceUpdatedAt": null,
+      "sourceVersion": null,
+      "supportsOrContradicts": "supports",
+      "trustLevel": "low",
+    },
+  ],
+  "record": {
+    "bindingId": "5032fa53-4bfb-421e-b1af-a8fe26cb07e3",
+    "companyId": "4cf9fc4c-0171-451d-83e8-e124fbddc3cd",
+    "confidenceScore": 0.5,
+    "content": "PRIVATE retained source",
+    "createdAt": 2026-10-22T20:27:53.310Z,
+    "createdByActorId": "45773c5d-701c-417f-8384-399db25ae8cc",
+    "createdByActorType": "agent",
+    "createdByOperationId": "25f74300-97bd-48b9-9e41-c48c8773a672",
+    "deletedAt": null,
+    "expiresAt": null,
+    "id": "039e7ad8-2935-4378-9b27-94c0ad07a133",
+    "importance": 50,
+    "memoryType": "lesson",
+    "metadata": {
+      "privateOperationFingerprint": "2a028881bd55129218d497315e4e9e6eeffee3c73100902ab4ac2af78f344d6c",
+      "sourcePrivacyQualified": true,
+      "sourceRunId": "d2b4b0b6-63dc-4517-b7cd-ad7e10bd8ee2",
+    },
+    "observedAt": 2026-10-22T20:27:53.272Z,
+    "ownerAgentId": "45773c5d-701c-417f-8384-399db25ae8cc",
+    "providerKey": "local",
+    "retentionPolicy": "standard",
+    "retentionState": "active",
+    "reviewState": "accepted",
+    "revocationReason": null,
+    "revokedAt": null,
+    "revokedByActorId": null,
+    "revokedByActorType": null,
+    "scopeId": "45773c5d-701c-417f-8384-399db25ae8cc",
+    "scopeType": "agent",
+    "sensitivityLabel": "internal",
+    "subjectId": null,
+    "subjectType": null,
+    "summary": null,
+    "supersededByRecordId": null,
+    "supersedesRecordId": null,
+    "title": "Private source lesson",
+    "updatedAt": 2026-10-22T20:27:53.310Z,
+    "validFrom": null,
+    "validUntil": null,
+    "verificationState": "unverified",
+  },
+}
+
+ ❯ src/__tests__/v10-private-payload.integration.test.ts:211:101
+    209|     await expect(memoryService(db).get(companyId,created.record.id,mem…
+    210|       .resolves.toMatchObject({record:{content:"PRIVATE retained sourc…
+    211|     await expect(memoryService(db).get(companyId,created.record.id,mem…
+       |                                                                                                     ^
+    212|     const eligible = await memoryService(db).listEligible(companyId,{s…
+    213|     expect(eligible.map(row=>row.id)).not.toContain(created.record.id);
+
+⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯[2/4]⎯
+
+ FAIL  |@paperclipai/server| src/__tests__/v10-private-payload.integration.test.ts > Private ordinary payloads retain current source authority without analytical roots > does not classify unqualified historical Memory as publicly readable
+AssertionError: expected { record: { …(37) }, evidence: [] } to be null
+
+- Expected:
+null
+
++ Received:
+{
+  "evidence": [],
+  "record": {
+    "bindingId": "89496531-81af-4c81-9288-e4c52cc8c22a",
+    "companyId": "e436a17a-332e-4177-9786-bbfa5a0cb645",
+    "confidenceScore": 0.5,
+    "content": "PRIVATE unknown provenance",
+    "createdAt": 2026-10-22T20:27:53.452Z,
+    "createdByActorId": "5ae7a5a1-7610-4cdf-8673-a91bd84d981c",
+    "createdByActorType": "agent",
+    "createdByOperationId": null,
+    "deletedAt": null,
+    "expiresAt": null,
+    "id": "787edec3-89de-406e-b99e-5dfd08fea886",
+    "importance": 50,
+    "memoryType": "lesson",
+    "metadata": {},
+    "observedAt": 2026-10-22T20:27:53.451Z,
+    "ownerAgentId": "5ae7a5a1-7610-4cdf-8673-a91bd84d981c",
+    "providerKey": "local",
+    "retentionPolicy": "standard",
+    "retentionState": "active",
+    "reviewState": "accepted",
+    "revocationReason": null,
+    "revokedAt": null,
+    "revokedByActorId": null,
+    "revokedByActorType": null,
+    "scopeId": "5ae7a5a1-7610-4cdf-8673-a91bd84d981c",
+    "scopeType": "agent",
+    "sensitivityLabel": "internal",
+    "subjectId": null,
+    "subjectType": null,
+    "summary": null,
+    "supersededByRecordId": null,
+    "supersedesRecordId": null,
+    "title": null,
+    "updatedAt": 2026-10-22T20:27:53.452Z,
+    "validFrom": null,
+    "validUntil": null,
+    "verificationState": "unverified",
+  },
+}
+
+ ❯ src/__tests__/v10-private-payload.integration.test.ts:222:93
+    220|       memoryType:"lesson",scopeType:"agent",scopeId:agentId,ownerAgent…
+    221|       reviewState:"accepted",observedAt:new Date(),createdByActorType:…
+    222|     await expect(memoryService(db).get(companyId,historical!.id,memory…
+       |                                                                                             ^
+    223|   });
+    224|   it("withholds captured Memory after its source membership is suspend…
+
+⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯[3/4]⎯
+
+ FAIL  |@paperclipai/server| src/__tests__/v10-private-payload.integration.test.ts > Private ordinary payloads retain current source authority without analytical roots > withholds captured Memory after its source membership is suspended
+AssertionError: expected { record: { …(37) }, …(1) } to be null
+
+- Expected:
+null
+
++ Received:
+{
+  "evidence": [
+    {
+      "citationJson": {
+        "label": "Caller citation",
+      },
+      "companyId": "be3d02f9-7d36-4d4b-9ffe-7d49c6afb02f",
+      "createdAt": 2026-10-22T20:27:53.529Z,
+      "excerptHash": "aecc24132d837e1f307a313ba975bc6c05767893c2fc4756500884015bf5f3e1",
+      "id": "25c3377e-aa94-46fe-a47a-b46928c84711",
+      "memoryRecordId": "e9c568a0-0a23-4aea-91b9-8035fd2015de",
+      "observedAt": 2026-10-22T20:27:53.527Z,
+      "sourceClass": "task",
+      "sourceProvider": "caller_claim",
+      "sourceRef": "issue://9e8cd614-d810-4507-9b22-5ad1109b36a3",
+      "sourceType": "issue",
+      "sourceUpdatedAt": null,
+      "sourceVersion": null,
+      "supportsOrContradicts": "supports",
+      "trustLevel": "low",
+    },
+  ],
+  "record": {
+    "bindingId": "624b6f46-9d90-45dc-9c8f-8a964c79abba",
+    "companyId": "be3d02f9-7d36-4d4b-9ffe-7d49c6afb02f",
+    "confidenceScore": 0.5,
+    "content": "PRIVATE retained source",
+    "createdAt": 2026-10-22T20:27:53.546Z,
+    "createdByActorId": "dbbd17ba-2864-4db1-befb-99290c08c1c8",
+    "createdByActorType": "agent",
+    "createdByOperationId": "c9599bdc-9bbf-44c3-a3ed-73182a024073",
+    "deletedAt": null,
+    "expiresAt": null,
+    "id": "e9c568a0-0a23-4aea-91b9-8035fd2015de",
+    "importance": 50,
+    "memoryType": "lesson",
+    "metadata": {
+      "privateOperationFingerprint": "cb34d52b36eeeac4ef6eef804d492f10d7454bb1c058ba63d19557859291a905",
+      "sourcePrivacyQualified": true,
+      "sourceRunId": "d64bab42-4dda-4706-946e-a3c41f44f6aa",
+    },
+    "observedAt": 2026-10-22T20:27:53.527Z,
+    "ownerAgentId": "dbbd17ba-2864-4db1-befb-99290c08c1c8",
+    "providerKey": "local",
+    "retentionPolicy": "standard",
+    "retentionState": "active",
+    "reviewState": "accepted",
+    "revocationReason": null,
+    "revokedAt": null,
+    "revokedByActorId": null,
+    "revokedByActorType": null,
+    "scopeId": "dbbd17ba-2864-4db1-befb-99290c08c1c8",
+    "scopeType": "agent",
+    "sensitivityLabel": "internal",
+    "subjectId": null,
+    "subjectType": null,
+    "summary": null,
+    "supersededByRecordId": null,
+    "supersedesRecordId": null,
+    "title": "Private source lesson",
+    "updatedAt": 2026-10-22T20:27:53.546Z,
+    "validFrom": null,
+    "validUntil": null,
+    "verificationState": "unverified",
+  },
+}
+
+ ❯ src/__tests__/v10-private-payload.integration.test.ts:229:96
+    227|       eq(companyMemberships.companyId,companyId),eq(companyMemberships…
+    228|     ));
+    229|     await expect(memoryService(db).get(companyId,created.record.id,mem…
+       |                                                                                                ^
+    230|   });
+    231| });
+
+⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯[4/4]⎯
+
+
+ Test Files  1 failed (1)
+      Tests  4 failed | 7 skipped (11)
+   Start at  20:27:23
+   Duration  30.23s (transform 9.29s, setup 211ms, import 13.95s, tests 15.61s, environment 0ms)
+

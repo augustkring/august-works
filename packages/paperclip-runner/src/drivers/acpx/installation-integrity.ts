@@ -102,7 +102,7 @@ const QUALIFIED_CLAUDE_PROVIDER_DEPENDENCIES = Object.freeze([
   }),
   Object.freeze({
     packageName: "zod",
-    packageVersion: "4.4.3",
+    packageVersion: "4.6.6",
     dependencyDeclaration: "^4.0.0",
   }),
 ]);

@@ -1,0 +1,35 @@
+{
+  "cacheAdvice": [
+    {
+      "elapsedSeconds": 3.964349810994463,
+      "filesAdvised": 622509,
+      "memoryAfter": 6131879936,
+      "contentChanged": false
+    }
+  ],
+  "steps": [
+    {
+      "command": [
+        "node",
+        "/workspace/v10-preparation/combined-source-20261109/parse-browser-handoff-r491.mjs"
+      ],
+      "exit": 0,
+      "seconds": 0.4385560560040176,
+      "peakGroupRssBytes": 110243840,
+      "stopped": null
+    },
+    {
+      "command": [
+        "git",
+        "diff",
+        "--check"
+      ],
+      "exit": 0,
+      "seconds": 0.22645024201483466,
+      "peakGroupRssBytes": 9302016,
+      "stopped": null
+    }
+  ],
+  "memoryBefore": "low 0\nhigh 0\nmax 0\noom 0\noom_kill 0\noom_group_kill 0\n",
+  "memoryAfter": "low 0\nhigh 0\nmax 0\noom 0\noom_kill 0\noom_group_kill 0\n"
+}

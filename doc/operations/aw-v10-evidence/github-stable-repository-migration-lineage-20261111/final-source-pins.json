@@ -1,0 +1,95 @@
+{
+  "sourceHead": "9091d2c55f24d37d250ccf2ab9f64637eb3a3011",
+  "sourceBaseCommit": "81d3445b98b1cd80ff400ede6bd44ea71d88d735",
+  "paths": [
+    {
+      "path": "packages/db/src/migrations/0578_keen_celestials.sql",
+      "sha256": "f70b741198c5e1cd51bc805f7c6cad0976ab1df3d241885c132dffbdb2b23543",
+      "bytes": 1895,
+      "mtimeNs": 1794419743863542238,
+      "worktreeState": "untracked",
+      "base81": {
+        "status": "absent_at_base",
+        "sha256": null
+      }
+    },
+    {
+      "path": "packages/db/src/migrations/meta/0578_snapshot.json",
+      "sha256": "9c70dcd7408501315d9fbaef46271573d38c23441e12dc200339b64e76b293dd",
+      "bytes": 2830104,
+      "mtimeNs": 1794419743863542238,
+      "worktreeState": "untracked",
+      "base81": {
+        "status": "absent_at_base",
+        "sha256": null
+      }
+    },
+    {
+      "path": "packages/db/src/migrations/meta/_journal.json",
+      "sha256": "506df6cfe8b12162feb0646a35589233f8757ad0203cf37793ee025908e1db36",
+      "bytes": 87385,
+      "mtimeNs": 1794419743863542238,
+      "worktreeState": "modified",
+      "base81": {
+        "status": "present_at_base",
+        "sha256": "566cd657d0f7ecfc33cce22a729b8e84473451d3961b96daf0f415b79af51a8c"
+      }
+    },
+    {
+      "path": "packages/db/src/schema/chat_github.ts",
+      "sha256": "fad6eae2570436abddff6d58a53c035af2b518570b14df7135fea2a18c127933",
+      "bytes": 7317,
+      "mtimeNs": 1794419662023229964,
+      "worktreeState": "modified",
+      "base81": {
+        "status": "present_at_base",
+        "sha256": "f7c3d019c3169866a3174f9ebba488f5c368687069258e780d96ec74f82c17bf"
+      }
+    },
+    {
+      "path": "packages/db/src/schema/index.ts",
+      "sha256": "3df027d8cb9cb9704e06911a8ed6c91d1d628842566275b2a319cb4071766c65",
+      "bytes": 15256,
+      "mtimeNs": 1794419662017582723,
+      "worktreeState": "modified",
+      "base81": {
+        "status": "present_at_base",
+        "sha256": "5dc372793aaa00e727fa5fd04d03bd28cafcbc0bf4444601398a26c99f5633dc"
+      }
+    },
+    {
+      "path": "server/src/__tests__/chat-channels.integration.test.ts",
+      "sha256": "e8974d84c2a74010bb811eee00fa390903c27657cdc511d99186d730c9a9a04c",
+      "bytes": 2636510,
+      "mtimeNs": 1794419885149737952,
+      "worktreeState": "modified",
+      "base81": {
+        "status": "present_at_base",
+        "sha256": "3a5f87add0b9c8a5d3fe7f0b4bc5e830f425a02784545b8acae55b69e89da880"
+      }
+    },
+    {
+      "path": "server/src/services/chat-channels.ts",
+      "sha256": "cdf774e9f1680e3991c5af5e2a6f700e4052059ae9f9e0ffddd824bc4fed7c8d",
+      "bytes": 1455525,
+      "mtimeNs": 1794419662017582723,
+      "worktreeState": "modified",
+      "base81": {
+        "status": "present_at_base",
+        "sha256": "10454054c67f5a2eeaaceb84d1036ddb18adbb2272e8a9c79e61f0f31de9fd3d"
+      }
+    },
+    {
+      "path": "server/src/services/native-runtime/chat-inbound-wakeup-owner.ts",
+      "sha256": "539c9cf85362fcba9427e01c7bbe1e372dff0e43812661ac413f793485a98b2e",
+      "bytes": 21941,
+      "mtimeNs": 1794419662018303295,
+      "worktreeState": "modified",
+      "base81": {
+        "status": "absent_at_base",
+        "sha256": null
+      }
+    }
+  ],
+  "qualificationPromoted": false
+}

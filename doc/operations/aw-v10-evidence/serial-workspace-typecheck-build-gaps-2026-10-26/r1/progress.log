@@ -1,0 +1,53 @@
+RUN prerequisite emit shared
+RUN prerequisite emit plugin-sdk
+RUN prerequisite emit eval-kernel
+RUN Runner protocol contract checks
+RUN Runner vendor emit
+RUN Server vendor dependency check
+RUN @paperclipai/db migration checks
+PASS @paperclipai/shared
+PASS @paperclipai/adapter-utils
+PASS @paperclipai/adapter-claude-local
+PASS @paperclipai/adapter-codex-local
+PASS @paperclipai/adapter-cursor-cloud
+PASS @paperclipai/adapter-cursor-local
+PASS @paperclipai/adapter-gemini-local
+PASS @paperclipai/adapter-grok-local
+PASS @paperclipai/hermes-paperclip-adapter
+PASS @paperclipai/adapter-hermes-gateway
+PASS @paperclipai/adapter-kimi-local
+PASS @paperclipai/adapter-openclaw-gateway
+PASS @paperclipai/adapter-opencode-local
+PASS @paperclipai/adapter-pi-local
+PASS @paperclipai/plugin-sdk
+PASS @paperclipai/create-paperclip-plugin
+PASS @paperclipai/db
+PASS @paperclipai/google-sheets-mcp-server
+PASS @paperclipai/kv-demo-mcp-server
+PASS @paperclipai/mcp-server
+PASS @paperclipai/paperclip-eval-kernel
+FAIL @paperclipai/paperclip-runner exit=1 log=/workspace/v10-preparation/serial-workspace-typecheck-build-gaps-20261026T191746Z/22-paperclipai_paperclip-runner.log
+PASS @paperclipai/plugin-authoring-smoke-example
+FAIL @paperclipai/plugin-cloudflare-sandbox exit=1 log=/workspace/v10-preparation/serial-workspace-typecheck-build-gaps-20261026T191746Z/24-paperclipai_plugin-cloudflare-sandbox.log
+FAIL @paperclipai/plugin-createos exit=1 log=/workspace/v10-preparation/serial-workspace-typecheck-build-gaps-20261026T191746Z/25-paperclipai_plugin-createos.log
+FAIL @paperclipai/plugin-daytona exit=1 log=/workspace/v10-preparation/serial-workspace-typecheck-build-gaps-20261026T191746Z/26-paperclipai_plugin-daytona.log
+FAIL @paperclipai/plugin-e2b exit=1 log=/workspace/v10-preparation/serial-workspace-typecheck-build-gaps-20261026T191746Z/27-paperclipai_plugin-e2b.log
+FAIL @paperclipai/plugin-exe-dev exit=1 log=/workspace/v10-preparation/serial-workspace-typecheck-build-gaps-20261026T191746Z/28-paperclipai_plugin-exe-dev.log
+PASS @paperclipai/plugin-fake-sandbox
+PASS @paperclipai/plugin-file-browser-example
+PASS @paperclipai/plugin-hello-world-example
+PASS @paperclipai/plugin-kitchen-sink-example
+FAIL @paperclipai/plugin-kubernetes exit=1 log=/workspace/v10-preparation/serial-workspace-typecheck-build-gaps-20261026T191746Z/33-paperclipai_plugin-kubernetes.log
+PASS @paperclipai/plugin-llm-wiki
+FAIL @paperclipai/plugin-modal exit=1 log=/workspace/v10-preparation/serial-workspace-typecheck-build-gaps-20261026T191746Z/35-paperclipai_plugin-modal.log
+FAIL @paperclipai/plugin-novita-sandbox exit=1 log=/workspace/v10-preparation/serial-workspace-typecheck-build-gaps-20261026T191746Z/36-paperclipai_plugin-novita-sandbox.log
+FAIL @paperclipai/plugin-orchestration-smoke-example exit=1 log=/workspace/v10-preparation/serial-workspace-typecheck-build-gaps-20261026T191746Z/37-paperclipai_plugin-orchestration-smoke-example.log
+PASS @paperclipai/plugin-workspace-diff
+PASS @paperclipai/skills-catalog
+FAIL @paperclipai/server exit=1 log=/workspace/v10-preparation/serial-workspace-typecheck-build-gaps-20261026T191746Z/40-paperclipai_server.log
+PASS @paperclipai/tailscale-https-broker
+PASS @paperclipai/teams-catalog
+PASS @paperclipai/ui
+FAIL paperclip-cloudflare-sandbox-bridge-template exit=1 log=/workspace/v10-preparation/serial-workspace-typecheck-build-gaps-20261026T191746Z/44-paperclip-cloudflare-sandbox-bridge-template.log
+FAIL paperclipai exit=1 log=/workspace/v10-preparation/serial-workspace-typecheck-build-gaps-20261026T191746Z/45-paperclipai.log
+RUN server runtime asset check

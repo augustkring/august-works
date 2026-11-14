@@ -1,0 +1,115 @@
+(!) Your Vite config uses features that are unsupported by `configLoader: 'native'`, which is planned to become the default in a future major version of Vite:
+  - `__dirname` (vitest.config.ts:7:25). Use `import.meta.dirname` instead
+Set `VITE_CONFIG_NATIVE_IGNORE_WARNING=true` to suppress this warning.
+
+ RUN  v4.1.11 /workspace/blentera-v10
+
+stderr | src/components/IssueChatThread.test.tsx > IssueChatThread > does not re-render unchanged markdown when feedback votes change
+Error: [vitest] No "useFeedbackPolicy" export is defined on the "./OutputFeedbackButtons" mock. Did you forget to return it from "vi.mock"?
+If you need to partially mock a module, you can use "importOriginal" helper inside:
+
+    at VitestMocker.createError (file:///workspace/blentera-v10/node_modules/.pnpm/vitest@4.1.11_@opentelemetry+api@1.9.1_@types+node@24.13.3_esbuild@0.28.2_jiti@2.7.0_jsdom@30_e3jxd7stdurun4cek57kpy36xi/node_modules/vitest/dist/chunks/startVitestModuleRunner.DB-7oCpn.js:62:17)
+    at Object.get (file:///workspace/blentera-v10/node_modules/.pnpm/vitest@4.1.11_@opentelemetry+api@1.9.1_@types+node@24.13.3_esbuild@0.28.2_jiti@2.7.0_jsdom@30_e3jxd7stdurun4cek57kpy36xi/node_modules/vitest/dist/chunks/startVitestModuleRunner.DB-7oCpn.js:327:16)
+    at IssueChatFeedbackButtons (/workspace/blentera-v10/ui/src/components/AgentBubbleActionRow.tsx:187:38)
+    at Object.react_stack_bottom_frame (/workspace/blentera-v10/node_modules/.pnpm/react-dom@19.2.8_react@19.2.8/node_modules/react-dom/cjs/react-dom-client.development.js:25904:20)
+    at renderWithHooks (/workspace/blentera-v10/node_modules/.pnpm/react-dom@19.2.8_react@19.2.8/node_modules/react-dom/cjs/react-dom-client.development.js:7662:22)
+    at updateFunctionComponent (/workspace/blentera-v10/node_modules/.pnpm/react-dom@19.2.8_react@19.2.8/node_modules/react-dom/cjs/react-dom-client.development.js:10166:19)
+    at beginWork (/workspace/blentera-v10/node_modules/.pnpm/react-dom@19.2.8_react@19.2.8/node_modules/react-dom/cjs/react-dom-client.development.js:11778:18)
+    at runWithFiberInDEV (/workspace/blentera-v10/node_modules/.pnpm/react-dom@19.2.8_react@19.2.8/node_modules/react-dom/cjs/react-dom-client.development.js:874:13)
+    at performUnitOfWork (/workspace/blentera-v10/node_modules/.pnpm/react-dom@19.2.8_react@19.2.8/node_modules/react-dom/cjs/react-dom-client.development.js:17641:22)
+    at workLoopSync (/workspace/blentera-v10/node_modules/.pnpm/react-dom@19.2.8_react@19.2.8/node_modules/react-dom/cjs/react-dom-client.development.js:17469:41) {
+  [stack]: [Getter/Setter],
+  [message]: '[vitest] No "useFeedbackPolicy" export is defined on the "./OutputFeedbackButtons" mock. Did you forget to return it from "vi.mock"?\n' +
+    'If you need to partially mock a module, you can use "importOriginal" helper inside:\n',
+  codeFrame: 'vi.mock(import("./OutputFeedbackButtons"), async (importOriginal) => {\n' +
+    '  const actual = await importOriginal()\n' +
+    '  return {\n' +
+    '    ...actual,\n' +
+    '    // your mocked methods\n' +
+    '  }\n' +
+    '})'
+}
+
+The above error occurred in the <IssueChatFeedbackButtons> component.
+
+React will try to recreate this component tree from scratch using the error boundary you provided, IssueChatErrorBoundary.
+
+Issue chat renderer failed; falling back to safe transcript view {
+  error: Error: [vitest] No "useFeedbackPolicy" export is defined on the "./OutputFeedbackButtons" mock. Did you forget to return it from "vi.mock"?
+  If you need to partially mock a module, you can use "importOriginal" helper inside:
+  
+      at VitestMocker.createError (file:///workspace/blentera-v10/node_modules/.pnpm/vitest@4.1.11_@opentelemetry+api@1.9.1_@types+node@24.13.3_esbuild@0.28.2_jiti@2.7.0_jsdom@30_e3jxd7stdurun4cek57kpy36xi/node_modules/vitest/dist/chunks/startVitestModuleRunner.DB-7oCpn.js:62:17)
+      at Object.get (file:///workspace/blentera-v10/node_modules/.pnpm/vitest@4.1.11_@opentelemetry+api@1.9.1_@types+node@24.13.3_esbuild@0.28.2_jiti@2.7.0_jsdom@30_e3jxd7stdurun4cek57kpy36xi/node_modules/vitest/dist/chunks/startVitestModuleRunner.DB-7oCpn.js:327:16)
+      at IssueChatFeedbackButtons (/workspace/blentera-v10/ui/src/components/AgentBubbleActionRow.tsx:187:38)
+      at Object.react_stack_bottom_frame (/workspace/blentera-v10/node_modules/.pnpm/react-dom@19.2.8_react@19.2.8/node_modules/react-dom/cjs/react-dom-client.development.js:25904:20)
+      at renderWithHooks (/workspace/blentera-v10/node_modules/.pnpm/react-dom@19.2.8_react@19.2.8/node_modules/react-dom/cjs/react-dom-client.development.js:7662:22)
+      at updateFunctionComponent (/workspace/blentera-v10/node_modules/.pnpm/react-dom@19.2.8_react@19.2.8/node_modules/react-dom/cjs/react-dom-client.development.js:10166:19)
+      at beginWork (/workspace/blentera-v10/node_modules/.pnpm/react-dom@19.2.8_react@19.2.8/node_modules/react-dom/cjs/react-dom-client.development.js:11778:18)
+      at runWithFiberInDEV (/workspace/blentera-v10/node_modules/.pnpm/react-dom@19.2.8_react@19.2.8/node_modules/react-dom/cjs/react-dom-client.development.js:874:13)
+      at performUnitOfWork (/workspace/blentera-v10/node_modules/.pnpm/react-dom@19.2.8_react@19.2.8/node_modules/react-dom/cjs/react-dom-client.development.js:17641:22)
+      at workLoopSync (/workspace/blentera-v10/node_modules/.pnpm/react-dom@19.2.8_react@19.2.8/node_modules/react-dom/cjs/react-dom-client.development.js:17469:41) {
+    codeFrame: 'vi.mock(import("./OutputFeedbackButtons"), async (importOriginal) => {\n' +
+      '  const actual = await importOriginal()\n' +
+      '  return {\n' +
+      '    ...actual,\n' +
+      '    // your mocked methods\n' +
+      '  }\n' +
+      '})'
+  },
+  info: '\n' +
+    '    at IssueChatFeedbackButtons (/workspace/blentera-v10/ui/src/components/AgentBubbleActionRow.tsx:198:37)\n' +
+    '    at div (<anonymous>)\n' +
+    '    at div (<anonymous>)\n' +
+    '    at div (<anonymous>)\n' +
+    '    at IssueChatAssistantMessage (/workspace/blentera-v10/ui/src/components/IssueChatThread.tsx:1862:38)\n' +
+    '    at div (<anonymous>)\n' +
+    '    at IssueChatMessageRow (/workspace/blentera-v10/ui/src/components/IssueChatThread.tsx:4161:91)\n' +
+    '    at div (<anonymous>)\n' +
+    '    at div (<anonymous>)\n' +
+    '    at IssueChatErrorBoundary (/workspace/blentera-v10/ui/src/components/IssueChatThread.tsx:231:1)\n' +
+    '    at div (<anonymous>)\n' +
+    '    at div (<anonymous>)\n' +
+    '    at AssistantRuntimeProvider (/workspace/blentera-v10/ui/src/components/IssueChatThread.test.tsx:13:31)\n' +
+    '    at IssueChatThread (/workspace/blentera-v10/ui/src/components/IssueChatThread.tsx:5290:28)\n' +
+    '    at Router (file:///workspace/blentera-v10/node_modules/.pnpm/react-router@7.18.2_react-dom@19.2.8_react@19.2.8__react@19.2.8/node_modules/react-router/dist/development/chunk-62JRHF6Z.mjs:7036:13)\n' +
+    '    at MemoryRouter (file:///workspace/blentera-v10/node_modules/.pnpm/react-router@7.18.2_react-dom@19.2.8_react@19.2.8__react@19.2.8/node_modules/react-router/dist/development/chunk-62JRHF6Z.mjs:6952:3)'
+}
+
+ ❯ |@paperclipai/ui| src/components/IssueChatThread.test.tsx (88 tests | 1 failed) 6493ms
+     × does not re-render unchanged markdown when feedback votes change 70ms
+
+⎯⎯⎯⎯⎯⎯⎯ Failed Tests 1 ⎯⎯⎯⎯⎯⎯⎯
+
+ FAIL  |@paperclipai/ui| src/components/IssueChatThread.test.tsx > IssueChatThread > does not re-render unchanged markdown when feedback votes change
+AssertionError: expected "vi.fn()" to not be called at all, but actually been called 1 times
+
+Received:
+
+  1st vi.fn() call:
+
+    Array [
+      Object {
+        "children": "Agent summary with **markdown**",
+        "className": undefined,
+      },
+    ]
+
+
+Number of calls: 1
+
+ ❯ src/components/IssueChatThread.test.tsx:2021:40
+    2019|     });
+    2020|
+    2021|     expect(markdownBodyRenderMock).not.toHaveBeenCalled();
+       |                                        ^
+    2022|
+    2023|     act(() => {
+
+⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯[1/1]⎯
+
+
+ Test Files  1 failed | 2 passed (3)
+      Tests  1 failed | 99 passed (100)
+   Start at  09:17:10
+   Duration  44.72s (transform 9.94s, setup 75ms, import 26.76s, tests 10.92s, environment 5.47s)
+

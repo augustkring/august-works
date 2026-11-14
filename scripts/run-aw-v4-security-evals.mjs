@@ -1,8 +1,9 @@
 #!/usr/bin/env node
-import { existsSync, mkdirSync, mkdtempSync, readFileSync, realpathSync, rmSync } from "node:fs";
+import { existsSync, mkdirSync, mkdtempSync, readFileSync, realpathSync } from "node:fs";
 import os from "node:os";
 import path from "node:path";
 import { spawnSync } from "node:child_process";
+import { removeRuntimeStorageTree } from "../server/src/services/runtime-skill-cache.ts";
 
 const repoRoot = process.cwd();
 const manifest = JSON.parse(
@@ -88,5 +89,5 @@ try {
     { env },
   );
 } finally {
-  rmSync(testRoot, { recursive: true, force: true });
+  await removeRuntimeStorageTree(testRoot);
 }

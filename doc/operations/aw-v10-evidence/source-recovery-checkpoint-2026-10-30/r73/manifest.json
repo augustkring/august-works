@@ -1,0 +1,30 @@
+{
+  "purpose": "RECOVERY ONLY; no source activation, publication, or broad qualification claim.",
+  "capturedAtUtc": "2026-11-01T21:29:44.707886+00:00",
+  "mainHead": "712d6681764b73ef69332847237a9b56238c0567",
+  "mainDirtyPatchSha256": "d54ecc657147be02958b154994a755b0d6fbb42c5008572f84a9118708c0605d",
+  "sourceFileCount": 36,
+  "archive": {
+    "path": "private-delta.tar.gz",
+    "bytes": 584044,
+    "sha256": "658659a3eb279e0f477a8ff871f3767397ce48524ed4ec46671496eb0590a91e",
+    "verifiedEntries": 36
+  },
+  "references": {
+    "R72ManifestSha256": "d2517e1586bd6f1017d1143d07f9c9b3482f71d9768e738eea9558ae6fd1dc23",
+    "R72ArchiveSha256": "2b353c82a409284471e03eebe241296f27ef8c27d07bbd5e00ee03cc91090de0",
+    "R126PinsSha256": "bdb4a89355fd90960588c36174449848ddf1f54e9ba569f6fa71d875d8c7cba9",
+    "R126Coherent121PinsSha256": "85022ff2451e7edbe5b1f17cceb9bd10244007c641ca6aa75d62fda8fd62d9d1",
+    "R126FailureReceiptSha256": "ec9a167c7ab2ab4c27c31e95a31e70cf38deac35bf223de6ba81f23980eb877b",
+    "R127PinsSha256": "62a0095401d4e1071af6b5191321b1f2c4082a29a4fc27642709aae586ab54c5",
+    "R127Coherent121PinsSha256": "0615da1861c7949ab107de687f8a6da9dfd0b88ea63648494db9e08988b850f7",
+    "R127QualificationReceiptSha256": "889b6526b3d87944f3e35bcf532bd79391879778231d1c6d753c75fb109db473",
+    "CodeFinalProof524PinsSha256": "0ee7b9c6527ab451e4fcb90232d967b9adad7f51dfb14aa1b46d45aa721602f0",
+    "R7PinsSha256": "a3c19e24484e72231de30f67da4ad11e6e780a3b052d2a06d983ce98d2fe13ce",
+    "Host69to73DedupReceiptSha256": "9a52115d0a6998cbb2b6dfbab2d8eaf57f469fbe23ff16acb6755cee4f35284b",
+    "ClosedPgBackupDedupReceiptSha256": "fc96f65303807fa5638903f9a8fe617d470a31a19970f47d655f17c09bd252b0",
+    "TsxCacheManifestSha256": "e91d2f4679c5910ee27ddc257431b502cda898662ecc24e0be20753c132d45b2",
+    "AggregateRunnerSha256": "cff50fd3086e9bf39658b7450ec6af8b6cdc6a329afc7bc80b5dd90672ce83b8"
+  },
+  "qualificationStatus": "R126 stopped at an existing quiescence guard (24 pass, 4 fail; later R127 closed with scoped B/A/Agent PostgreSQL and full server TypeScript checks). R127 receipt explicitly leaves C7/full Native and actual Worker runtime acceptance open. Code finalproof524 is syntax-only. R7 and phase 0568 are inactive metadata; dedup receipts record recovery only. No full 121-source payload bundle, active R128 output, or broad final aggregate acceptance is included."
+}

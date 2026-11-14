@@ -1,0 +1,30 @@
+{
+  "cacheAdvice": [
+    {
+      "elapsedSeconds": 3.8628265890001785,
+      "filesAdvised": 620200,
+      "memoryAfter": 6085931008,
+      "contentChanged": false
+    },
+    {
+      "elapsedSeconds": 6.035634467989439,
+      "filesAdvised": 620218,
+      "memoryAfter": 12088197120,
+      "contentChanged": false
+    }
+  ],
+  "steps": [
+    {
+      "command": [
+        "pnpm",
+        "build"
+      ],
+      "exit": 0,
+      "seconds": 187.8866266789846,
+      "peakGroupRssBytes": 6380298240,
+      "stopped": null
+    }
+  ],
+  "memoryBefore": "low 0\nhigh 0\nmax 0\noom 0\noom_kill 0\noom_group_kill 0\n",
+  "memoryAfter": "low 0\nhigh 0\nmax 0\noom 0\noom_kill 0\noom_group_kill 0\n"
+}

@@ -1,0 +1,42 @@
+(!) Your Vite config uses features that are unsupported by `configLoader: 'native'`, which is planned to become the default in a future major version of Vite:
+  - `__dirname` (vitest.config.ts:7:25). Use `import.meta.dirname` instead
+Set `VITE_CONFIG_NATIVE_IGNORE_WARNING=true` to suppress this warning.
+
+ RUN  v4.1.11 /workspace/blentera-v10
+
+ ❯ |@paperclipai/server| src/__tests__/v7-agent-packages.integration.test.ts (115 tests | 1 failed | 114 skipped) 9767ms
+     × refuses package activation under another installer's identity and preserves its actual owner session 556ms
+
+⎯⎯⎯⎯⎯⎯⎯ Failed Tests 1 ⎯⎯⎯⎯⎯⎯⎯
+
+ FAIL  |@paperclipai/server| src/__tests__/v7-agent-packages.integration.test.ts > V7 native internal package installation and activation > refuses package activation under another installer's identity and preserves its actual owner session
+AssertionError: expected Error: Stop before readiness admission; n… to match object { status: 403, …(1) }
+
+- Expected
++ Received
+
+- {
+-   "details": {
+-     "code": "package_accountable_human_required",
+-   },
+-   "status": 403,
++ Error {
++   "message": "Stop before readiness admission; no assessment or activation is qualified",
+  }
+
+ ❯ src/__tests__/v7-agent-packages.integration.test.ts:339:12
+    337|         await expect(service.decide(actor, f.home, installed.id, "acti…
+    338|           expectedVersion: installed.version, reason: "Current Human r…
+    339|         })).rejects.toMatchObject({ status: 403, details: { code: "pac…
+       |            ^
+    340|         expect(observedOwner).toBeUndefined();
+    341|         await expect(service.decide(f.actor, f.home, installed.id, "ac…
+
+⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯[1/1]⎯
+
+
+ Test Files  1 failed (1)
+      Tests  1 failed | 114 skipped (115)
+   Start at  10:32:15
+   Duration  57.97s (transform 30.92s, setup 354ms, import 47.11s, tests 9.77s, environment 0ms)
+

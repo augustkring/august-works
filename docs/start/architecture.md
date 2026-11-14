@@ -3,7 +3,7 @@ title: Architecture
 summary: Stack overview, request flow, and adapter model
 ---
 
-Paperclip is a monorepo with four main layers.
+Blentera is a monorepo with four main layers.
 
 ## Stack Overview
 
@@ -60,7 +60,7 @@ paperclip/
 │       └── codex-local/         # OpenAI Codex adapter
 │
 ├── skills/                      # Agent skills
-│   └── paperclip/               # Core Paperclip skill (heartbeat protocol)
+│   └── paperclip/               # Core Blentera skill (heartbeat protocol)
 │
 ├── cli/                         # CLI client
 │   └── src/                     # Setup and control-plane commands
@@ -74,25 +74,25 @@ When a heartbeat fires:
 
 1. **Trigger** — Scheduler, manual invoke, or event (assignment, mention) triggers a heartbeat
 2. **Adapter invocation** — Server calls the configured adapter's `execute()` function
-3. **Agent process** — Adapter spawns the agent (e.g. Claude Code CLI) with Paperclip env vars and a prompt
-4. **Agent work** — The agent calls Paperclip's REST API to check assignments, checkout tasks, do work, and update status
+3. **Agent process** — Adapter spawns the agent (e.g. Claude Code CLI) with Blentera env vars and a prompt
+4. **Agent work** — The agent calls Blentera's REST API to check assignments, checkout tasks, do work, and update status
 5. **Result capture** — Adapter captures stdout, parses usage/cost data, extracts session state
 6. **Run record** — Server records the run result, costs, and any session state for next heartbeat
 
 ## Adapter Model
 
-Adapters are the bridge between Paperclip and agent runtimes. Each adapter is a package with three modules:
+Adapters are the bridge between Blentera and agent runtimes. Each adapter is a package with three modules:
 
 - **Server module** — `execute()` function that spawns/calls the agent, plus environment diagnostics
 - **UI module** — stdout parser for the run viewer, config form fields for agent creation
 - **CLI module** — terminal formatter for `paperclipai run --watch`
 
-Built-in adapters: `claude_local`, `codex_local`, `process`, `http`. You can create custom adapters for any runtime.
+The source includes adapters such as `claude_local`, `codex_local`, `process`, and `http`. A custom adapter can connect a compatible runtime, but that alone does not establish provider qualification, entitlement, or availability in a deployment.
 
 ## Key Design Decisions
 
-- **Control plane, not execution plane** — Paperclip orchestrates agents; it doesn't run them
+- **Control plane, not execution plane** — Blentera orchestrates agents; it doesn't run them
 - **Company-scoped** — all entities belong to exactly one company; strict data boundaries
 - **Single-assignee tasks** — atomic checkout prevents concurrent work on the same task
-- **Adapter-agnostic** — any runtime that can call an HTTP API works as an agent
+- **Adapter interface** — compatible runtimes can be connected through adapters; qualification and enablement are checked separately
 - **Embedded by default** — zero-config local mode with embedded PostgreSQL

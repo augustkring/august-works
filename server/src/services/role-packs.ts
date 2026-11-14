@@ -3,7 +3,8 @@ import {assertLearnedAssetAnalyticalSources} from "./learning/learning-analytica
 import type {NativeReadScope} from "./analytical-reader.js";
 import { and, asc, eq, inArray, sql } from "drizzle-orm";
 import { agents, agentRolePackAssignments, orgUnitMemberships, orgUnits, rolePackItems, rolePacks, rolePackVersions, type Db } from "@paperclipai/db";
-import { assignRolePackSchema, createRolePackSchema, mergeRolePackItems, rolePackVersionInputSchema, SYSTEM_ROLE_PACKS, type RolePackItem } from "@paperclipai/shared";
+import { assignRolePackSchema, createRolePackSchema, mergeRolePackItems, rolePackVersionInputSchema, SYSTEM_ROLE_PACKS, type RolePackItem, type NativePayloadSourceInput } from "@paperclipai/shared";
+import { nativeSha256 } from "./native-runtime/canonical.js";
 import type { z } from "zod";
 import { lockMemoryPrivacy } from "./memory/memory-privacy.js";
 import { assertLearningAssetCurrent } from "./learning/learning-assets.js";
@@ -100,7 +101,8 @@ export function rolePackService(db: Db) {
         await audit(tx, actor, companyId, row.id, "role_pack.assigned", publications); return assignment!;
       });
     },
-    resolve: async (actor: AuthorizationActor, companyId: string, agentId: string, proposedAgentAssignment?: {rolePackId:string;versionId:string},readScope?:NativeReadScope) => {
+    resolve: async (actor: AuthorizationActor, companyId: string, agentId: string, proposedAgentAssignment?: {rolePackId:string;versionId:string},readScope?:NativeReadScope,
+      onSourceCapture?: (inputs: Array<Extract<NativePayloadSourceInput, { kind: "role_pack_version" }>>) => void) => {
       await readable(actor, companyId);
       const [agent] = await db.select().from(agents).where(and(eq(agents.companyId, companyId), eq(agents.id, agentId))).limit(1);
       if (!agent) throw notFound("Agent presence not found");
@@ -128,6 +130,7 @@ export function rolePackService(db: Db) {
       const scopeOrder = [companyId, ...[...ancestry.keys()].sort((a, b) => (ancestry.get(b)! - ancestry.get(a)!) || unitById.get(a)!.slug.localeCompare(unitById.get(b)!.slug)), agentId];
       assignments.sort((a, b) => scopeOrder.indexOf(a.scopeId) - scopeOrder.indexOf(b.scopeId));
       const layers: RolePackItem[][] = [system.items], pins: Array<{ rolePackId: string; versionId: string; scopeType: string; scopeId: string }> = [];
+      const sourceInputs: Array<Extract<NativePayloadSourceInput, { kind: "role_pack_version" }>> = [];
       for (const assignment of assignments) {
         const assigned = await pack(db, companyId, assignment.rolePackId);
         const versionId = assignment.pinnedVersionId ?? assigned.publishedVersionId;
@@ -135,8 +138,14 @@ export function rolePackService(db: Db) {
         const selected = await version(db, companyId, assigned.id, versionId,actor,readScope);
         if (selected.state !== "published") throw conflict("Assigned Role Pack version is not published");
         layers.push(selected.items); pins.push({ rolePackId: assigned.id, versionId, scopeType: assignment.scopeType, scopeId: assignment.scopeId });
+        sourceInputs.push({ kind: "role_pack_version", rolePackId: assigned.id, versionId,
+          contentHash: nativeSha256({ summary: selected.summary, items: selected.items }) });
       }
-      return { systemKey: system.key, systemVersion: system.version, pins, items: mergeRolePackItems(layers) };
+      const items = mergeRolePackItems(layers);
+      // Original selected immutable rows only; this rendition hash supplies no
+      // permission, dispatch acknowledgement or complete input-source proof.
+      onSourceCapture?.([...new Map(sourceInputs.map(input => [input.versionId, input])).values()]);
+      return { systemKey: system.key, systemVersion: system.version, pins, items };
     },
   };
 }

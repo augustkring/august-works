@@ -117,6 +117,7 @@ async function ensurePiSkillsInjected(
         `[paperclip] ${result === "repaired" ? "Repaired" : "Injected"} Pi skill "${entry.runtimeName}" into ${piAgentSkillsDir()}\n`,
       );
     } catch (err) {
+      if (entry.key === "blentera-platform") throw err;
       await onLog(
         "stderr",
         `[paperclip] Failed to inject Pi skill "${entry.runtimeName}" into ${piAgentSkillsDir()}: ${err instanceof Error ? err.message : String(err)}\n`,

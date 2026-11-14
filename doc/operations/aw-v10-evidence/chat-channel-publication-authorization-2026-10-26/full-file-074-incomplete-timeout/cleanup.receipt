@@ -1,0 +1,6 @@
+run=chat-channel-full-074-20261026
+fixture=/tmp/paperclip-chat-channels-gbCU3B
+source=Vitest embedded Postgres command -D /tmp/paperclip-chat-channels-gbCU3B observed under run PID 1377075
+checks=no matching postgres process; no cwd/fd references; no postmaster.pid; no TCP listener on port 45019
+entries_before_cleanup=23
+action=removed exact generated test fixture directory after outer timeout exited 124

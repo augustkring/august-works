@@ -1,0 +1,49 @@
+
+ RUN  v4.1.11 /workspace/v10-dep-qualification/server
+
+ ✓ src/services/native-runtime/native-session-resume.test.ts > seals an acknowledged retained session to its checkpoint, Human, and generation 21ms
+ ✓ src/services/native-runtime/native-session-resume.test.ts > wires exact-session recovery and guarded selected identity into heartbeat persistence 6ms
+ ✓ src/services/native-runtime/native-session-resume.test.ts > keeps actual normalized driver events separate from raw maintenance receipts 4819ms
+ ✓ src/services/native-runtime/native-session-resume.test.ts > archives a damaged prior epoch before completing guarded same-task replacement with real runnerd 8902ms
+ ✓ src/services/native-runtime/native-session-resume.test.ts > native session recovery database orchestration > uses scoped latest checkpoints, preserves progress barriers, and guards bootstrap persistence after the row lock 3980ms
+ ✓ src/services/native-runtime/native-session-resume.test.ts > rebindNativeSessionCheckpoint > rotates a carried session id when no checkpoint source exists 1ms
+ ✓ src/services/native-runtime/native-session-resume.test.ts > rebindNativeSessionCheckpoint > does not rotate an admitted or authority-bearing session id 2ms
+ ✓ src/services/native-runtime/native-session-resume.test.ts > rebindNativeSessionCheckpoint > recovers the latest exact checkpoint past only unused bootstrap failures 1ms
+ ✓ src/services/native-runtime/native-session-resume.test.ts > rebindNativeSessionCheckpoint > never skips a newer provider authority or incompatible checkpoint 1ms
+ ✓ src/services/native-runtime/native-session-resume.test.ts > rebindNativeSessionCheckpoint > does not borrow checkpoints across company, agent, issue, or normalized session 0ms
+ ✓ src/services/native-runtime/native-session-resume.test.ts > rebindNativeSessionCheckpoint > does not resume across a work-mode tool-surface change 0ms
+ ✓ src/services/native-runtime/native-session-resume.test.ts > rebindNativeSessionCheckpoint > rebuilds full task context when a External chat message received checkpoint is corrupt 1ms
+ ✓ src/services/native-runtime/native-session-resume.test.ts > rebindNativeSessionCheckpoint > rebuilds full task context when a issue_comment_added checkpoint is corrupt 1ms
+ ✓ src/services/native-runtime/native-session-resume.test.ts > rebindNativeSessionCheckpoint > keeps a valid checkpoint and does not rebuild the resumed task 1ms
+ ✓ src/services/native-runtime/native-session-resume.test.ts > rebindNativeSessionCheckpoint > rebuilds full context when the persisted provider tool contract is stale 0ms
+ ✓ src/services/native-runtime/native-session-resume.test.ts > rebindNativeSessionCheckpoint > refreshes retained 'completion descriptions' without changing the Paperclip task or prior history 4ms
+ ✓ src/services/native-runtime/native-session-resume.test.ts > rebindNativeSessionCheckpoint > refreshes retained 'task-bound human-input description' without changing the Paperclip task or prior history 1ms
+ ✓ src/services/native-runtime/native-session-resume.test.ts > rebindNativeSessionCheckpoint > rotates a provider thread created while the current-wake reader was conditionally advertised 0ms
+ ✓ src/services/native-runtime/native-session-resume.test.ts > rebindNativeSessionCheckpoint > rotates a provider thread that predates same-conversation attachment reuse 0ms
+ ✓ src/services/native-runtime/native-session-resume.test.ts > rebindNativeSessionCheckpoint > binds the provider tool catalog to the local or remote execution target 1ms
+ ✓ src/services/native-runtime/native-session-resume.test.ts > rebindNativeSessionCheckpoint > rotates provider threads whose retained catalog cannot inspect historical files 0ms
+ ✓ src/services/native-runtime/native-session-resume.test.ts > rebindNativeSessionCheckpoint > rotates direct provider threads whose retained catalog cannot ask structured questions 0ms
+ ✓ src/services/native-runtime/native-session-resume.test.ts > rebindNativeSessionCheckpoint > rotates direct provider threads whose retained completion tool cannot yield for a response 0ms
+ ✓ src/services/native-runtime/native-session-resume.test.ts > rebindNativeSessionCheckpoint > rotates provider threads whose retained attachment tools lack explicit invocation guidance 0ms
+ ✓ src/services/native-runtime/native-session-resume.test.ts > rebindNativeSessionCheckpoint > permits legacy retry rebinding only before the replacement acquired authority 0ms
+ ✓ src/services/native-runtime/native-session-resume.test.ts > rebindNativeSessionCheckpoint > retains provider identity but clears prior turn and event state 1ms
+ ✓ src/services/native-runtime/native-session-resume.test.ts > rebindNativeSessionCheckpoint > allows a provider replacement only after a durable response wake 1ms
+ ✓ src/services/native-runtime/native-session-resume.test.ts > rebindNativeSessionCheckpoint > requires exact provider continuity for an unfinished session goal 1ms
+ ✓ src/services/native-runtime/native-session-resume.test.ts > rebindNativeSessionCheckpoint > refuses to resume when the workspace changes 0ms
+ ✓ src/services/native-runtime/native-session-resume.test.ts > rebindNativeSessionCheckpoint > requires the exact managed execution-workspace identity 1ms
+ ✓ src/services/native-runtime/native-session-resume.test.ts > rebindNativeSessionCheckpoint > permits per-run projectless placeholders only for an identical workspace descriptor 1ms
+ ✓ src/services/native-runtime/native-session-resume.test.ts > rebindNativeSessionCheckpoint > rotates when assigned context changes but permits a fresh run-scoped MCP binding 1ms
+ ✓ src/services/native-runtime/native-session-resume.test.ts > rebindNativeSessionCheckpoint > refuses a checkpoint whose prior-run binding was rewritten 0ms
+ ✓ src/services/native-runtime/native-session-resume.test.ts > rebindNativeSessionCheckpoint > reuses plan mode across canonical revisions but never across a mode change 1ms
+ ✓ src/services/native-runtime/native-session-resume.test.ts > buildNativeExecutionInput wake projection > uses compact Slack input only after provider resume, preserving fresh bootstrap fallback 2ms
+ ✓ src/services/native-runtime/native-session-resume.test.ts > buildNativeExecutionInput wake projection > uses a neutral turn title for authenticated external-chat follow-ups 1ms
+ ✓ src/services/native-runtime/native-session-resume.test.ts > buildNativeExecutionInput wake projection > preserves the canonical task title outside the authenticated chat shortcut 0ms
+ ✓ src/services/native-runtime/native-session-resume.test.ts > buildNativeExecutionInput wake projection > writes native v4 and pins every provider's complete effective configuration 2ms
+ ✓ src/services/native-runtime/native-session-resume.test.ts > buildNativeExecutionInput wake projection > projects wake context with the appropriate execution contract (conversation=false) 1ms
+ ✓ src/services/native-runtime/native-session-resume.test.ts > buildNativeExecutionInput wake projection > projects wake context with the appropriate execution contract (conversation=true) 0ms
+
+ Test Files  1 passed (1)
+      Tests  40 passed (40)
+   Start at  23:05:19
+   Duration  32.18s (transform 10.04s, setup 77ms, import 14.21s, tests 17.76s, environment 0ms)
+

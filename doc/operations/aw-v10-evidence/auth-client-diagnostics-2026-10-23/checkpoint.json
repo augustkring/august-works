@@ -1,0 +1,38 @@
+{
+  "baseCommit": "cc5b738c449fb6644bcab41e8a45438671e7dd5c",
+  "sources": {
+    "ui/src/api/auth.ts": "6805de1fb2e677bd625a354c42f5395f3ee9374b102929cfbe2c7d5e16e83e21",
+    "ui/src/api/auth.test.ts": "bb5d7ee5caf08782c63e5ae1ed22d307f35b3b2bc3ee21fa29ad3de8f908c378"
+  },
+  "checks": {
+    "initialBaseline": {
+      "exit": 1,
+      "tests": "2 failed | 4 passed",
+      "limits": "Network case initially stopped on missing node-environment window; not a reproduced network leak."
+    },
+    "correctedBaseline": {
+      "exit": 1,
+      "tests": "2 failed | 4 passed",
+      "evidence": "Both original logging paths expose arbitrary canary data. The network test stubs window explicitly in the native node test environment."
+    },
+    "final": {
+      "exit": 0,
+      "tests": "6 passed",
+      "durationSeconds": 13.41
+    },
+    "ui-types": {
+      "exit": 0
+    },
+    "token-gates": {
+      "exit": 0
+    }
+  },
+  "interpretation": [
+    "Network diagnostics retain fixed request URL, method, origin, credentials mode, online state and fixed guidance. They omit page URLs and arbitrary errors.",
+    "HTTP diagnostics retain request URL/method/status, omitting arbitrary response bodies and reason phrases. Original thrown errors and native auth status/code contract remain unchanged.",
+    "Initial baseline source archive precedes the explicit window stub. The corrected baseline test source was not archived before whitespace-only cleanup; no exact source pin is claimed for that stage."
+  ],
+  "limits": [
+    "Controlled fetch/console fixtures, not browser credential/provider or complete V10 qualification."
+  ]
+}

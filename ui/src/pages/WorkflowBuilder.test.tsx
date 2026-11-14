@@ -12,6 +12,8 @@ import type {
   WorkflowRunDetail,
 } from "@paperclipai/shared";
 import { ApiError } from "@/api/client";
+import { queryKeys } from "@/lib/queryKeys";
+import { v9SessionFixture } from "@/hooks/v9-session.test-support";
 import { WorkflowBuilder } from "./WorkflowBuilder";
 
 const agentsApiMock = vi.hoisted(() => ({
@@ -33,6 +35,7 @@ const apiMock = vi.hoisted(() => ({
 
 vi.mock("@/api/workflows", () => ({ workflowsApi: apiMock }));
 vi.mock("@/api/agents", () => ({ agentsApi: agentsApiMock }));
+vi.mock("@/api/access", () => ({ accessApi: { listWorkflowCoverages: vi.fn(async () => ({ coverages: [] })) } }));
 vi.mock("@/context/CompanyContext", () => ({
   useCompany: () => ({ selectedCompanyId: "company-1" }),
 }));
@@ -425,6 +428,7 @@ describe("WorkflowBuilder", () => {
 
     const root = createRoot(container);
     const queryClient = new QueryClient({ defaultOptions: { queries: { retry: false } } });
+    queryClient.setQueryData(queryKeys.auth.session, v9SessionFixture("user-1"));
     flushSync(() => {
       root.render(
         <QueryClientProvider client={queryClient}>
@@ -453,6 +457,7 @@ describe("WorkflowBuilder", () => {
       "workflow-1",
       { input: {}, revisionId: null },
       expect.stringMatching(/^ui-run-/),
+      null,
     );
     expect(container.textContent).toContain("Run destination");
 

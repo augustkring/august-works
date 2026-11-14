@@ -1,0 +1,98 @@
+
+ RUN  v4.1.11 /workspace/v10-dep-qualification/server
+
+[04:16:18] [32mINFO[39m: [36mSetup-token login confidential transport startup assessment[39m [90m{"proxyForwardingEnabled":false,"reason":"no_proxy_allowlist_local_trusted_loopback_only","deploymentMode":"local_trusted"}[39m
+[04:16:20] [31mERROR[39m: [36mheartbeat execution setup failed[39m [90m{"runId":"d944b503-403c-47e2-9449-fe392f9630e6"}[39m
+    err: {
+      "type": "HttpError",
+      "message": "Low-trust execution requires isolated workspaces to be enabled.",
+      "stack":
+          Error: Low-trust execution requires isolated workspaces to be enabled.
+              at unprocessable (/workspace/v10-dep-qualification/server/src/errors.ts:41:10)
+              at assertLowTrustWorkspaceIsolation (/workspace/v10-dep-qualification/server/src/services/low-trust-runtime-containment.ts:61:11)
+              at preflightLowTrustWorkspaceIsolation (/workspace/v10-dep-qualification/server/src/services/heartbeat.ts:2298:9)
+              at process.processTicksAndRejections (node:internal/process/task_queues:104:5)
+              at resolveWorkspaceAfterLowTrustPreflight (/workspace/v10-dep-qualification/server/src/services/heartbeat.ts:2328:37)
+              at executeRun (/workspace/v10-dep-qualification/server/src/services/heartbeat.ts:21520:11)
+      "status": 422,
+      "details": {
+        "code": "low_trust_isolation_unavailable"
+      }
+    }
+[04:16:22] [32mINFO[39m: [36mclaimQueuedRun: cancelled stale queued run[39m [90m{"runId":"bd3bd94b-e88b-4908-b2a9-116bd75df4e4","issueId":"4e3921fb-5499-4f08-872c-34420bfe45a4","errorCode":"issue_terminal_status"}[39m
+[04:16:22] [32mINFO[39m: [36mclaimQueuedRun: cancelled stale queued run[39m [90m{"runId":"c9c12b0e-7c47-4287-9818-72cf14f3306a","issueId":"4e3921fb-5499-4f08-872c-34420bfe45a4","errorCode":"issue_terminal_status"}[39m
+[04:16:23] [31mERROR[39m: [36mheartbeat execution setup failed[39m [90m{"runId":"b7a7ea4e-418b-4d0a-ac0a-a76b9f3911eb"}[39m
+    err: {
+      "type": "HttpError",
+      "message": "Low-trust execution requires isolated workspaces to be enabled.",
+      "stack":
+          Error: Low-trust execution requires isolated workspaces to be enabled.
+              at unprocessable (/workspace/v10-dep-qualification/server/src/errors.ts:41:10)
+              at assertLowTrustWorkspaceIsolation (/workspace/v10-dep-qualification/server/src/services/low-trust-runtime-containment.ts:61:11)
+              at preflightLowTrustWorkspaceIsolation (/workspace/v10-dep-qualification/server/src/services/heartbeat.ts:2298:9)
+              at process.processTicksAndRejections (node:internal/process/task_queues:104:5)
+              at resolveWorkspaceAfterLowTrustPreflight (/workspace/v10-dep-qualification/server/src/services/heartbeat.ts:2328:37)
+              at executeRun (/workspace/v10-dep-qualification/server/src/services/heartbeat.ts:21520:11)
+      "status": 422,
+      "details": {
+        "code": "low_trust_isolation_unavailable"
+      }
+    }
+[04:16:24] [31mERROR[39m: [36mheartbeat execution setup failed[39m [90m{"runId":"c4627966-0d7d-4351-8bc8-fda37f60974b"}[39m
+    err: {
+      "type": "HttpError",
+      "message": "Low-trust execution requires isolated workspaces to be enabled.",
+      "stack":
+          Error: Low-trust execution requires isolated workspaces to be enabled.
+              at unprocessable (/workspace/v10-dep-qualification/server/src/errors.ts:41:10)
+              at assertLowTrustWorkspaceIsolation (/workspace/v10-dep-qualification/server/src/services/low-trust-runtime-containment.ts:61:11)
+              at preflightLowTrustWorkspaceIsolation (/workspace/v10-dep-qualification/server/src/services/heartbeat.ts:2298:9)
+              at process.processTicksAndRejections (node:internal/process/task_queues:104:5)
+              at resolveWorkspaceAfterLowTrustPreflight (/workspace/v10-dep-qualification/server/src/services/heartbeat.ts:2328:37)
+              at executeRun (/workspace/v10-dep-qualification/server/src/services/heartbeat.ts:21520:11)
+      "status": 422,
+      "details": {
+        "code": "low_trust_isolation_unavailable"
+      }
+    }
+[04:16:25] [31mERROR[39m: [36mheartbeat execution setup failed[39m [90m{"runId":"a50d93e2-2019-444b-9f94-0bced7889f1c"}[39m
+    err: {
+      "type": "HttpError",
+      "message": "Low-trust execution requires isolated workspaces to be enabled.",
+      "stack":
+          Error: Low-trust execution requires isolated workspaces to be enabled.
+              at unprocessable (/workspace/v10-dep-qualification/server/src/errors.ts:41:10)
+              at assertLowTrustWorkspaceIsolation (/workspace/v10-dep-qualification/server/src/services/low-trust-runtime-containment.ts:61:11)
+              at preflightLowTrustWorkspaceIsolation (/workspace/v10-dep-qualification/server/src/services/heartbeat.ts:2298:9)
+              at process.processTicksAndRejections (node:internal/process/task_queues:104:5)
+              at resolveWorkspaceAfterLowTrustPreflight (/workspace/v10-dep-qualification/server/src/services/heartbeat.ts:2328:37)
+              at executeRun (/workspace/v10-dep-qualification/server/src/services/heartbeat.ts:21520:11)
+      "status": 422,
+      "details": {
+        "code": "low_trust_isolation_unavailable"
+      }
+    }
+[04:16:25] [31mERROR[39m: [36mheartbeat execution setup failed[39m [90m{"runId":"d6a8a87d-a8ef-410d-9d59-34b3a13e4f07"}[39m
+    err: {
+      "type": "HttpError",
+      "message": "Low-trust execution requires isolated workspaces to be enabled.",
+      "stack":
+          Error: Low-trust execution requires isolated workspaces to be enabled.
+              at unprocessable (/workspace/v10-dep-qualification/server/src/errors.ts:41:10)
+              at assertLowTrustWorkspaceIsolation (/workspace/v10-dep-qualification/server/src/services/low-trust-runtime-containment.ts:61:11)
+              at preflightLowTrustWorkspaceIsolation (/workspace/v10-dep-qualification/server/src/services/heartbeat.ts:2298:9)
+              at process.processTicksAndRejections (node:internal/process/task_queues:104:5)
+              at resolveWorkspaceAfterLowTrustPreflight (/workspace/v10-dep-qualification/server/src/services/heartbeat.ts:2328:37)
+              at executeRun (/workspace/v10-dep-qualification/server/src/services/heartbeat.ts:21520:11)
+      "status": 422,
+      "details": {
+        "code": "low_trust_isolation_unavailable"
+      }
+    }
+--·--------
+
+ Test Files  1 passed (1)
+      Tests  1 passed | 10 skipped (11)
+   Start at  04:16:00
+   Duration  26.44s (transform 9.20s, setup 71ms, import 13.05s, tests 13.20s, environment 0ms)
+

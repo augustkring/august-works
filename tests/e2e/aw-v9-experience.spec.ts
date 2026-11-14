@@ -1,4 +1,7 @@
 import { expect, test, type APIResponse } from "@playwright/test";
+import { registerEnglishAccountLocaleIsolation } from "./account-locale-isolation";
+
+registerEnglishAccountLocaleIsolation(test);
 
 test.use({ trace: "retain-on-failure" });
 
@@ -9,8 +12,8 @@ async function json(response: APIResponse) {
   return response.json();
 }
 
-// This exercises the built UI and native local-board APIs on the disposable
-// instance. It does not qualify hosted authentication or V9 human usability.
+// This exercises the built UI and authenticated Native APIs on the disposable
+// instance. It does not qualify hosted authentication or live business acceptance.
 test("V9 Home, feedback recovery and rollback preserve native state", async ({
   page,
   request,
@@ -19,6 +22,8 @@ test("V9 Home, feedback recovery and rollback preserve native state", async ({
   const original = await json(
     await request.get("/api/instance/settings/experimental"),
   );
+  const session = await json(await request.get("/api/auth/get-session"));
+  const expectedUserId = encodeURIComponent(session.user.id);
   const enabled = {
     experience_projection_v9: true,
     progressive_shell_v9: true,
@@ -53,12 +58,23 @@ test("V9 Home, feedback recovery and rollback preserve native state", async ({
     "Browser feedback: preserve my entered explanation after a network interruption.";
   try {
     await page.goto(`/${company.issuePrefix}/dashboard`);
-    await expect(
-      page.getByRole("heading", { name: "Home", exact: true }),
-    ).toBeVisible();
-    await expect(
-      page.getByRole("heading", { name: "Home", exact: true }),
-    ).toBeFocused();
+    const homeHeading = page.getByRole("heading", { name: "Home", exact: true });
+    await expect(homeHeading).toBeVisible();
+    const entryFocus = await page.evaluate(() => {
+      const active = document.activeElement;
+      const rect = active?.getBoundingClientRect();
+      return {
+        tagName: active?.tagName ?? null,
+        text: active?.textContent?.trim().slice(0, 80) ?? "",
+        role: active?.getAttribute("role"),
+        ariaLabel: active?.getAttribute("aria-label"),
+        visible: Boolean(rect && rect.width > 0 && rect.height > 0),
+        inMain: Boolean(active?.closest("main")),
+        interactive: Boolean(active?.matches("a[href],button,input,select,textarea,summary,[contenteditable='true'],[role='button']")),
+      };
+    });
+    expect(entryFocus, `Home must preserve a visible, safe entry focus: ${JSON.stringify(entryFocus)}`).toMatchObject({ visible: true });
+    expect(entryFocus.interactive || entryFocus.inMain, `unexpected Home entry focus: ${JSON.stringify(entryFocus)}`).toBe(true);
     // The built Home entry must not fetch setup, triage or private history pages.
     // This checks real browser imports, not a mocked lazy component.
     expect(requestedPageChunks).toEqual([]);
@@ -68,11 +84,11 @@ test("V9 Home, feedback recovery and rollback preserve native state", async ({
       }),
     ).toBeVisible();
     const projection = await json(
-      await request.get(`${base}/experience?expectedUserId=local-board`),
+      await request.get(`${base}/experience?expectedUserId=${expectedUserId}`),
     );
     expect(projection.companyId).toBe(company.id);
     expect(projection.needsYou).toEqual([]);
-    await page.goto(`/${company.issuePrefix}/needs-you`);
+    await page.getByRole("link", { name: "Needs You", exact: true }).click();
     await expect(
       page.getByRole("heading", { name: "Needs You", exact: true }),
     ).toBeVisible();
@@ -90,7 +106,7 @@ test("V9 Home, feedback recovery and rollback preserve native state", async ({
     await expect(page).toHaveURL(
       new RegExp(`/${company.issuePrefix}/decisions$`),
     );
-    await page.goto(`/${company.issuePrefix}/work`);
+    await page.getByRole("link", { name: "Work", exact: true }).click();
     await expect(
       page.getByRole("heading", { name: "Work", exact: true }),
     ).toBeVisible();
@@ -116,10 +132,9 @@ test("V9 Home, feedback recovery and rollback preserve native state", async ({
         { exact: true },
       ),
     ).toBeVisible();
-    await page.goto(`/${company.issuePrefix}/dashboard`);
-    await expect(
-      page.getByRole("heading", { name: "Home", exact: true }),
-    ).toBeVisible();
+    await page.getByRole("link", { name: "Home", exact: true }).click();
+    await expect(homeHeading).toBeVisible();
+    await expect(homeHeading).toBeFocused();
     const homeEndpoint = `**/api/companies/${company.id}/experience?*`;
     await page.route(homeEndpoint, (route) =>
       route.fulfill({ status: 503, json: { error: "Temporary test outage" } }),
@@ -149,7 +164,7 @@ test("V9 Home, feedback recovery and rollback preserve native state", async ({
       .getByRole("button", { name: "Feedback", exact: true });
     const ask = page
       .locator('[aria-label="Global utilities"]')
-      .getByRole("button", { name: "Ask August", exact: true });
+      .getByRole("button", { name: "Ask Blentera", exact: true });
     await ask.click();
     let commands = page.getByRole("dialog");
     await expect(
@@ -220,7 +235,7 @@ test("V9 Home, feedback recovery and rollback preserve native state", async ({
     const discard = dialog.getByRole("button", { name: "Discard draft", exact: true });
     await discard.focus(); await page.keyboard.press("Enter");
     await expect(dialog).toHaveCount(0);
-    expect(await json(await request.get(`${base}/customer-feedback?expectedUserId=local-board`))).toEqual([]);
+    expect(await json(await request.get(`${base}/customer-feedback?expectedUserId=${expectedUserId}`))).toEqual([]);
     await trigger.click();
     await expect(dialog.getByRole("textbox").first()).toHaveValue("");
     await expect(dialog.getByRole("combobox")).toHaveValue("BUG");
@@ -271,7 +286,7 @@ test("V9 Home, feedback recovery and rollback preserve native state", async ({
     });
     expect(payloads[0]).not.toHaveProperty("diagnostics");
     const history = await json(
-      await request.get(`${base}/customer-feedback?expectedUserId=local-board`),
+      await request.get(`${base}/customer-feedback?expectedUserId=${expectedUserId}`),
     );
     expect(history).toHaveLength(1);
     expect(history[0].body).toBe(body);
@@ -320,7 +335,7 @@ test("V9 Home, feedback recovery and rollback preserve native state", async ({
     );
     expect(
       (
-        await request.get(`${base}/experience?expectedUserId=local-board`)
+        await request.get(`${base}/experience?expectedUserId=${expectedUserId}`)
       ).status(),
     ).toBe(404);
     await page.goto(`/${company.issuePrefix}/work`);
@@ -349,6 +364,8 @@ test("V9 Home, feedback recovery and rollback preserve native state", async ({
 test("V9 workflow review preserves the account gate, separates revisions and keeps Advanced rollback", async ({
   page,
   request,
+  browser,
+  baseURL,
 }) => {
   // This covers the whole Native lifecycle and explicit receipt recovery; it
   // is not an individual interaction or journey-performance timing budget.
@@ -375,6 +392,21 @@ test("V9 workflow review preserves the account gate, separates revisions and kee
   const base = `/api/companies/${company.id}/workflows`;
   const errors: string[] = [];
   page.on("pageerror", (error) => errors.push(error.message));
+  // Verify the account gate with an actually anonymous browser context. The
+  // default authenticated fixture is verified and must be able to proceed.
+  const anonymousContext = await browser.newContext({
+    baseURL,
+    storageState: { cookies: [], origins: [] },
+  });
+  try {
+    const anonymousPage = await anonymousContext.newPage();
+    await anonymousPage.goto(`/${company.issuePrefix}/workflows`);
+    await expect(
+      anonymousPage.getByRole("heading", { name: "Sign in to Blentera" }),
+    ).toBeVisible({ timeout: 15_000 });
+  } finally {
+    await anonymousContext.close();
+  }
   // Native activity can withdraw an acknowledgement while its original change
   // commits. Model the user's explicit, bounded same-request recovery; never
   // create another command or relax current authority.
@@ -401,12 +433,6 @@ test("V9 workflow review preserves the account gate, separates revisions and kee
       await request.post(base, { data: { name: "Review deal opportunities" } }),
     );
     const path = `/${company.issuePrefix}/workflows/${created.id}`;
-    await page.goto(`/${company.issuePrefix}/workflows`);
-    // The customer index requires a verified account. This local-board fixture
-    // must not borrow that admission; Original detail/rollback remain separate.
-    await expect(page.getByRole("main").getByRole("status")).toContainText(
-      "Sign in with a verified account to describe a workflow.",
-    );
     await page.goto(path);
     await expect(
       page.getByRole("heading", {
@@ -813,6 +839,8 @@ test("V9 workflow review preserves the account gate, separates revisions and kee
 
 test("feedback recovers an actually committed lost acknowledgement by reading its Original request", async ({ page, request }) => {
   const original = await json(await request.get("/api/instance/settings/experimental"));
+  const session = await json(await request.get("/api/auth/get-session"));
+  const expectedUserId = encodeURIComponent(session.user.id);
   const company = await json(await request.post("/api/companies", { data: { name: "Disposable committed feedback receipt fixture" } }));
   let posts = 0, committedId = "", requestKey = "";
   try {
@@ -839,7 +867,7 @@ test("feedback recovers an actually committed lost acknowledgement by reading it
     await expect(dialog.getByText("Thanks — feedback received", { exact: true })).toBeVisible();
     await expect(dialog.getByText("AWF-" + committedId.replaceAll("-", "").toUpperCase(), { exact: true })).toBeVisible();
     expect(posts).toBe(1);
-    const history = await json(await request.get(`/api/companies/${company.id}/customer-feedback?expectedUserId=local-board`));
+    const history = await json(await request.get(`/api/companies/${company.id}/customer-feedback?expectedUserId=${expectedUserId}`));
     expect(history).toHaveLength(1); expect(history[0].id).toBe(committedId);
   } finally {
     await json(await request.patch("/api/instance/settings/experimental", { data: original }));

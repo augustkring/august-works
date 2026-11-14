@@ -1,0 +1,19 @@
+{
+  "purpose": "scoped source qualification; not physical host, deployed compatibility or whole V10 acceptance",
+  "qualifiedRepositoryHead": "af29df32d734c89310613df68051f389a2915c92",
+  "workflowRun": 41044296826,
+  "job": 124024450939,
+  "vendorPatchSha256": "1b964e22688124645ad0b05653c533943724adc2a589dcdb87fe6219f617e227",
+  "exactTestsPassed": 15,
+  "compiledPackages": [
+    "openshell-server",
+    "openshell-cli",
+    "openshell-driver-docker",
+    "openshell-sandbox"
+  ],
+  "rawJobLogSha256": "b8257b87428e514f89c024d3342311bb2547dbb2f37cbeedac023d4cfad5403c",
+  "fullRawJobLogIncluded": true,
+  "artifactZipDownloaded": false,
+  "archiveSha256": "3c0c8c1a2c7be5384d25ab4f5806a654a03d50630cbf440dd33c0fb0284ffba5",
+  "archiveBytes": 1168613
+}

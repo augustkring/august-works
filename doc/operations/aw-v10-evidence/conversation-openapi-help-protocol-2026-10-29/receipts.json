@@ -1,0 +1,104 @@
+{
+  "schema": "aw.v10.scoped-test-evidence.v1",
+  "attempt": "conversation-openapi-help-protocol-r1-20261029",
+  "exitCode": 0,
+  "results": {
+    "openApiWholeOriginalFile": {
+      "passed": 33,
+      "failed": 0,
+      "skipped": 0,
+      "durationSeconds": 7.28
+    },
+    "helpMetadataLinksRegistryExitCode": 0,
+    "generatedHelpCheckExitCode": 0,
+    "controlledFixtureProtocol": {
+      "passed": 3,
+      "failed": 0,
+      "skipped": 0
+    }
+  },
+  "artifacts": {
+    "test.log": {
+      "artifact": "test.log.gz",
+      "rawSha256": "1555e84b89f5a31702432bdedfa19c20ee296b6cc4e21d17cdfa43d624ecdff1"
+    },
+    "help.log": {
+      "artifact": "help.log.gz",
+      "rawSha256": "d655ad8dc672bd8936203fd57f1a82c0fe16d7e158f5d803803c8a376a066ff8"
+    },
+    "help-generated.log": {
+      "artifact": "help-generated.log.gz",
+      "rawSha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+    },
+    "protocol.log": {
+      "artifact": "protocol.log.gz",
+      "rawSha256": "ff21d76e2249c441f9a322d0ff394e9461d477614606b33cb2fb32e9f086fd72"
+    },
+    "source-pins.json": {
+      "artifact": "source-pins.json.gz",
+      "rawSha256": "ae3617bb4e0645e5d1eb496f44159d792cf92cfc9f7c5c5ec13a2c35f6a5daa3"
+    },
+    "doc-protocol-source-pins.json": {
+      "artifact": "doc-protocol-source-pins.json.gz",
+      "rawSha256": "44d37b5e655e1c50e731766f37dde392f7b97b7622e20e051696080cf38c9663"
+    }
+  },
+  "sourceHead": "c16a15cc02afe9a396e95c824057e3b8dadb1b58",
+  "apiSourcePins": [
+    {
+      "path": "server/src/__tests__/openapi-routes.test.ts",
+      "sha256": "35359c55e78277b9b7a245476c76956d7e451e03fb445d166b6cc6498e540102",
+      "matchesCurrentAtArchive": false
+    },
+    {
+      "path": "server/src/routes/openapi.ts",
+      "sha256": "2b1f49b01261deb4fded50a5289dee93a9d94a0cee60174b86e111fb398aa236",
+      "matchesCurrentAtArchive": false
+    }
+  ],
+  "docProtocolSourcePins": [
+    {
+      "path": "docs/api/issues.md",
+      "sha256": "72965fd35660c9d1cb890b11390a5c1667d43f1de84ffce0222b163e6c47da19"
+    },
+    {
+      "path": "docs/guides/board-operator/managing-tasks.md",
+      "sha256": "5c4dde46713577d2d4c410bec33495fa21c770ecea3d931931c5d26275948521"
+    },
+    {
+      "path": "docs/da/guides/board-operator/managing-tasks.md",
+      "sha256": "2c194388e5ded4b8a285bbbcd8955ebcd437e8bfad81a2d124d47e402565f014"
+    },
+    {
+      "path": "server/src/services/company-search-help.generated.ts",
+      "sha256": "22d01f6ed06e7fbcde89d8323fb50487daf785be34db27780423bfdbf91edd60"
+    },
+    {
+      "path": "scripts/check-help-docs.mjs",
+      "sha256": "98673de6edc795239a38729fe0f4319e03a37f4a6436f96db12d7bf5670b4273"
+    },
+    {
+      "path": "server/scripts/generate-company-search-help.mjs",
+      "sha256": "c6ed5bc38dde4f6a0fc845d89d41ffa0ed3964fac7596f21ad5d26bd9a879df9"
+    },
+    {
+      "path": "tests/e2e/fixtures/native-chat-codex.mjs",
+      "sha256": "a19dee5a85c45a54dd3a0ec62d6ad09942bbf40ae030090f4f22f0b38b54eb4d"
+    },
+    {
+      "path": "tests/e2e/fixtures/native-chat-codex.protocol.test.mjs",
+      "sha256": "af91f7bf4ef7c3c42acc5e6db7ce7e27173fea4fe2feafcd39ef48ec535b95a3"
+    }
+  ],
+  "docProtocolDriftAtArchive": [],
+  "qualifiedScope": [
+    "Existing OpenAPI whole-file regressions plus scoped literal Human Task/attachments/interaction description and actual status contracts",
+    "Help metadata/navigation/local links and generated article consistency",
+    "Actual child-process controlled Codex protocol: retained thread final IDs, answered-question resume, exact plan-bound root Task completion intent"
+  ],
+  "excludedScope": [
+    "Production provider or physical-host qualification",
+    "Generic private Task/Project API permission",
+    "Confirmation of deployed Help or published API documentation"
+  ]
+}

@@ -1,0 +1,54 @@
+{
+  "scope": "Freeze actual authored definition, Foundation and Playbook source versions and retained Memory Context alongside first native input",
+  "sources": {
+    "server/src/services/native-runtime/runtime-context.ts": "91d5e175635d9006774850f468acdf47ff235747a6b26bc0a9daf6993608d42a",
+    "server/src/services/heartbeat.ts": "7185ea0e5386464975e9a677c9e0ddaa79e9f4e153292701e4dbc3bdd8547b16",
+    "server/src/__tests__/v9-agent-procedure-pins.integration.test.ts": "64f7afbcf3f96ddd33a69361fc6b00cb934a5ebba6955e26d1a934bc2366b20f",
+    "server/src/__tests__/heartbeat-process-recovery.test.ts": "67921cb83e801258e8c843304e8fe6f9c83e45e7f4ab0f77a8abc22c5d34cd80"
+  },
+  "verification": {
+    "combinedActualPostgres": {
+      "passed": 1,
+      "filtered": 13,
+      "seconds": 60.26,
+      "exit": 0,
+      "log": "up03-authored-runtime-combined.log",
+      "limit": "Initial fixture before bound-run correction; final full suite supersedes."
+    },
+    "initialFullProcedureSuite": {
+      "passed": 9,
+      "failed": 5,
+      "seconds": 86.34,
+      "exit": 1,
+      "log": "up03-authored-runtime-regressions.log",
+      "cause": "Existing helper created an unbound company run but supplied a Task to Context; original actual-run guard rejected before new source capture. Failed exact fixture retained compressed."
+    },
+    "finalFullProcedureSuite": {
+      "passed": 14,
+      "seconds": 93.11,
+      "exit": 0,
+      "log": "up03-authored-runtime-bound-regressions.log",
+      "assertions": "Actual Task/accountable native run identity; combined rendered selected source bodies and exact hashes/refs, Memory roots, original revocation/version replacement/consumed-runtime erasure cases."
+    },
+    "nativeBootstrap": {
+      "passed": 2,
+      "filtered": 305,
+      "seconds": 69.88,
+      "exit": 0,
+      "log": "up03-authored-runtime-native.log",
+      "assertions": "Nonauthored real native first-input empty capture and original full-profile immutability on recovery; provider factory uncalled. Original hook unchanged, dedicated migrated PG prestarted through supported test URL branch."
+    },
+    "serverCompiler": {
+      "exit": 0,
+      "log": "up03-authored-runtime-server-types.log"
+    },
+    "finalPinsMatch": true
+  },
+  "implementation": "Original runtime builder reports actual inner resolver inputs after successful runtime parse; retained owner buffers them and exact returned Context refs until transaction success. Heartbeat persists capture only with first input. Existing immutable runtime snapshot already retains instruction/Skill bundles; no duplicate descriptor. Original resolver/hash/authority guards preserved.",
+  "review": "Root reviewed final source and actual process exits. Bounded gpt-6-luna read-only production review. Fixture now binds actual Task/run/responsible Human through original initializeRunIdentity, without protocol activation or weakened assertions. Dedicated PG cleanup completed.",
+  "limits": [
+    "Combined authored source capture is tested at actual retained runtime owner; authored heartbeat end-to-end is not qualified by the nonauthored bootstrap cases.",
+    "Partial capture only; missing historical captures remain unknown. No complete receipt, writer protocol, transport/effect or current authorization activation.",
+    "Original copied private Memory/temporal regressions and all broad V10 release gates remain open."
+  ]
+}

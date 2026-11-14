@@ -1,0 +1,14 @@
+{
+  "headBaseline": "727e103405ba44e37a2f65eeb4ad03e24e5ca068",
+  "qualification": "Source/configuration exact pins for scoped verification; new managed SDK/Host cases remain unqualified",
+  "sourcePaths": {
+    "server/src/__tests__/activity-service.test.ts": "c3a2f89535ccaa937c358620eb256492eaf0d40d6a71a104964222c9a116ff16",
+    "server/src/__tests__/heartbeat-managed-chat-dispatch-boundaries.integration.test.ts": "8debc5749740b21cba9fadb7bcc13b4b92e905bf40a103a66a45bc5710dd11fc",
+    "server/src/__tests__/heartbeat-managed-scheduler.integration.test.ts": "8c0b6d59d35144a4dda07dd3b0f5b2984c2bb337f927c1e740bc0dd3c7af1f88",
+    "server/src/__tests__/heartbeat-process-recovery.test.ts": "61e3b5e6ef5c861b63d64c52e8b904c390158ce720acdcf7748b8af7a8e1ba66",
+    "server/src/services/activity.ts": "bee4ee4fd6fda49a05e5c7d7968bea50cee097707a83014be2951f9bc7811018",
+    "server/src/services/heartbeat.ts": "abdcd18071434f41fe1692df9f798119df242798c91abde230de6c39b7b6e7f0",
+    "server/src/services/run-liveness-evidence.ts": "bf6ba8a9364ef5db15ddf3df56847f3357f7189edc88171b8cc7ded438e15f34",
+    "server/src/services/run-liveness.ts": "509d293debfe6a6efb75562573e346e402ed434ff39e249688494e5142339fd6"
+  }
+}

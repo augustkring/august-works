@@ -1,0 +1,12 @@
+{
+  "command": [
+    "pnpm",
+    "db:generate"
+  ],
+  "exit": 0,
+  "seconds": 15.378990905999672,
+  "peakGroupRssBytes": 3374944256,
+  "stopReason": null,
+  "schemaInputsUnchanged": true,
+  "mutationScope": "official generated SQL, journal and snapshot outputs only; schema source inputs must remain unchanged"
+}

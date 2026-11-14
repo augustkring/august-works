@@ -1,3 +1,4 @@
+import { PRODUCT_IDENTITY } from "@paperclipai/shared/product-identity";
 import { isExperienceCardToolName, parseExperienceToolCardRequest } from "@paperclipai/shared";
 /**
  * Live adapter: map a run's streaming TranscriptEntry[] (from
@@ -1584,12 +1585,12 @@ function phaseSummary(
         case "paperclip_read":
           text =
             count === 1
-              ? "Read from Paperclip"
-              : `Read from Paperclip ${count} times`;
+              ? `Read from ${PRODUCT_IDENTITY.productName}`
+              : `Read from ${PRODUCT_IDENTITY.productName} ${count} times`;
           break;
         case "task_operation":
           text =
-            count === 1 ? "Used Paperclip" : `Used Paperclip ${count} times`;
+            count === 1 ? `Used ${PRODUCT_IDENTITY.productName}` : `Used ${PRODUCT_IDENTITY.productName} ${count} times`;
           break;
         default:
           text = count === 1 ? "Used a tool" : `Used ${count} tools`;

@@ -1,9 +1,11 @@
 import { z } from "zod";
+import { PRODUCT_IDENTITY } from "./product-identity.js";
+import { CUSTOMER_PROBLEM_AREAS, CUSTOMER_PROBLEM_IMPACTS, customerProblemEvidenceProjectionBaseSchema } from "./customer-problem-evidence.js";
 
 export const FEEDBACK_CONTACTS = {
-  support: "mailto:support@blentera.com",
-  security: "mailto:security@blentera.com",
-  privacy: "mailto:privacy@blentera.com",
+  support: `mailto:${PRODUCT_IDENTITY.supportEmail}`,
+  security: `mailto:${PRODUCT_IDENTITY.securityEmail}`,
+  privacy: `mailto:${PRODUCT_IDENTITY.privacyEmail}`,
 } as const;
 export const feedbackCategorySchema = z.enum([
   "BUG",
@@ -168,6 +170,57 @@ export const feedbackDiagnosticsSchema = z.strictObject({
     .max(8),
   correlationIds: z.array(z.uuid()).max(8),
 });
+export const feedbackSatisfactionRatingSchema = z.enum([
+  "very_dissatisfied", "dissatisfied", "neither", "satisfied", "very_satisfied",
+]);
+export const feedbackEffortRatingSchema = z.enum([
+  "very_difficult", "difficult", "neither", "easy", "very_easy",
+]);
+export const customerExperienceMeasureSchema = z.strictObject({
+  offered: z.literal(true),
+  consent: z.literal("granted").optional(),
+  satisfaction: feedbackSatisfactionRatingSchema.optional(),
+  effort: feedbackEffortRatingSchema.optional(),
+}).superRefine((value, ctx) => {
+  if (value.consent === "granted" && (!value.satisfaction || !value.effort))
+    ctx.addIssue({ code: "custom", message: "Both optional experience ratings are required after consent" });
+  if (value.consent !== "granted" && (value.satisfaction || value.effort))
+    ctx.addIssue({ code: "custom", message: "Ratings require explicit consent" });
+});
+/** Immutable root marker only records that questions were offered and whether
+ * the submitter granted consent. Rating bytes live in the erasable sidecar. */
+export const customerFeedbackExperienceMeasureMarkerSchema = z.strictObject({
+  offered: z.literal(true),
+  consent: z.literal("granted").optional(),
+});
+export const customerFeedbackStoredExperienceMeasureSchema = z.strictObject({
+  offered: z.literal(true),
+  consent: z.literal("granted").optional(),
+  satisfaction: feedbackSatisfactionRatingSchema.optional(),
+  effort: feedbackEffortRatingSchema.optional(),
+  availability: z.enum(["withdrawn", "unavailable"]).optional(),
+}).superRefine((value, ctx) => {
+  if (value.consent === "granted" && (!value.satisfaction || !value.effort || value.availability))
+    ctx.addIssue({ code: "custom", message: "Granted ratings must be available and complete" });
+  if (value.consent !== "granted" && (value.satisfaction || value.effort))
+    ctx.addIssue({ code: "custom", message: "Ratings require explicit consent" });
+  if (value.availability && value.consent)
+    ctx.addIssue({ code: "custom", message: "Unavailable or withdrawn ratings cannot be active" });
+});
+export const withdrawCustomerExperienceMeasureSchema = z.strictObject({ idempotencyKey: z.uuid() });
+export const feedbackProblemClassificationSchema = z.strictObject({
+  area: z.enum(CUSTOMER_PROBLEM_AREAS),
+  impact: z.enum(CUSTOMER_PROBLEM_IMPACTS),
+  provenance: z.literal("human_feedback_triage"),
+  classifiedAt: z.iso.datetime(),
+});
+export const customerFeedbackQualitySummarySchema = z.strictObject({
+  period: z.strictObject({ from: z.iso.datetime(), to: z.iso.datetime() }),
+  source: z.literal("product_feedback"),
+  denominator: z.strictObject({ offeredFeedbackSubmissions: z.number().int().nonnegative(), consentedResponses: z.number().int().nonnegative(), withdrawnResponses: z.number().int().nonnegative(), unconsentedSubmissions: z.number().int().nonnegative(), unavailableResponses: z.number().int().nonnegative() }),
+  satisfaction: z.strictObject({ count: z.number().int().nonnegative(), distribution: z.record(feedbackSatisfactionRatingSchema, z.number().int().nonnegative()) }),
+  effort: z.strictObject({ count: z.number().int().nonnegative(), distribution: z.record(feedbackEffortRatingSchema, z.number().int().nonnegative()) }),
+});
 export const createCustomerFeedbackSchema = z
   .strictObject({
     idempotencyKey: z.uuid(),
@@ -179,6 +232,7 @@ export const createCustomerFeedbackSchema = z
     context: feedbackContextSchema,
     includeDiagnostics: z.boolean().default(false),
     diagnostics: feedbackDiagnosticsSchema.optional(),
+    experienceMeasure: customerExperienceMeasureSchema.optional(),
   })
   .superRefine((value, ctx) => {
     if (
@@ -216,6 +270,7 @@ export const feedbackTriageSchema = z
     internalState: feedbackInternalStateSchema,
     customerMessage: z.string().trim().max(10000).default(""),
     internalNote: z.string().trim().max(10000).default(""),
+    problemClassification: feedbackProblemClassificationSchema.pick({ area: true, impact: true }).nullable().optional(),
     link: z
       .strictObject({ type: z.enum(["issue", "duplicate"]), id: z.uuid() })
       .optional(),
@@ -224,7 +279,7 @@ export const feedbackTriageSchema = z
     (value) => value.internalState !== "NEEDS_INFO" || !!value.customerMessage,
     { message: "A customer question is required", path: ["customerMessage"] },
   );
-export const customerFeedbackSchema = z.strictObject({
+const customerFeedbackReceiptBaseSchema = z.strictObject({
   id: z.uuid(),
   feedbackId: z.string().regex(/^AWF-[A-F0-9]{32}$/),
   companyId: z.uuid(),
@@ -233,6 +288,8 @@ export const customerFeedbackSchema = z.strictObject({
   goal: z.string(),
   blocksWork: z.boolean(),
   omitName: z.boolean(),
+  experienceMeasureStatus: z.enum(["granted", "withdrawn", "unavailable"]).optional(),
+  experienceMeasure: z.strictObject({ satisfaction: feedbackSatisfactionRatingSchema, effort: feedbackEffortRatingSchema }).optional(),
   status: feedbackStatusSchema,
   version: z.number().int().nonnegative(),
   createdAt: z.iso.datetime(),
@@ -245,7 +302,11 @@ export const customerFeedbackSchema = z.strictObject({
         createdAt: z.iso.datetime(),
       }),
     )
-    .max(100),
+  .max(100),
+});
+export const customerFeedbackSchema = customerFeedbackReceiptBaseSchema.superRefine((value, ctx) => {
+  if (value.experienceMeasure && value.experienceMeasureStatus !== "granted")
+    ctx.addIssue({ code: "custom", path: ["experienceMeasure"], message: "Ratings are available only while consent remains active" });
 });
 /** A missing observation does not establish rejection or effect quiescence. */
 export const customerFeedbackRequestReceiptSchema = z.strictObject({
@@ -259,7 +320,7 @@ export type CustomerFeedback = z.infer<typeof customerFeedbackSchema>;
 export const customerFeedbackListSchema = z
   .array(customerFeedbackSchema)
   .max(25);
-export const feedbackInternalSummarySchema = customerFeedbackSchema
+export const feedbackInternalSummarySchema = customerFeedbackReceiptBaseSchema
   .pick({
     id: true,
     feedbackId: true,
@@ -273,8 +334,14 @@ export const feedbackInternalSummarySchema = customerFeedbackSchema
 export const feedbackInternalListSchema = z
   .array(feedbackInternalSummarySchema)
   .max(25);
-export const feedbackInternalDetailSchema = customerFeedbackSchema
+export const feedbackInternalDetailSchema = customerFeedbackReceiptBaseSchema
   .extend({
+    customerProblemEvidence: customerProblemEvidenceProjectionBaseSchema.extend({
+      source: z.literal("product_feedback"), nativeCategory: feedbackCategorySchema,
+      nativeLifecycle: feedbackInternalStateSchema, reportedImpact: z.enum(["blocked", "limited", "question", "unknown"]),
+      triageImpact: z.enum(CUSTOMER_PROBLEM_IMPACTS).optional(),
+      linkCoverage: z.enum(["complete", "current_page", "unavailable"]),
+    }).optional(),
     internalState: feedbackInternalStateSchema,
     submittedByUserId: z.string().min(1).optional(),
     context: feedbackContextSchema.extend({
@@ -297,6 +364,8 @@ export const feedbackInternalDetailSchema = customerFeedbackSchema
         .array(z.enum(FEEDBACK_CONTEXT_FEATURE_IDS))
         .max(FEEDBACK_CONTEXT_FEATURE_IDS.length)
         .optional(),
+      experienceMeasure: customerFeedbackStoredExperienceMeasureSchema.optional(),
+      problemClassification: feedbackProblemClassificationSchema.optional(),
     }),
     diagnostics: feedbackDiagnosticsSchema.nullable(),
     events: z

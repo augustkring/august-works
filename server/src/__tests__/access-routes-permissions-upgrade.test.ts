@@ -5,9 +5,13 @@ import { and, eq } from "drizzle-orm";
 import { afterAll, afterEach, beforeAll, describe, expect, it, vi } from "vitest";
 import {
   activityLog,
+  authSessions,
+  authUsers,
   agents,
   companies,
   companyMemberships,
+  heartbeatRuns,
+  heartbeatRunEvents,
   connectionGrantDelegations,
   connectionGrants,
   createDb,
@@ -19,6 +23,8 @@ import {
   getEmbeddedPostgresTestSupport,
   startEmbeddedPostgresTestDatabase,
 } from "./helpers/embedded-postgres.js";
+import { seedCurrentHumanMembership } from "./helpers/current-human-membership-fixture.js";
+import { seedNativePasskeySession } from "./helpers/native-authentication-fixtures.js";
 
 vi.hoisted(() => {
   process.env.PAPERCLIP_HOME = "/tmp/paperclip-test-home";
@@ -32,7 +38,7 @@ const describeEmbeddedPostgres = embeddedPostgresSupport.supported ? describe : 
 
 type Db = ReturnType<typeof createDb>;
 
-async function createApp(db: Db, companyId: string, userId: string) {
+async function createApp(db: Db, companyId: string, userId: string, sessionId?: string) {
   process.env.PAPERCLIP_LOG_DIR = "/tmp/paperclip-test-home/logs";
   process.env.PAPERCLIP_IN_WORKTREE = "false";
   const { accessRoutes } = await import("../routes/access.js");
@@ -42,7 +48,8 @@ async function createApp(db: Db, companyId: string, userId: string) {
     req.actor = {
       type: "board",
       userId,
-      source: "local_implicit",
+      source: sessionId ? "session" : "local_implicit",
+      ...(sessionId ? { sessionId } : {}),
       companyIds: [companyId],
       memberships: [{ companyId, membershipRole: "owner", status: "active" }],
       isInstanceAdmin: true,
@@ -105,6 +112,8 @@ describeEmbeddedPostgres("access routes permissions upgrade compatibility", () =
     await db.delete(connectionGrants);
     await db.delete(toolConnections);
     await db.delete(toolApplications);
+    await db.delete(heartbeatRunEvents);
+    await db.delete(heartbeatRuns);
     await db.delete(principalPermissionGrants);
     await db.delete(companyMemberships);
     await db.delete(agents);
@@ -132,6 +141,77 @@ describeEmbeddedPostgres("access routes permissions upgrade compatibility", () =
       .then((rows) => rows[0]!);
     expect(unchanged.membershipRole).toBe("owner");
   }, 10_000);
+
+  it("allows an explicitly authorized recent Human to security-suspend the last owner and records owner recovery", async () => {
+    const { company, owner } = await createCompanyWithOwner(db);
+    const actorId = `continuity-admin-${randomUUID()}`;
+    await seedCurrentHumanMembership(db, company.id, actorId, "admin");
+    await db.insert(principalPermissionGrants).values({
+      companyId: company.id, principalType: "user", principalId: actorId,
+      permissionKey: "users:manage_permissions", scope: null,
+    });
+    const actorSessionId = await seedNativePasskeySession(db, actorId);
+    await db.insert(authUsers).values({
+      id: owner.principalId, name: "Last owner", email: `${owner.principalId}@fixture.invalid`,
+      emailVerified: true, createdAt: new Date(), updatedAt: new Date(),
+    });
+    const agent = await db.insert(agents).values({
+      companyId: company.id, name: "Owner work", role: "worker", adapterType: "process", adapterConfig: {},
+    }).returning().then((rows) => rows[0]!);
+    const [run] = await db.insert(heartbeatRuns).values({
+      companyId: company.id, agentId: agent.id, status: "running", startedAt: new Date(),
+      runtimeMode: "legacy", responsibleUserId: owner.principalId,
+    }).returning();
+    await db.update(companies).set({ defaultResponsibleUserId: owner.principalId }).where(eq(companies.id, company.id));
+
+    const response = await request(await createApp(db, company.id, actorId, actorSessionId))
+      .post(`/api/companies/${company.id}/members/${owner.id}/security-suspend`)
+      .send({ reasonCode: "suspected_compromise" });
+    expect(response.status, JSON.stringify(response.body)).toBe(200);
+    expect(response.body).toMatchObject({ ownerRecoveryRequired: true, member: { id: owner.id, status: "suspended" } });
+    expect(await db.select({ status: heartbeatRuns.status }).from(heartbeatRuns).where(eq(heartbeatRuns.id, run!.id)))
+      .toEqual([{ status: "cancelled" }]);
+    expect(await db.select({ defaultResponsibleUserId: companies.defaultResponsibleUserId }).from(companies).where(eq(companies.id, company.id)))
+      .toEqual([{ defaultResponsibleUserId: null }]);
+    expect(await db.select({ action: activityLog.action }).from(activityLog).where(and(
+      eq(activityLog.companyId, company.id), eq(activityLog.action, "company.owner_recovery_required"),
+    ))).toHaveLength(1);
+
+    const localAttempt = await request(await createApp(db, company.id, actorId))
+      .post(`/api/companies/${company.id}/members/${owner.id}/security-suspend`)
+      .send({ reasonCode: "other" });
+    expect(localAttempt.status).toBe(403);
+    const accountChangedAttempt = await request(await createApp(db, company.id, actorId, actorSessionId))
+      .post(`/api/companies/${company.id}/members/${owner.id}/security-suspend`)
+      .set("X-Blentera-Expected-User", actorId)
+      .set("X-Blentera-Expected-Session", randomUUID())
+      .send({ reasonCode: "other" });
+    expect(accountChangedAttempt.status).toBe(409);
+    await db.update(authSessions).set({ authenticatedAt: new Date(Date.now() - 301_000) })
+      .where(eq(authSessions.id, actorSessionId));
+    const staleAttempt = await request(await createApp(db, company.id, actorId, actorSessionId))
+      .post(`/api/companies/${company.id}/members/${owner.id}/security-suspend`)
+      .send({ reasonCode: "other" });
+    expect(staleAttempt.status).toBe(403);
+  }, 20_000);
+
+  it("does not let local implicit administrator access read, create, or revoke Human workflow coverage", async () => {
+    const { company, owner } = await createCompanyWithOwner(db);
+    const http = request(await createApp(db, company.id, owner.principalId));
+    await http.get(`/api/companies/${company.id}/workflow-coverages`).expect(403).expect((response) => {
+      expect(response.body.error).toMatch(/current Human session is required/i);
+    });
+    await http.post(`/api/companies/${company.id}/workflow-coverages`).send({
+      requestId: randomUUID(), delegateeUserId: `delegatee-${randomUUID()}`,
+      workflowId: randomUUID(), workflowRevisionId: randomUUID(), scopeType: "manual", taskId: null,
+      startsAt: new Date(Date.now() + 60_000), expiresAt: new Date(Date.now() + 3_600_000), reason: "Human session required",
+    }).expect(403).expect((response) => {
+      expect(response.body.error).toMatch(/current Human session is required/i);
+    });
+    await http.delete(`/api/companies/${company.id}/workflow-coverages/${randomUUID()}`).expect(403).expect((response) => {
+      expect(response.body.error).toMatch(/current Human session is required/i);
+    });
+  });
 
   it("keeps custom grants when the role-only member route changes a member role", async () => {
     const { company, owner } = await createCompanyWithOwner(db);

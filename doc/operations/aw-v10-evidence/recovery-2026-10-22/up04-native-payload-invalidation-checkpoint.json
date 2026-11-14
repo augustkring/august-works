@@ -1,0 +1,94 @@
+{
+  "scope": "Prevent clear-to-NULL from discarding known native payload source history",
+  "sources": {
+    "packages/db/src/schema/document_revisions.ts": "b924480e4fa69f4acabf7ef04ead4e0d69d8cbac9bc661f39e2896ad03faefa9",
+    "packages/db/src/schema/issue_attachments.ts": "fe40358e9583c01212cbc8614e2607c340390402c15f85985303908cc9970e0a",
+    "packages/db/src/schema/issue_comments.ts": "0bdc54ad7a3a9d47b64fca2280da6f6f46b2b5911ffea0f9bfb319c63bd9961a",
+    "packages/db/src/schema/issues.ts": "3c745d2f5a41ee855c236efc2e046a4e46c8b456b7d78672f1e6d09292b79b5c",
+    "packages/db/src/schema/memory.ts": "d1ecce3ad7beb9cd8c49ce6af411d7ee61135e3fc9697c276d2575122ae890fd",
+    "packages/db/src/schema/projects.ts": "ad636d4bb217f29f94c20982ee4766879c198865c2856596550e65db35c8b9f8",
+    "packages/db/src/migrations/0513_soft_risque.sql": "7a1c88416f1c3915c7ad5fc2e71d984b28731849ae523bf248cece53f635565b",
+    "packages/db/src/migrations/meta/0513_snapshot.json": "e7767b48b0bb30651f73a6c6f2b5204235bc9cf1158a18086cab91cd19cb05bc",
+    "packages/db/src/migrations/meta/_journal.json": "003f5460b263830ff034d4682490aa0c348729189d87ed3e00eb9483bccc2a7d",
+    "packages/db/src/native-payload-invalidation-migration.test.ts": "5022cadf5f4a4d693e284145a4cd4f14948970732a87733ef0735043473b0b7c",
+    "server/src/services/native-payload-public.ts": "4000f69e22034250c6d6a05acc6799b57efeeb39135080c1fc922825ac1b5902",
+    "server/src/services/issues.ts": "92a53b18623a2bd432d0a64690c93e51a311b9ca4604b138ee90a4679344a049",
+    "server/src/routes/issues.ts": "bd37818a58921a422934458569968d4c3a6906fa00585933305dab0e1afa3800",
+    "server/src/__tests__/native-payload-source-binding.integration.test.ts": "6c5588bef125acc4a6a9f29ca6a5a5371d2be3288ce53226281744cc4c955fec",
+    "server/src/__tests__/native-payload-public-response.integration.test.ts": "46eaa5a47733a063f7478525b6d2a7ebcd9fb8fe4fa6548cb44a4d8a93d4f46f"
+  },
+  "baseline": {
+    "exit": 1,
+    "failed": 1,
+    "filtered": 4,
+    "seconds": 21.03,
+    "log": "up04-payload-source-null-rebind-baseline.log",
+    "finding": "With actual valid owner/body/canonical digest, clearing known snapshot and rebinding with empty roots was accepted. Not a missing-column/setup failure. Exact baseline source, original0509 and pins retained."
+  },
+  "implementation": "Native-generated0513 adds private defaultfalse NOTNULL marker to six original owners. Existing shared binding trigger forbids caller edits/forgedtrue INSERT, sets latch on known-to-NULL, refuses all rebinding after latch. Existing protocol1NULL rows backfilled conservatively before trigger replacement; protocol0 not upgraded, existing nonnull snapshots unchanged. Original body/hash/tenant/containment guards preserved; marker excluded by existing explicit body-field hashing. No new registry/table/trigger family. Existing public row owner drops only top-level marker. Original Task list selects actual DB bit and return type omits it.",
+  "verification": {
+    "finalActualPostgres": {
+      "files": 2,
+      "passed": 11,
+      "seconds": 92.55,
+      "exit": 0,
+      "log": "up04-payload-source-invalidation-final.log",
+      "assertions": "All six owner tables bind then latch NULL; reject direct false-to-true, true-to-false, valid rebind and forged INSERT with server-owned23514. Real Memory evidence and asset SHA mutation invoke existing invalidators. Existing Task explicit unchangedfalse marker plus NULL succeeds. Actual Task/Project/Memory/Comment responses omit top-level marker, preserve nested arbitrary user metadata and stored proof."
+    },
+    "actualUpgrade": {
+      "passed": 4,
+      "seconds": 23.62,
+      "exit": 0,
+      "log": "up04-payload-invalidation-migration.log",
+      "assertions": "Actual pre0513 migration chain with initialNULL and previouslyclearedNULL protocol1, knownnonnull and legacyprotocol0 Task rows. Normal migration latches both unknown1 histories, preserves known snapshot byte-for-byte and operational priority update, does not upgrade0, allows fresh1 structural binding."
+    },
+    "reviewedTaskListProjection": {
+      "passed": 5,
+      "seconds": 66.28,
+      "exit": 0,
+      "log": "up04-payload-invalidation-reviewed-public.log",
+      "reason": "Rerun after Root added actual marker to original Task list SELECT and synchronized generic public return type."
+    },
+    "snapshotDrift": {
+      "passed": 1,
+      "seconds": 23.1,
+      "exit": 0,
+      "log": "up04-payload-invalidation-snapshot-drift.log"
+    },
+    "dbTypesAndMigrationChecks": {
+      "exit": 0,
+      "log": "up04-payload-invalidation-db-types.log"
+    },
+    "serverCompiler": {
+      "exit": 0,
+      "log": "up04-payload-invalidation-reviewed-server-types.log"
+    },
+    "finalPinsMatch": true,
+    "processesClosed": true
+  },
+  "intermediate": {
+    "focusedBeforeInsertFollowup": {
+      "passed": 6,
+      "seconds": 35.59,
+      "exit": 0,
+      "log": "up04-payload-source-invalidation-focused.log"
+    },
+    "firstGenerator": {
+      "exit": 1,
+      "log": "up04-payload-source-marker-db-generate.log",
+      "reason": "Wrong toolchain environment caused pnpm nonTTY reinstall refusal before compilation. No install/purge performed. Correct sourced Node24/pnpm9 native generator then exit0."
+    },
+    "firstCompiler": {
+      "exit": 1,
+      "log": "up04-payload-invalidation-server-types.log",
+      "reason": "Two original Task list contracts still omitted only two old proof fields: missing new selected DB bit and generic Omit. Root synchronized actual selection and omission, without type casts, invented defaults or weaker row types. Before-caller source is Git6a33dc80c; failed schema/test source pins retained, unchanged in final."
+    }
+  },
+  "review": "Bounded gpt-6-luna implementation; Root reviewed generated schema/SQL and original trigger ordering, removed proposed separate marker trigger family in favor of existing binding owner, added real historical upgrade test, corrected Task list contracts and ran final actual HTTP projection/compiler with15 matching pins. Native generator-pruned old committed snapshots restored; no old migration rewritten.",
+  "limits": [
+    "Integrity and conservative unknown-history preservation only; not source completeness, producer truth, authorization or source readiness. Fresh protocol1NULL initial binding remains structural and does not certify source-free content.",
+    "No API to restore/restamp a row whose known history was lost. Mixed writers/readers, delete/recreate/restore qualification and complete source-preserving producer writes remain open.",
+    "Known HTTP projection fixture uses injected authenticated board actor; no credential middleware, physical host or all-delivery qualification. All-six binding coverage does not imply all-six historical upgrade fixture coverage.",
+    "Complete native receipts/dispatch/history/tools, canonical current authorization/SQL and original copied-private-Memory/temporal regressions remain open. Full workspace/release/V10/PR gates remain open."
+  ]
+}

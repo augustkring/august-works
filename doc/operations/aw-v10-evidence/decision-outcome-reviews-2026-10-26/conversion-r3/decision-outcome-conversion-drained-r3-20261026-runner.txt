@@ -1,0 +1,3 @@
+timeout_seconds=240
+test_file=src/__tests__/decision-outcome-reviews.integration.test.ts
+test_pattern=atomically links one native Learning cycle under concurrent human review conversion

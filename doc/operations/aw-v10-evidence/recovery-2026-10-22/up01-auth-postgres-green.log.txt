@@ -1,0 +1,47 @@
+2026-10-22T19:12:55Z
+a2c4b2907bc91874e58a1dffa434cc4fb9ecce34ca6777ec30bfe91074856e2f  server/src/__tests__/agent-auth-audit.integration.test.ts
+e002afb69b5cdaf4e0856636b842dde52600b1c7126cf35edce3c9df938a61dd  server/src/middleware/auth.ts
+28b089f710e89f7abcf4b00ad8ffebd9a8642d6f5733304c9fc758864cb5a9c1  server/src/services/board-auth.ts
+d337ac08574be0e5a98a47d8d12db0d0f064eb9d04e825b6b6590bc3e1cfc8a1  server/src/agent-auth-jwt.ts
+692011333f7b82174f05509043ce1058820bd3409a65dcdd3cd40788b6711f74  server/src/middleware/error-handler.ts
+5bf1911980adc5457afd06e3b56a7e867e2bdad2f96c91862c6fed52c7f5d00f  server/src/__tests__/helpers/embedded-postgres.ts
+a47fa6bf83303012a18ca4c3adb829ddf731a23e1054a3e1f4fb56e3ad187e67  packages/db/src/client.ts
+20f3ca6d9fa6a2eb98725d7ebccdcd3189a89d7cbc105040d608c07af2fd462c  packages/db/src/test-embedded-postgres.ts
+(!) Your Vite config uses features that are unsupported by `configLoader: 'native'`, which is planned to become the default in a future major version of Vite:
+  - `__dirname` (vitest.config.ts:7:25). Use `import.meta.dirname` instead
+Set `VITE_CONFIG_NATIVE_IGNORE_WARNING=true` to suppress this warning.
+
+ RUN  v4.1.11 /workspace/blentera-v10
+
+ ❯ |@paperclipai/server| src/__tests__/agent-auth-audit.integration.test.ts (0 test)
+
+⎯⎯⎯⎯⎯⎯ Failed Suites 1 ⎯⎯⎯⎯⎯⎯⎯
+
+ FAIL  |@paperclipai/server| src/__tests__/agent-auth-audit.integration.test.ts [ server/src/__tests__/agent-auth-audit.integration.test.ts ]
+Error: Transform failed with 1 error:
+
+[31m[PARSE_ERROR] [0mExpected a semicolon or an implicit semicolon after a statement, but found none
+     [38;5;246m╭[0m[38;5;246m─[0m[38;5;246m[[0m server/src/__tests__/agent-auth-audit.integration.test.ts:120:13 [38;5;246m][0m
+     [38;5;246m│[0m
+ [38;5;246m120 │[0m [38;5;249m [0m[38;5;249m [0m[38;5;249m [0m[38;5;249m [0m[38;5;249m [0m[38;5;249m [0m[38;5;249m [0m[38;5;249m [0m[38;5;249m [0m[38;5;249m [0m[38;5;249ma[0m[38;5;249ms[0m[38;5;249m [0m[38;5;249mu[0m[38;5;249mn[0m[38;5;249mk[0m[38;5;249mn[0m[38;5;249mo[0m[38;5;249mw[0m[38;5;249mn[0m[38;5;249m [0m[38;5;249ma[0m[38;5;249ms[0m[38;5;249m [0m[38;5;249mA[0m[38;5;249mr[0m[38;5;249mr[0m[38;5;249ma[0m[38;5;249my[0m[38;5;249m<[0m[38;5;249m{[0m[38;5;249m [0m[38;5;249mb[0m[38;5;249ml[0m[38;5;249mo[0m[38;5;249mc[0m[38;5;249mk[0m[38;5;249me[0m[38;5;249md[0m[38;5;249m:[0m[38;5;249m [0m[38;5;249mb[0m[38;5;249mo[0m[38;5;249mo[0m[38;5;249ml[0m[38;5;249me[0m[38;5;249ma[0m[38;5;249mn[0m[38;5;249m [0m[38;5;249m}[0m[38;5;249m>[0m[38;5;249m;[0m
+ [38;5;240m    │[0m             │ 
+ [38;5;240m    │[0m             ╰─ 
+ [38;5;240m    │[0m 
+ [38;5;240m    │[0m [38;5;115mHelp[0m: Try inserting a semicolon here
+[38;5;246m─────╯[0m
+
+  Plugin: vite:oxc
+  File: /workspace/blentera-v10/server/src/__tests__/agent-auth-audit.integration.test.ts
+ ❯ transformWithOxc ../node_modules/.pnpm/vite@8.2.2_@types+node@24.13.3_esbuild@0.28.2_jiti@2.7.0_tsx@4.23.12/node_modules/vite/dist/node/chunks/node.js:4103:19
+ ❯ TransformPluginContext.transform ../node_modules/.pnpm/vite@8.2.2_@types+node@24.13.3_esbuild@0.28.2_jiti@2.7.0_tsx@4.23.12/node_modules/vite/dist/node/chunks/node.js:4174:26
+ ❯ EnvironmentPluginContainer.transform ../node_modules/.pnpm/vite@8.2.2_@types+node@24.13.3_esbuild@0.28.2_jiti@2.7.0_tsx@4.23.12/node_modules/vite/dist/node/chunks/node.js:30932:51
+ ❯ loadAndTransform ../node_modules/.pnpm/vite@8.2.2_@types+node@24.13.3_esbuild@0.28.2_jiti@2.7.0_tsx@4.23.12/node_modules/vite/dist/node/chunks/node.js:20671:26
+
+⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯[1/1]⎯
+
+
+ Test Files  1 failed (1)
+      Tests  no tests
+   Start at  19:12:57
+   Duration  1.34s (transform 48ms, setup 284ms, import 0ms, tests 0ms, environment 0ms)
+

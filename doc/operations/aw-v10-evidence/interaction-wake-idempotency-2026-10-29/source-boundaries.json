@@ -1,0 +1,44 @@
+{
+  "schema_version": "aw-v10-evidence-boundaries.v1",
+  "scope": "Accepted and rejected interaction continuation wake idempotency and focused CI regressions.",
+  "production_sources": [
+    "server/src/services/heartbeat.ts",
+    "server/src/services/recovery/service.ts"
+  ],
+  "focused_tests": [
+    "server/src/__tests__/heartbeat-process-recovery.test.ts",
+    "server/src/__tests__/chat-channels.integration.test.ts"
+  ],
+  "help_review": {
+    "register": "docs/help/change-review.json",
+    "qualified_source": "server/src/services/heartbeat.ts",
+    "source_sha256": "368ce1f106b547b39ee89bb9badaa16c86efa531626d3457974cd542ed75f3ac",
+    "article_ids": [
+      "recovering-work",
+      "recovering-work-da",
+      "export-and-delete",
+      "export-and-delete-da"
+    ],
+    "article_text_changed": false,
+    "other_wip_rows_reviewed": false
+  },
+  "final_test_receipt": {
+    "name": "interaction-wake-idempotency-r7-20261029",
+    "result": "7 passed, 309 skipped",
+    "source_snapshot": "e1e7d04d8c0f96c4ae8782905719fb8cd8035b5d",
+    "qualification_base": "886014cae5a7d6ed5a9ab99d62613ec7646308cb",
+    "archive": "scoped-ci-review.zip",
+    "archive_sha256": "43be3648b6e7954cb16ff0b70a81064641b07985a5154f4efd18f9c3adca0740"
+  },
+  "historical_failure": {
+    "diagnostic": "rejected-interaction-idempotency-r1-20261029",
+    "database_code": "23505",
+    "index": "agent_wakeup_requests_question_response_delivery_idempotency_uq"
+  },
+  "out_of_scope": [
+    "database migrations",
+    "public API contract changes",
+    "other Help source mappings or WIP review rows",
+    "Help article text changes"
+  ]
+}

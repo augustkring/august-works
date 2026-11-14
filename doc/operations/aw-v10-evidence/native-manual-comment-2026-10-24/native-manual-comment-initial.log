@@ -1,0 +1,53 @@
+(!) Your Vite config uses features that are unsupported by `configLoader: 'native'`, which is planned to become the default in a future major version of Vite:
+  - `__dirname` (vitest.config.ts:7:25). Use `import.meta.dirname` instead
+Set `VITE_CONFIG_NATIVE_IGNORE_WARNING=true` to suppress this warning.
+
+ RUN  v4.1.11 /workspace/blentera-v10
+
+ ❯ |@paperclipai/server| src/__tests__/manual-comment-payload-source.integration.test.ts (7 tests | 1 failed) 15415ms
+     × keeps structured or service-attributed comments unknown 189ms
+
+⎯⎯⎯⎯⎯⎯⎯ Failed Tests 1 ⎯⎯⎯⎯⎯⎯⎯
+
+ FAIL  |@paperclipai/server| src/__tests__/manual-comment-payload-source.integration.test.ts > direct Human comment payload source capture > keeps structured or service-attributed comments unknown
+ZodError: [
+  {
+    "code": "invalid_value",
+    "values": [
+      1
+    ],
+    "path": [
+      "version"
+    ],
+    "message": "Invalid input: expected 1"
+  },
+  {
+    "expected": "array",
+    "code": "invalid_type",
+    "path": [
+      "sections"
+    ],
+    "message": "Invalid input: expected array, received undefined"
+  }
+]
+ ❯ addComment src/services/issues.ts:12937:10
+    12935|       const metadata = issueCommentMetadataSchema
+    12936|         .nullable()
+    12937|         .parse(
+       |          ^
+    12938|           actor.agentId
+    12939|             ? withAgentCommentAuthorizationMetadata(
+ ❯ src/services/issues.ts:12758:29
+ ❯ scope ../node_modules/.pnpm/postgres@3.4.9_patch_hash=sryle6qd5qfmnxvoebal4gashi/node_modules/postgres/src/index.js:279:18
+ ❯ sql.begin ../node_modules/.pnpm/postgres@3.4.9_patch_hash=sryle6qd5qfmnxvoebal4gashi/node_modules/postgres/src/index.js:257:14
+ ❯ append src/services/issues.ts:12718:26
+ ❯ src/__tests__/manual-comment-payload-source.integration.test.ts:89:24
+
+⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯[1/1]⎯
+
+
+ Test Files  1 failed (1)
+      Tests  1 failed | 6 passed (7)
+   Start at  10:44:51
+   Duration  64.05s (transform 33.11s, setup 425ms, import 47.19s, tests 15.42s, environment 0ms)
+

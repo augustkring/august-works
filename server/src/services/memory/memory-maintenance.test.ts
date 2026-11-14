@@ -1,7 +1,7 @@
 import { randomUUID } from "node:crypto";
 import { and, eq, inArray, sql } from "drizzle-orm";
 import { afterAll, afterEach, beforeAll, describe, expect, it } from "vitest";
-import { activityLog, companies, companyMemberships, createDb, memoryBindings, memoryBindingTargets, memoryEvidence, memoryJobs, memoryRecords } from "@paperclipai/db";
+import { activityLog, authUsers, companies, companyMemberships, createDb, EMBEDDED_POSTGRES_TEST_TIMEOUT_MS, memoryBindings, memoryBindingTargets, memoryEvidence, memoryJobs, memoryRecords } from "@paperclipai/db";
 import { getEmbeddedPostgresTestSupport, startEmbeddedPostgresTestDatabase } from "../../__tests__/helpers/embedded-postgres.js";
 import { instanceSettingsService } from "../instance-settings.js";
 import { memoryService } from "./memory-service.js";
@@ -15,7 +15,7 @@ suite("Governed native Memory maintenance", () => {
   let temp: Awaited<ReturnType<typeof startEmbeddedPostgresTestDatabase>>;
   const fixtureCompanies = new Set<string>();
   beforeAll(async () => { temp = await startEmbeddedPostgresTestDatabase("paperclip-memory-maintenance-"); db = createDb(temp.connectionString);
-    await enableHistory(); }, 30_000);
+    await enableHistory(); }, EMBEDDED_POSTGRES_TEST_TIMEOUT_MS);
   afterAll(async () => temp?.cleanup());
   afterEach(async () => {
     // Preserve assertions and receipts, but do not let a failed disposable
@@ -29,11 +29,12 @@ suite("Governed native Memory maintenance", () => {
     const [company] = await db.insert(companies).values({ name: "Maintenance", issuePrefix: `M${randomUUID().slice(0, 6).toUpperCase()}` }).returning();
     const companyId = company!.id, userId = `owner-${randomUUID()}`;
     fixtureCompanies.add(companyId);
+    await db.insert(authUsers).values({id:userId,name:"Maintenance owner",email:`${randomUUID()}@example.test`,createdAt:new Date(),updatedAt:new Date()});
     await db.insert(companyMemberships).values({ companyId, principalType: "user", principalId: userId, membershipRole: "owner", status: "active" });
     const [binding] = await db.insert(memoryBindings).values({ companyId, key: "shared", name: "Local Memory", providerKey: "local", enabled: true, config: {} }).returning();
     await db.insert(memoryBindingTargets).values({ companyId, bindingId: binding!.id, targetType: "company", targetId: companyId });
     const records = await db.insert(memoryRecords).values([0, 1].map((index) => ({ companyId, bindingId: binding!.id, providerKey: "local",
-      memoryType: "observation" as const, scopeType: "company" as const, scopeId: null, title: duplicate ? "Same reviewed claim" : `Reviewed claim ${index}`,
+      sourceProvenanceQualified:true, memoryType: "observation" as const, scopeType: "company" as const, scopeId: null, title: duplicate ? "Same reviewed claim" : `Reviewed claim ${index}`,
       content: duplicate ? "An identical reviewed claim with preserved supporting evidence." : `Reviewed claim ${index}. ${"Full source detail. ".repeat(20)}`,
       summary: duplicate ? "Same summary" : `Reviewed summary ${index}.`, observedAt: new Date(), reviewState: "accepted" as const,
       verificationState: "human_verified" as const, createdByActorType: "user" as const, createdByActorId: userId }))).returning();
@@ -103,6 +104,27 @@ suite("Governed native Memory maintenance", () => {
     await memoryService(db).forget(seeded.companyId, seeded.records[0]!.id, seeded.actor);
     expect((await readMemoryMaintenanceHistory(db, historyActor(seeded), seeded.companyId)).entries[0])
       .toMatchObject({ outcome: "source_unavailable", receiptId: null, indexedRecordCount: null });
+    const [receipt]=await db.select({id:activityLog.id}).from(activityLog).where(and(eq(activityLog.companyId,seeded.companyId),
+      eq(activityLog.entityType,"memory_job"),eq(activityLog.entityId,job.id),eq(activityLog.action,"memory.index_refresh_completed")));
+    expect(receipt).toBeTruthy();
+    await db.delete(activityLog).where(eq(activityLog.id,receipt!.id));
+    expect((await readMemoryMaintenanceHistory(db,historyActor(seeded),seeded.companyId)).entries).toHaveLength(0);
+  });
+  it("retains only the original local operator's content-free index receipt after erasure", async () => {
+    const seeded = await seed(), svc = memoryJobService(db);
+    const local = { principal: { type: "system" as const, service: "local-board" } };
+    const job = await svc.enqueueMaintenance(seeded.companyId, { operationType: "index_refresh",
+      recordIds: [seeded.records[0]!.id] }, local, "local-history-erasure");
+    await execute(seeded.companyId, job.id);
+    await memoryService(db).forget(seeded.companyId, seeded.records[0]!.id, local);
+    const view = await readMemoryMaintenanceHistory(db, { type: "board", source: "local_implicit" }, seeded.companyId);
+    expect(view.entries).toEqual([expect.objectContaining({ jobId: job.id, outcome: "source_unavailable",
+      receiptId: null, indexedRecordCount: null })]);
+    expect(JSON.stringify(view)).not.toContain(seeded.records[0]!.id);
+    expect((await readMemoryMaintenanceHistory(db, historyActor(seeded), seeded.companyId)).entries).toEqual([]);
+    await db.delete(activityLog).where(and(eq(activityLog.companyId, seeded.companyId),
+      eq(activityLog.entityType, "memory_job"), eq(activityLog.entityId, job.id)));
+    expect((await readMemoryMaintenanceHistory(db, { type: "board", source: "local_implicit" }, seeded.companyId)).entries).toEqual([]);
   });
   it("repeats native company and Memory owner admission rather than trusting an instance-admin claim", async () => {
     const seeded = await seed();

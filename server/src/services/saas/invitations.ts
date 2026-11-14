@@ -1,3 +1,4 @@
+import { PRODUCT_IDENTITY } from "@paperclipai/shared/product-identity";
 import { and, eq, gt, isNull, sql } from "drizzle-orm";
 import {
   activityLog,
@@ -148,7 +149,7 @@ export function saasInvitationService(
           companyId,
           purpose: "invite",
           recipient: input.email,
-          subject: "Join your organization in August Works",
+          subject: `Join your organization in ${PRODUCT_IDENTITY.productName}`,
           message:
             "You have been invited to join " +
             company.name +

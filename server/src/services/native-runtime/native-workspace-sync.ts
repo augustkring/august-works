@@ -13,6 +13,7 @@ import {
 } from "@paperclipai/adapter-utils/execution-target";
 import type { GitWorkspaceSnapshot } from "@paperclipai/adapter-utils/git-workspace-sync";
 import {
+  captureDirectorySnapshot,
   directorySnapshotSha256,
   parseDirectorySnapshot,
   serializeDirectorySnapshot,
@@ -56,6 +57,7 @@ interface NativeWorkspaceSyncDescriptor {
   baselineSha256: string;
   baseline: SerializedDirectorySnapshot;
   gitSnapshot: GitWorkspaceSnapshot | null;
+  workspaceRepositoryMode?: "discover" | "server_verified_none";
   seed: {
     workspaceArchiveSha256: string;
     gitArchiveSha256: string | null;
@@ -77,6 +79,7 @@ export interface NativeWorkspaceSyncReference {
   providerLeaseId: string;
   remoteCwd: string;
   resourceDisposition: NativeWorkspaceResourceDisposition | null;
+  workspaceRepositoryMode?: "discover" | "server_verified_none";
 }
 
 export interface PreparedNativeWorkspaceSync {
@@ -268,6 +271,7 @@ async function writeDescriptor(
     providerLeaseId: descriptor.binding.providerLeaseId,
     remoteCwd: descriptor.binding.remoteCwd,
     resourceDisposition: descriptor.resourceDisposition,
+    ...(descriptor.workspaceRepositoryMode ? { workspaceRepositoryMode: descriptor.workspaceRepositoryMode } : {}),
   };
 }
 
@@ -294,7 +298,9 @@ export function readNativeWorkspaceSyncReference(
       candidate.resourceDisposition !== undefined &&
       candidate.resourceDisposition !== "keep_running" &&
       candidate.resourceDisposition !== "stop_and_retain" &&
-      candidate.resourceDisposition !== "destroy")
+      candidate.resourceDisposition !== "destroy") ||
+    (candidate.workspaceRepositoryMode !== undefined && candidate.workspaceRepositoryMode !== "discover" &&
+      candidate.workspaceRepositoryMode !== "server_verified_none")
   ) {
     return null;
   }
@@ -307,6 +313,8 @@ export function readNativeWorkspaceSyncReference(
       typeof candidate.finalHostSha256 === "string"
         ? candidate.finalHostSha256
         : null,
+    ...(candidate.workspaceRepositoryMode === "discover" || candidate.workspaceRepositoryMode === "server_verified_none"
+      ? { workspaceRepositoryMode: candidate.workspaceRepositoryMode } : {}),
     workspaceId: candidate.workspaceId,
     leaseId: candidate.leaseId,
     providerLeaseId: candidate.providerLeaseId,
@@ -439,6 +447,10 @@ async function readDescriptor(input: {
       : candidate.finalHostSha256 === null
         ? null
         : undefined;
+  const workspaceRepositoryMode = candidate.workspaceRepositoryMode === undefined
+    ? undefined : candidate.workspaceRepositoryMode === "discover" || candidate.workspaceRepositoryMode === "server_verified_none"
+      ? candidate.workspaceRepositoryMode : undefined;
+  const invalidWorkspaceRepositoryMode = candidate.workspaceRepositoryMode !== undefined && workspaceRepositoryMode === undefined;
   const resourceDisposition =
     candidate.resourceDisposition === "keep_running" ||
     candidate.resourceDisposition === "stop_and_retain" ||
@@ -468,7 +480,8 @@ async function readDescriptor(input: {
     directorySnapshotSha256(baseline) !== candidate.baselineSha256 ||
     typeof candidate.createdAt !== "string" ||
     !Number.isFinite(Date.parse(candidate.createdAt)) ||
-    candidate.state !== input.reference.state ||
+    candidate.state !== input.reference.state || invalidWorkspaceRepositoryMode ||
+    (input.reference.workspaceRepositoryMode !== undefined && input.reference.workspaceRepositoryMode !== workspaceRepositoryMode) ||
     finalHostSha256 === undefined ||
     finalHostSha256 !== input.reference.finalHostSha256 ||
     resourceDisposition === undefined ||
@@ -506,6 +519,7 @@ async function readDescriptor(input: {
           : null,
       finalHostSha256,
       resourceDisposition,
+      ...(workspaceRepositoryMode ? { workspaceRepositoryMode } : {}),
     },
     baseline,
   };
@@ -585,6 +599,7 @@ function shellQuote(value: string): string {
 async function writeRemoteStamp(input: {
   target: Extract<AdapterExecutionTarget, { transport: "sandbox" }>;
   stamp: Record<string, unknown>;
+  nativeWorkspacePreparation?: boolean;
 }): Promise<void> {
   if (!input.target.runner) {
     throw new Error("native_workspace_sync_runner_missing");
@@ -606,9 +621,12 @@ async function writeRemoteStamp(input: {
       "-c",
       `umask 077; mkdir -p ${shellQuote(runtimeDir)} && printf %s ${shellQuote(encoded)} | base64 -d > ${shellQuote(tempPath)} && mv ${shellQuote(tempPath)} ${shellQuote(stampPath)}`,
     ],
-    cwd: "/",
+    // RuntimeControl binds conversation commands to the exact private Task
+    // workspace. The stamp itself lives under that workspace's runtime root.
+    cwd: input.target.remoteCwd,
     timeoutMs: 15_000,
     bypassSession: true,
+    ...(input.nativeWorkspacePreparation ? { nativePreparationPurpose: "native_workspace_prepare" as const } : {}),
   });
   if (result.timedOut || result.exitCode !== 0) {
     throw new Error("native_workspace_sync_remote_stamp_failed");
@@ -618,6 +636,7 @@ async function writeRemoteStamp(input: {
 async function remoteStampMatches(input: {
   target: Extract<AdapterExecutionTarget, { transport: "sandbox" }>;
   expected: Record<string, unknown>;
+  nativeWorkspacePreparation?: boolean;
 }): Promise<boolean> {
   if (!input.target.runner) return false;
   const stampPath = path.posix.join(
@@ -632,9 +651,10 @@ async function remoteStampMatches(input: {
       "-c",
       `test -f ${shellQuote(stampPath)} && cat ${shellQuote(stampPath)}`,
     ],
-    cwd: "/",
+    cwd: input.target.remoteCwd,
     timeoutMs: 15_000,
     bypassSession: true,
+    ...(input.nativeWorkspacePreparation ? { nativePreparationPurpose: "native_workspace_prepare" as const } : {}),
   });
   if (result.timedOut || result.exitCode !== 0) return false;
   try {
@@ -689,6 +709,8 @@ async function prepareRuntime(input: {
   mode: WorkspaceInboundMode;
   baseline?: DirectorySnapshot;
   gitSnapshot?: GitWorkspaceSnapshot | null;
+  workspaceRepositoryMode?: "discover" | "server_verified_none";
+  nativeWorkspacePreparation?: boolean;
   durableSeed?: WorkspaceDurableSeedPaths;
 }): Promise<PreparedAdapterExecutionTargetRuntime> {
   return prepareAdapterExecutionTargetRuntime({
@@ -701,6 +723,8 @@ async function prepareRuntime(input: {
     workspaceDurableSeed: input.durableSeed,
     workspaceBaseline: input.baseline,
     workspaceGitSnapshot: input.gitSnapshot,
+    workspaceRepositoryMode: input.workspaceRepositoryMode,
+    nativeWorkspacePreparation: input.nativeWorkspacePreparation === true || input.workspaceRepositoryMode === "server_verified_none",
   });
 }
 
@@ -724,7 +748,8 @@ async function finalizePreparedRuntime(input: {
     descriptor: input.descriptor,
     hostSha256: finalHostSha256,
   });
-  await writeRemoteStamp({ target: input.target, stamp });
+  await writeRemoteStamp({ target: input.target, stamp,
+    nativeWorkspacePreparation: input.descriptor.workspaceRepositoryMode === "server_verified_none" });
   const finalizedDescriptor: NativeWorkspaceSyncDescriptor = {
     ...input.descriptor,
     state: "finalized",
@@ -752,6 +777,12 @@ export async function prepareNativeWorkspaceSync(input: {
   restartRecovery?: NativeRestartRecoveryClaim;
   sameRunRecovery?: boolean;
   resourceDisposition?: NativeWorkspaceResourceDisposition;
+  /** Set only by heartbeat after exact private projectless task-root verification. */
+  workspaceRepositoryMode?: "discover" | "server_verified_none";
+  /** Bound to the existing managed Native source authority before staging. */
+  nativeWorkspacePreparation?: boolean;
+  /** Refuse replacement staging when a conformance root's retained Host stamp is absent or changed. */
+  requireCleanRemoteAdoption?: boolean;
 }): Promise<PreparedNativeWorkspaceSync | null> {
   if (input.target?.kind !== "remote" || input.target.transport !== "sandbox") {
     return null;
@@ -798,6 +829,17 @@ export async function prepareNativeWorkspaceSync(input: {
     }
     const sameProviderLease =
       existing.descriptor.binding.providerLeaseId === providerLeaseId;
+    if (input.requireCleanRemoteAdoption) {
+      if (input.workspaceRepositoryMode !== "server_verified_none" ||
+          existing.descriptor.workspaceRepositoryMode !== "server_verified_none" ||
+          existing.descriptor.baseline.entries.length !== 0 || existing.descriptor.gitSnapshot !== null || !sameProviderLease)
+        throw new Error("native_conformance_workspace_source_changed");
+      if (existing.descriptor.state === "finalized" && existing.descriptor.finalHostSha256) {
+        const expected = finalizedWorkspaceStamp({ descriptor: existing.descriptor, hostSha256: existing.descriptor.finalHostSha256 });
+        if (!(await remoteStampMatches({ target, expected, nativeWorkspacePreparation: true })) )
+          throw new Error("native_conformance_workspace_remote_stamp_changed");
+      }
+    }
     mode = classifyNativeWorkspaceInbound({
       kind: "existing_run",
       restartRecovery: Boolean(input.restartRecovery),
@@ -823,6 +865,8 @@ export async function prepareNativeWorkspaceSync(input: {
       mode,
       baseline: existing.baseline,
       gitSnapshot: existing.descriptor.gitSnapshot,
+      workspaceRepositoryMode: input.workspaceRepositoryMode,
+      nativeWorkspacePreparation: input.nativeWorkspacePreparation,
       durableSeed,
     });
     descriptor = {
@@ -841,6 +885,14 @@ export async function prepareNativeWorkspaceSync(input: {
       providerLeaseId,
       remoteCwd: target.remoteCwd,
     });
+    if (input.requireCleanRemoteAdoption) {
+      if (input.workspaceRepositoryMode !== "server_verified_none" || (acquisition === "resumed" && !priorStamp))
+        throw new Error("native_conformance_workspace_prior_stamp_missing");
+      if (acquisition === "resumed" && priorStamp &&
+          (!(await remoteStampMatches({ target, expected: priorStamp, nativeWorkspacePreparation: true })) ||
+            priorStamp.hostSha256 !== directorySnapshotSha256(await captureDirectorySnapshot(input.workspaceLocalDir))))
+        throw new Error("native_conformance_workspace_remote_stamp_changed");
+    }
     mode = classifyNativeWorkspaceInbound({
       kind: "new_run",
       acquisition,
@@ -855,6 +907,8 @@ export async function prepareNativeWorkspaceSync(input: {
         workspaceArchivePath: seedPaths.workspaceArchivePath,
         gitArchivePath: seedPaths.gitArchivePath,
       },
+      workspaceRepositoryMode: input.workspaceRepositoryMode,
+      nativeWorkspacePreparation: input.nativeWorkspacePreparation,
     });
     const currentSnapshot = runtime.workspaceSyncSnapshot;
     if (!currentSnapshot) {
@@ -866,7 +920,9 @@ export async function prepareNativeWorkspaceSync(input: {
       );
       const verifiedWarmAdoption =
         priorStamp.hostSha256 === currentHostSha256 &&
-        (await remoteStampMatches({ target, expected: priorStamp }));
+        (await remoteStampMatches({ target, expected: priorStamp, nativeWorkspacePreparation: input.nativeWorkspacePreparation }));
+      if (input.requireCleanRemoteAdoption && !verifiedWarmAdoption)
+        throw new Error("native_conformance_workspace_remote_stamp_changed");
       if (verifiedWarmAdoption) {
         mode = "adopt_remote";
       } else {
@@ -878,6 +934,8 @@ export async function prepareNativeWorkspaceSync(input: {
           mode,
           baseline: currentSnapshot.baseline,
           gitSnapshot: currentSnapshot.gitSnapshot,
+          workspaceRepositoryMode: input.workspaceRepositoryMode,
+          nativeWorkspacePreparation: input.nativeWorkspacePreparation,
           durableSeed: {
             workspaceArchivePath: seedPaths.workspaceArchivePath,
             gitArchivePath: seedPaths.gitArchivePath,
@@ -909,6 +967,7 @@ export async function prepareNativeWorkspaceSync(input: {
       baselineSha256: directorySnapshotSha256(snapshot.baseline),
       baseline: serializeDirectorySnapshot(snapshot.baseline),
       gitSnapshot: snapshot.gitSnapshot,
+      ...(input.workspaceRepositoryMode ? { workspaceRepositoryMode: input.workspaceRepositoryMode } : {}),
       seed: { workspaceArchiveSha256, gitArchiveSha256 },
       createdAt: now,
       finalizedAt: null,
@@ -946,6 +1005,58 @@ export async function prepareNativeWorkspaceSync(input: {
     },
     cleanup: () => cleanupNativeWorkspaceSync(input.runId),
   };
+}
+
+
+export async function assertNativeWorkspaceSyncServerVerifiedNone(input: {
+  runId: string;
+  reference: NativeWorkspaceSyncReference;
+  companyId: string;
+  workspaceId: string;
+  leaseId: string;
+  providerLeaseId: string;
+  localCwd: string;
+  remoteCwd: string;
+  requireEmptyBaseline?: boolean;
+}): Promise<boolean> {
+  try {
+    const { descriptor, baseline } = await readDescriptor({ runId: input.runId, reference: input.reference });
+    return descriptor.state === "prepared" && descriptor.workspaceRepositoryMode === "server_verified_none" &&
+      descriptor.binding.runId === input.runId && descriptor.binding.companyId === input.companyId &&
+      descriptor.binding.workspaceId === input.workspaceId && descriptor.binding.leaseId === input.leaseId &&
+      descriptor.binding.providerLeaseId === input.providerLeaseId &&
+      path.resolve(descriptor.binding.localCwd) === path.resolve(input.localCwd) &&
+      path.resolve(descriptor.binding.remoteCwd) === path.resolve(input.remoteCwd) &&
+      (!input.requireEmptyBaseline || baseline.entries.size === 0) && descriptor.gitSnapshot === null &&
+      input.reference.workspaceRepositoryMode === "server_verified_none" &&
+      input.reference.baselineSha256 === descriptor.baselineSha256 && input.reference.workspaceId === input.workspaceId &&
+      input.reference.leaseId === input.leaseId && input.reference.providerLeaseId === input.providerLeaseId &&
+      input.reference.remoteCwd === input.remoteCwd;
+  } catch {
+    return false;
+  }
+}
+
+export async function assertNativeOpenCodeConformanceWorkspaceRootReceipt(input: {
+  groupId: string; companyId: string; agentId: string; taskId: string; taskRoot: string;
+  workspaceId: string; cwd: string; creationReceipt: string;
+}): Promise<boolean> {
+  try {
+    const key = createHash("sha256").update(`${input.groupId}\0${input.companyId}\0${input.agentId}\0${input.taskId}`).digest("hex");
+    const instanceRoot = await fs.realpath(resolvePaperclipInstanceRoot());
+    const parent = path.join(instanceRoot, "chat-workspace-proofs");
+    const receiptPath = path.join(parent, `${key}.json`), root = input.taskRoot;
+    const [receiptRaw, stat, real, parentStat] = await Promise.all([
+      fs.readFile(receiptPath, "utf8"), fs.lstat(root), fs.realpath(root), fs.lstat(parent),
+    ]);
+    const receipt = JSON.parse(receiptRaw) as Record<string, unknown>;
+    return receipt.schema === "paperclip.native-opencode-conformance-workspace/v1" &&
+      receipt.groupId === input.groupId && receipt.companyId === input.companyId && receipt.agentId === input.agentId &&
+      receipt.taskId === input.taskId && receipt.taskRoot === input.taskRoot && receipt.workspaceId === input.workspaceId &&
+      receipt.cwd === input.cwd && root === input.cwd && real === root &&
+      !stat.isSymbolicLink() && stat.isDirectory() && stat.dev === receipt.dev && stat.ino === receipt.ino &&
+      !parentStat.isSymbolicLink() && parentStat.isDirectory() && sha256(receipt) === input.creationReceipt;
+  } catch { return false; }
 }
 
 export async function resumeNativeWorkspaceSync(input: {
@@ -1025,5 +1136,6 @@ export const nativeWorkspaceSyncInternals = {
   writeDescriptor,
   readDescriptor,
   readReference: readNativeWorkspaceSyncReference,
+  writeRemoteStamp,
   sha256,
 };

@@ -1,0 +1,20 @@
+src/services/heartbeat.ts(24720,59): error TS2339: Property 'commentId' does not exist on type 'NativeRenderedSourceReference'.
+  Property 'commentId' does not exist on type '{ kind: "task_wake_interaction_state"; id: string; interactionKind: "ask_user_questions" | "request_checkbox_confirmation" | "request_confirmation"; interactionStatus: "cancelled" | "rejected"; }'.
+src/services/heartbeat.ts(24726,109): error TS2339: Property 'byteSize' does not exist on type 'NativeRenderedSourceReference'.
+  Property 'byteSize' does not exist on type '{ kind: "task_wake_interaction_state"; id: string; interactionKind: "ask_user_questions" | "request_checkbox_confirmation" | "request_confirmation"; interactionStatus: "cancelled" | "rejected"; }'.
+src/services/heartbeat.ts(24727,55): error TS2339: Property 'filename' does not exist on type 'NativeRenderedSourceReference'.
+  Property 'filename' does not exist on type '{ kind: "task_wake_interaction_state"; id: string; interactionKind: "ask_user_questions" | "request_checkbox_confirmation" | "request_confirmation"; interactionStatus: "cancelled" | "rejected"; }'.
+src/services/heartbeat.ts(24727,104): error TS2339: Property 'contentType' does not exist on type 'NativeRenderedSourceReference'.
+  Property 'contentType' does not exist on type '{ kind: "task_wake_interaction_state"; id: string; interactionKind: "ask_user_questions" | "request_checkbox_confirmation" | "request_confirmation"; interactionStatus: "cancelled" | "rejected"; }'.
+src/services/heartbeat.ts(24728,55): error TS2339: Property 'byteSize' does not exist on type 'NativeRenderedSourceReference'.
+  Property 'byteSize' does not exist on type '{ kind: "task_wake_interaction_state"; id: string; interactionKind: "ask_user_questions" | "request_checkbox_confirmation" | "request_confirmation"; interactionStatus: "cancelled" | "rejected"; }'.
+src/services/native-runtime/native-model-input-dispatch.integration.test.ts(375,152): error TS2339: Property 'commentId' does not exist on type 'NativeRenderedSourceReference'.
+  Property 'commentId' does not exist on type '{ kind: "task_wake_interaction_state"; id: string; interactionKind: "ask_user_questions" | "request_checkbox_confirmation" | "request_confirmation"; interactionStatus: "cancelled" | "rejected"; }'.
+src/services/native-runtime/native-model-input-dispatch.integration.test.ts(378,121): error TS2339: Property 'byteSize' does not exist on type 'NativeRenderedSourceReference'.
+  Property 'byteSize' does not exist on type '{ kind: "task_wake_interaction_state"; id: string; interactionKind: "ask_user_questions" | "request_checkbox_confirmation" | "request_confirmation"; interactionStatus: "cancelled" | "rejected"; }'.
+src/services/native-runtime/native-model-input-dispatch.integration.test.ts(379,49): error TS2339: Property 'filename' does not exist on type 'NativeRenderedSourceReference'.
+  Property 'filename' does not exist on type '{ kind: "task_wake_interaction_state"; id: string; interactionKind: "ask_user_questions" | "request_checkbox_confirmation" | "request_confirmation"; interactionStatus: "cancelled" | "rejected"; }'.
+src/services/native-runtime/native-model-input-dispatch.integration.test.ts(379,98): error TS2339: Property 'contentType' does not exist on type 'NativeRenderedSourceReference'.
+  Property 'contentType' does not exist on type '{ kind: "task_wake_interaction_state"; id: string; interactionKind: "ask_user_questions" | "request_checkbox_confirmation" | "request_confirmation"; interactionStatus: "cancelled" | "rejected"; }'.
+src/services/native-runtime/native-model-input-dispatch.integration.test.ts(379,147): error TS2339: Property 'byteSize' does not exist on type 'NativeRenderedSourceReference'.
+  Property 'byteSize' does not exist on type '{ kind: "task_wake_interaction_state"; id: string; interactionKind: "ask_user_questions" | "request_checkbox_confirmation" | "request_confirmation"; interactionStatus: "cancelled" | "rejected"; }'.

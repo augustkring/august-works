@@ -63,6 +63,7 @@ type ToolAccessContext = {
   projectId: string | null;
   routineId: string | null;
   gatewayId: string | null;
+  gatewayPublicId: string | null;
   applicationId: string | null;
   connectionId: string | null;
   catalogEntryId: string | null;
@@ -683,6 +684,47 @@ function scopeAllowsTool(scope: Record<string, unknown> | null, ctx: ToolAccessC
   return selectorMatches(scope, ctx);
 }
 
+/**
+ * Server-internal record of the rate-limit tokens that one tool call has
+ * already consumed, keyed by policy, bucket and window start.
+ *
+ * A call consumes its token in the admitting `decide` (`consumeRateLimit:
+ * true`). Later non-consuming re-checks made by the same call (for example the
+ * scoped transport re-checks before remote MCP dispatch) pass this ledger so
+ * the peek does not count the call's own token against it: with limit N the
+ * Nth admitted call must not reject itself. A token only offsets the count in
+ * the exact window it was consumed in. After a window rollover the new
+ * window's count never includes this call, so the ordinary `count >= limit`
+ * check applies and no extra call is admitted.
+ *
+ * This is deliberately not part of `ToolAccessDecisionInput`: it travels as a
+ * separate `decide` argument, and only ledgers made by
+ * `createToolRateLimitTokenLedger` are honoured, so no request body can set it.
+ */
+export interface ToolRateLimitTokenLedger {
+  heldIn(policyId: string, bucketKey: string, windowStartAt: Date): number;
+}
+
+export interface ToolAccessDecisionInternalOptions {
+  rateLimitTokens?: ToolRateLimitTokenLedger;
+}
+
+const rateLimitTokenLedgerEntries = new WeakMap<ToolRateLimitTokenLedger, Map<string, number>>();
+
+function rateLimitTokenKey(policyId: string, bucketKey: string, windowStartAt: Date) {
+  return JSON.stringify([policyId, bucketKey, windowStartAt.getTime()]);
+}
+
+export function createToolRateLimitTokenLedger(): ToolRateLimitTokenLedger {
+  const entries = new Map<string, number>();
+  const ledger: ToolRateLimitTokenLedger = Object.freeze({
+    heldIn: (policyId: string, bucketKey: string, windowStartAt: Date) =>
+      entries.get(rateLimitTokenKey(policyId, bucketKey, windowStartAt)) ?? 0,
+  });
+  rateLimitTokenLedgerEntries.set(ledger, entries);
+  return ledger;
+}
+
 export function toolAccessPolicyService(db: Db) {
   async function listPolicies(companyId: string) {
     return db
@@ -853,6 +895,7 @@ export function toolAccessPolicyService(db: Db) {
     let projectId = input.runContext?.projectId ?? null;
     let routineId = input.runContext?.routineId ?? null;
     const gatewayId = input.runContext?.gatewayId ?? null;
+    const gatewayPublicId = input.runContext?.gatewayPublicId ?? null;
 
     if (input.actor.actorType === "agent") {
       const [agent] = await db.select().from(agents).where(and(eq(agents.id, agentId ?? ""), eq(agents.companyId, input.companyId)));
@@ -992,6 +1035,7 @@ export function toolAccessPolicyService(db: Db) {
         projectId,
         routineId,
         gatewayId,
+        gatewayPublicId,
         applicationId,
         connectionId,
         catalogEntryId,
@@ -1062,8 +1106,14 @@ export function toolAccessPolicyService(db: Db) {
     return grants.some((grant) => scopeAllowsTool(grant.scope, ctx));
   }
 
-  async function enforceRateLimit(policy: typeof toolPolicies.$inferSelect, ctx: ToolAccessContext, consume: boolean) {
+  async function enforceRateLimit(
+    policy: typeof toolPolicies.$inferSelect,
+    ctx: ToolAccessContext,
+    consume: boolean,
+    rateLimitTokens?: ToolRateLimitTokenLedger,
+  ) {
     const rule = rateLimitRule(policy);
+    const tokenEntries = rateLimitTokens ? rateLimitTokenLedgerEntries.get(rateLimitTokens) : undefined;
     if (!rule) return null;
     const now = new Date();
     const start = windowStart(now, rule.windowSeconds);
@@ -1080,7 +1130,13 @@ export function toolAccessPolicyService(db: Db) {
     if (!consume) {
       const [existing] = await db.select().from(toolRateLimitCounters).where(counterWhere);
       const count = existing ? Math.max(0, existing.limit - existing.remaining) : 0;
-      return { limited: count >= rule.limit, count, limit: rule.limit, windowSeconds: rule.windowSeconds, bucketKey };
+      // A pre-check (no held token) keeps `count >= limit`: one more call would
+      // exceed the limit. A re-check by an admitted call excludes only the
+      // tokens that call consumed in this same window, so it becomes
+      // `count > limit` for a single held token.
+      const heldByThisCall = tokenEntries?.get(rateLimitTokenKey(policy.id, bucketKey, start)) ?? 0;
+      const othersCount = Math.max(0, count - heldByThisCall);
+      return { limited: othersCount >= rule.limit, count, limit: rule.limit, windowSeconds: rule.windowSeconds, bucketKey };
     }
 
     const [counter] = await db
@@ -1116,6 +1172,10 @@ export function toolAccessPolicyService(db: Db) {
       .returning({ remaining: toolRateLimitCounters.remaining });
     if (!counter) {
       return { limited: true, count: rule.limit, limit: rule.limit, windowSeconds: rule.windowSeconds, bucketKey };
+    }
+    if (tokenEntries) {
+      const tokenKey = rateLimitTokenKey(policy.id, bucketKey, start);
+      tokenEntries.set(tokenKey, (tokenEntries.get(tokenKey) ?? 0) + 1);
     }
     return {
       limited: false,
@@ -1182,7 +1242,7 @@ export function toolAccessPolicyService(db: Db) {
     });
   }
 
-  async function decideCore(input: ToolAccessDecisionInput): Promise<ToolAccessDecision> {
+  async function decideCore(input: ToolAccessDecisionInput, internal: ToolAccessDecisionInternalOptions = {}): Promise<ToolAccessDecision> {
     const loaded = await loadContext(input);
     if (!loaded.ok) return loaded.decision;
     const { ctx, redaction } = loaded;
@@ -1256,7 +1316,7 @@ export function toolAccessPolicyService(db: Db) {
             { redactionPlan: redaction.redactionPlan, policyExplanation },
           );
         }
-        const state = await enforceRateLimit(policy, ctx, input.consumeRateLimit === true);
+        const state = await enforceRateLimit(policy, ctx, input.consumeRateLimit === true, internal.rateLimitTokens);
         if (state?.limited) {
           return decision("rate_limited", "rate_limited", "Tool access rate limit exceeded.", effectiveProfileIds, [policy.id], { rateLimitState: state, redactionPlan: redaction.redactionPlan, policyExplanation });
         }
@@ -1317,8 +1377,12 @@ export function toolAccessPolicyService(db: Db) {
     return decision("deny", "deny_default", "No effective tool profile, grant, or allow policy permits this call.", effectiveProfileIds, [], { redactionPlan: redaction.redactionPlan });
   }
 
-  async function decide(input: ToolAccessDecisionInput): Promise<ToolAccessDecision> {
-    const base = await decideCore(input);
+  /**
+   * `internal` is server-only: HTTP routes pass a validated body as `input`
+   * and never a second argument. See `ToolRateLimitTokenLedger`.
+   */
+  async function decide(input: ToolAccessDecisionInput, internal: ToolAccessDecisionInternalOptions = {}): Promise<ToolAccessDecision> {
+    const base = await decideCore(input, internal);
     if (!base.allowed && base.decision !== "require_approval") return base;
     const loaded = await loadContext(input); if (!loaded.ok) return loaded.decision;
     if (loaded.ctx.agentId && (input.actor.actorType === "agent" || loaded.ctx.heartbeatRunId)) {
@@ -1327,6 +1391,27 @@ export function toolAccessPolicyService(db: Db) {
     }
     const packageRestriction = await packageToolRestriction(db, loaded.ctx);
     if(packageRestriction.denyReason) return decision("deny", "deny_policy_block", packageRestriction.denyReason, base.effectiveProfileIds, base.matchedPolicyIds);
+    const restriction = await governanceToolRestriction(db, loaded.ctx);
+    if (restriction.denyReason) return decision("deny", "deny_policy_block", restriction.denyReason, base.effectiveProfileIds, base.matchedPolicyIds);
+    if ((restriction.requireHumanApproval || packageRestriction.requireHumanApproval) && base.allowed) return decision("require_approval", "requires_approval_policy", "The reviewed use case requires a human decision for this material action.", base.effectiveProfileIds, base.matchedPolicyIds);
+    return base;
+  }
+
+  /**
+   * Evaluate persisted tool policies, profiles, package restrictions and
+   * governance restrictions while a managed runtime policy is being compiled.
+   * Compilation can precede the first healthy runtime generation, so only the
+   * commercial-capacity gate is deferred to the existing full `decide` call at
+   * operation dispatch. This result is metadata for route construction and is
+   * never a dispatch authorization.
+   */
+  async function decideForPolicyCompilation(input: ToolAccessDecisionInput): Promise<ToolAccessDecision> {
+    const base = await decideCore(input);
+    if (!base.allowed && base.decision !== "require_approval") return base;
+    const loaded = await loadContext(input);
+    if (!loaded.ok) return loaded.decision;
+    const packageRestriction = await packageToolRestriction(db, loaded.ctx);
+    if (packageRestriction.denyReason) return decision("deny", "deny_policy_block", packageRestriction.denyReason, base.effectiveProfileIds, base.matchedPolicyIds);
     const restriction = await governanceToolRestriction(db, loaded.ctx);
     if (restriction.denyReason) return decision("deny", "deny_policy_block", restriction.denyReason, base.effectiveProfileIds, base.matchedPolicyIds);
     if ((restriction.requireHumanApproval || packageRestriction.requireHumanApproval) && base.allowed) return decision("require_approval", "requires_approval_policy", "The reviewed use case requires a human decision for this material action.", base.effectiveProfileIds, base.matchedPolicyIds);
@@ -1426,10 +1511,13 @@ export function toolAccessPolicyService(db: Db) {
     }
   }
 
-  async function recordInvocation(input: ToolAccessDecisionInput, accessDecision: ToolAccessDecision) {
+  async function recordInvocation(input: ToolAccessDecisionInput, accessDecision: ToolAccessDecision,
+    options: { nativeMemoryDraft?: true } = {}) {
     const loaded = await loadContext(input);
     if (!loaded.ok) throw new Error("Cannot record invocation for invalid tool access context");
     const { ctx, redaction } = loaded;
+    if (options.nativeMemoryDraft && (ctx.toolName !== "paperclip-self:remember" || ctx.providerType !== "paperclip_self" ||
+      ctx.riskLevel !== "write")) throw new Error("Invalid Native Memory draft classification");
     const argumentsHash = redaction.summary.sha256 ?? sha256(input.request.arguments ?? {});
     const idempotencyRequestHash = sha256({ actorType: ctx.actorType, actorId: ctx.actorId,
       connectionId: ctx.connectionId, catalogEntryId: ctx.catalogEntryId, toolName: ctx.toolName,
@@ -1446,6 +1534,11 @@ export function toolAccessPolicyService(db: Db) {
           existing.actorType !== ctx.actorType || existing.actorId !== ctx.actorId ||
           existing.connectionId !== ctx.connectionId || existing.toolName !== ctx.toolName || existing.argumentsHash !== argumentsHash) {
           throw conflict("Idempotency key belongs to a different tool operation", { code: "tool_idempotency_conflict" });
+        }
+        // A replay may reuse only the exact Gateway identity that originally
+        // created the invocation. Never retrofit an older row to a new session.
+        if (existing.gatewayId !== ctx.gatewayId || existing.gatewayPublicId !== ctx.gatewayPublicId) {
+          throw conflict("Idempotent invocation belongs to a different Gateway session", { code: "gateway_invocation_binding_invalid" });
         }
         return { invocation: existing, replayed: true, actionRequest: null };
       }
@@ -1468,6 +1561,8 @@ export function toolAccessPolicyService(db: Db) {
       agentId: ctx.agentId,
       issueId: ctx.issueId,
       runId: ctx.heartbeatRunId,
+      gatewayId: ctx.gatewayId,
+      gatewayPublicId: ctx.gatewayPublicId,
       applicationId: ctx.applicationId,
       connectionId: ctx.connectionId,
       catalogEntryId: ctx.catalogEntryId,
@@ -1476,7 +1571,11 @@ export function toolAccessPolicyService(db: Db) {
       providerType: ctx.providerType,
       applicationKey: ctx.applicationKey,
       upstreamToolName: ctx.upstreamToolName,
-      riskLevel: ctx.riskLevel,
+      // A Native capture-bound Memory remember call creates owner-private
+      // Memory or a shared proposal held for Human review. Keep it within the
+      // existing bounded internal-draft action class; access policy still
+      // evaluates the descriptor's declared write risk before this row exists.
+      riskLevel: options.nativeMemoryDraft ? "low" : ctx.riskLevel,
       toolName: ctx.toolName,
       argumentsHash,
       argumentsSummary: redaction.summary,
@@ -1553,6 +1652,7 @@ export function toolAccessPolicyService(db: Db) {
         projectId: invocation.issueId ? issueProjectById.get(invocation.issueId) ?? null : null,
         routineId: null,
         gatewayId: null,
+        gatewayPublicId: null,
         applicationId: invocation.applicationId,
         connectionId: invocation.connectionId,
         catalogEntryId: invocation.catalogEntryId,
@@ -1888,6 +1988,7 @@ export function toolAccessPolicyService(db: Db) {
 
   return {
     decide,
+    decideForPolicyCompilation,
     writeAudit,
     recordInvocation,
     summarizeAndRedact,

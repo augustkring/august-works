@@ -1,0 +1,18 @@
+{
+  "files": {
+    "package.json": "631b595ef1b57251c2d6f8218ad1a367705072b3d2ec14a6f2010fc9abb9b6f7",
+    "pnpm-lock.yaml": "b70210ed554c63d425e34e4c075f0984309f74f0836d82d85f714b1c4deeb5b2",
+    "server/package.json": "08b8faa2b2b9c69530928aa0b283cf9e53e70e27a692a8cb9fdbee6dec3fb0f4",
+    "server/src/__tests__/chat-channels.integration.test.ts": "be361ebb4b02ca3768c5f2067f940f4fd376e7b7165bf45841b047a36376fbff",
+    "server/src/__tests__/controlled-native-signoff-backend.test.ts": "6365d5beca59aa735fb303874e3b4473a521f37d7fc0f38674c9b1b07ca5ffd1",
+    "server/src/__tests__/heartbeat-managed-native-runtime-skills.integration.test.ts": "82e1b9c4af75a2565de419c5744b6a1bc158fe44cbd22f0254c581dfe33cb957",
+    "server/src/__tests__/helpers/controlled-native-signoff-backend.ts": "d3a5efd9a4edb65c587230d25f2d06c86327dd901808fc4cb1543d64f87d8096",
+    "server/src/__tests__/helpers/managed-native-conversation-frame.ts": "8d69b198143a1f707f0f363394f094d8a3dcb8ba77314c55ebcd713bde649bae",
+    "server/src/__tests__/native-opencode-managed-session-resumption.integration.test.ts": "bf528dac77d774e1dffba552ad6549c9437d49226307993119ce80758cc12b0c",
+    "server/src/services/native-runtime/chat-inbound-wakeup-owner.ts": "cc141f0643047d9cebb28f3f78be7fa1c912da59cdfb806347ef41ac5bc88f27",
+    "server/src/services/native-runtime/native-opencode-managed-conversation-frame.integration.test.ts": "133c56adc73854e60f26cca19f38c625971d8dab8f667871ffff90b00066685e",
+    "server/tsconfig.json": "41b38f5d62b35e02f2b15c294baf39d196a8e6af125bd4a4d7b5e30d9334d150"
+  },
+  "allPinsUnchanged": true,
+  "allMtimesUnchanged": true
+}

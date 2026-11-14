@@ -2,6 +2,7 @@ import { afterEach, describe, expect, it } from "vitest";
 import type { BetterAuthOptions } from "better-auth";
 import { getCookies } from "better-auth/cookies";
 import {
+  resolveBetterAuthSessionFromHeaders,
   buildBetterAuthAdvancedOptions,
   buildBetterAuthRateLimitOptions,
   deriveAuthCookiePrefix,
@@ -241,4 +242,27 @@ describe("Better Auth cookie scoping", () => {
     expect(trustedOrigins).not.toContain("https://board.example.test:3100");
     expect(trustedOrigins).not.toContain("http://board.example.test:3100");
   });
+});
+
+
+it("does not forward native token/driver details from a failed session resolution", async () => {
+  const error = await resolveBetterAuthSessionFromHeaders({ api: { getSession: async () => {
+    throw new Error("Native SQL token=LOOKUP-TOKEN-CANARY");
+  } } }, new Headers({ cookie: "LOOKUP-COOKIE-CANARY" })).catch(error => error);
+  expect(error).toBeInstanceOf(Error);
+  expect(error.message).toBe("Native authentication session resolution failed");
+  expect(error.stack).not.toContain("CANARY");
+  expect(error.cause).toBeUndefined();
+});
+
+
+it("retains the verified native session deadline and refuses contradictory identity or malformed expiry", async () => {
+  const deadline = new Date("2030-01-01T00:00:00.000Z");
+  const resolve = (session: Record<string, unknown>, userId = "original-user") => resolveBetterAuthSessionFromHeaders({
+    api: { getSession: async () => ({ session, user: { id: userId } }) },
+  }, new Headers());
+  expect((await resolve({ id: "original-session", userId: "original-user", expiresAt: deadline }))?.session?.expiresAt).toEqual(deadline);
+  expect((await resolve({ id: "original-session", userId: "original-user", expiresAt: deadline.toISOString() }))?.session?.expiresAt).toEqual(deadline);
+  expect(await resolve({ id: "original-session", userId: "other-user", expiresAt: deadline })).toBeNull();
+  expect(await resolve({ id: "original-session", userId: "original-user", expiresAt: "invalid" })).toBeNull();
 });

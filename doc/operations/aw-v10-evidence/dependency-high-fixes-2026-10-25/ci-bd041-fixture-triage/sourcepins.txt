@@ -1,0 +1,10 @@
+source_head=4b54b6f363e6589b8a8010783ce2877442a75798
+qualification_head=886014cae5a7d6ed5a9ab99d62613ec7646308cb
+node=v24.19.0
+pnpm=9.15.4
+vitest=vitest/4.1.11 linux-x64 node-v24.19.0
+493e7fcd8ab1a1d91edd0ed34c216a2d71c7ecc8d3b5a091c139edecba98ca1e  /workspace/v10-dep-qualification/server/src/services/automation-artifacts/automation-artifact-service.test.ts
+6903bfe5656fa9979e57c0bd01c5104ac48a62f8d00250e9d808cf459207c80d  /workspace/v10-dep-qualification/server/src/services/optimizer/optimizer-evaluation.integration.test.ts
+b32ea3a1c33d0b2f2990816eb64afcfa3c531de871fabfc1f8a5be83edad1c11  /workspace/v10-dep-qualification/server/src/services/workflows/workflow-direct-agent.test.ts
+a710365e54bf19dc0511042cd7e7582c89491bbfb9eec657d01a5255a1c3c82e  /workspace/v10-dep-qualification/pnpm-workspace.yaml
+6bce79ea6e951c5c96a0cf93b93eb3abb853495a7e38c6a6aa7633bd138b1bb2  /workspace/v10-dep-qualification/pnpm-lock.yaml

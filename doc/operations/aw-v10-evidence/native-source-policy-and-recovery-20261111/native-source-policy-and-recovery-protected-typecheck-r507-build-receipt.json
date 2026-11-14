@@ -1,0 +1,28 @@
+{
+  "cacheAdvice": [
+    {
+      "elapsedSeconds": 4.463984698988497,
+      "filesAdvised": 623009,
+      "memoryAfter": 6131908608,
+      "contentChanged": false
+    }
+  ],
+  "steps": [
+    {
+      "command": [
+        "pnpm",
+        "--filter",
+        "@paperclipai/server",
+        "exec",
+        "tsc",
+        "--noEmit"
+      ],
+      "exit": -9,
+      "seconds": 45.83261964499252,
+      "peakGroupRssBytes": 6468378624,
+      "stopped": "process-group RSS cap"
+    }
+  ],
+  "memoryBefore": "low 0\nhigh 0\nmax 0\noom 0\noom_kill 0\noom_group_kill 0\n",
+  "memoryAfter": "low 0\nhigh 0\nmax 0\noom 0\noom_kill 0\noom_group_kill 0\n"
+}

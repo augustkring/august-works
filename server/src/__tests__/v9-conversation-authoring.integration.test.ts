@@ -10,6 +10,8 @@ import { ExperienceOverloadError } from "../services/experience/projection.js";
 import { issueService } from "../services/issues.js";
 import { issueThreadInteractionService } from "../services/issue-thread-interactions.js";
 import { PaperclipRunnerToolAuthority } from "../services/native-runtime/paperclip-runner-tool-authority.js";
+import { preparePlatformSkillAdmission } from "../services/platform-skill-admission.js";
+import { blenteraPlatformContractHashes } from "../services/tool-gateway.js";
 import { instanceSettingsService } from "../services/instance-settings.js";
 import { enableV5ForTest, seedV5Presences } from "./helpers/v5-fixtures.js";
 import { startEmbeddedPostgresTestDatabase } from "./helpers/embedded-postgres.js";
@@ -20,6 +22,10 @@ describe("Current conversation previews use actual Original authoring revisions"
   const view = () => conversationAuthoringService(db).get(f.actor, f.home, conversation.id);
   const tools = () => workflowAuthoringToolsService(db);
   const context = () => ({ companyId: f.home, agentId: f.presence.id, runId: run.id });
+  async function admitNativeRun() {
+    await preparePlatformSkillAdmission(db, { companyId: f.home, agentId: f.presence.id, runId: run.id,
+      responsibleUserId: f.userId, requireExisting: false }, blenteraPlatformContractHashes());
+  }
   beforeAll(async () => {
     database = await startEmbeddedPostgresTestDatabase("aw-v9-conversation-authoring-"); db = createDb(database.connectionString);
     await instanceSettingsService(db).getExperimental(); await enableV5ForTest(db);
@@ -46,6 +52,7 @@ describe("Current conversation previews use actual Original authoring revisions"
   async function saveTask() {
     await db.update(heartbeatRuns).set({ runtimeMode: "native", nativeIssueId: conversation.id }).where(eq(heartbeatRuns.id, run.id));
     await db.update(issues).set({ executionRunId: run.id }).where(eq(issues.id, conversation.id));
+    await admitNativeRun();
     const enqueueWakeup = vi.fn();
     const authority = new PaperclipRunnerToolAuthority(db, { companyId: f.home, agentId: f.presence.id,
       issueId: conversation.id, runId: run.id, enqueueWakeup });
@@ -57,6 +64,7 @@ describe("Current conversation previews use actual Original authoring revisions"
   async function reviewedTask() {
     await db.update(heartbeatRuns).set({ runtimeMode: "native", nativeIssueId: conversation.id }).where(eq(heartbeatRuns.id, run.id));
     await db.update(issues).set({ executionRunId: run.id }).where(eq(issues.id, conversation.id));
+    await admitNativeRun();
     const owner = issueThreadInteractionService(db);
     const proposed = await owner.create(conversation, { kind: "suggest_tasks", sourceRunId: run.id, resolverPolicy: "human_only", continuationPolicy: "none",
       payload: { version: 1, tasks: [{ clientKey: "reviewed-backlog", title: "Human reviewed backlog task", description: "PRIVATE review description", status: "backlog", placement: "company_backlog" }] } },
@@ -124,7 +132,10 @@ describe("Current conversation previews use actual Original authoring revisions"
   it("requires the actual Original mutation receipt in addition to matching run provenance", async () => {
     await saveTask();
     await issueService(db).create(f.home, { title: "Fabricated receipt claim", createdByAgentId: f.presence.id,
-      originKind: "manual", originRunId: run.id, originId: `paperclip-runner:create-task:${conversation.id}:fabricated` });
+      responsibleUserId: f.userId, actorRunId: run.id,
+      originKind: "manual", originRunId: run.id, originId: `paperclip-runner:create-task:${conversation.id}:fabricated` },
+    db, undefined, { privacyActor: { type: "agent", source: "agent_jwt", companyId: f.home,
+      agentId: f.presence.id, runId: run.id, onBehalfOfUserId: f.userId } });
     expect((await view()).savedTasks?.map(task => task.title)).toEqual(["Saved research task"]);
     await db.update(heartbeatRuns).set({ resultJson: null }).where(eq(heartbeatRuns.id, run.id));
     expect((await view()).savedTasks).toEqual([]);
@@ -133,10 +144,34 @@ describe("Current conversation previews use actual Original authoring revisions"
     const saved = await saveTask();
     for (let i = 0; i < 10; i++) await saved.authority.execute({ ...saved.call, callId: `next-${i}`,
       arguments: { ...saved.call.arguments, idempotencyKey: randomUUID(), title: `Saved task ${i}` } });
+    const startedAt = performance.now();
     const current = await view();
+    expect(performance.now() - startedAt).toBeLessThan(1500);
     expect(current.savedTasks).toHaveLength(10); expect(current.hasMoreTasks).toBe(true);
     expect(new Set(current.savedTasks!.map(task => task.id)).size).toBe(10);
     expect(saved.enqueueWakeup).not.toHaveBeenCalled();
+  });
+  it("rechecks current company authority after waiting on a saved task source row", async () => {
+    await saveTask();
+    let pending!: Promise<unknown>;
+    await db.transaction(async holder => {
+      const [backend] = await holder.execute<{ pid: number }>(sql`select pg_backend_pid() as pid`);
+      await holder.execute(sql`select id from heartbeat_runs where id=${run.id}::uuid for update`);
+      pending = view();
+      const deadline = performance.now() + 5000;
+      let waiting = false;
+      while (performance.now() < deadline) {
+        const [state] = await db.execute<{ waiting: boolean }>(sql`select exists (
+          select 1 from pg_stat_activity where ${backend!.pid}=any(pg_blocking_pids(pid)) and wait_event_type='Lock'
+        ) as waiting`);
+        if (state?.waiting) { waiting = true; break; }
+        await new Promise(resolve => setTimeout(resolve, 10));
+      }
+      expect(waiting).toBe(true);
+      await db.delete(companyMemberships).where(and(eq(companyMemberships.companyId, f.home),
+        eq(companyMemberships.principalType, "user"), eq(companyMemberships.principalId, f.userId)));
+    });
+    await expect(pending).rejects.toMatchObject({ status: 403 });
   });
   it("refuses an already aborted private read without returning proposal data", async () => {
     await draft(); const controller = new AbortController(); controller.abort();

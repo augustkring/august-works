@@ -1,10 +1,17 @@
 import { randomUUID } from "node:crypto";
 import { eq } from "drizzle-orm";
-import { afterAll, beforeAll, describe, expect, it, vi } from "vitest";
+import { afterAll, afterEach, beforeAll, describe, expect, it, vi } from "vitest";
 import { agents, companies, createDb, heartbeatRuns, issues } from "@paperclipai/db";
 import { getEmbeddedPostgresTestSupport, startEmbeddedPostgresTestDatabase } from "./helpers/embedded-postgres.js";
+import { installHeartbeatApiUrlFixture } from "./helpers/heartbeat-runtime-fixtures.js";
+import { seedCurrentHumanMembership } from "./helpers/current-human-membership-fixture.js";
+import { admitMockedLegacyDispatch, resetMockedLegacyDispatch } from "./helpers/mocked-legacy-paid-dispatch.js";
 import { heartbeatService } from "../services/heartbeat.js";
 
+// Mocked legacy dispatch: see helpers/mocked-legacy-paid-dispatch.ts. Only the
+// "process" adapter this fixture mocks is admitted; the real guard handles the rest.
+vi.mock("../services/native-runtime/paid-transport-admission.js", async (importOriginal) =>
+  (await import("./helpers/mocked-legacy-paid-dispatch.js")).withMockedLegacyDispatchAdmission(await importOriginal()));
 const execute = vi.hoisted(() => vi.fn());
 vi.mock("../adapters/index.js", async () => {
   const actual = await vi.importActual<typeof import("../adapters/index.js")>("../adapters/index.js");
@@ -16,11 +23,15 @@ const suite = support.supported ? describe : describe.skip;
 suite("native terminal-run cleanup admission", () => {
   let db: ReturnType<typeof createDb>;
   let temporary: Awaited<ReturnType<typeof startEmbeddedPostgresTestDatabase>>;
+  let restoreApiUrl = () => {};
   beforeAll(async () => {
     temporary = await startEmbeddedPostgresTestDatabase("native-cleanup-admission-");
     db = createDb(temporary.connectionString);
+    restoreApiUrl = installHeartbeatApiUrlFixture();
   }, 60_000);
+  afterEach(() => resetMockedLegacyDispatch());
   afterAll(async () => {
+    restoreApiUrl();
     await db?.$client.end({ timeout: 0 });
     await temporary?.cleanup();
   });
@@ -28,9 +39,11 @@ suite("native terminal-run cleanup admission", () => {
   it("holds the same task until its native executor settles while allowing unrelated tasks", async () => {
     const companyId = randomUUID(), agentId = randomUUID(), issueId = randomUUID(), otherIssueId = randomUUID();
     await db.insert(companies).values({ id: companyId, name: "Cleanup admission", issuePrefix: "CLN", defaultResponsibleUserId: "owner" });
+    await seedCurrentHumanMembership(db, companyId, "owner", "owner");
     await db.insert(agents).values({ id: agentId, companyId, name: "Worker", role: "engineer", status: "idle", adapterType: "process",
       adapterConfig: {}, permissions: {}, runtimeConfig: { heartbeat: { enabled: false, wakeOnDemand: true, maxConcurrentRuns: 20 } } });
     await db.insert(issues).values([issueId, otherIssueId].map(id => ({ id, companyId, title: "Recovery task", status: "todo", assigneeAgentId: agentId, responsibleUserId: "owner" })));
+    admitMockedLegacyDispatch(["process"]);
     let release!: () => void, entered!: () => void;
     const cleanupGate = new Promise<void>(resolve => { release = resolve; });
     const terminal = new Promise<void>(resolve => { entered = resolve; });

@@ -41,10 +41,28 @@ const mockHeartbeatService = vi.hoisted(() => ({
 }));
 
 const mockObserveCrossIssueInfluence = vi.hoisted(() => vi.fn(async () => null));
+const mockCanActorReadIssuePrivacy = vi.hoisted(() => vi.fn(async () => true));
+const mockAnalyticalPayloadAccess = vi.hoisted(() => vi.fn(async () => undefined));
+const mockSyncIssueSafely = vi.hoisted(() => vi.fn(async () => undefined));
+const routeErrors: string[] = [];
 
 vi.mock("../services/cross-issue-influence-limit.js", async (importOriginal) => ({
   ...await importOriginal<typeof import("../services/cross-issue-influence-limit.js")>(),
   observeCrossIssueInfluence: mockObserveCrossIssueInfluence,
+}));
+
+vi.mock("../services/authorization.js", async (importOriginal) => ({
+  ...await importOriginal<typeof import("../services/authorization.js")>(),
+  canActorReadIssuePrivacy: mockCanActorReadIssuePrivacy,
+}));
+
+vi.mock("../services/analytical-context-authority.js", async (importOriginal) => ({
+  ...await importOriginal<typeof import("../services/analytical-context-authority.js")>(),
+  assertAnalyticalContextPayloadAccess: mockAnalyticalPayloadAccess,
+}));
+
+vi.mock("../services/external-objects.js", () => ({
+  externalObjectService: () => ({ syncIssueSafely: mockSyncIssueSafely }),
 }));
 
 vi.mock("../services/index.js", () => ({
@@ -175,6 +193,11 @@ function createApp(actor: Actor) {
     next();
   });
   app.use("/api", issueRoutes(stubDb() as any, {} as any));
+  app.use((err: unknown, _req: unknown, _res: unknown, next: (error: unknown) => void) => {
+    const value = err instanceof Error ? err : new Error(String(err));
+    routeErrors.push(`${value.name}: ${value.message}\n${value.stack?.split("\n").slice(1, 5).join("\n") ?? ""}`);
+    next(err);
+  });
   app.use(errorHandler);
   return app;
 }
@@ -202,6 +225,9 @@ function makeIssue(overrides: Record<string, unknown> = {}) {
 
 describe("issue assignee invokability guard", () => {
   beforeEach(() => {
+    routeErrors.length = 0;
+    mockCanActorReadIssuePrivacy.mockReset();
+    mockCanActorReadIssuePrivacy.mockResolvedValue(true);
     mockIssueService.getById.mockReset();
     mockIssueService.findOpenAncestorCreatedByAgent.mockReset();
     mockIssueService.findOpenAncestorCreatedByAgent.mockResolvedValue(null);
@@ -212,6 +238,8 @@ describe("issue assignee invokability guard", () => {
     mockHeartbeatService.wakeup.mockClear();
     mockObserveCrossIssueInfluence.mockClear();
     mockObserveCrossIssueInfluence.mockResolvedValue(null);
+    mockAnalyticalPayloadAccess.mockClear();
+    mockSyncIssueSafely.mockClear();
   });
 
   it("refuses an agent assigning an issue to a paused agent", async () => {
@@ -222,7 +250,7 @@ describe("issue assignee invokability guard", () => {
       .patch(`/api/issues/${existing.id}`)
       .send({ assigneeAgentId: PAUSED_AGENT_ID });
 
-    expect(res.status).toBe(409);
+    expect(res.status, `${JSON.stringify(res.body)}; routeErrors=${routeErrors.join(" | ")}`).toBe(409);
     expect(res.body.error).toContain("paused agent");
     expect(mockIssueService.update).not.toHaveBeenCalled();
   });
@@ -239,7 +267,7 @@ describe("issue assignee invokability guard", () => {
         assigneeAgentId: PAUSED_AGENT_ID,
       });
 
-    expect(res.status).toBe(409);
+    expect(res.status, `${JSON.stringify(res.body)}; routeErrors=${routeErrors.join(" | ")}`).toBe(409);
     expect(res.body.error).toContain("paused agent");
     expect(mockIssueService.createChild).not.toHaveBeenCalled();
     expect(mockIssueService.create).not.toHaveBeenCalled();
@@ -255,7 +283,7 @@ describe("issue assignee invokability guard", () => {
       .patch(`/api/issues/${existing.id}`)
       .send({ assigneeAgentId: IDLE_AGENT_ID });
 
-    expect(res.status).toBe(200);
+    expect(res.status, `${JSON.stringify(res.body)}; routeErrors=${routeErrors.join(" | ")}`).toBe(200);
     expect(mockIssueService.update).toHaveBeenCalled();
   });
 
@@ -269,13 +297,28 @@ describe("issue assignee invokability guard", () => {
       .patch(`/api/issues/${existing.id}`)
       .send({ assigneeAgentId: PAUSED_AGENT_ID });
 
-    expect(res.status).toBe(200);
+    expect(res.status, `${JSON.stringify(res.body)}; routeErrors=${routeErrors.join(" | ")}`).toBe(200);
     expect(mockIssueService.update).toHaveBeenCalled();
+  });
+
+  it("keeps the privacy admission check ahead of issue mutation", async () => {
+    const existing = makeIssue();
+    mockIssueService.getById.mockResolvedValue(existing);
+    mockCanActorReadIssuePrivacy.mockResolvedValueOnce(false);
+
+    const res = await request(createApp(agentActor()))
+      .patch(`/api/issues/${existing.id}`)
+      .send({ assigneeAgentId: IDLE_AGENT_ID });
+
+    expect(res.status, `${JSON.stringify(res.body)}; routeErrors=${routeErrors.join(" | ")}`).toBe(404);
+    expect(mockIssueService.update).not.toHaveBeenCalled();
   });
 });
 
 describe("agent delegation cycle guard", () => {
   beforeEach(() => {
+    mockCanActorReadIssuePrivacy.mockReset();
+    mockCanActorReadIssuePrivacy.mockResolvedValue(true);
     mockIssueService.getById.mockReset();
     mockIssueService.findOpenAncestorCreatedByAgent.mockReset();
     mockIssueService.findOpenAncestorCreatedByAgent.mockResolvedValue(null);
@@ -302,7 +345,7 @@ describe("agent delegation cycle guard", () => {
         assigneeAgentId: IDLE_AGENT_ID,
       });
 
-    expect(res.status).toBe(409);
+    expect(res.status, `${JSON.stringify(res.body)}; routeErrors=${routeErrors.join(" | ")}`).toBe(409);
     expect(res.body.error).toContain("Delegation cycle");
     expect(res.body.details).toMatchObject({ code: "delegation_cycle" });
     expect(mockIssueService.createChild).not.toHaveBeenCalled();
@@ -325,7 +368,7 @@ describe("agent delegation cycle guard", () => {
         assigneeAgentId: IDLE_AGENT_ID,
       });
 
-    expect(res.status).toBe(201);
+    expect(res.status, `${JSON.stringify(res.body)}; routeErrors=${routeErrors.join(" | ")}`).toBe(201);
     expect(mockIssueService.createChild).toHaveBeenCalled();
   });
 
@@ -345,7 +388,7 @@ describe("agent delegation cycle guard", () => {
         assigneeAgentId: IDLE_AGENT_ID,
       });
 
-    expect(res.status).toBe(201);
+    expect(res.status, `${JSON.stringify(res.body)}; routeErrors=${routeErrors.join(" | ")}`).toBe(201);
     expect(mockIssueService.findOpenAncestorCreatedByAgent).not.toHaveBeenCalled();
   });
 });

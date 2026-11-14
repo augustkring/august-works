@@ -133,6 +133,56 @@ describeEmbeddedPostgres("reportRunFailure", () => {
     );
   });
 
+  it("projects only bounded ACP watchdog facts into failure telemetry", async () => {
+    await seedCompanyAndAgent();
+    const run = buildRun({
+      status: "failed",
+      errorCode: "acpx_tool_stalled",
+      resultJson: {
+        acpStalledToolKind: "execute",
+        acpStalledToolSilentMs: 1_800_000,
+        acpStalledToolPermissionRequestArrived: true,
+        acpPendingToolPermissionRequestArrivedCount: 2,
+        acpStalledToolTitle: "private title",
+        acpStalledToolCallId: "private-call-id",
+        acpStalledToolInput: { token: "private-input" },
+        permissionDecision: "allow_once",
+      },
+    });
+
+    await reportRunFailure(db, run);
+
+    expect(mockCaptureRunFailure).toHaveBeenCalledWith(expect.objectContaining({
+      executionDiagnostics: {
+        acpStalledToolKind: "execute",
+        acpStalledToolSilentMs: 1_800_000,
+        acpStalledToolPermissionRequestArrived: true,
+        acpPendingToolPermissionRequestArrivedCount: 2,
+      },
+    }));
+    expect(JSON.stringify(mockCaptureRunFailure.mock.calls[0]?.[0])).not.toContain("private-call-id");
+    expect(JSON.stringify(mockCaptureRunFailure.mock.calls[0]?.[0])).not.toContain("private title");
+    expect(JSON.stringify(mockCaptureRunFailure.mock.calls[0]?.[0])).not.toContain("private-input");
+    expect(JSON.stringify(mockCaptureRunFailure.mock.calls[0]?.[0])).not.toContain("allow_once");
+  });
+
+  it("drops unknown kinds and out-of-bound diagnostic values", async () => {
+    await seedCompanyAndAgent();
+    const run = buildRun({
+      status: "failed",
+      resultJson: {
+        acpStalledToolKind: "private-provider-kind",
+        acpStalledToolSilentMs: Number.MAX_SAFE_INTEGER,
+        acpStalledToolPermissionRequestArrived: "yes",
+        acpPendingToolPermissionRequestArrivedCount: 10_001,
+      },
+    });
+
+    await reportRunFailure(db, run);
+
+    expect(mockCaptureRunFailure).toHaveBeenCalledWith(expect.objectContaining({ executionDiagnostics: undefined }));
+  });
+
   it("sends the adapter value unknown when the agent row is absent", async () => {
     await seedCompanyAndAgent();
     const run = buildRun({ status: "failed", agentId: randomUUID() });

@@ -1,6 +1,8 @@
 import { createRequire } from "node:module";
 import { expect, test, type APIResponse } from "@playwright/test";
+import { registerEnglishAccountLocaleIsolation } from "./account-locale-isolation";
 const axePath = createRequire(import.meta.url).resolve("axe-core/axe.min.js");
+registerEnglishAccountLocaleIsolation(test);
 async function json(response: APIResponse) {
   expect(response.ok(), `${response.status()}: ${await response.text()}`).toBe(true);
   return response.json();
@@ -19,14 +21,14 @@ test("account entry changes language without sending credentials and keeps a ref
     return route.fulfill({ status: 401, json: { code: "INVALID_EMAIL_OR_PASSWORD", message: "Invalid email or password" } });
   });
   await page.goto("/auth");
-  await expect(page.getByRole("heading", { level: 1, name: "Sign in to August Works", exact: true })).toBeVisible();
+  await expect(page.getByRole("heading", { level: 1, name: "Sign in to Blentera", exact: true })).toBeVisible();
   await expect(page.getByRole("button", { name: "Sign in with company SSO", exact: true })).toHaveCount(0);
   const email = page.getByRole("textbox", { name: "Email", exact: true });
   await email.fill("software-account-fixture@example.test");
   await page.getByLabel("Password", { exact: true }).fill("private-software-fixture");
   await page.getByRole("combobox", { name: "Language", exact: true }).selectOption("da");
   await expect(page.locator("html")).toHaveAttribute("lang", "da");
-  await expect(page.getByRole("heading", { level: 1, name: "Log ind på August Works", exact: true })).toBeVisible();
+  await expect(page.getByRole("heading", { level: 1, name: "Log ind på Blentera", exact: true })).toBeVisible();
   await expect(page.getByRole("textbox", { name: "E-mail", exact: true })).toHaveValue("software-account-fixture@example.test");
   await expect(page.getByLabel("Adgangskode", { exact: true })).toHaveValue("private-software-fixture");
   expect(commands).toHaveLength(0);

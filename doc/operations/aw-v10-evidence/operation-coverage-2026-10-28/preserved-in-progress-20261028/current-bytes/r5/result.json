@@ -1,0 +1,99 @@
+{
+  "version": 1,
+  "classificationGate": "PASS",
+  "scope": "Mounted UI write/unknown-call classification and source-backed mapping only.",
+  "materialApiContractQualification": "PROPOSED_SOURCE_REVIEW_NOT_QUALIFIED",
+  "apiContractQualificationNote": "The separate API-only source proposal now records 14 exact API-helper path corrections and source traces all 19 previously unresolved request shapes, resolving imported validator aliases and marking manual/no-runtime validation explicitly. For the 62 launchcritical APIs, 50 have exact HTTP route cases in existing test sources and 12 have no exact route candidate in the reviewed owner suites. Every candidate remains NOT_RUN; none is presented as a passing test. The frozen runtime manifest was not changed.",
+  "toolCatalogExposure": "API-only contracts have toolId null, no aliases, and mcpExposed false.",
+  "counts": {
+    "mountedUiCallsites": 990,
+    "classificationByMode": {
+      "HUMAN_ONLY": 577,
+      "DIRECT_AGENT": 335,
+      "NOT_APPLICABLE": 15,
+      "OPERATOR_ONLY": 37,
+      "PROPOSAL_ONLY": 10,
+      "HUMAN_CONFIRMATION": 12,
+      "QUERY_POST": 2,
+      "NON_MUTATING_PREVIEW": 2
+    },
+    "toolOperations": 6,
+    "existingApiOnlyContracts": 159
+  },
+  "manifestHash": "24b568c81d493c84218a55e8efdea6c9cce5b77b5107b5a1c62e7322fce198b8",
+  "toolCatalogContractHash": "5c9b1372bf12ad8b962b3249d2ce6e3679f33ba681f5cbc407d1459bee335825",
+  "check": "check.log",
+  "tests": "test.log",
+  "sourcePins": "source-pins.sha256",
+  "reviewEvidence": [
+    "review-root.json",
+    "review-security.json",
+    "review-readiness.json",
+    "review-supplement.json",
+    "review-merged.json",
+    "proposed-contract-review.json"
+  ],
+  "proposedContractReview": {
+    "path": "proposed-contract-review.json",
+    "status": "PROPOSED_SOURCE_REVIEW_NOT_QUALIFIED",
+    "sourceManifestHash": "24b568c81d493c84218a55e8efdea6c9cce5b77b5107b5a1c62e7322fce198b8",
+    "counts": {
+      "contracts": 159,
+      "material": 158,
+      "launchcritical": 62,
+      "ordinary": 96,
+      "nonmaterial": 1,
+      "schemaStatus": {
+        "route_validation_reference_only": 14,
+        "schema_definition_source_found": 105,
+        "handler_does_not_read_request_body": 35,
+        "body_consumed_schema_unresolved": 5
+      },
+      "idempotencyStatus": {
+        "no_handler_key_found_propose_no_auto_retry": 147,
+        "explicit_handler_evidence": 12
+      },
+      "reconciliationReadStatus": {
+        "paired_get": 83,
+        "no_paired_get_route_found": 76
+      },
+      "testSourceStatus": {
+        "no_candidate_match": 94,
+        "candidate_found": 65
+      },
+      "routeResolutionStatus": {
+        "matched_current_route_source": 159
+      },
+      "routeAgreementStatus": {
+        "manifest_route_matches_mounted_server_route": 145,
+        "server_route_composes_client_path_prefix; manifest_route_is_partial": 14
+      },
+      "remainingGapCounts": {
+        "No matching test source case identified.": 94,
+        "Idempotency key/replay behavior not established in located handler span.": 147,
+        "Request schema not fully traced.": 19,
+        "No paired GET/read route identified for reconciliation.": 76
+      },
+      "semanticTraceStatus": {
+        "ownerMethodRefs": 131,
+        "routeEffectCalls": 147,
+        "responseStatements": 154,
+        "errorBranches": 113,
+        "schemaDeclarations": 105,
+        "testSourceCases": 65
+      }
+    }
+  },
+  "boundedSemanticFollowup": {
+    "proposal": "proposed-contract-review.json",
+    "sourceManifestHash": "24b568c81d493c84218a55e8efdea6c9cce5b77b5107b5a1c62e7322fce198b8",
+    "proposedHelperRouteCorrections": 14,
+    "previouslyUnresolvedRequestShapesTraced": 19,
+    "launchcriticalTestReview": {
+      "launchcriticalExactHttpSourceCases": 50,
+      "launchcriticalOwnerTestsReviewedNoExactCase": 12,
+      "executionStatus": "NOT_RUN_BY_THIS_REVIEW"
+    },
+    "proposalSha256": "796f8cfbd4f9f5110e5cb7a4e4760d9ed425d3e8ff5e1a17011a6f96c3b272a4"
+  }
+}

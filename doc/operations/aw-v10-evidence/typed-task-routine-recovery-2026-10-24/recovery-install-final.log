@@ -1,0 +1,50 @@
+Scope: all 36 workspace projects
+Lockfile is up to date, resolution step is skipped
+Progress: resolved 1, reused 0, downloaded 0, added 0
+Packages: +1348
+++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++
+Progress: resolved 1348, reused 1344, downloaded 0, added 0
+Progress: resolved 1348, reused 1346, downloaded 0, added 1226
+Progress: resolved 1348, reused 1346, downloaded 0, added 1348, done
+ WARN  Failed to create bin at /workspace/blentera-v10/packages/plugins/create-paperclip-plugin/node_modules/.bin/paperclip-plugin-dev-server. ENOENT: no such file or directory, open '/workspace/blentera-v10/packages/plugins/sdk/dist/dev-cli.js'
+ WARN  Failed to create bin at /workspace/blentera-v10/packages/plugins/examples/plugin-authoring-smoke-example/node_modules/.bin/paperclip-plugin-dev-server. ENOENT: no such file or directory, open '/workspace/blentera-v10/packages/plugins/sdk/dist/dev-cli.js'
+ WARN  Failed to create bin at /workspace/blentera-v10/packages/plugins/examples/plugin-file-browser-example/node_modules/.bin/paperclip-plugin-dev-server. ENOENT: no such file or directory, open '/workspace/blentera-v10/packages/plugins/sdk/dist/dev-cli.js'
+ WARN  Failed to create bin at /workspace/blentera-v10/packages/plugins/examples/plugin-hello-world-example/node_modules/.bin/paperclip-plugin-dev-server. ENOENT: no such file or directory, open '/workspace/blentera-v10/packages/plugins/sdk/dist/dev-cli.js'
+ WARN  Failed to create bin at /workspace/blentera-v10/packages/plugins/paperclip-plugin-fake-sandbox/node_modules/.bin/paperclip-plugin-dev-server. ENOENT: no such file or directory, open '/workspace/blentera-v10/packages/plugins/sdk/dist/dev-cli.js'
+ WARN  Failed to create bin at /workspace/blentera-v10/packages/plugins/plugin-llm-wiki/node_modules/.bin/paperclip-plugin-dev-server. ENOENT: no such file or directory, open '/workspace/blentera-v10/packages/plugins/sdk/dist/dev-cli.js'
+ WARN  Failed to create bin at /workspace/blentera-v10/packages/plugins/examples/plugin-kitchen-sink-example/node_modules/.bin/paperclip-plugin-dev-server. ENOENT: no such file or directory, open '/workspace/blentera-v10/packages/plugins/sdk/dist/dev-cli.js'
+ WARN  Failed to create bin at /workspace/blentera-v10/packages/plugins/plugin-workspace-diff/node_modules/.bin/paperclip-plugin-dev-server. ENOENT: no such file or directory, open '/workspace/blentera-v10/packages/plugins/sdk/dist/dev-cli.js'
+ WARN  Failed to create bin at /workspace/blentera-v10/server/node_modules/.bin/paperclip-runner-eval-session. ENOENT: no such file or directory, open '/workspace/blentera-v10/packages/paperclip-runner/dist/cli/eval-session.js'
+ WARN  Failed to create bin at /workspace/blentera-v10/server/node_modules/.bin/paperclip-runner-codex-proxy. ENOENT: no such file or directory, open '/workspace/blentera-v10/packages/paperclip-runner/dist/cli/codex-app-server-unix-proxy.js'
+ WARN  Failed to create bin at /workspace/blentera-v10/server/node_modules/.bin/paperclip-runner-opencode-proxy. ENOENT: no such file or directory, open '/workspace/blentera-v10/packages/paperclip-runner/dist/cli/opencode-app-server-proxy.js'
+ WARN  Failed to create bin at /workspace/blentera-v10/server/node_modules/.bin/paperclip-runner-acpx-sidecar. ENOENT: no such file or directory, open '/workspace/blentera-v10/packages/paperclip-runner/dist/cli/acpx-runtime-sidecar.js'
+ WARN  Failed to create bin at /workspace/blentera-v10/server/node_modules/.bin/paperclip-plugin-dev-server. ENOENT: no such file or directory, open '/workspace/blentera-v10/packages/plugins/sdk/dist/dev-cli.js'
+ WARN  Failed to create bin at /workspace/blentera-v10/ui/node_modules/.bin/paperclip-plugin-dev-server. ENOENT: no such file or directory, open '/workspace/blentera-v10/packages/plugins/sdk/dist/dev-cli.js'
+
+devDependencies:
++ @playwright/test 1.62.1
++ agentmail 0.5.20
++ cross-env 10.1.0
++ esbuild 0.28.2
++ typescript 7.0.2
++ typescript-compiler-api <- typescript 5.9.3
++ vitest 4.1.11
+
+. postinstall$ node scripts/link-plugin-dev-sdk.mjs
+. postinstall:   ✓ Linked @paperclipai/plugin-sdk into 0 excluded plugin(s) (skipped 9)
+. postinstall: Done
+ WARN  Failed to create bin at /workspace/blentera-v10/packages/plugins/create-paperclip-plugin/node_modules/.bin/paperclip-plugin-dev-server. ENOENT: no such file or directory, open '/workspace/blentera-v10/packages/plugins/create-paperclip-plugin/node_modules/@paperclipai/plugin-sdk/dist/dev-cli.js'
+ WARN  Failed to create bin at /workspace/blentera-v10/packages/plugins/examples/plugin-authoring-smoke-example/node_modules/.bin/paperclip-plugin-dev-server. ENOENT: no such file or directory, open '/workspace/blentera-v10/packages/plugins/examples/plugin-authoring-smoke-example/node_modules/@paperclipai/plugin-sdk/dist/dev-cli.js'
+ WARN  Failed to create bin at /workspace/blentera-v10/packages/plugins/examples/plugin-file-browser-example/node_modules/.bin/paperclip-plugin-dev-server. ENOENT: no such file or directory, open '/workspace/blentera-v10/packages/plugins/examples/plugin-file-browser-example/node_modules/@paperclipai/plugin-sdk/dist/dev-cli.js'
+ WARN  Failed to create bin at /workspace/blentera-v10/packages/plugins/examples/plugin-hello-world-example/node_modules/.bin/paperclip-plugin-dev-server. ENOENT: no such file or directory, open '/workspace/blentera-v10/packages/plugins/examples/plugin-hello-world-example/node_modules/@paperclipai/plugin-sdk/dist/dev-cli.js'
+ WARN  Failed to create bin at /workspace/blentera-v10/packages/plugins/examples/plugin-kitchen-sink-example/node_modules/.bin/paperclip-plugin-dev-server. ENOENT: no such file or directory, open '/workspace/blentera-v10/packages/plugins/examples/plugin-kitchen-sink-example/node_modules/@paperclipai/plugin-sdk/dist/dev-cli.js'
+ WARN  Failed to create bin at /workspace/blentera-v10/packages/plugins/paperclip-plugin-fake-sandbox/node_modules/.bin/paperclip-plugin-dev-server. ENOENT: no such file or directory, open '/workspace/blentera-v10/packages/plugins/paperclip-plugin-fake-sandbox/node_modules/@paperclipai/plugin-sdk/dist/dev-cli.js'
+ WARN  Failed to create bin at /workspace/blentera-v10/packages/plugins/plugin-llm-wiki/node_modules/.bin/paperclip-plugin-dev-server. ENOENT: no such file or directory, open '/workspace/blentera-v10/packages/plugins/plugin-llm-wiki/node_modules/@paperclipai/plugin-sdk/dist/dev-cli.js'
+ WARN  Failed to create bin at /workspace/blentera-v10/packages/plugins/plugin-workspace-diff/node_modules/.bin/paperclip-plugin-dev-server. ENOENT: no such file or directory, open '/workspace/blentera-v10/packages/plugins/plugin-workspace-diff/node_modules/@paperclipai/plugin-sdk/dist/dev-cli.js'
+ WARN  Failed to create bin at /workspace/blentera-v10/ui/node_modules/.bin/paperclip-plugin-dev-server. ENOENT: no such file or directory, open '/workspace/blentera-v10/ui/node_modules/@paperclipai/plugin-sdk/dist/dev-cli.js'
+ WARN  Failed to create bin at /workspace/blentera-v10/server/node_modules/.bin/paperclip-runner-eval-session. ENOENT: no such file or directory, open '/workspace/blentera-v10/server/node_modules/@paperclipai/paperclip-runner/dist/cli/eval-session.js'
+ WARN  Failed to create bin at /workspace/blentera-v10/server/node_modules/.bin/paperclip-runner-codex-proxy. ENOENT: no such file or directory, open '/workspace/blentera-v10/server/node_modules/@paperclipai/paperclip-runner/dist/cli/codex-app-server-unix-proxy.js'
+ WARN  Failed to create bin at /workspace/blentera-v10/server/node_modules/.bin/paperclip-runner-opencode-proxy. ENOENT: no such file or directory, open '/workspace/blentera-v10/server/node_modules/@paperclipai/paperclip-runner/dist/cli/opencode-app-server-proxy.js'
+ WARN  Failed to create bin at /workspace/blentera-v10/server/node_modules/.bin/paperclip-runner-acpx-sidecar. ENOENT: no such file or directory, open '/workspace/blentera-v10/server/node_modules/@paperclipai/paperclip-runner/dist/cli/acpx-runtime-sidecar.js'
+ WARN  Failed to create bin at /workspace/blentera-v10/server/node_modules/.bin/paperclip-plugin-dev-server. ENOENT: no such file or directory, open '/workspace/blentera-v10/server/node_modules/@paperclipai/plugin-sdk/dist/dev-cli.js'
+Done in 8.3s

@@ -967,6 +967,17 @@ function assertSelectableProviderConfig(config: {
   }
 }
 
+/** Content purge has no provider authority: every managed remote row is still a liability. */
+export async function assertCompanyManagedSecretErasureComplete(db: Db | DbTransaction, companyId: string) {
+  const [pending] = await db.select({ id: companySecrets.id }).from(companySecrets).where(and(
+    eq(companySecrets.companyId, companyId), eq(companySecrets.managedMode, "paperclip_managed"),
+    ne(companySecrets.provider, "local_encrypted"),
+  )).limit(1);
+  if (pending) throw conflict("Company secret erasure is awaiting its original provider", {
+    code: "secret_provider_erasure_pending",
+  });
+}
+
 export function secretService(db: Db | DbTransaction) {
   const authorization = authorizationService(db);
 
@@ -2196,7 +2207,10 @@ export function secretService(db: Db | DbTransaction) {
         eq(companySecrets.companyId, companyId),
         eq(companySecrets.scope, "company"),
         eq(companySecrets.key, key),
-        ne(companySecrets.status, "deleted"),
+        (input.managedMode ?? "paperclip_managed") === "paperclip_managed" && input.provider !== "local_encrypted"
+          ? sql`(${companySecrets.status}<>'deleted' or (${companySecrets.provider}=${input.provider}
+              and ${companySecrets.managedMode}='paperclip_managed'))`
+          : ne(companySecrets.status, "deleted"),
       ))
       .then((rows) => rows[0] ?? null);
     if (duplicateKey) throw conflict(`Secret key already exists: ${key}`);
@@ -2262,7 +2276,8 @@ export function secretService(db: Db | DbTransaction) {
     } catch (error) {
       throw await throwProviderWriteOrReservedRowRollbackError({
         error,
-        rollbackReservedRow: () => db.delete(companySecrets).where(eq(companySecrets.id, reservedSecret.id)),
+        rollbackReservedRow: () => db.delete(companySecrets).where(and(eq(companySecrets.id, reservedSecret.id),
+          ne(companySecrets.status, "deleted"), sql`${companySecrets.deletedAt} is null`)),
         companyId,
         provider: provider.id,
         providerConfigId: input.providerConfigId ?? null,
@@ -2637,7 +2652,10 @@ export function secretService(db: Db | DbTransaction) {
           eq(companySecrets.companyId, secret.companyId),
           eq(companySecrets.scope, "company"),
           eq(companySecrets.key, nextKey),
-          ne(companySecrets.status, "deleted"),
+            secret.managedMode === "paperclip_managed" && secret.provider !== "local_encrypted"
+            ? sql`(${companySecrets.status}<>'deleted' or (${companySecrets.provider}=${secret.provider}
+                and ${companySecrets.managedMode}='paperclip_managed'))`
+            : ne(companySecrets.status, "deleted"),
         ))
         .then((rows) => rows[0] ?? null);
       if (duplicateKey && duplicateKey.id !== secret.id) {
@@ -3016,7 +3034,10 @@ export function secretService(db: Db | DbTransaction) {
       providerConfigId,
     });
     const idSuffix = randomUUID();
-    const key = normalizeSecretKey(`user.${definition.key}.${idSuffix}`);
+    // Reserve the full UUID suffix even for the longest accepted definition.
+    // Truncating the whole key could erase it and alias a pending old value.
+    const keyPrefix = normalizeSecretKey(`user.${definition.key}`).slice(0, 120 - idSuffix.length - 1);
+    const key = `${keyPrefix}.${idSuffix}`;
     const name = `${definition.name} (${ownerUserId})`;
     const providerWriteContext = {
       companyId,
@@ -3074,7 +3095,8 @@ export function secretService(db: Db | DbTransaction) {
     } catch (error) {
       throw await throwProviderWriteOrReservedRowRollbackError({
         error,
-        rollbackReservedRow: () => db.delete(companySecrets).where(eq(companySecrets.id, reservedSecret.id)),
+        rollbackReservedRow: () => db.delete(companySecrets).where(and(eq(companySecrets.id, reservedSecret.id),
+          ne(companySecrets.status, "deleted"), sql`${companySecrets.deletedAt} is null`)),
         companyId,
         provider: provider.id,
         providerConfigId,
@@ -3382,17 +3404,35 @@ export function secretService(db: Db | DbTransaction) {
     const versionRow = await getSecretVersion(secret.id, secret.latestVersion);
     const providerId = secret.provider as SecretProvider;
     const provider = getSecretProvider(providerId);
+    const managedRemote = secret.managedMode === "paperclip_managed" && providerId !== "local_encrypted";
+    if (managedRemote && secret.status === "deleted" && secret.deletedAt &&
+        secret.key.endsWith(`__deleted__${secret.id}`) && secret.name.endsWith(`__deleted__${secret.id}`)) {
+      // Old rows lost their original key before remote ACK. A suffix alone
+      // cannot distinguish that history from a legitimate key; never guess.
+      throw conflict("Secret erasure requires reconciliation of its original provider identity", {
+        code: "secret_provider_erasure_identity_unresolved",
+      });
+    }
     if (secret.status !== "deleted") {
       await db
         .update(companySecrets)
         .set({
-          key: `${secret.key}__deleted__${secret.id}`,
-          name: `${secret.name}__deleted__${secret.id}`,
+          // AWS derives the managed resource from the original key. A failed
+          // delete must retry that same namespace, never a renamed one.
+          key: managedRemote ? secret.key : `${secret.key}__deleted__${secret.id}`,
+          name: managedRemote ? secret.name : `${secret.name}__deleted__${secret.id}`,
           status: "deleted",
           deletedAt: secret.deletedAt ?? new Date(),
           updatedAt: new Date(),
         })
         .where(eq(companySecrets.id, secretId));
+    }
+    if (managedRemote && (!versionRow || secret.latestVersion < 1 || !versionRow.material)) {
+      // An interrupted reservation may have reached the remote provider. Its
+      // absent material cannot authorize the provider's local no-op deletion.
+      throw conflict("Secret erasure requires reconciliation of its original provider identity", {
+        code: "secret_provider_erasure_identity_unresolved",
+      });
     }
     const providerConfig = secret.providerConfigId
       ? await getProviderConfigById(secret.providerConfigId)
@@ -3401,6 +3441,13 @@ export function secretService(db: Db | DbTransaction) {
       providerConfig && providerConfig.status !== "disabled" && providerConfig.status !== "coming_soon"
         ? toProviderVaultRuntimeConfig(providerConfig)
         : null;
+    if (managedRemote && secret.providerConfigId && !providerRuntimeConfig) {
+      // Access is fenced above. Missing deletion authority is not evidence
+      // that the original external material is gone; retain its exact pins.
+      throw conflict("Secret erasure is pending its original provider vault", {
+        code: "secret_provider_erasure_pending",
+      });
+    }
     if (!secret.providerConfigId || providerRuntimeConfig) {
       try {
         await provider.deleteOrArchive({
@@ -3636,12 +3683,22 @@ export function secretService(db: Db | DbTransaction) {
         .then((rows) => rows[0] ?? null);
     },
 
-    removeProviderConfig: async (id: string) =>
-      db
-        .delete(companySecretProviderConfigs)
-        .where(eq(companySecretProviderConfigs.id, id))
-        .returning()
-        .then((rows) => rows[0] ?? null),
+    removeProviderConfig: async (id: string) => db.transaction(async tx => {
+      // The original FK's key-share lock serializes a concurrent reservation
+      // before its provider write. Never detach a live managed erasure pin.
+      const [config] = await tx.select().from(companySecretProviderConfigs)
+        .where(eq(companySecretProviderConfigs.id, id)).for("update");
+      if (!config) return null;
+      const [managed] = await tx.select({ id: companySecrets.id }).from(companySecrets).where(and(
+        eq(companySecrets.providerConfigId, id), eq(companySecrets.managedMode, "paperclip_managed"),
+        ne(companySecrets.provider, "local_encrypted"),
+      )).limit(1);
+      if (managed) throw conflict("Remove managed secret material before detaching its provider vault", {
+        code: "secret_provider_erasure_pending",
+      });
+      return tx.delete(companySecretProviderConfigs).where(eq(companySecretProviderConfigs.id, id))
+        .returning().then(rows => rows[0] ?? null);
+    }),
 
     setDefaultProviderConfig: async (id: string) => {
       const existing = await getProviderConfigById(id);

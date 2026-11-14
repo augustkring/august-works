@@ -93,8 +93,11 @@ if ! git -C "$REPO_ROOT" rev-parse "$tag" >/dev/null 2>&1; then
   exit 1
 fi
 
-# The catalog is derived from the checked-out sources, so it must be generated
-# from the exact commit the release tag points at, with no local edits.
+# Both catalog assets are derived from the checked-out sources. Keep the
+# existing tier-only v1 asset intact for the Cloud harness and publish
+# lifecycle-rich v2 separately until that external consumer is qualified.
+# Generate both from the exact commit the release tag points at, with no local
+# edits, so their release identity cannot drift from the tagged source.
 tag_commit="$(git -C "$REPO_ROOT" rev-parse "$tag^{commit}")"
 head_commit="$(git -C "$REPO_ROOT" rev-parse HEAD)"
 if [ "$head_commit" != "$tag_commit" ]; then
@@ -109,19 +112,31 @@ fi
 catalog_dir="$(mktemp -d)"
 trap 'rm -rf "$catalog_dir"' EXIT
 catalog_file="$catalog_dir/feature-catalog.json"
+lifecycle_catalog_file="$catalog_dir/feature-catalog-lifecycle.json"
 node "$REPO_ROOT/cli/node_modules/tsx/dist/cli.mjs" \
   "$REPO_ROOT/scripts/generate-feature-catalog.ts" \
   --version "$version" \
   --out "$catalog_file"
+node "$REPO_ROOT/cli/node_modules/tsx/dist/cli.mjs" \
+  "$REPO_ROOT/scripts/generate-feature-catalog.ts" \
+  --version "$version" \
+  --schema-version 2 \
+  --out "$lifecycle_catalog_file"
 
 if [ "$dry_run" = true ]; then
   echo "[dry-run] gh release create $tag -R $GITHUB_REPO --title $tag --notes-file $notes_file"
-  echo "[dry-run] gh release upload $tag -R $GITHUB_REPO --clobber $catalog_file"
+  echo "[dry-run] gh release upload $tag -R $GITHUB_REPO --clobber $catalog_file $lifecycle_catalog_file"
   exit 0
 fi
 
-if ! git -C "$REPO_ROOT" ls-remote --exit-code --tags "$PUBLISH_REMOTE" "refs/tags/$tag" >/dev/null 2>&1; then
+tag_ref="refs/tags/$tag"
+if ! remote_tag_listing="$(git -C "$REPO_ROOT" ls-remote --exit-code --tags "$PUBLISH_REMOTE" "$tag_ref" "$tag_ref^{}" 2>/dev/null)"; then
   echo "Error: remote tag $tag was not found on $PUBLISH_REMOTE. Push the release commit and tag first." >&2
+  exit 1
+fi
+remote_tag_commit="$(awk -v ref="$tag_ref" '$2 == ref "^{}" { peeled = $1 } $2 == ref { direct = $1 } END { print peeled != "" ? peeled : direct }' <<< "$remote_tag_listing")"
+if [ "$remote_tag_commit" != "$tag_commit" ]; then
+  echo "Error: remote tag $tag ($remote_tag_commit) does not match the local release source $tag_commit on $PUBLISH_REMOTE." >&2
   exit 1
 fi
 
@@ -133,5 +148,5 @@ else
   echo "Created GitHub Release $tag"
 fi
 
-gh release upload "$tag" -R "$GITHUB_REPO" --clobber "$catalog_file"
-echo "Uploaded feature-catalog.json to GitHub Release $tag"
+gh release upload "$tag" -R "$GITHUB_REPO" --clobber "$catalog_file" "$lifecycle_catalog_file"
+echo "Uploaded feature-catalog.json and feature-catalog-lifecycle.json to GitHub Release $tag"

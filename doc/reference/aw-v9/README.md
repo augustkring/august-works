@@ -17,6 +17,8 @@ All 36 playbooks were structurally scanned in full and their central principles 
 
 The earlier brief inventory lists 35 playbooks without 06 Security. The current attachments include all 36 below. No app feature, analytics, paid infrastructure, customer communication or marketing action is authorized by staging these references.
 
+The table lists 39 playbooks: the 36 from preparation plus the three WR writing playbooks added on 2026-10-13. Generated heading indexes for every playbook are in [playbooks/index](playbooks/index/README.md).
+
 | Playbook | V9 applicability |
 |---|---|
 | [01_requirements_specification_domain_engineering_master_playbook_v2.2.md](playbooks/01_requirements_specification_domain_engineering_master_playbook_v2.2.md) | Requirements, acceptance criteria and traceability |

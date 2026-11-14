@@ -1,0 +1,130 @@
+
+ RUN  v4.1.11 /workspace/v10-dep-qualification/server
+
+ ✓ src/services/native-runtime/paperclip-runner-tool-authority.test.ts > PaperclipRunnerToolAuthority > retains a Human-only backlog proposal through Native tool replay without granting Agent approval 1963ms
+ ✓ src/services/native-runtime/paperclip-runner-tool-authority.test.ts > PaperclipRunnerToolAuthority > advertises only real bindings and reads the bound task 649ms
+ ✓ src/services/native-runtime/paperclip-runner-tool-authority.test.ts > PaperclipRunnerToolAuthority > captures the exact read_document revision and digest of the returned result 1112ms
+ ✓ src/services/native-runtime/paperclip-runner-tool-authority.test.ts > PaperclipRunnerToolAuthority > qualifies a pure task-context read from its exact retained Task owner 778ms
+ ✓ src/services/native-runtime/paperclip-runner-tool-authority.test.ts > PaperclipRunnerToolAuthority > binds an accepted-plan task-context result to its exact revision and accepted interaction 957ms
+ ✓ src/services/native-runtime/paperclip-runner-tool-authority.test.ts > PaperclipRunnerToolAuthority > captures actual get_task_history comments but leaves missing retained roots unknown 441ms
+ ✓ src/services/native-runtime/paperclip-runner-tool-authority.test.ts > PaperclipRunnerToolAuthority > marks only an actually empty bounded task-history read as a complete source-free result 224ms
+stderr | src/services/native-runtime/paperclip-runner-tool-authority.test.ts > PaperclipRunnerToolAuthority > persists a complete Native history read only against its acknowledged dispatch and exact result bytes
+native_model_input_dispatch_closure_diagnostic {
+  closurePresent: true,
+  closureMatches: true,
+  mismatch: 'unclassified',
+  sourceProtocolVersion: 0,
+  responsibleUserPresent: true,
+  existingReceiptValid: false,
+  noPriorNativeEffects: true,
+  priorIntentCount: 0,
+  priorAssociationCount: 0,
+  priorResultCaptureCount: 0,
+  attachmentStagePresent: false
+}
+
+stderr | src/services/native-runtime/paperclip-runner-tool-authority.test.ts > PaperclipRunnerToolAuthority > persists a complete Native history read only against its acknowledged dispatch and exact result bytes
+managed_model_prompt_source_diagnostic {
+  runId: 'f3e2fd3f-c6f8-4a17-90a3-06bbde5dbf24',
+  promptLength: 858,
+  promptHash: '9647c48bf2cd37bc0e689fbc179ea06f7740f26cf2ac4e89426b54328672300f',
+  firstTurnWrappedPromptLength: 2990,
+  firstTurnWrappedPromptHash: '92d236a07af135a32a5dde7154f92afcd87336fc7fae274805f1bb5bf2b2f98a',
+  continuation: false,
+  sourceClosurePresent: true,
+  sourceClosureMatches: true
+}
+
+ ✓ src/services/native-runtime/paperclip-runner-tool-authority.test.ts > PaperclipRunnerToolAuthority > persists a complete Native history read only against its acknowledged dispatch and exact result bytes 1113ms
+stderr | src/services/native-runtime/paperclip-runner-tool-authority.test.ts > PaperclipRunnerToolAuthority > keeps assigned-review context unknown and prevents a later read from repairing its output history
+native_model_input_dispatch_closure_diagnostic {
+  closurePresent: true,
+  closureMatches: true,
+  mismatch: 'unclassified',
+  sourceProtocolVersion: 0,
+  responsibleUserPresent: true,
+  existingReceiptValid: false,
+  noPriorNativeEffects: true,
+  priorIntentCount: 0,
+  priorAssociationCount: 0,
+  priorResultCaptureCount: 0,
+  attachmentStagePresent: false
+}
+
+stderr | src/services/native-runtime/paperclip-runner-tool-authority.test.ts > PaperclipRunnerToolAuthority > keeps assigned-review context unknown and prevents a later read from repairing its output history
+managed_model_prompt_source_diagnostic {
+  runId: '086ec472-3292-40bd-b464-e0a8a2ac7f20',
+  promptLength: 858,
+  promptHash: 'f61a08414f31c0b19b9805607cbc0cb919735b2ca4a1efb410e7d1bd9fe7a83b',
+  firstTurnWrappedPromptLength: 2990,
+  firstTurnWrappedPromptHash: '62833476508ffce067f92c3bafce9cf47fbd36827aab71e170dcfe6a324c06f8',
+  continuation: false,
+  sourceClosurePresent: true,
+  sourceClosureMatches: true
+}
+
+stderr | src/services/native-runtime/paperclip-runner-tool-authority.test.ts > PaperclipRunnerToolAuthority > keeps assigned-review context unknown and prevents a later read from repairing its output history
+managed_model_prompt_source_diagnostic {
+  runId: '086ec472-3292-40bd-b464-e0a8a2ac7f20',
+  promptLength: 858,
+  promptHash: 'f61a08414f31c0b19b9805607cbc0cb919735b2ca4a1efb410e7d1bd9fe7a83b',
+  firstTurnWrappedPromptLength: null,
+  firstTurnWrappedPromptHash: null,
+  continuation: false,
+  sourceClosurePresent: true,
+  sourceClosureMatches: true
+}
+
+ ✓ src/services/native-runtime/paperclip-runner-tool-authority.test.ts > PaperclipRunnerToolAuthority > keeps assigned-review context unknown and prevents a later read from repairing its output history 1744ms
+ ✓ src/services/native-runtime/paperclip-runner-tool-authority.test.ts > PaperclipRunnerToolAuthority > does not let a legacy document revision bypass its parent Task privacy check 359ms
+ ✓ src/services/native-runtime/paperclip-runner-tool-authority.test.ts > PaperclipRunnerToolAuthority > rechecks a protocol-v1 document parent reader after its revision row wait 642ms
+ ✓ src/services/native-runtime/paperclip-runner-tool-authority.test.ts > PaperclipRunnerToolAuthority > binds a returned document to its authenticated dispatch and never to model arguments 568ms
+ ✓ src/services/native-runtime/paperclip-runner-tool-authority.test.ts > PaperclipRunnerToolAuthority > keeps concurrent read_document source captures local to their calls 352ms
+ ✓ src/services/native-runtime/paperclip-runner-tool-authority.test.ts > PaperclipRunnerToolAuthority > withholds the read_document result when its source capture callback fails 205ms
+ ✓ src/services/native-runtime/paperclip-runner-tool-authority.test.ts > PaperclipRunnerToolAuthority > rechecks the accountable reader after document capture and withholds on access revocation 270ms
+ ✓ src/services/native-runtime/paperclip-runner-tool-authority.test.ts > PaperclipRunnerToolAuthority > withholds a document result when its selected revision is replaced before delivery 215ms
+ ✓ src/services/native-runtime/paperclip-runner-tool-authority.test.ts > PaperclipRunnerToolAuthority > returns public task URLs from the current claimed origin in context and search results 1142ms
+ ✓ src/services/native-runtime/paperclip-runner-tool-authority.test.ts > PaperclipRunnerToolAuthority > exposes existing child tasks on continuation without crossing company boundaries 544ms
+ ✓ src/services/native-runtime/paperclip-runner-tool-authority.test.ts > PaperclipRunnerToolAuthority > advertises API tools by default and preserves direct-chat file tools when disabled 3ms
+ ✓ src/services/native-runtime/paperclip-runner-tool-authority.test.ts > PaperclipRunnerToolAuthority > dispatches hire_agent with fixed caller context and replays its API receipt 753ms
+ ✓ src/services/native-runtime/paperclip-runner-tool-authority.test.ts > PaperclipRunnerToolAuthority > advertises structured human input in ask mode 1ms
+ ✓ src/services/native-runtime/paperclip-runner-tool-authority.test.ts > PaperclipRunnerToolAuthority > advertises real task-bound questions and provider-dependent controls in standard mode 1ms
+ ✓ src/services/native-runtime/paperclip-runner-tool-authority.test.ts > PaperclipRunnerToolAuthority > advertises real task-bound questions and provider-dependent controls in ask mode 1ms
+ ✓ src/services/native-runtime/paperclip-runner-tool-authority.test.ts > PaperclipRunnerToolAuthority > executes the advertised choice question once on the bound reviewed task 839ms
+ ✓ src/services/native-runtime/paperclip-runner-tool-authority.test.ts > PaperclipRunnerToolAuthority > executes the advertised text question once on the bound reviewed task 929ms
+ ✓ src/services/native-runtime/paperclip-runner-tool-authority.test.ts > PaperclipRunnerToolAuthority > does not project a foreign-company task through approval context 55ms
+ ✓ src/services/native-runtime/paperclip-runner-tool-authority.test.ts > PaperclipRunnerToolAuthority > fits large assigned catalogs alongside workspace and completion tools without dropping task tools 53ms
+ ✓ src/services/native-runtime/paperclip-runner-tool-authority.test.ts > PaperclipRunnerToolAuthority > relays assigned MCP calls only while the native run still owns its task 66ms
+ ✓ src/services/native-runtime/paperclip-runner-tool-authority.test.ts > PaperclipRunnerToolAuthority > does not advertise delegation tools during pre-acceptance planning 1ms
+ ✓ src/services/native-runtime/paperclip-runner-tool-authority.test.ts > PaperclipRunnerToolAuthority > writes progress through the real issue service and replays idempotently 855ms
+ ✓ src/services/native-runtime/paperclip-runner-tool-authority.test.ts > PaperclipRunnerToolAuthority > creates checkbox interactions through the real interaction service 744ms
+ ✓ src/services/native-runtime/paperclip-runner-tool-authority.test.ts > PaperclipRunnerToolAuthority > writes a real revisioned document and replays the mutation receipt 810ms
+stderr | src/services/native-runtime/paperclip-runner-tool-authority.test.ts > PaperclipRunnerToolAuthority > returns the exact accepted plan revision in task context
+[paperclip] Dropping unparseable request_confirmation interaction result for interaction 6a75a947-97e8-47d2-82df-62c193fc6245 [
+  {
+    code: 'invalid_value',
+    values: [ 1 ],
+    path: [ 'version' ],
+    message: 'Invalid input: expected 1'
+  }
+]
+
+ ✓ src/services/native-runtime/paperclip-runner-tool-authority.test.ts > PaperclipRunnerToolAuthority > returns the exact accepted plan revision in task context 674ms
+ ✓ src/services/native-runtime/paperclip-runner-tool-authority.test.ts > PaperclipRunnerToolAuthority > creates ordinary children, preserves blockers, and deduplicates across runs 3330ms
+ ✓ src/services/native-runtime/paperclip-runner-tool-authority.test.ts > PaperclipRunnerToolAuthority > binds a private Agent-created Task to the locked run Human and denies stale Human access 926ms
+ ✓ src/services/native-runtime/paperclip-runner-tool-authority.test.ts > PaperclipRunnerToolAuthority > commits exact acknowledged dispatch identity with the native Task mutation receipt 700ms
+ ✓ src/services/native-runtime/paperclip-runner-tool-authority.test.ts > PaperclipRunnerToolAuthority > stores explicit unknown dispatch identity when no acknowledged association exists 1273ms
+ ✓ src/services/native-runtime/paperclip-runner-tool-authority.test.ts > PaperclipRunnerToolAuthority > stores unknown when association history has a contradictory tool for the same call tuple 709ms
+ ✓ src/services/native-runtime/paperclip-runner-tool-authority.test.ts > PaperclipRunnerToolAuthority > stores unknown when a later acknowledged intent makes a previously associated turn ambiguous 661ms
+ ✓ src/services/native-runtime/paperclip-runner-tool-authority.test.ts > PaperclipRunnerToolAuthority > keeps concurrent mutation receipts bound to their own backend calls 1085ms
+ ✓ src/services/native-runtime/paperclip-runner-tool-authority.test.ts > PaperclipRunnerToolAuthority > preserves original dispatch identity when a semantic mutation receipt is replayed 881ms
+ ✓ src/services/native-runtime/paperclip-runner-tool-authority.test.ts > PaperclipRunnerToolAuthority > rolls back Task effects when the atomic mutation receipt cannot commit 919ms
+ ✓ src/services/native-runtime/paperclip-runner-tool-authority.test.ts > PaperclipRunnerToolAuthority > rejects mutations after reassignment, run replacement, or terminalization 69ms
+ ✓ src/services/native-runtime/paperclip-runner-tool-authority.test.ts > PaperclipRunnerToolAuthority > captures delegation and approval origins before steering and preserves replay identity 2160ms
+ ✓ src/services/native-runtime/paperclip-runner-tool-authority.test.ts > PaperclipRunnerToolAuthority > fails closed once the run is no longer active 7ms
+
+ Test Files  1 passed (1)
+      Tests  45 passed (45)
+   Start at  07:37:38
+   Duration  51.33s (transform 10.40s, setup 71ms, import 14.74s, tests 36.40s, environment 0ms)
+

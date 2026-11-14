@@ -1,12 +1,14 @@
-import { and, desc, eq, inArray, sql } from "drizzle-orm";
+import { and, desc, eq, inArray, isNull, or, sql } from "drizzle-orm";
 import { heartbeatRuns, issues, issueThreadInteractions, statusDecisions, type Db } from "@paperclipai/db";
 import type { ExecutionContinuationEnvelope } from "@paperclipai/shared";
+import { issueReadSqlCondition, heartbeatRunReadSqlCondition, type AuthorizationActor } from "../authorization.js";
 
 /** Recorded decisions are evidence for the parent, never new review authority. */
 export async function childReviewOutcomes(
   db: Db,
   companyId: string,
   parentIssueId: string,
+  reader: AuthorizationActor = { type: "none" },
 ): Promise<ExecutionContinuationEnvelope["interactionOutcomes"]> {
   const rows = await db.select({
     id: issueThreadInteractions.id,
@@ -40,6 +42,15 @@ export async function childReviewOutcomes(
     .where(and(
       eq(issues.companyId, companyId),
       eq(issues.parentId, parentIssueId),
+      await issueReadSqlCondition(db, reader),
+      await heartbeatRunReadSqlCondition(db, reader),
+      or(isNull(issueThreadInteractions.createdByAgentId), eq(heartbeatRuns.agentId, issueThreadInteractions.createdByAgentId)),
+      or(isNull(issueThreadInteractions.resolvedByRunId), sql`exists (
+        select 1 from ${heartbeatRuns} where ${heartbeatRuns.id}=${issueThreadInteractions.resolvedByRunId}
+          and ${heartbeatRuns.companyId}=${companyId} and ${heartbeatRuns.nativeIssueId}=${issues.id}
+          and (${issueThreadInteractions.resolvedByAgentId} is null or ${heartbeatRuns.agentId}=${issueThreadInteractions.resolvedByAgentId})
+          and ${await heartbeatRunReadSqlCondition(db, reader)}
+      )`),
       eq(issueThreadInteractions.kind, "request_confirmation"),
       inArray(issueThreadInteractions.status, ["accepted", "rejected"]),
       sql`${issueThreadInteractions.payload}->'target'->>'type' = 'custom'`,

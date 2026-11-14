@@ -1,0 +1,3 @@
+timeout_seconds=240
+test_file=src/__tests__/account-deletion-sso-reauth.integration.test.ts
+test_pattern=requires a fresh native passkey for a configured local operator and then permits password-confirmed deletion

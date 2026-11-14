@@ -1,0 +1,75 @@
+{
+  "scope": "Existing Context Engine integration fixture repair only; no production guard/permission change",
+  "baseline": {
+    "source": "/workspace/v10-preparation/up03-context-engine-fixture-original.test.ts",
+    "sourceSha256File": "/workspace/v10-preparation/up03-context-engine-fixture-original.sha256",
+    "rootPriorLog": "/workspace/v10-preparation/up03-context-selected-snapshots-engine.log",
+    "rootReportedActualExit": 1,
+    "rootReportedFailures": 7,
+    "rootReportedDurationSeconds": 73.66
+  },
+  "changes": [
+    "Seed actual persisted running native run bound to current Human/Agent/Task and pass runId to every assemble variant",
+    "Capture Memory source arrays/privateHuman through original captureMemorySources using real producer runs/Tasks; raw review states are bounded structural fixtures, not review/producer qualification",
+    "Separate producer Tasks avoid fictitious future Context dependencies; Task-erasure workflow case instead retains actual source Task/run",
+    "Replace fabricated sourceRef run UUID with actual captured producer run identity",
+    "Clean up manifests then actual runs and native runtime-asset erasure jobs before principals/company",
+    "Original grants/assertions/deadlines and denied Foundation cases retained; success assertion adds failure diagnostics"
+  ],
+  "current": {
+    "actualExit": 0,
+    "passed": 7,
+    "durationSeconds": 75.41,
+    "log": "/workspace/v10-preparation/up03-context-engine-fixture-current.log",
+    "durableExit": "/workspace/v10-preparation/up03-context-engine-fixture-current.exit",
+    "before": "/workspace/v10-preparation/up03-context-engine-fixture-current-before.sha256",
+    "after": "/workspace/v10-preparation/up03-context-engine-fixture-current-after.sha256",
+    "all8PinsUnchanged": true,
+    "actualEmbeddedPostgresCleanupClosed": true,
+    "exactSevenPassTestSnapshot": "/workspace/v10-preparation/up03-context-engine-fixture-seven-pass.test.ts"
+  },
+  "ownedFile": {
+    "path": "server/src/services/context/context-engine-integration.test.ts",
+    "sha256": "6419188c9a0390be8ed6e78c2038341692a4a4cc0ef215d2858d0ffea31435f3"
+  },
+  "limits": [
+    "No production edits or generic grants",
+    "No native provider/transport/real Human qualification claims",
+    "Only this original seven-case suite run; not full Context/Memory portfolio",
+    "No Git commit by A"
+  ],
+  "finalSourceReview": {
+    "type": "No cast needed: canonical Db=Omit<ReturnType<typeof createDb>,\"$client\">; PostgresJsTransaction inherits original PgDatabase query surface",
+    "change": "Comment only explicitly keeps both original same-run temporal regression cases open",
+    "sha256": "9faba98432ebd0b868b03fb1a3a44eef1771a706b5b1691b604a41631db377d9",
+    "rerun": false,
+    "note": "Seven-pass proof names the saved exact pre-comment source; no later-byte test claim"
+  },
+  "finalVerification": {
+    "testSourceSha256": "921944b5ec9df611161485d115c3bf5c6d7363da33b12763e707ad839f64164b",
+    "compiler": {
+      "actualExit": 0,
+      "log": "up03-context-engine-fixture-server-types-current.log"
+    },
+    "isolatedEngine": {
+      "actualExit": 0,
+      "passed": 7,
+      "durationSeconds": 68.11,
+      "log": "up03-context-engine-fixture-current-solo.log"
+    },
+    "concurrentEngine": {
+      "actualExit": 1,
+      "passed": 6,
+      "failed": 1,
+      "durationSeconds": 69.66,
+      "log": "up03-context-engine-fixture-current-final.log",
+      "reason": "Eligible Memory was empty in the 3-second deadline case during simultaneous compiler; load-sensitive behavior remains recorded, no timeout increase."
+    },
+    "diagnosticCorrection": "Initial compiler rejected nonexistent WorkflowStepRun.error in assertion diagnostics; removed only that diagnostic field. No assertion/guard/deadline weakened.",
+    "initialCompiler": {
+      "actualExit": 1,
+      "log": "up03-context-engine-fixture-server-types.log",
+      "exactSource": "up03-context-engine-fixture-compiler-failure.test.txt"
+    }
+  }
+}

@@ -238,6 +238,12 @@ export interface MemoryEvidence {
 export interface MemoryRecordDetail {
   record: MemoryRecord;
   evidence: MemoryEvidence[];
+  /** Safe projection of the canonical private-share proposal, never caller metadata. */
+  privateShareReview?: {
+    state: "pending" | "published" | "rejected";
+    targetScopeType: Exclude<MemoryScopeType, "agent">;
+    targetScopeId: string | null;
+  };
 }
 
 export interface MemoryCandidateResolutionResult extends MemoryRecordDetail {

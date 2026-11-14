@@ -1,0 +1,50 @@
+{
+  "scope": "Static mounted UI operation authorization classification; not execution or release qualification.",
+  "checkedAtUtc": "2026-10-29T21:34:14.690700+00:00",
+  "command": "node scripts/check-aw-v10-operation-coverage.mjs",
+  "exit": 0,
+  "counts": {
+    "agentToolOperations": 6,
+    "existingApiOnlyContracts": 159,
+    "exactMountedClientCallsites": 996
+  },
+  "change": "Existing workflow continuation start callsites retain their original Agent-capable API mappings; the new model-monitor write is Human-session-only and introduces no Agent tool. Callsite lines for safe test and CustomAgent move with their source.",
+  "sourcePins": [
+    {
+      "path": "doc/operations/agent-native-ui-operation-coverage.json",
+      "sha256": "67edaf4af0708fb0252107143e325ec2470b90fa6ce9ac90e92f9cd4a4855bd5"
+    },
+    {
+      "path": "ui/src/pages/WorkflowRun.tsx",
+      "sha256": "7031b66da31cde26b5a5f406d802d783b114de45ecdd9b887ea4a978a266ab3d"
+    },
+    {
+      "path": "ui/src/components/AgentModelMigrationMonitor.tsx",
+      "sha256": "e1f66b8a2a038a649bcdce8614473cca4cd1e044ed481c89e6682fe3db4261de"
+    },
+    {
+      "path": "ui/src/components/AgentDraftSafeTest.tsx",
+      "sha256": "bbb819ca44614e00093eb475afe4fa133c3dce588f7b572ebf02865763018bb8"
+    },
+    {
+      "path": "ui/src/pages/CustomAgent.tsx",
+      "sha256": "4426cefb8796470f8ecdd21aec7d9d2889d7e0062d93865bf6a15dba79b6866f"
+    },
+    {
+      "path": "ui/src/api/workflows.ts",
+      "sha256": "ee9505c819c9caef8df121345bc3c9ea398fd8a66fcccb9f1ad85da3c735b30b"
+    },
+    {
+      "path": "ui/src/api/agent-authoring.ts",
+      "sha256": "7f66e0c7060319c7b1b66798e30fd299c72f1b0284b56d523536d42622fcce1a"
+    },
+    {
+      "path": "server/src/routes/agent-authoring.ts",
+      "sha256": "54f66742b5dc6028d54c81a08c5d468c4b1345a6560e084971045025b16865f8"
+    },
+    {
+      "path": "server/src/routes/workflows.ts",
+      "sha256": "45117a317a22c78441b7a3f1b0a44104e463f89234329a62a669a5d8a4e63705"
+    }
+  ]
+}

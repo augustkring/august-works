@@ -1,6 +1,6 @@
 import { randomUUID } from "node:crypto";
 import { eq } from "drizzle-orm";
-import { afterAll, afterEach, beforeAll, describe, expect, it } from "vitest";
+import { afterAll, afterEach, beforeAll, describe, expect, it, vi } from "vitest";
 import {
   activityLog,
   agents,
@@ -28,7 +28,11 @@ import {
   getEmbeddedPostgresTestSupport,
   startEmbeddedPostgresTestDatabase,
 } from "./helpers/embedded-postgres.js";
-import { toolAccessPolicyService } from "../services/tool-access-policy.js";
+import {
+  createToolRateLimitTokenLedger,
+  toolAccessPolicyService,
+  type ToolRateLimitTokenLedger,
+} from "../services/tool-access-policy.js";
 import { toolAccessService } from "../services/tool-access.js";
 import { createToolGatewayService, ToolGatewayHttpError } from "../services/tool-gateway.js";
 
@@ -956,6 +960,78 @@ describeEmbeddedPostgres("tool access policy service", () => {
 
     expect(decisions.filter((decision) => decision.allowed)).toHaveLength(1);
     expect(decisions.filter((decision) => decision.reasonCode === "rate_limited")).toHaveLength(1);
+  });
+
+  it("lets the Nth admitted call pass its own re-checks while pre-checks and the (N+1)th call stay limited", async () => {
+    const company = await createCompany(db);
+    const agent = await createAgent(db, company.id);
+    const { connection } = await createTool(db, company.id);
+    await db.insert(principalPermissionGrants).values({
+      companyId: company.id,
+      principalType: "agent",
+      principalId: agent.id,
+      permissionKey: "tools:use",
+      scope: { toolName: "send_email" },
+    });
+    await db.insert(toolPolicies).values({
+      companyId: company.id,
+      name: "Three sends per minute",
+      policyType: "rate_limit",
+      selectors: { toolName: "send_email" },
+      config: { limit: 3, windowSeconds: 60, keyBy: ["agent", "tool"] },
+    });
+    const base = {
+      companyId: company.id,
+      actor: { actorType: "agent" as const, actorId: agent.id, agentId: agent.id },
+      request: { connectionId: connection.id, toolName: "send_email" },
+    };
+    const policy = toolAccessPolicyService(db);
+    const admit = (rateLimitTokens: ToolRateLimitTokenLedger) =>
+      policy.decide({ ...base, consumeRateLimit: true }, { rateLimitTokens });
+    const recheck = (rateLimitTokens?: ToolRateLimitTokenLedger) =>
+      policy.decide({ ...base, consumeRateLimit: false }, { rateLimitTokens });
+    const precheck = () => policy.decide({ ...base, consumeRateLimit: false });
+    const limited = { allowed: false, decision: "rate_limited", reasonCode: "rate_limited" };
+
+    // Keep every call in one 60-second window, then roll over deliberately.
+    const windowInstant = new Date(); windowInstant.setUTCSeconds(10, 0);
+    vi.useFakeTimers({ toFake: ["Date"] }); vi.setSystemTime(windowInstant);
+    try {
+      const calls = [createToolRateLimitTokenLedger(), createToolRateLimitTokenLedger(), createToolRateLimitTokenLedger()];
+      for (const [index, call] of calls.entries()) {
+        expect(await precheck(), `pre-check before call ${index + 1}`).toMatchObject({ allowed: true });
+        expect(await admit(call), `admission of call ${index + 1}`).toMatchObject({ allowed: true });
+        // Post-admission re-checks run repeatedly during one remote dispatch.
+        expect(await recheck(call), `first re-check of call ${index + 1}`).toMatchObject({ allowed: true });
+        expect(await recheck(call), `second re-check of call ${index + 1}`).toMatchObject({ allowed: true });
+      }
+
+      // The window is full: pre-checks keep `count >= limit`, and a re-check
+      // without this call's ledger, or with a forged one, is still limited.
+      expect(await precheck()).toMatchObject(limited);
+      expect(await recheck()).toMatchObject(limited);
+      expect(await recheck({ heldIn: () => 99 })).toMatchObject(limited);
+      expect(await recheck(createToolRateLimitTokenLedger())).toMatchObject(limited);
+
+      // The (N+1)th call is rejected and gains no token, so its re-check stays limited.
+      const fourth = createToolRateLimitTokenLedger();
+      expect(await admit(fourth)).toMatchObject(limited);
+      expect(await recheck(fourth)).toMatchObject(limited);
+      const [counter] = await db.select().from(toolRateLimitCounters);
+      expect(counter).toMatchObject({ limit: 3, remaining: 0 });
+
+      // Window rollover: a token consumed in window W does not offset the
+      // count in W+1, so a held token never admits an extra call there.
+      vi.setSystemTime(new Date(windowInstant.getTime() + 60_000));
+      expect(await recheck(calls[2])).toMatchObject({ allowed: true });
+      for (let index = 0; index < 3; index += 1) {
+        expect(await admit(createToolRateLimitTokenLedger())).toMatchObject({ allowed: true });
+      }
+      expect(await recheck(calls[2])).toMatchObject(limited);
+      expect(await precheck()).toMatchObject(limited);
+    } finally {
+      vi.useRealTimers();
+    }
   });
 
   it("rejects unsupported policy semantics at create and update time", async () => {

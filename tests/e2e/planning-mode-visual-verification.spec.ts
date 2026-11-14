@@ -7,7 +7,7 @@ import {
 
 /** The name the CEO role fills in — see AGENT_ROLE_LABELS. */
 const AGENT_NAME = "CEO";
-const TASK_TITLE = "Paperclip onboarding";
+const TASK_TITLE = "Blentera onboarding";
 
 /**
  * The first task opens with the chief of staff's opening card sitting where
@@ -48,14 +48,8 @@ test("captures planning mode UI for desktop and mobile", async ({ page }) => {
   await page.route("**/agent-hires", async (route) => {
     const req = route.request();
     const body = JSON.parse(req.postData() || "{}");
-    const auth = req.headers().authorization;
-    const real = await fetch(new URL(req.url()).toString(), {
-      method: "POST",
-      headers: {
-        "Content-Type": "application/json",
-        ...(auth ? { Authorization: auth } : {}),
-      },
-      body: JSON.stringify({
+    const real = await route.fetch({
+      postData: JSON.stringify({
         name: body.name,
         role: body.role,
         adapterType: "http",
@@ -64,9 +58,7 @@ test("captures planning mode UI for desktop and mobile", async ({ page }) => {
       }),
     });
     await route.fulfill({
-      status: real.status,
-      contentType: "application/json",
-      body: await real.text(),
+      response: real,
     });
   });
 

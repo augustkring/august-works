@@ -1,5 +1,11 @@
 import { describe, expect, it } from "vitest";
-import { humanizeSystemNotice } from "./system-notice-humanizer";
+import experienceDa from "../i18n/experience/da.json";
+import experienceEn from "../i18n/experience/en.json";
+import {
+  humanizeSystemNotice,
+  NATIVE_PAID_RUNTIME_UNAVAILABLE_MESSAGE,
+  TOOL_MODEL_EFFECT_UNAVAILABLE_MESSAGE,
+} from "./system-notice-humanizer";
 
 describe("humanizeSystemNotice", () => {
   it("uses presentation title and tone when present", () => {
@@ -34,6 +40,58 @@ describe("humanizeSystemNotice", () => {
     });
     expect(result.title).toBe("Task paused — a secret/config binding is missing");
     expect(result.tone).toBe("warning");
+  });
+
+
+  it.each([
+    ["English", experienceEn.taskChatSystemNotice],
+    ["Danish", experienceDa.taskChatSystemNotice],
+  ])("localizes an unqualified managed runtime in %s", (_language, copy) => {
+    const result = humanizeSystemNotice({
+      body: `This run stopped before dispatch. ${NATIVE_PAID_RUNTIME_UNAVAILABLE_MESSAGE} Latest retry failure: ` +
+        "`configuration_incomplete`.",
+      presentation: {
+        kind: "system_notice",
+        title: "Configuration incomplete",
+        tone: "danger",
+        detailsDefaultOpen: false,
+      },
+      runtimeUnavailableCopy: {
+        title: copy.runtimeUnavailableTitle,
+        detail: copy.runtimeUnavailableDetail,
+      },
+    });
+    expect(result).toEqual({
+      title: copy.runtimeUnavailableTitle,
+      tone: "danger",
+      detail: copy.runtimeUnavailableDetail,
+    });
+  });
+
+  it("keeps actual missing-secret copy and specific presentation priority", () => {
+    const missingSecret = humanizeSystemNotice({
+      body: "Required secret/env bindings are missing. Latest retry failure: `configuration_incomplete`.",
+      runtimeUnavailableCopy: {
+        title: experienceEn.taskChatSystemNotice.runtimeUnavailableTitle,
+        detail: experienceEn.taskChatSystemNotice.runtimeUnavailableDetail,
+      },
+    });
+    expect(missingSecret.title).toBe("Task paused — a secret/config binding is missing");
+
+    const presentationPriority = humanizeSystemNotice({
+      body: NATIVE_PAID_RUNTIME_UNAVAILABLE_MESSAGE,
+      presentation: {
+        kind: "system_notice",
+        title: "Run recovery exhausted",
+        tone: "danger",
+        detailsDefaultOpen: false,
+      },
+      runtimeUnavailableCopy: {
+        title: experienceEn.taskChatSystemNotice.runtimeUnavailableTitle,
+        detail: experienceEn.taskChatSystemNotice.runtimeUnavailableDetail,
+      },
+    });
+    expect(presentationPriority).toEqual({ title: "Run recovery exhausted", tone: "danger" });
   });
 
   it("classifies missing secret bindings even without a failure code", () => {
@@ -96,5 +154,14 @@ describe("humanizeSystemNotice", () => {
       tone: "neutral",
       detail: "Run rescheduled.",
     });
+  });
+});
+
+describe("tool model-effect unavailable central copy", () => {
+  it.each([experienceEn, experienceDa])("prioritizes localized tool action above generic configuration/secret copy", copy => {
+    const translated={title:copy.taskChatSystemNotice.toolUnavailableTitle,detail:copy.taskChatSystemNotice.toolUnavailableDetail};
+    const result=humanizeSystemNotice({body:`${TOOL_MODEL_EFFECT_UNAVAILABLE_MESSAGE} Latest retry failure: \`configuration_incomplete\`.`,presentation:{kind:"system_notice",title:"Configuration incomplete",tone:"warning",detailsDefaultOpen:false},toolUnavailableCopy:translated});
+    expect(result).toMatchObject({...translated,tone:"warning"});
+    expect(result.detail).not.toContain("Runtime");expect(result.detail).not.toContain("secret");
   });
 });

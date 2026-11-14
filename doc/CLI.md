@@ -6,6 +6,63 @@ Paperclip CLI now supports both:
 - instance setup/diagnostics (`onboard`, `doctor`, `configure`, `env`, `allowed-hostname`, `env-lab`)
 - control-plane client operations (issues, approvals, agents, activity, dashboard)
 
+## Browser-approved Board authentication
+
+```sh
+npx paperclipai auth login --api-base <instance-url>
+npx paperclipai auth logout --api-base <instance-url>
+```
+
+Login creates a ten-minute challenge and prints its browser approval link.
+Sign in, review the client and full Board authority, and approve only a request
+you started in your own terminal. The pending token cannot authenticate before
+approval. The CLI verifies its current identity before storing the credential.
+If your current sign-in needs confirmation, the approval page asks for your
+password, authenticator/recovery code or passkey as required by your account.
+Confirmation rotates the native session and returns you to review; it does not
+approve the request. Platform operators require a recent passkey and verified
+email. A Board token cannot substitute for this human proof or mint another
+Board token.
+
+The default key expires after thirty days; logout attempts server revocation
+and removes the local credential. Check the reported `revoked` result.
+
+A Board key is a human developer/operator credential across the organizations
+that person can currently access. A requested company supplies audit context;
+it does not restrict the key to that company. Instance-admin requests also
+require the current instance-admin role. Never give a Board key to a Co-worker,
+agent environment or model context; use the existing scoped agent/tool gateway
+credentials for those paths.
+
+Approval and cancellation serialize on the same challenge. Another person
+cannot take over an approved challenge. Same-owner replay rechecks current
+authority and the original key; deleting or revoking that key cannot turn the
+old approval into another key. Cancelling an approved challenge does not revoke
+its key. Consent is never automatically resubmitted after an error.
+
+Creation and revocation store their available company audit records in the same
+transaction as the key change; a later notification failure cannot repeat that
+change. Trusted historical creation/challenge context can supply an own-key
+revocation audit destination after membership loss. It grants no current company
+access. Each first creation and successful revocation also records one global
+authentication security event, even without a company audit destination. This
+receipt contains only the opaque user/key IDs, action and timestamps. It survives
+key/account removal and expires after ninety days; native maintenance removes
+expired events in bounded batches independently of email feature settings.
+
+Challenge creation is limited to twenty requests per minute per resolved client
+IP and polling to 120, with separate process-local budgets. Configure
+`TRUST_PROXY` for the actual trusted proxy boundary. HTTP 429 reads honor
+`Retry-After` within the original challenge expiry; recovery continues the same
+challenge and never creates another one. Browser reads have at most three such
+retries and a ten-minute maximum window. Other failures remain visible.
+
+Automatic authentication recovery identifies the command as `paperclipai`.
+Argument values, credentials and private content are not copied into the
+persisted challenge label. Explicit login and connect flows use fixed labels.
+Challenge API responses and approval documents use `no-store` and
+`no-referrer`; approval-page state is scoped to the current Human/session.
+
 ## Security: safe invocation for content-bearing arguments
 
 Use `npx paperclipai` for any command whose argument can hold untrusted or
@@ -416,6 +473,17 @@ Notes:
   or `/api/agents/me` and then reads only that scoped company.
 - `company create` requires board/instance-admin authentication because it is
   an instance-wide setup command.
+- Company package format 8 preserves task and project ownership and native source
+  restrictions. Export and preview include only sources readable by the current
+  actor. Task/project copies currently require verified sources in the existing
+  target organization; legacy packages without that proof and cross-organization
+  copies are refused until explicit source publication is supported. Access loss
+  or deletion of a retained source can withhold its copies.
+- Private task/project HTTP writes remain temporarily unavailable while their
+  complete delivery checks are unfinished. Downloading a readable package does
+  not grant publication or copy permission. Routine copies and native imports
+  from restricted task, Memory, or learned Foundation context also remain
+  unavailable where the target cannot retain those source restrictions.
 - Deletion is server-gated by `PAPERCLIP_ENABLE_COMPANY_DELETION`.
 - With agent authentication, company deletion is company-scoped. Use the current company ID/prefix (for example via `--company-id` or `PAPERCLIP_COMPANY_ID`), not another company.
 
@@ -593,6 +661,12 @@ npx paperclipai token agent revoke --company-id <company-id> --agent <agent-id-o
 ```
 
 Named board API keys use the board authorization model, support revocation and expiration metadata, and are audited server-side.
+
+`token board create` opens a new browser consent flow even when the CLI already
+has a Board token. Review the requested name and expiry, including an explicit
+non-expiring request, before approving. `connect` uses the exact key approved in
+its browser flow. Neither command creates a second key from the approved token.
+A server that cannot preserve requested key settings is rejected before approval.
 
 ```sh
 npx paperclipai token board create --company-id <company-id> --name external-admin

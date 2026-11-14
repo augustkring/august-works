@@ -1,0 +1,12 @@
+
+ RUN  v4.1.11 /workspace/v10-dep-qualification/server
+
+ ✓ src/__tests__/legacy-runtime-assets.integration.test.ts > Legacy runtime asset reconciliation on PostgreSQL > waits for active runs, retains another tenant's terminal reference and owned copies, bounds orphan removal and refuses symlinks 246ms
+ ✓ src/__tests__/legacy-runtime-assets.integration.test.ts > Legacy runtime asset reconciliation on PostgreSQL > does not erase a shared historical bundle while another tenant Run still owns it 163ms
+ ✓ src/__tests__/legacy-runtime-assets.integration.test.ts > Legacy runtime asset reconciliation on PostgreSQL > rejects a pre-upgrade success receipt when cleared profiles leave legacy bytes behind 36ms
+
+ Test Files  1 passed (1)
+      Tests  3 passed (3)
+   Start at  23:16:27
+   Duration  18.32s (transform 9.74s, setup 81ms, import 13.58s, tests 4.54s, environment 0ms)
+

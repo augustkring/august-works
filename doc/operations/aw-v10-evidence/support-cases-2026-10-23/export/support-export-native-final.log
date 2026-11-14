@@ -1,0 +1,39 @@
+(!) Your Vite config uses features that are unsupported by `configLoader: 'native'`, which is planned to become the default in a future major version of Vite:
+  - `__dirname` (vitest.config.ts:7:25). Use `import.meta.dirname` instead
+Set `VITE_CONFIG_NATIVE_IGNORE_WARNING=true` to suppress this warning.
+
+ RUN  v4.1.11 /workspace/blentera-v10
+
+ ❯ |@paperclipai/server| src/__tests__/v10-support-cases.integration.test.ts (17 tests | 1 failed) 28955ms
+     × serializes concurrent create retries to one effect and rejects changed content on the same key 297ms
+
+⎯⎯⎯⎯⎯⎯⎯ Failed Tests 1 ⎯⎯⎯⎯⎯⎯⎯
+
+ FAIL  |@paperclipai/server| src/__tests__/v10-support-cases.integration.test.ts > V10 authenticated support cases > serializes concurrent create retries to one effect and rejects changed content on the same key
+AssertionError: expected [ 201, 500 ] to deeply equal [ 201, 201 ]
+
+- Expected
++ Received
+
+  [
+    201,
+-   201,
++   500,
+  ]
+
+ ❯ src/__tests__/v10-support-cases.integration.test.ts:162:34
+    160|     const key = randomUUID();
+    161|     const [a, b] = await Promise.all([create(companyA, "opener", "One …
+    162|     expect([a.status, b.status]).toEqual([201, 201]);
+       |                                  ^
+    163|     expect(a.body.id).toBe(b.body.id);
+    164|     expect(await db.select().from(supportCases).where(eq(supportCases.…
+
+⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯[1/1]⎯
+
+
+ Test Files  1 failed (1)
+      Tests  1 failed | 16 passed (17)
+   Start at  19:31:43
+   Duration  104.85s (transform 48.41s, setup 967ms, import 72.08s, tests 28.96s, environment 1ms)
+

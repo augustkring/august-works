@@ -1,0 +1,63 @@
+[33m[PLUGIN_TIMINGS] [0mYour build spent 86% of 7.1s inside plugin hooks (6.1s).
+Measured inside the callback, so queue time is excluded and time the callback itself awaited is not:
+  - inject-file-scope-variables transform (67%, 4.7s, 2 calls)
+See https://rolldown.rs/reference/InputOptions.checks#plugintimings for more details.
+
+(!) Your Vite config uses features that are unsupported by `configLoader: 'native'`, which is planned to become the default in a future major version of Vite:
+  - `__dirname` (vitest.config.ts:7:25). Use `import.meta.dirname` instead
+Set `VITE_CONFIG_NATIVE_IGNORE_WARNING=true` to suppress this warning.
+
+ RUN  v4.1.11 /workspace/blentera-v10
+
+ ❯ |@paperclipai/server| src/__tests__/native-payload-temporal-sources.integration.test.ts (2 tests | 2 failed) 11773ms
+     × keeps earlier shared Memory readable after its producer later reads a private Task, while narrowing new Memory 1930ms
+     × keeps an earlier derived Task readable while a new Task retains a later private input 781ms
+
+⎯⎯⎯⎯⎯⎯⎯ Failed Tests 2 ⎯⎯⎯⎯⎯⎯⎯
+
+ FAIL  |@paperclipai/server| src/__tests__/native-payload-temporal-sources.integration.test.ts > Native payload inputs retain their creation-time source closure > keeps earlier shared Memory readable after its producer later reads a private Task, while narrowing new Memory
+AssertionError: promise resolved "null" instead of rejecting
+
+- Expected:
+Error {
+  "message": "rejected promise",
+}
+
++ Received:
+null
+
+ ❯ src/__tests__/native-payload-temporal-sources.integration.test.ts:71:69
+     69|     expect(later.record.sourceIssueIds).toContain(s.privateTask.id);
+     70|     expect((await memory.get(s.companyId, later.record.id, human))?.re…
+     71|     await expect(memory.get(s.companyId, later.record.id, bobActor)).r…
+       |                                                                     ^
+     72|     // Current private policy still narrows later copies. A future inp…
+     73|     // become an input to an already committed earlier Memory body.
+
+⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯[1/2]⎯
+
+ FAIL  |@paperclipai/server| src/__tests__/native-payload-temporal-sources.integration.test.ts > Native payload inputs retain their creation-time source closure > keeps an earlier derived Task readable while a new Task retains a later private input
+AssertionError: expected false to be true // Object.is equality
+
+- Expected
++ Received
+
+- true
++ false
+
+ ❯ src/__tests__/native-payload-temporal-sources.integration.test.ts:86:64
+     84|     expect(await canActorReadIssuePrivacy(db, s.alice, later)).toBe(tr…
+     85|     expect(await canActorReadIssuePrivacy(db, s.bob, later)).toBe(fals…
+     86|     expect(await canActorReadIssuePrivacy(db, s.bob, earlier)).toBe(tr…
+       |                                                                ^
+     87|   });
+     88| });
+
+⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯[2/2]⎯
+
+
+ Test Files  1 failed (1)
+      Tests  2 failed (2)
+   Start at  01:07:12
+   Duration  147.93s (transform 61.34s, setup 18.75s, import 92.02s, tests 11.77s, environment 0ms)
+

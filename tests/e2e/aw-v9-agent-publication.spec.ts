@@ -56,7 +56,8 @@ for (const [kind, locale] of [["custom", "en"], ["hire", "da"], ["hire", "en"]] 
           expect(Object.keys(input)).toHaveLength(6);
           receipt = agentDraftPublicationReceiptSchema.parse({ companyId: company.id, draftId: id, requestId: input.requestId, agentId, revisionId: input.requestId,
             ...(kind === "hire" ? { packageInstallation: { installationId: planId, versionId: packageId, key: "research", version: "1.0.0", contentHash: "a".repeat(64) } } : {}),
-            publishedContent: draft.content!, publishedVersion: 2, publishedAt: "2026-10-12T00:00:00.000Z", activatedAtPublication: true, authorityGranted: false, executionStarted: false });
+            publishedContent: draft.content!, publishedVersion: 2, publishedAt: "2026-10-12T00:00:00.000Z", activatedAtPublication: true,
+            modelMigration: { required: false, action: "none", stage: "single_agent" }, authorityGranted: false, executionStarted: false });
           return route.abort("failed");
         }
         expect(req.method()).toBe("GET");
@@ -83,7 +84,8 @@ for (const [kind, locale] of [["custom", "en"], ["hire", "da"], ["hire", "en"]] 
             revisionId: "10000000-0000-4000-8000-000000000033", revisionNumber: 7, title: "Approved Aster company facts",
             bodyHash: "a".repeat(64), sensitivity: "internal", validFrom: null, validUntil: null }], requiredProcedures: [{ name: "Required security procedure", skillId: "10000000-0000-4000-8000-000000000012", versionId: "10000000-0000-4000-8000-000000000013" }],
           requiredPlaybooks: [{ playbookId: "10000000-0000-4000-8000-000000000014", revisionId: "10000000-0000-4000-8000-000000000015", name: "Approved welcome procedure", bodyHash: "e".repeat(64) }],
-          maximumPerModelCallMinor: 3, currency: "USD", provider: "anthropic", model: "software-host-model", runtimeBindingId: runtimeId, reviewHash: "b".repeat(64),
+          maximumPerModelCallMinor: 3, currency: "USD", provider: "anthropic", model: "software-host-model",
+          modelMigration: { required: false, action: "none", stage: "single_agent" }, runtimeBindingId: runtimeId, reviewHash: "b".repeat(64),
           modelCalled: false, authorityGranted: false, executionStarted: false } });
         if (path.endsWith('/publications')) return route.fulfill({ json: receipt });
         if (receipt && path.endsWith(`/publications/${receipt.requestId}`)) return route.fulfill({ json: receipt });

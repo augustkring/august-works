@@ -1,4 +1,5 @@
-import { randomUUID } from "node:crypto";
+import { createHash, randomUUID } from "node:crypto";
+import { createServer } from "node:http";
 import { chmod, lstat, mkdtemp, readdir, rm } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
@@ -22,11 +23,21 @@ import {
   companies,
   companyMemberships,
   connectionGrants,
+  toolConnections,
+  toolConnectionInstalls,
+  toolProfiles,
+  toolProfileEntries,
   createDb,
   heartbeatRuns,
+  heartbeatRunEvents,
+  issueComments,
+  runIdentityContexts,
+  nativeRunFinalizations,
   issues,
   agentExecutionManifests,
   contextManifestMemoryRoots,
+  contextManifests,
+  contextManifestItems,
   memoryBindings,
   memoryRecords,
   orchestrationPlans,
@@ -35,22 +46,34 @@ import {
   orchestrationModelReservations,
   supervisionInterventions,
   toolInvocations,
+  toolActionRequests,
+  toolPolicies,
   issueDocuments,
   documents,
+  documentRevisions,
   issueThreadInteractions,
   memoryDeletionMarkers,
 } from "@paperclipai/db";
 import {
   PROVIDER_CAPABILITY_FEATURES,
   agentAuthoringContentSchema, AUTHORED_AGENT_DEFINITION_KEY,
+  nativePayloadSourceSnapshotSchema,
+  nativeRunInputSourceReceiptSchema,
+  crossCompanyPolicySchema,
   type WorkerModelBinding,
 } from "@paperclipai/shared";
 import { instanceSettingsService } from "../services/instance-settings.js";
 import { agentProviderBindingService } from "../services/agent-provider-bindings.js";
 import { agentRuntimeFabricService } from "../services/agent-runtime-fabric.js";
+import { crossCompanyContextService } from "../services/cross-company-context.js";
 import { aiConnectionService } from "../services/ai-connections.js";
 import { orchestrationService } from "../services/orchestration/orchestration-service.js";
+import * as agentRunCancellation from "../agent-run-cancellation.js";
 import { workerModelGateway } from "../services/orchestration/worker-model-gateway.js";
+import { createToolGatewayService } from "../services/tool-gateway.js";
+import { canonicalToolArguments, readSignedToolArgumentsPayload, verifyToolArgumentsSignature, validateToolContent } from "../services/tool-content-guards.js";
+import { blenteraPlatformContractHashes } from "../services/tool-gateway.js";
+import { preparePlatformSkillAdmission } from "../services/platform-skill-admission.js";
 import type { WorkerModelProfile } from "../services/orchestration/worker-model-profiles.js";
 import {
   createRuntimeToolsToken,
@@ -60,18 +83,30 @@ import {
 import type { guardedRemoteHttpFetch } from "../services/remote-http-fetch.js";
 import { enableV5ForTest, seedV5Presences } from "./helpers/v5-fixtures.js";
 import { runtimeConnectionIntentRoutes } from "../routes/connection-intents.js";
+import { mcpGatewayProtocolRoutes } from "../routes/tool-gateway.js";
 import { errorHandler } from "../middleware/index.js";
 import { purgeMemoryRecords, purgeDerivedWorkflowMemory, lockMemoryPrivacy } from "../services/memory/memory-privacy.js";
 import { assertAnalyticalContextPayloadAccess } from "../services/analytical-context-authority.js";
 import { PaperclipRunnerToolAuthority } from "../services/native-runtime/paperclip-runner-tool-authority.js";
 import { PaperclipRunnerSemanticAuthority } from "../services/native-runtime/runner-semantic-authority.js";
-import { createAssignedMcpTools } from "../services/native-runtime/assigned-mcp-tools.js";
-import type { ToolGatewayService } from "../services/tool-gateway.js";
+import { createAssignedMcpTools, registerAssignedMcpGateway } from "../services/native-runtime/assigned-mcp-tools.js";
+import { prepareConnectionIntentRailwayFixture } from "./helpers/connection-intent-railway-fixture.js";
 import { withOrchestrationNativeTool } from "../services/orchestration/native-tool-boundary.js";
 import { createAwTextDraftBackend } from "../services/native-runtime/aw-text-draft-backend.js";
 import { registerNativeDraftGateway } from "../services/orchestration/native-draft-runtime.js";
-import { heartbeatService } from "../services/heartbeat.js";
+import { heartbeatService, getIssueExecutionContext, buildPaperclipTaskMarkdown } from "../services/heartbeat.js";
 import { discoverNativeCapabilities } from "../services/native-provider-conformance.js";
+import { currentNativeControllerIdentity } from "../services/native-runtime/native-restart-recovery.js";
+import { recordNativeModelInputDispatchIntent, recordNativeModelInputDispatchAcknowledgement } from "../services/native-runtime/native-session-executor.js";
+import { buildNativeExecutionInput, buildNativeBootstrapSourceSet } from "../services/native-runtime/native-execution-input.js";
+import { nativeSha256 } from "../services/native-runtime/canonical.js";
+import { buildNativeModelEnvelope, parseNativeExecutionInput, type NativeSession } from "../vendor/paperclip-runner/index.js";
+import { buildRetainedNativeRuntimeContext } from "../services/native-runtime/runtime-context.js";
+import { ensureNativeCompletionContract } from "../services/native-runtime/completion-contracts.js";
+import { initializeRunIdentity, reserveSteeredIdentity, reconcileSteeredIdentity } from "../services/run-identity.js";
+import { PROCESS_START_REQUESTED } from "../services/native-local-process-stop.js";
+import { resolveDefaultAgentWorkspaceDir } from "../home-paths.js";
+
 import {
   validatePrpEvent,
   validatePrpStructuredRunResult,
@@ -80,6 +115,8 @@ import { documentService } from "../services/documents.js";
 import { agentService } from "../services/agents.js";
 import { compileAuthoredAgentDefinition, readAuthoredAgentDefinition } from "../services/agents/authored-definition.js";
 import { issueThreadInteractionService } from "../services/issue-thread-interactions.js";
+import { issueService } from "../services/issues.js";
+import { seedCurrentHumanSourceActor } from "./helpers/current-human-source-fixture.js";
 import { makeProviderCapabilitySnapshot, providerConformanceRequirements } from "../services/provider-capabilities.js";
 import { hashContextPolicySnapshot } from "../services/context/context-manifest.js";
 import {
@@ -107,15 +144,20 @@ async function makeFixtureTreeWritable(target: string): Promise<void> {
       plan: typeof orchestrationPlans.$inferSelect,
       task: typeof issues.$inferSelect,
       run: typeof heartbeatRuns.$inferSelect,
+      fixtureSourceClosure: Awaited<ReturnType<typeof prepareFixtureNativeSourceClosure>>["sourceClosure"],
+      fixtureExpectedTask: ReturnType<typeof buildNativeExecutionInput>["task"],
       binding: WorkerModelBinding,
       profile: WorkerModelProfile,
       claims: RuntimeToolsTokenClaims;
+    let managedMcpApi: Awaited<ReturnType<typeof startManagedMcpApiFixture>> | undefined;
+    let activeHeartbeat: ReturnType<typeof heartbeatService> | undefined;
     let calls: number,
       observedKey: string,
       observedBody: string,
       inputTokens: number,
       modelOutput: string,
-      duringCall: (() => Promise<void>) | undefined;
+      duringCall: (() => Promise<void>) | undefined,
+      providerSignalAbortedBeforeResponse: boolean;
     beforeAll(async () => {
       home = await mkdtemp(join(tmpdir(), "aw-v7-worker-model-fixture-"));
       vi.stubEnv("PAPERCLIP_HOME", home);
@@ -125,7 +167,7 @@ async function makeFixtureTreeWritable(target: string): Promise<void> {
         "private-fixture-signing-master-123456789",
       );
       database = await startEmbeddedPostgresTestDatabase("aw-v7-worker-model-");
-      db = createDb(database.connectionString);
+      db = createDb(database.connectionString, { maxConnections: 3 });
       await instanceSettingsService(db).getExperimental();
       await enableV5ForTest(db);
     }, 60000);
@@ -138,6 +180,10 @@ async function makeFixtureTreeWritable(target: string): Promise<void> {
       }
     }, 30000);
     beforeEach(async (context) => {
+      // The direct draft-session and ledger cases also reach the production
+      // Runner MCP client. Keep the same real API route available for every
+      // fixture, not only tests that launch through freshNativePlan().
+      await ensureManagedMcpApiFixture();
       await instanceSettingsService(db).updateExperimental({
         enableWorkflowsV1: true,
         role_packs_v5: false,
@@ -208,15 +254,24 @@ async function makeFixtureTreeWritable(target: string): Promise<void> {
         },
       );
       const provider = await providers.assertRuntime(f.home, f.presence.id);
-      [task] = (await db
-        .insert(issues)
-        .values({
-          companyId: f.home,
-          title: "Save the bounded private fixture draft",
-          status: "todo",
-          assigneeAgentId: f.presence.id,
-        })
-        .returning()) as [typeof task];
+      const taskSourceActor = await seedCurrentHumanSourceActor(db, [f.home], f.userId);
+      task = await issueService(db).create(f.home, {
+        title: "Save the bounded private fixture draft",
+        description: "Human-authored internal draft request.",
+        status: "todo",
+        createdByUserId: f.userId,
+        responsibleUserId: f.userId,
+      }, db, undefined, {
+        manualInputActor: taskSourceActor,
+        privacyActor: taskSourceActor,
+        sourceAccessActor: taskSourceActor,
+      });
+      task = await issueService(db).update(task.id, {
+        assigneeAgentId: f.presence.id,
+        actorUserId: f.userId,
+        privacyActor: taskSourceActor,
+      });
+      if (!task) throw new Error("The canonical Human Task fixture disappeared before assignment");
       [run] = (await db
         .insert(heartbeatRuns)
         .values({
@@ -247,7 +302,9 @@ async function makeFixtureTreeWritable(target: string): Promise<void> {
           requiredOutputs: [{ key: "result" }],
           businessInvariants: ["Use authorized sources only"],
         },
-        budgets: { maxModelCostMinor: 6, maxToolActions: context.task.name.startsWith("reviewed proposal:") && !context.task.name.includes("insufficient retained") ? 3 : 2 },
+        budgets: { maxModelCostMinor: 6, maxToolActions: context.task.name.startsWith("reviewed proposal:") && !context.task.name.includes("insufficient retained") ? 3 : 2,
+          ...(context.task.name === "withholds both connection tools when the current Plan binding is expired"
+            ? { maxWallClockSeconds: 30 } : {}) },
         workers: [{ key: "writer", issueId: task.id }],
       });
       // Private Native fixture setup only. Production launch remains closed for
@@ -288,6 +345,27 @@ async function makeFixtureTreeWritable(target: string): Promise<void> {
         executionManifestId: prepared!.record.id,
         expectedPlanVersion: plan.version,
       };
+      const nativeSourceFixture = await prepareFixtureNativeSourceClosure();
+      fixtureSourceClosure = nativeSourceFixture.sourceClosure;
+      fixtureExpectedTask = nativeSourceFixture.expectedTask;
+      const [sourcePreparedRun] = await db.select({ protocol: heartbeatRuns.nativeInputSourceProtocolVersion,
+        profile: heartbeatRuns.runnerProfileJson }).from(heartbeatRuns)
+        .where(and(eq(heartbeatRuns.companyId, f.home), eq(heartbeatRuns.id, run.id)));
+      if (sourcePreparedRun?.protocol !== 1 ||
+        !nativeRunInputSourceReceiptSchema.safeParse((sourcePreparedRun.profile as Record<string, unknown> | null)?.nativeInputSourceReceipt).success ||
+        !fixtureSourceClosure.sourceSet.inputs.some(source => source.kind === "task" && source.issueId === task.id))
+        throw new Error("The worker gateway fixture requires the original Native source preparer");
+      // The fixture source preparer writes the retained execution profile.
+      // Record the required platform Skill admission after that canonical
+      // write, as the production launch path does; admitting first would be
+      // overwritten by the full runnerProfileJson fixture replacement.
+      await preparePlatformSkillAdmission(db, {
+        companyId: f.home,
+        agentId: f.presence.id,
+        runId: run.id,
+        responsibleUserId: f.userId,
+        requireExisting: false,
+      }, blenteraPlatformContractHashes());
       const connection = await aiConnectionService(db).save(
         f.home,
         f.userId,
@@ -346,8 +424,22 @@ async function makeFixtureTreeWritable(target: string): Promise<void> {
       inputTokens = 10;
       modelOutput = "Retained bounded draft";
       duringCall = undefined;
+      providerSignalAbortedBeforeResponse = false;
     });
-    afterEach(() => registerNativeDraftGateway(db, undefined));
+    afterEach(async () => {
+      try {
+        if (activeHeartbeat) await activeHeartbeat.drainActiveRunExecutions();
+      } finally {
+        try {
+          activeHeartbeat = undefined;
+          registerNativeDraftGateway(db, undefined);
+        } finally {
+          const api = managedMcpApi;
+          managedMcpApi = undefined;
+          if (api) await api.close();
+        }
+      }
+    });
 
     async function qualifiedNativePresence() {
       await db
@@ -411,6 +503,7 @@ async function makeFixtureTreeWritable(target: string): Promise<void> {
     async function freshNativePlan(
       budgets = { maxModelCostMinor: 6, maxToolActions: 2 },
     ) {
+      await ensureManagedMcpApiFixture();
       await qualifiedNativePresence();
       // Retire the separate, manually bound component fixture before exercising
       // the real scheduler. This new plan has no manually inserted attempt.
@@ -418,17 +511,26 @@ async function makeFixtureTreeWritable(target: string): Promise<void> {
         .update(heartbeatRuns)
         .set({ status: "failed", finishedAt: new Date() })
         .where(eq(heartbeatRuns.id, run.id));
-      [task] = (await db
-        .insert(issues)
-        .values({
-          companyId: f.home,
-          title: "Produce the scheduler's single internal draft",
-          status: "todo",
-          workMode: "standard",
-          assigneeAgentId: f.presence.id,
-          responsibleUserId: f.userId,
-        })
-        .returning()) as [typeof task];
+      const sourceActor = await seedCurrentHumanSourceActor(db, [f.home], f.userId);
+      task = await issueService(db).create(f.home, {
+        title: "Produce the scheduler's single internal draft",
+        description: "Retain one internal draft for human review.",
+        status: "todo",
+        workMode: "standard",
+        responsibleUserId: f.userId,
+        createdByUserId: f.userId,
+      }, db, undefined, { manualInputActor: sourceActor, privacyActor: sourceActor, sourceAccessActor: sourceActor });
+      expect(task.payloadSourceSnapshot, "manual Task producer must retain its canonical source snapshot before assignment").toBeTruthy();
+      task = await issueService(db).update(task.id, {
+        assigneeAgentId: f.presence.id,
+        actorUserId: f.userId,
+        privacyActor: sourceActor,
+      });
+      if (!task) throw new Error("Canonical Task assignment was not stored");
+      const [persistedTask] = await db.select({ payloadSourceSnapshot: issues.payloadSourceSnapshot })
+        .from(issues).where(eq(issues.id, task.id));
+      expect(nativePayloadSourceSnapshotSchema.safeParse(persistedTask?.payloadSourceSnapshot).success,
+        "assignment must preserve the unchanged human-authored Task snapshot").toBe(true);
       plan = await orchestrationService(db).create(f.actor, f.home, {
         issueId: task.id,
         expectedIssueUpdatedAt: task.updatedAt.toISOString(),
@@ -442,11 +544,138 @@ async function makeFixtureTreeWritable(target: string): Promise<void> {
         budgets,
         workers: [{ key: "native-writer", issueId: task.id }],
       });
-      return orchestrationService(db).decide(f.actor, f.home, plan.id, {
+      const assertCurrentTaskSnapshot = async (phase: string) => {
+        const [current] = await db.select({ payloadSourceSnapshot: issues.payloadSourceSnapshot })
+          .from(issues).where(eq(issues.id, task.id));
+        expect(nativePayloadSourceSnapshotSchema.safeParse(current?.payloadSourceSnapshot).success,
+          `canonical human Task source snapshot must remain current ${phase}`).toBe(true);
+      };
+      await assertCurrentTaskSnapshot("after plan creation");
+      const started = await orchestrationService(db).decide(f.actor, f.home, plan.id, {
         expectedVersion: plan.version,
         action: "start",
         rationale: "Start only the operator-qualified bounded internal draft",
       });
+      await assertCurrentTaskSnapshot("after plan start");
+      return started;
+    }
+
+    async function startManagedMcpApiFixture() {
+      const app = express();
+      app.use(express.json());
+      // The Runner receives a real origin backed by the production MCP route and
+      // gateway service. This keeps run-scoped bearer validation and tool
+      // dispatch on their normal owners instead of substituting a placeholder URL.
+      app.use(mcpGatewayProtocolRoutes(createToolGatewayService(db)));
+      app.use(errorHandler);
+      const server = createServer(app);
+      await new Promise<void>((resolve, reject) => {
+        server.once("error", reject);
+        server.listen(0, "127.0.0.1", () => {
+          server.off("error", reject);
+          resolve();
+        });
+      });
+      const address = server.address();
+      if (!address || typeof address === "string") throw new Error("Expected the local managed MCP API listener");
+      const priorApiUrl = process.env.PAPERCLIP_API_URL;
+      const apiOrigin = `http://127.0.0.1:${address.port}`;
+      process.env.PAPERCLIP_API_URL = apiOrigin;
+      return { apiOrigin, server, close: async () => {
+        if (priorApiUrl === undefined) delete process.env.PAPERCLIP_API_URL;
+        else process.env.PAPERCLIP_API_URL = priorApiUrl;
+        server.closeAllConnections();
+        await new Promise<void>((resolve, reject) => {
+          server.close(error => error ? reject(error) : resolve());
+        });
+      } };
+    }
+
+    async function ensureManagedMcpApiFixture() {
+      managedMcpApi ??= await startManagedMcpApiFixture();
+      return managedMcpApi;
+    }
+
+    async function prepareFixtureNativeSourceClosure() {
+      const controller = await currentNativeControllerIdentity();
+      const eventSeq = 1;
+      const attempt = 1;
+      const leaseOwner = `worker-model-source-${randomUUID()}`;
+      const runnerInstanceId = randomUUID();
+      const normalizedSessionId = randomUUID();
+      await db.update(heartbeatRuns).set({ runnerInstanceId, nativeSessionId: normalizedSessionId })
+        .where(and(eq(heartbeatRuns.companyId, f.home), eq(heartbeatRuns.id, run.id)));
+      await db.insert(nativeRunFinalizations).values({
+        runId: run.id, companyId: f.home, issueId: task.id, phase: "running", attempt, leaseOwner,
+        leaseExpiresAt: new Date(Date.now() + 60_000), controllerBootId: controller.bootId,
+        controllerPid: controller.pid, controllerProcessStartedAt: controller.processStartedAt,
+      });
+      await db.insert(heartbeatRunEvents).values({ companyId: f.home, runId: run.id, agentId: f.presence.id,
+        seq: eventSeq, eventType: PROCESS_START_REQUESTED, payload: { fixture: "native source dispatch setup" } });
+      await db.update(issues).set({ status: "in_progress", executionRunId: run.id })
+        .where(and(eq(issues.companyId, f.home), eq(issues.id, task.id)));
+      await initializeRunIdentity(db, { companyId: f.home, runId: run.id, issueId: task.id,
+        responsibleUserId: f.userId, cause: "dispatch" });
+
+      const taskCaptureHolder: { value: import("../services/issues.js").NativeTaskSourceCapture | null } = { value: null };
+      const selectedTask = await getIssueExecutionContext(db, f.home, task.id, capture => { taskCaptureHolder.value = capture; });
+      const taskCapture = taskCaptureHolder.value;
+      if (!selectedTask || !taskCapture?.payloadSourceSnapshot)
+        throw new Error("The canonical Native source fixture did not capture its Task");
+      const references: Array<{ kind: "task" | "comment" | "document_revision" | "attachment" | "unknown"; id: string }> = [];
+      const markdown = buildPaperclipTaskMarkdown({ issue: { id: task.id, identifier: selectedTask.identifier,
+        title: selectedTask.title, description: selectedTask.description, workMode: selectedTask.workMode } },
+      { onRenderedSource: source => references.push(source) });
+      if (!markdown) throw new Error("The canonical Native source fixture could not render its Task");
+
+      const [agent] = await db.select().from(agents).where(and(eq(agents.companyId, f.home), eq(agents.id, f.presence.id)));
+      if (!agent) throw new Error("The Native source fixture Agent disappeared");
+      const runtimeCaptureHolder: { value: import("../services/native-runtime/runtime-context.js").NativeRuntimeAuthoredSourceCapture | null } = { value: null };
+      const runtimeContext = await buildRetainedNativeRuntimeContext({ db, agent, runId: run.id,
+        runtimeConfig: {}, runtimeSkillEntries: [], onAuthoredSourceCapture: capture => { runtimeCaptureHolder.value = capture; } });
+      const runtimeCapture = runtimeCaptureHolder.value;
+      if (!runtimeCapture) throw new Error("The canonical Native runtime source capture is unavailable");
+      const completion = await ensureNativeCompletionContract({ db, companyId: f.home,
+        issue: { id: task.id, title: selectedTask.title, description: selectedTask.description }, actorId: f.presence.id });
+      await db.update(heartbeatRuns).set({ completionContractId: completion.row.id,
+        completionContractSha256: completion.row.canonicalSha256 }).where(eq(heartbeatRuns.id, run.id));
+      const workspaceTuple = { cwd: resolveDefaultAgentWorkspaceDir(f.presence.id), repoUrl: null, repoRef: null, branchName: null };
+      const workspace = { id: run.id, ...workspaceTuple };
+      const execution = buildNativeExecutionInput({ companyId: f.home, runId: run.id, agentId: f.presence.id,
+        issue: { id: task.id, identifier: selectedTask.identifier, title: selectedTask.title,
+          description: selectedTask.description, workMode: selectedTask.workMode }, taskPrompt: markdown, workspace,
+        normalizedSessionId, provider: "codex", model: "worker-source-fixture-model",
+        completionContract: { id: completion.row.id, sha256: completion.row.canonicalSha256,
+          schemaVersion: completion.row.schemaVersion, contract: completion.contract }, runtimeContext });
+      const parsedExecution = parseNativeExecutionInput(execution);
+      await db.update(heartbeatRuns).set({ runnerProfileJson: { nativeExecutionInput: parsedExecution } })
+        .where(and(eq(heartbeatRuns.companyId, f.home), eq(heartbeatRuns.id, run.id)));
+      const sourceSet = buildNativeBootstrapSourceSet({ companyId: f.home, runId: run.id, agentId: f.presence.id,
+        issueId: task.id, renderedMarkdown: markdown,
+        renderedMarkdownDigest: createHash("sha256").update(markdown, "utf8").digest("hex"), references,
+        candidates: [{ kind: "task", id: task.id, input: taskCapture.input, payloadSourceSnapshot: taskCapture.payloadSourceSnapshot }],
+        runtimeInputs: runtimeCapture.inputs, contextManifestIds: runtimeCapture.contextManifests,
+        governedContextMarkdown: "", contextWitnessMarkdown: "", contextWitness: null,
+        rolePackInputs: [], unsupportedInputPresent: false,
+        additionalInputs: [
+          { kind: "completion_contract", issueId: task.id, contractId: completion.row.id,
+            revision: String(completion.row.revision), contentHash: completion.row.canonicalSha256 },
+          { kind: "workspace_metadata", runId: run.id, executionWorkspaceId: run.id,
+            origin: "agent_home", sourceVersion: `agent-home:${f.presence.id}:v1`,
+            contentHash: createHash("sha256").update(JSON.stringify(workspaceTuple), "utf8").digest("hex") },
+        ],
+      });
+      if (!sourceSet) throw new Error("The canonical Native source set could not be prepared");
+      const closure = { sourceSet, taskEnvelopeDigest: nativeSha256(parsedExecution.task) };
+      const turnInput = { message: { role: "user" as const, text: JSON.stringify(buildNativeModelEnvelope(parsedExecution)) },
+        requestedCollaborationMode: "default" as const };
+      const dispatchId = await recordNativeModelInputDispatchIntent({ db, runId: run.id, companyId: f.home,
+        issueId: task.id, agentId: f.presence.id, leaseOwner, attempt, controller, eventSeq, turnInput,
+        bootstrapSourceClosure: closure });
+      await recordNativeModelInputDispatchAcknowledgement({ db, runId: run.id, companyId: f.home,
+        issueId: task.id, agentId: f.presence.id, leaseOwner, attempt, controller, eventSeq, dispatchId,
+        turnInput, turnId: `worker-source-turn-${run.id}`, sourceClosure: closure });
+      return { sourceClosure: closure, expectedTask: parsedExecution.task };
     }
 
     it("qualifies only the explicit private Native draft selector without decrypting or spending", async () => {
@@ -533,7 +762,14 @@ async function makeFixtureTreeWritable(target: string): Promise<void> {
     );
 
     it("forces the real heartbeat through native admission and the budget gateway, saves one draft and retains human review", async () => {
-      const started = await freshNativePlan();
+      const api = await ensureManagedMcpApiFixture();
+      try {
+      const unauthorizedGatewayCall = await request(api.server)
+        .post("/mcp/gateways/not-a-token")
+        .send({ jsonrpc: "2.0", id: 1, method: "tools/list", params: {} });
+      expect(unauthorizedGatewayCall.status).toBe(401);
+      const started = await freshNativePlan({ maxModelCostMinor: 6, maxToolActions: 3 });
+      modelOutput = "Retained bounded draft";
       const substitution = vi.fn(() => {
         throw new Error(
           "An internal draft must not use the injected provider seam",
@@ -542,18 +778,15 @@ async function makeFixtureTreeWritable(target: string): Promise<void> {
       const heartbeat = heartbeatService(db, {
         nativeSessionBackendFactory: substitution,
       });
-      try {
-        await heartbeat.invoke(
+      activeHeartbeat = heartbeat;
+      await heartbeat.invoke(
           f.presence.id,
           "on_demand",
           { issueId: task.id },
           "manual",
           { actorType: "user", actorId: f.userId },
         );
-        await heartbeat.drainActiveRunExecutions();
-      } finally {
-        await heartbeat.drainActiveRunExecutions();
-      }
+      await heartbeat.drainActiveRunExecutions();
       const attempts = await db
         .select()
         .from(orchestrationWorkerAttempts)
@@ -563,21 +796,43 @@ async function makeFixtureTreeWritable(target: string): Promise<void> {
         .select()
         .from(heartbeatRuns)
         .where(eq(heartbeatRuns.id, attempts[0]!.runId!));
+      expect(actualRun?.issueId, "the exercised scheduler run must retain the canonical human-authored Task").toBe(task.id);
+      expect(calls).toBe(1);
+      expect(actualRun!.error).toBeNull();
       expect(actualRun).toMatchObject({
         status: "succeeded",
         runtimeMode: "native",
         driverKind: "aw_text_messages",
         responsibleUserId: f.userId,
       });
-      expect(actualRun!.error).toBeNull();
+      const sourceReceipt = nativeRunInputSourceReceiptSchema.parse(
+        (actualRun!.runnerProfileJson as Record<string, unknown>).nativeInputSourceReceipt,
+      );
+      expect(sourceReceipt.bootstrap.inputs.map((source) => source.kind)).toEqual(
+        expect.arrayContaining(["task", "context", "workspace_metadata"]),
+      );
       expect(substitution).not.toHaveBeenCalled();
-      expect(calls).toBe(1);
       expect(observedBody).toContain("assignedRuntimeContext");
+      expect(observedBody).not.toContain("## Pinned execution inventory");
       expect(observedBody).not.toContain(credential);
       expect(
         (await documentService(db).getIssueDocumentByKey(task.id, "result"))
           ?.body,
       ).toBe("Retained bounded draft");
+      const [revision] = await db.select({ revision: documentRevisions }).from(issueDocuments)
+        .innerJoin(documents, and(eq(documents.companyId, issueDocuments.companyId), eq(documents.id, issueDocuments.documentId)))
+        .innerJoin(documentRevisions, and(eq(documentRevisions.companyId, documents.companyId),
+          eq(documentRevisions.id, documents.latestRevisionId), eq(documentRevisions.documentId, documents.id)))
+        .where(and(eq(issueDocuments.issueId, task.id), eq(issueDocuments.key, "result")));
+      expect(revision?.revision.payloadSourceProtocolVersion).toBe(1);
+      expect(revision?.revision.payloadSourceSnapshot?.inputs.map((source) => source.kind)).toEqual(
+        expect.arrayContaining(["task", "completion_contract", "runtime_instructions", "worker_model_dispatch"]),
+      );
+      const wireDispatch = ((actualRun!.runnerProfileJson as Record<string, unknown>).nativeAwModelWireIntents as Array<Record<string, unknown>>)[0];
+      expect(revision?.revision.payloadSourceSnapshot?.inputs).toContainEqual(expect.objectContaining({
+        kind: "worker_model_dispatch", runId: actualRun!.id, requestHash: wireDispatch!.requestHash,
+        wireBodyHash: wireDispatch!.wireBodyHash,
+      }));
       const [current] = await db
         .select()
         .from(orchestrationPlans)
@@ -591,6 +846,31 @@ async function makeFixtureTreeWritable(target: string): Promise<void> {
         .from(issues)
         .where(eq(issues.id, task.id));
       expect(currentTask!.status).not.toBe("done");
+
+      // The dispatch run is provenance for the copied model output, not a
+      // grant over the canonical Human Task that existed before the run.
+      const independentActor = await seedCurrentHumanSourceActor(db, [f.home], f.userId);
+      const { document: independentDocument } = await documentService(db).upsertIssueDocument({
+        issueId: task.id, key: "human-note", title: "Independent Human note", format: "markdown",
+        body: "KEEP_INDEPENDENT_DOCUMENT", createdByUserId: f.userId, manualInputActor: independentActor,
+      });
+      await db.transaction(async rawTx => {
+        const tx = rawTx as unknown as typeof db;
+        await lockMemoryPrivacy(tx, f.home);
+        await tx.insert(memoryDeletionMarkers).values({ companyId: f.home, kind: "source", key: `memory-run-source-erasure:v1:${actualRun!.id}` });
+        await purgeDerivedWorkflowMemory(tx, f.home, [], new Date(), { workflowRevisionIds: [], artifactVersionIds: [], runIds: [actualRun!.id] });
+      });
+      const [retainedTask] = await db.select().from(issues).where(eq(issues.id, task.id));
+      expect(retainedTask).toMatchObject({ title: "Produce the scheduler's single internal draft", description: "Retain one internal draft for human review." });
+      const [erasedRevision] = await db.select().from(documentRevisions).where(eq(documentRevisions.id, revision!.revision.id));
+      expect(erasedRevision).toMatchObject({ body: "", title: null, payloadSourceSnapshot: null });
+      const [retainedDocument] = await db.select().from(documents).where(eq(documents.id, independentDocument.id));
+      expect(retainedDocument).toMatchObject({ title: "Independent Human note", latestBody: "KEEP_INDEPENDENT_DOCUMENT" });
+      } finally {
+        try {
+          if (activeHeartbeat) await activeHeartbeat.drainActiveRunExecutions();
+        } finally { activeHeartbeat = undefined; }
+      }
     }, 60000);
 
     it("rejects actual Native admission after a private grant is revoked, before a worker attempt or model dispatch", async () => {
@@ -600,6 +880,7 @@ async function makeFixtureTreeWritable(target: string): Promise<void> {
         .set({ status: "revoked", revokedAt: new Date() })
         .where(eq(connectionGrants.companyId, f.home));
       const heartbeat = heartbeatService(db);
+      activeHeartbeat = heartbeat;
       await heartbeat.invoke(
         f.presence.id,
         "on_demand",
@@ -632,7 +913,8 @@ async function makeFixtureTreeWritable(target: string): Promise<void> {
         });
       };
       const heartbeat = heartbeatService(db);
-      await heartbeat.invoke(
+      activeHeartbeat = heartbeat;
+      const invocation = await heartbeat.invoke(
         f.presence.id,
         "on_demand",
         { issueId: task.id },
@@ -640,13 +922,18 @@ async function makeFixtureTreeWritable(target: string): Promise<void> {
         { actorType: "user", actorId: f.userId },
       );
       await heartbeat.drainActiveRunExecutions();
+      const [actualRun] = await db
+        .select()
+        .from(heartbeatRuns)
+        .where(eq(heartbeatRuns.id, invocation!.id));
       expect(calls).toBe(1);
       expect(
         await documentService(db).getIssueDocumentByKey(task.id, "result"),
       ).toBeNull();
       expect((await ledger())[0]).toMatchObject({
-        status: "unknown",
+        status: "completed",
         maximumMinor: 3,
+        usage: { inputTokens, outputTokens: 20 },
       });
       const [current] = await db
         .select()
@@ -696,6 +983,7 @@ async function makeFixtureTreeWritable(target: string): Promise<void> {
         maximumMinor: 3,
       });
       await duringCall?.();
+      providerSignalAbortedBeforeResponse = init.signal?.aborted === true;
       return new Response(
         JSON.stringify({
           type: "message",
@@ -732,16 +1020,56 @@ async function makeFixtureTreeWritable(target: string): Promise<void> {
         ...issueInput(),
         outputKey: "result",
         maxOutputTokens: 256,
+        expectedTask: fixtureExpectedTask,
+        sourceClosure: fixtureSourceClosure,
       });
     }
     const sessionIdentity = () => ({
       ...nativeBinding(),
       sessionId: randomUUID(),
     });
+    async function startAcknowledgedDraftTurn(
+      session: NativeSession,
+      input: Parameters<NativeSession["startTurn"]>[0],
+    ) {
+      const started = await session.startTurn(input);
+      await started.releaseAfterInputAcknowledgement?.();
+      return started;
+    }
+    it("holds actual Native Text work until input acknowledgement and cancels safely before release", async () => {
+      const session = await draftBackend().openSession({ identity: sessionIdentity() });
+      const iterator = session.events()[Symbol.asyncIterator]();
+      await iterator.next();
+      const started = await session.startTurn({
+        message: { role: "user", text: "Write the draft." },
+      });
+      expect((await iterator.next()).value?.eventType).toBe("turn.started");
+      await Promise.resolve();
+      await Promise.resolve();
+      expect(calls).toBe(0);
+      expect(await ledger()).toHaveLength(0);
+
+      const cancellation = session.cancel!({
+        reason: "native_stop",
+        signal: new AbortController().signal,
+      });
+      expect((await iterator.next()).value?.eventType).toBe("turn.cancelled");
+      await iterator.return?.();
+      await cancellation.cleanup;
+      await session.close({ reason: "cancelled_before_acknowledgement" });
+      expect(await session.result()).toBeNull();
+      expect(calls).toBe(0);
+      expect(await ledger()).toHaveLength(0);
+      // Cancellation owns release; callers cannot accidentally dispatch after
+      // the Native controller has revoked this turn.
+      await started.releaseAfterInputAcknowledgement?.();
+      expect(calls).toBe(0);
+      expect(await ledger()).toHaveLength(0);
+    });
     it("reviewed proposal: saves bounded data and requests Human approval before any backlog task exists", async () => {
       modelOutput = JSON.stringify({ draft: "Review the internal evidence", proposedTask: { title: "Follow up on the approved scope", description: "Compare only the internal source" } });
       const session = await draftBackend().openSession({ identity: sessionIdentity() });
-      await session.startTurn({ message: { role: "user", text: "Propose one internal follow-up for Human review" } });
+      await startAcknowledgedDraftTurn(session, { message: { role: "user", text: "Propose one internal follow-up for Human review" } });
       expect(await session.result()).toMatchObject({ result: { reportedWorkDisposition: "needs_review", completionClaim: { objectiveSatisfied: false } } });
       expect(calls).toBe(1);
       expect(JSON.parse(observedBody).system).toContain("proposedTask");
@@ -791,7 +1119,7 @@ async function makeFixtureTreeWritable(target: string): Promise<void> {
     it("reviewed proposal: explicit absence saves a draft without requesting task approval", async () => {
       modelOutput = JSON.stringify({ draft: "No additional task is needed", proposedTask: null });
       const session = await draftBackend().openSession({ identity: sessionIdentity() });
-      await session.startTurn({ message: { role: "user", text: "Draft only the requested answer" } });
+      await startAcknowledgedDraftTurn(session, { message: { role: "user", text: "Draft only the requested answer" } });
       expect(await session.result()).toMatchObject({ result: { reportedWorkDisposition: "needs_review" } });
       expect(await db.select().from(issueThreadInteractions).where(eq(issueThreadInteractions.issueId, task.id))).toEqual([]);
       expect((await documentService(db).getIssueDocumentByKey(task.id, "result"))?.body).toBe("No additional task is needed");
@@ -799,7 +1127,7 @@ async function makeFixtureTreeWritable(target: string): Promise<void> {
     it("reviewed proposal: erased run Source prevents Human task creation and rolls back the verdict", async () => {
       modelOutput = JSON.stringify({ draft: "A Source-bound draft", proposedTask: { title: "A Source-bound task", description: "Only retained source data" } });
       const session = await draftBackend().openSession({ identity: sessionIdentity() });
-      await session.startTurn({ message: { role: "user", text: "Propose one internal task" } });
+      await startAcknowledgedDraftTurn(session, { message: { role: "user", text: "Propose one internal task" } });
       expect(await session.result()).toMatchObject({ result: { reportedWorkDisposition: "needs_review" } });
       const [proposal] = await db.select().from(issueThreadInteractions).where(eq(issueThreadInteractions.issueId, task.id));
       await db.insert(memoryDeletionMarkers).values({ companyId: f.home, kind: "source", key: `memory-run-source-erasure:v1:${run.id}` });
@@ -811,7 +1139,7 @@ async function makeFixtureTreeWritable(target: string): Promise<void> {
     it("reviewed proposal: current Human membership withdrawal prevents separate task creation", async () => {
       modelOutput = JSON.stringify({ draft: "A bounded draft", proposedTask: { title: "A bounded task", description: "Original internal scope" } });
       const session = await draftBackend().openSession({ identity: sessionIdentity() });
-      await session.startTurn({ message: { role: "user", text: "Propose one internal task" } });
+      await startAcknowledgedDraftTurn(session, { message: { role: "user", text: "Propose one internal task" } });
       expect(await session.result()).toMatchObject({ result: { reportedWorkDisposition: "needs_review" } });
       const [proposal] = await db.select().from(issueThreadInteractions).where(eq(issueThreadInteractions.issueId, task.id));
       await db.delete(companyMemberships).where(and(eq(companyMemberships.companyId, f.home), eq(companyMemberships.principalType, "user"), eq(companyMemberships.principalId, f.userId)));
@@ -823,7 +1151,7 @@ async function makeFixtureTreeWritable(target: string): Promise<void> {
     it("reviewed proposal: an unverified Human cannot approve a separate task", async () => {
       modelOutput = JSON.stringify({ draft: "A bounded draft", proposedTask: { title: "A bounded task", description: "Original internal scope" } });
       const session = await draftBackend().openSession({ identity: sessionIdentity() });
-      await session.startTurn({ message: { role: "user", text: "Propose one internal task" } });
+      await startAcknowledgedDraftTurn(session, { message: { role: "user", text: "Propose one internal task" } });
       expect(await session.result()).toMatchObject({ result: { reportedWorkDisposition: "needs_review" } });
       const [proposal] = await db.select().from(issueThreadInteractions).where(eq(issueThreadInteractions.issueId, task.id));
       await db.update(authUsers).set({ emailVerified: false }).where(eq(authUsers.id, f.userId));
@@ -840,7 +1168,7 @@ async function makeFixtureTreeWritable(target: string): Promise<void> {
     it("reviewed proposal: refuses model-selected assignees before saving output or an interaction", async () => {
       modelOutput = JSON.stringify({ draft: "An invalid proposal", proposedTask: { title: "Widen the scope", description: "Unsafe extra fields", assigneeAgentId: f.guestPresence.id } });
       const session = await draftBackend().openSession({ identity: sessionIdentity() });
-      await session.startTurn({ message: { role: "user", text: "Propose one bounded task" } });
+      await startAcknowledgedDraftTurn(session, { message: { role: "user", text: "Propose one bounded task" } });
       expect(await session.result()).toBeNull();
       expect((await ledger())[0]).toMatchObject({ status: "completed", maximumMinor: 3 });
       expect(await documentService(db).getIssueDocumentByKey(task.id, "result")).toBeNull();
@@ -857,7 +1185,7 @@ async function makeFixtureTreeWritable(target: string): Promise<void> {
           { authoredPublication: next, recordRevision: { id: next.revisionId, source: "agent_authoring_publish", createdByUserId: f.userId } });
       };
       const session = await draftBackend().openSession({ identity: sessionIdentity() });
-      await session.startTurn({ message: { role: "user", text: "Propose the original reviewed scope" } });
+      await startAcknowledgedDraftTurn(session, { message: { role: "user", text: "Propose the original reviewed scope" } });
       expect(await session.result()).toBeNull();
       expect(calls).toBe(1);
       expect(await documentService(db).getIssueDocumentByKey(task.id, "result")).toBeNull();
@@ -876,7 +1204,7 @@ async function makeFixtureTreeWritable(target: string): Promise<void> {
       expect(descriptor.runtimeContextCapabilities).toBeUndefined();
       const session = await backend.openSession({ identity });
       expect(calls).toBe(0);
-      await session.startTurn({
+      await startAcknowledgedDraftTurn(session, {
         message: { role: "user", text: "Write the declared internal draft." },
       });
       const result = await session.result();
@@ -916,7 +1244,10 @@ async function makeFixtureTreeWritable(target: string): Promise<void> {
         .select()
         .from(issues)
         .where(eq(issues.id, task.id));
-      expect(currentTask!.status).toBe("todo");
+      // The real Native source preparer marks the Task in progress before it
+      // builds this retained input; the draft backend must leave that state
+      // unchanged.
+      expect(currentTask!.status).toBe("in_progress");
       const events = [];
       for await (const event of session.events()) {
         expect(validatePrpEvent(event).ok).toBe(true);
@@ -975,7 +1306,7 @@ async function makeFixtureTreeWritable(target: string): Promise<void> {
       const backend = draftBackend(),
         identity = sessionIdentity();
       const session = await backend.openSession({ identity });
-      await session.startTurn({
+      await startAcknowledgedDraftTurn(session, {
         message: { role: "user", text: "Write the draft." },
       });
       await session.result();
@@ -1028,7 +1359,7 @@ async function makeFixtureTreeWritable(target: string): Promise<void> {
       const session = await draftBackend(gateway(broken)).openSession({
         identity: sessionIdentity(),
       });
-      await session.startTurn({
+      await startAcknowledgedDraftTurn(session, {
         message: { role: "user", text: "Write the draft." },
       });
       expect(await session.result()).toBeNull();
@@ -1073,7 +1404,7 @@ async function makeFixtureTreeWritable(target: string): Promise<void> {
       const session = await draftBackend(gateway(empty)).openSession({
         identity: sessionIdentity(),
       });
-      await session.startTurn({
+      await startAcknowledgedDraftTurn(session, {
         message: { role: "user", text: "Write the draft." },
       });
       expect(await session.result()).toBeNull();
@@ -1121,7 +1452,7 @@ async function makeFixtureTreeWritable(target: string): Promise<void> {
       });
       const iterator = session.events()[Symbol.asyncIterator]();
       await iterator.next();
-      await session.startTurn({
+      await startAcknowledgedDraftTurn(session, {
         message: { role: "user", text: "Write the draft." },
       });
       await iterator.next();
@@ -1162,7 +1493,7 @@ async function makeFixtureTreeWritable(target: string): Promise<void> {
       const session = await draftBackend().openSession({
         identity: sessionIdentity(),
       });
-      await session.startTurn({
+      await startAcknowledgedDraftTurn(session, {
         message: { role: "user", text: "Write the draft." },
       });
       expect(await session.result()).toBeNull();
@@ -1170,98 +1501,174 @@ async function makeFixtureTreeWritable(target: string): Promise<void> {
         await documentService(db).getIssueDocumentByKey(task.id, "result"),
       ).toBeNull();
       expect((await ledger())[0]).toMatchObject({
-        status: "unknown",
+        status: "completed",
         maximumMinor: 3,
+        usage: { inputTokens, outputTokens: 20 },
       });
       expect(calls).toBe(1);
       await session.close({ reason: "revoked" });
     });
-    it("charges assigned-tool catalog search and keeps actual MCP invocation charging at its existing gateway", async () => {
-      let effects = 0;
-      // Private gateway fixture uses the actual Native SQL invocation guard.
-      // It does not establish a live connected-tool or credential qualification.
-      const assigned = await createAssignedMcpTools({
-        gateway: {
-          listToolsForNamedGateway: async () => [
-            {
-              name: "fixture.read",
-              displayName: "Read",
-              description: "Private native charge fixture",
-              risk: "read",
-              parametersSchema: { type: "object", properties: {} },
-            },
-          ],
-          executeTool: async () => {
-            const [receipt] = await db
-              .insert(toolInvocations)
-              .values({
-                companyId: f.home,
-                agentId: f.presence.id,
-                issueId: task.id,
-                runId: run.id,
-                toolName: "fixture.read",
-                riskLevel: "read",
-                status: "executing",
-              })
-              .returning();
-            effects++;
-            await db
-              .update(toolInvocations)
-              .set({ status: "succeeded", completedAt: new Date() })
-              .where(eq(toolInvocations.id, receipt!.id));
-            return { status: "completed", result: { fixture: true } };
-          },
-        } as unknown as ToolGatewayService,
-        gatewayPublicId: "private-budget-fixture",
-        bearerToken: "private-fixture-token",
-      });
-      const authority = new PaperclipRunnerToolAuthority(db, {
-        ...nativeBinding(),
-        assignedMcpTools: assigned,
-      });
-      const catalog = (await authority.execute({
-        tool: "paperclip_search_assigned_tools",
-        callId: "catalog-native-budget",
-        arguments: { query: "" },
-      })) as { tools: Array<{ name: string }> };
+    it("charges assigned-tool catalog search and an actual fixed-contract MCP invocation at their existing owners", async () => {
+      const railway = await prepareConnectionIntentRailwayFixture({ db, companyId: f.home,
+        userId: f.userId, holderAgentId: f.presence.id });
+      const [gatewayProfile] = await db.insert(toolProfiles).values({ companyId: f.home,
+        profileKey: `assigned-budget-${randomUUID()}`, name: `Assigned budget ${randomUUID()}`, defaultAction: "deny" }).returning();
+      await db.insert(toolProfileEntries).values({ companyId: f.home, profileId: gatewayProfile!.id,
+        selectorType: "connection", effect: "include", connectionId: railway.connection.id });
+      const gatewayOwner = createToolGatewayService(db, { remoteHttpRequest: railway.request });
+      const namedGateway = await gatewayOwner.createNamedGateway({ companyId: f.home,
+        body: { name: `Assigned budget ${randomUUID()}`, profileId: gatewayProfile!.id,
+          agentId: f.presence.id, issueId: task.id }, actor: { userId: f.userId } });
+      registerAssignedMcpGateway(db, gatewayOwner, scopedDb => createToolGatewayService(scopedDb,
+        { remoteHttpRequest: railway.request }));
+      const gatewaySession = await gatewayOwner.createNamedGatewayToken({ companyId: f.home,
+        gatewayId: namedGateway.id, body: { name: "Native assigned-tool fixture",
+          subjectType: "heartbeat_run", subjectId: run.id, allowedActions: ["tools/list", "tools/call"] },
+        actor: { userId: f.userId } });
+      const assigned = await createAssignedMcpTools({ db, companyId: f.home, issueId: task.id, runId: run.id,
+        agentId: f.presence.id, responsibleUserId: f.userId, gateway: gatewayOwner,
+        gatewayPublicId: namedGateway.gatewayPublicId, bearerToken: gatewaySession.token });
+      const authority = new PaperclipRunnerToolAuthority(db, { ...nativeBinding(), assignedMcpTools: assigned });
+      const catalog = (await authority.execute({ tool: "paperclip_search_assigned_tools",
+        callId: "catalog-native-budget", arguments: { query: "list projects" } })) as { tools: Array<{ name: string }> };
       expect(catalog.tools).toHaveLength(1);
-      await authority.execute({
-        tool: catalog.tools[0]!.name,
-        callId: "mcp-native-budget",
-        arguments: {},
-      });
-      expect(effects).toBe(1);
-      expect(
-        (
-          await db
-            .select()
-            .from(orchestrationPlans)
-            .where(eq(orchestrationPlans.id, plan.id))
-        )[0],
-      ).toMatchObject({ toolActionsUsed: 2, status: "running" });
-      expect(
-        await db
-          .select()
-          .from(toolInvocations)
-          .where(eq(toolInvocations.runId, run.id)),
-      ).toHaveLength(2);
-      await expect(
-        authority.execute({
-          tool: catalog.tools[0]!.name,
-          callId: "mcp-native-exhausted",
-          arguments: {},
-        }),
-      ).rejects.toThrow();
-      expect(effects).toBe(1);
-      expect(
-        (
-          await db
-            .select()
-            .from(orchestrationPlans)
-            .where(eq(orchestrationPlans.id, plan.id))
-        )[0],
-      ).toMatchObject({ toolActionsUsed: 2, status: "paused" });
+      await authority.execute({ tool: catalog.tools[0]!.name, callId: "mcp-native-budget",
+        arguments: { workspaceId: railway.workspaceId, first: 25 } });
+      expect(railway.captures().filter(capture => capture.purpose === "projects_call")).toHaveLength(1);
+
+      const invocationRows = await db.select().from(toolInvocations).where(eq(toolInvocations.runId, run.id));
+      expect(invocationRows).toHaveLength(2);
+      expect(invocationRows.filter(row => row.toolName === "paperclip_search_assigned_tools" && row.status === "succeeded"))
+        .toHaveLength(1);
+      const gatewayDescriptors = await gatewayOwner.listToolsForNamedGateway({ gatewayPublicId: namedGateway.gatewayPublicId,
+        bearerToken: gatewaySession.token });
+      const projectsDescriptor = gatewayDescriptors.find(descriptor => descriptor.connectionId === railway.connection.id &&
+        descriptor.catalogEntryId === railway.tool.id);
+      expect(projectsDescriptor).toBeDefined();
+      const actualProjectsInvocation = invocationRows.filter(row => row.status === "succeeded" &&
+        row.toolName === projectsDescriptor!.name);
+      expect(actualProjectsInvocation).toHaveLength(1);
+      expect(actualProjectsInvocation[0]).toMatchObject({ connectionId: railway.connection.id,
+        catalogEntryId: railway.tool.id, catalogSchemaHash: railway.tool.schemaHash,
+        upstreamToolName: railway.tool.toolName, riskLevel: "read", agentId: f.presence.id,
+        issueId: task.id, runId: run.id, gatewayId: namedGateway.id, gatewayPublicId: namedGateway.gatewayPublicId,
+        idempotencyKey: `aw-native-tool:${run.id}:mcp-native-budget`, credentialScopeSummary: expect.any(Object),
+        argumentsHash: validateToolContent({ value: { workspaceId: railway.workspaceId, first: 25 },
+          direction: "arguments", sensitiveMode: "block", promptInjectionMode: "ignore" }).summary.sha256 });
+      expect(actualProjectsInvocation[0]!.credentialScopeSummary).not.toBeNull();
+      const retainedResult = actualProjectsInvocation[0]!.workflowResultJson;
+      expect(retainedResult).not.toBeNull();
+      const sanitizedResult = validateToolContent({ value: retainedResult, direction: "result", sensitiveMode: "redact",
+        promptInjectionMode: "block" });
+      expect(sanitizedResult.value).toEqual(retainedResult);
+      expect(sanitizedResult.summary.sha256).toBe(actualProjectsInvocation[0]!.resultHash);
+      expect((retainedResult as Record<string, unknown>).content).toContain("Fixture project inventory");
+      expect((await db.select().from(orchestrationPlans).where(eq(orchestrationPlans.id, plan.id)))[0])
+        .toMatchObject({ toolActionsUsed: 2, status: "running" });
+      await expect(authority.execute({ tool: catalog.tools[0]!.name, callId: "mcp-native-exhausted",
+        arguments: { workspaceId: railway.workspaceId, first: 25 } })).rejects.toThrow();
+      expect(railway.captures().filter(capture => capture.purpose === "projects_call")).toHaveLength(1);
+      expect((await db.select().from(orchestrationPlans).where(eq(orchestrationPlans.id, plan.id)))[0])
+        .toMatchObject({ toolActionsUsed: 2, status: "paused" });
+      const settledInvocations = await db.select().from(toolInvocations).where(eq(toolInvocations.runId, run.id));
+      expect(settledInvocations).toHaveLength(3);
+      expect(settledInvocations.filter(row => row.status === "succeeded")).toHaveLength(2);
+      expect(settledInvocations.find(row => row.idempotencyKey === `aw-native-tool:${run.id}:mcp-native-exhausted`))
+        .toMatchObject({ status: "authorized", resultHash: null, workflowResultJson: null });
     });
+    it("retains an approved assigned MCP result under its signed accepted identity after steering", async () => {
+      const railway = await prepareConnectionIntentRailwayFixture({ db, companyId: f.home,
+        userId: f.userId, holderAgentId: f.presence.id });
+      const [gatewayProfile] = await db.insert(toolProfiles).values({ companyId: f.home,
+        profileKey: `assigned-approved-origin-${randomUUID()}`, name: `Assigned approved origin ${randomUUID()}`, defaultAction: "deny" }).returning();
+      await db.insert(toolProfileEntries).values({ companyId: f.home, profileId: gatewayProfile!.id,
+        selectorType: "connection", effect: "include", connectionId: railway.connection.id });
+      await db.insert(toolPolicies).values({ companyId: f.home, name: `Review assigned read ${randomUUID()}`,
+        policyType: "require_approval", selectors: { connectionId: railway.connection.id } });
+      const approvalSigningSecret = "native-assigned-approved-origin-fixture-signing-secret";
+      const gatewayOwner = createToolGatewayService(db, { remoteHttpRequest: railway.request,
+        toolActionSigningSecret: approvalSigningSecret });
+      const namedGateway = await gatewayOwner.createNamedGateway({ companyId: f.home,
+        body: { name: `Assigned approved origin ${randomUUID()}`, profileId: gatewayProfile!.id,
+          agentId: f.presence.id, issueId: task.id }, actor: { userId: f.userId } });
+      const namedToken = await gatewayOwner.createNamedGatewayToken({ companyId: f.home,
+        gatewayId: namedGateway.id, body: { name: "Native approved origin fixture", subjectType: "heartbeat_run",
+          subjectId: run.id, allowedActions: ["tools/list", "tools/call"] }, actor: { userId: f.userId } });
+      const [runIdentity] = await db.select({ activeIdentityContextId: heartbeatRuns.activeIdentityContextId })
+        .from(heartbeatRuns).where(eq(heartbeatRuns.id, run.id));
+      if (!runIdentity?.activeIdentityContextId) throw new Error("The Native fixture has no accepted identity owner");
+      const [origin] = await db.select().from(runIdentityContexts).where(
+        eq(runIdentityContexts.id, runIdentity.activeIdentityContextId));
+      if (!origin || origin.status !== "accepted") throw new Error("The Native fixture identity is not accepted");
+      await db.insert(companyMemberships).values({ companyId: f.home, principalType: "user",
+        principalId: "steering-human-b", membershipRole: "member", status: "active" });
+      const descriptor = (await gatewayOwner.listToolsForNamedGateway({ gatewayPublicId: namedGateway.gatewayPublicId,
+        bearerToken: namedToken.token })).find(tool => tool.connectionId === railway.connection.id &&
+          tool.catalogEntryId === railway.tool.id);
+      if (!descriptor) throw new Error("The fixed-contract MCP tool is absent from the named Gateway");
+      const app = express();
+      app.use(express.json());
+      app.use(mcpGatewayProtocolRoutes(gatewayOwner));
+      await request(app).post(namedGateway.endpointPath).set("authorization", `Bearer ${namedToken.token}`)
+        .send({ jsonrpc: "2.0", id: randomUUID(), method: "tools/call",
+          params: { name: descriptor.name, arguments: { workspaceId: railway.workspaceId, first: 25 } } })
+        .expect(409);
+      expect(railway.captures().filter(capture => capture.purpose === "projects_call")).toHaveLength(0);
+      const [actionRequest] = await db.select().from(toolActionRequests).where(eq(toolActionRequests.companyId, f.home));
+      if (!actionRequest) throw new Error("The signed MCP approval request was not recorded");
+      const signed = readSignedToolArgumentsPayload({ signedArguments: actionRequest.signedArguments,
+        invocationId: actionRequest.invocationId, toolName: descriptor.name, signingSecret: approvalSigningSecret });
+      expect(signed).toMatchObject({ executionOnApprove: true, identityContextId: origin.id });
+      expect(verifyToolArgumentsSignature({ signedArguments: actionRequest.signedArguments,
+        invocationId: actionRequest.invocationId, toolName: descriptor.name,
+        canonicalArguments: canonicalToolArguments(signed!.arguments),
+        approvalSnapshot: signed!.approvalSnapshot, executionOnApprove: true,
+        identityContextId: origin.id, signingSecret: approvalSigningSecret })).toBe(true);
+
+      const [steeringComment] = await db.insert(issueComments).values({ companyId: f.home, issueId: task.id,
+        authorType: "user", authorUserId: "steering-human-b", body: "Continue under the next accepted identity." }).returning();
+      const steered = await reserveSteeredIdentity(db, { companyId: f.home, runId: run.id,
+        issueId: task.id, messageId: steeringComment!.id });
+      if (!steered) throw new Error("The next Human identity could not be reserved");
+      await reconcileSteeredIdentity(db, steered);
+      const [steeredRun] = await db.select().from(heartbeatRuns).where(eq(heartbeatRuns.id, run.id));
+      expect(steeredRun?.responsibleUserId).toBe("steering-human-b");
+
+      const { getNativeAssignedMcpDescriptorCurrent, nativeAssignedMcpDescriptorProjection } =
+        await import("../services/tool-gateway.js");
+      const assignedArguments = { workspaceId: railway.workspaceId, first: 25 };
+      const descriptorProof = nativeAssignedMcpDescriptorProjection(descriptor);
+      const descriptorOwner = { companyId: f.home, issueId: task.id, runId: run.id, agentId: f.presence.id,
+        gatewayId: namedGateway.id, gatewayPublicId: namedGateway.gatewayPublicId, gatewayProfileId: gatewayProfile!.id,
+        descriptorName: descriptor.name, descriptorHash: nativeSha256(descriptorProof),
+        parametersSchemaHash: nativeSha256(descriptor.parametersSchema), providerType: descriptor.providerType,
+        risk: descriptor.risk, connectionId: railway.connection.id, catalogEntryId: railway.tool.id,
+        upstreamToolName: railway.tool.toolName, catalogSchemaHash: railway.tool.schemaHash,
+        arguments: assignedArguments, workMode: "standard" as const };
+      expect(await getNativeAssignedMcpDescriptorCurrent(db, { ...descriptorOwner,
+        responsibleUserId: f.userId, identityContextId: origin.id })).toBeTruthy();
+      await expect(getNativeAssignedMcpDescriptorCurrent(db, { ...descriptorOwner,
+        responsibleUserId: "steering-human-b", identityContextId: origin.id })).resolves.toBeNull();
+
+      const reviewed = await gatewayOwner.approveActionRequest({ companyId: f.home,
+        actionRequestId: actionRequest.id, actor: { userId: f.userId } });
+      expect(reviewed.status).toBe("executed");
+      expect(railway.captures().filter(capture => capture.purpose === "projects_call")).toHaveLength(1);
+      const [invocation] = await db.select().from(toolInvocations).where(eq(toolInvocations.id, actionRequest.invocationId));
+      expect(invocation).toMatchObject({ status: "succeeded", approvalState: "approved",
+        gatewayId: namedGateway.id, gatewayPublicId: namedGateway.gatewayPublicId });
+      expect(invocation?.workflowResultJson).not.toBeNull();
+      expect(validateToolContent({ value: invocation?.workflowResultJson, direction: "result", sensitiveMode: "redact",
+        promptInjectionMode: "block" }).summary.sha256).toBe(invocation?.resultHash);
+
+      // Model a settled producer row for the status-neutral retained-source
+      // owner only; this does not stand in for Native stop/lease cleanup.
+      await db.update(heartbeatRuns).set({ status: "succeeded", finishedAt: new Date() })
+        .where(eq(heartbeatRuns.id, run.id));
+      expect(await getNativeAssignedMcpDescriptorCurrent(db, { ...descriptorOwner,
+        responsibleUserId: "steering-human-b" })).toBeTruthy();
+    });
+
     it("shares one tool ceiling across both Native protocol authority paths", async () => {
       await db
         .update(issues)
@@ -1393,10 +1800,12 @@ async function makeFixtureTreeWritable(target: string): Promise<void> {
       expect(JSON.stringify(receipts)).not.toContain(
         "Authorized unverified draft",
       );
+      // The canonical retained-input fixture has already started this Run.
+      // The read/write tool path must leave its active Task in progress.
       expect(
         (await db.select().from(issues).where(eq(issues.id, task.id)))[0]
           ?.status,
-      ).toBe("todo");
+      ).toBe("in_progress");
     });
     it("deduplicates concurrent Native protocol calls and refuses changed or completed dispatch identities", async () => {
       const call = {
@@ -1426,13 +1835,20 @@ async function makeFixtureTreeWritable(target: string): Promise<void> {
       ).toMatchObject({ toolActionsUsed: 1, status: "running" });
     });
     it("keeps unknown/material Native API paths and undeclared document keys outside the draft qualification", async () => {
+      for (const argumentsValue of [
+        { operationId: "GET /api/projects/{id}", pathParams: { id: randomUUID() } },
+        { operationId: "GET /api/projects/{id}", pathParams: { id: randomUUID() }, query: {} },
+        { operationId: "GET /api/projects/{id}", pathParams: { id: randomUUID(), companyId: f.home } },
+        { operationId: "POST /api/companies/{companyId}/projects", pathParams: { companyId: f.home }, body: {} },
+      ]) await expect(nativeTools().execute({ tool: "call_api", callId: `unqualified-project-${randomUUID()}`,
+        arguments: argumentsValue })).rejects.toMatchObject({ status: 403 });
       for (const tool of [
         "call_api",
         "hire_agent",
         "reassign_task",
         "create_project",
         "create_skill",
-        "connections_search",
+        "opaque_provider_search",
       ]) {
         await expect(
           nativeTools().execute({ tool, callId: tool, arguments: {} }),
@@ -1459,6 +1875,96 @@ async function makeFixtureTreeWritable(target: string): Promise<void> {
             .where(eq(orchestrationPlans.id, plan.id))
         )[0]?.toolActionsUsed,
       ).toBe(0);
+    });
+    it("charges current Plan discovery and a Human connection card without installing or dispatching access", async () => {
+      const accessRows = async () => ({
+        connections: await db.select().from(toolConnections).where(eq(toolConnections.companyId, f.home)),
+        grants: await db.select().from(connectionGrants).where(eq(connectionGrants.companyId, f.home)),
+        installs: await db.select().from(toolConnectionInstalls).where(eq(toolConnectionInstalls.companyId, f.home)),
+      });
+      const before = await accessRows();
+      const authority = nativeTools();
+      await expect(authority.execute({ tool: "connections_search", callId: "plan-connection-search",
+        arguments: { query: "railway" } })).resolves.toMatchObject({
+        results: expect.arrayContaining([expect.objectContaining({ service: "railway" })]),
+      });
+      const call = { tool: "connection_request", callId: "plan-connection-card", arguments: { service: "railway" } };
+      await expect(authority.execute(call)).resolves.toMatchObject({ service: "railway", state: "needs_user_action",
+        connectionId: null, interactionId: expect.any(String) });
+      const [card] = await db.select().from(issueThreadInteractions).where(eq(issueThreadInteractions.issueId, task.id));
+      expect(card).toMatchObject({ companyId: f.home, kind: "connection_intent", status: "pending",
+        sourceRunId: run.id, addresseeUserId: f.userId, createdByAgentId: f.presence.id,
+        payload: { serviceSlug: "railway", requestingAgentId: f.presence.id, phase: "requested" } });
+      await expect(authority.execute(call)).rejects.toMatchObject({ status: 409 });
+      await expect(authority.execute({ ...call, arguments: { service: "github" } })).rejects.toMatchObject({ status: 409 });
+      expect(await db.select().from(issueThreadInteractions).where(eq(issueThreadInteractions.issueId, task.id))).toHaveLength(1);
+      expect(await accessRows()).toEqual(before);
+      expect(calls).toBe(0);
+      expect(await ledger()).toHaveLength(0);
+      const receipts = await db.select().from(toolInvocations).where(eq(toolInvocations.runId, run.id));
+      expect(receipts).toHaveLength(2);
+      expect(receipts.every(receipt => receipt.status === "succeeded")).toBe(true);
+      expect((await db.select().from(orchestrationPlans).where(eq(orchestrationPlans.id, plan.id)))[0])
+        .toMatchObject({ toolActionsUsed: 2, status: "running" });
+      await expect(authority.execute({ tool: "connection_request", callId: "plan-connection-over-budget",
+        arguments: { service: "railway" } })).rejects.toMatchObject({ status: 403 });
+      expect(await accessRows()).toEqual(before);
+      expect(await db.select().from(issueThreadInteractions).where(eq(issueThreadInteractions.issueId, task.id))).toHaveLength(1);
+    });
+    it.each(["expired", "revoked", "cross_run", "unadmitted_plan"] as const)(
+      "withholds both connection tools when the current Plan binding is %s", async (reason) => {
+        let pinnedStartedAt: Date | undefined;
+        try {
+          if (reason === "expired") {
+            const [current] = await db.select({ startedAt: orchestrationPlans.startedAt, budgets: orchestrationPlans.budgets })
+              .from(orchestrationPlans).where(eq(orchestrationPlans.id, plan.id));
+            if (!current?.startedAt) throw new Error("The expiry fixture requires its original started Plan");
+            pinnedStartedAt = current.startedAt;
+            expect(current.budgets.maxWallClockSeconds).toBe(30);
+            const deadline = current.startedAt.getTime() + current.budgets.maxWallClockSeconds * 1000;
+            expect(Date.now()).toBeLessThan(deadline);
+            // Keep the immutable Plan pin and real socket/timer behavior. Only
+            // Date advances just past this fixture's initial 30-second budget;
+            // the other current authority fixtures keep their longer lifetimes.
+            vi.useFakeTimers({ toFake: ["Date"] });
+            vi.setSystemTime(new Date(deadline + 1));
+          }
+          if (reason === "revoked") await db.delete(companyMemberships).where(and(
+            eq(companyMemberships.companyId, f.home), eq(companyMemberships.principalId, f.userId)));
+          if (reason === "unadmitted_plan") await db.delete(orchestrationWorkerAttempts)
+            .where(eq(orchestrationWorkerAttempts.id, binding.workerAttemptId));
+          const authority = new PaperclipRunnerToolAuthority(db, { ...nativeBinding(),
+            ...(reason === "cross_run" ? { runId: randomUUID() } : {}) });
+          for (const call of [
+            { tool: "connections_search", callId: "denied-connection-search", arguments: { query: "railway" } },
+            { tool: "connection_request", callId: "denied-connection-card", arguments: { service: "railway" } },
+          ]) await expect(authority.execute(call)).rejects.toMatchObject({ status: 403,
+            ...(reason === "expired" ? { message: "Native plan tool authority is no longer current" } : {}) });
+          expect(await db.select().from(issueThreadInteractions).where(eq(issueThreadInteractions.issueId, task.id))).toHaveLength(0);
+          expect(await db.select().from(toolInvocations).where(eq(toolInvocations.runId, run.id))).toHaveLength(0);
+          expect((await db.select().from(orchestrationPlans).where(eq(orchestrationPlans.id, plan.id)))[0]?.toolActionsUsed).toBe(0);
+          expect(calls).toBe(0);
+          if (pinnedStartedAt) {
+            const [current] = await db.select({ startedAt: orchestrationPlans.startedAt }).from(orchestrationPlans)
+              .where(eq(orchestrationPlans.id, plan.id));
+            expect(current?.startedAt?.getTime()).toBe(pinnedStartedAt.getTime());
+          }
+        } finally {
+          if (reason === "expired") vi.useRealTimers();
+        }
+      },
+    );
+    it("binds dispatch-time Worker issuance to the current accountable attempt and rejects stale ownership", async () => {
+      const input = { companyId: f.home, agentId: f.presence.id, runId: run.id, responsibleUserId: f.userId };
+      const minted = await gateway().issueForRun(input);
+      expect(verifyRuntimeToolsToken(minted.token, "worker_model")?.worker_model).toMatchObject(binding);
+      expect(verifyRuntimeToolsToken(minted.token, "conversation_model")).toBeNull();
+      await db.update(orchestrationWorkerAttempts).set({ status: "cancelled", finishedAt: new Date() })
+        .where(eq(orchestrationWorkerAttempts.id, binding.workerAttemptId));
+      await expect(gateway().issueForRun(input)).rejects.toMatchObject({ status: 403 });
+      expect(calls).toBe(0);
+      expect(await db.select().from(orchestrationModelReservations)
+        .where(eq(orchestrationModelReservations.planId, plan.id))).toHaveLength(0);
     });
     it.each([
       "pause",
@@ -1571,6 +2077,152 @@ async function makeFixtureTreeWritable(target: string): Promise<void> {
       ).rejects.toMatchObject({ status: 403 });
       expect(effects).toBe(1);
     });
+    describe("assigned tool calls stopped at their Human approval gate", () => {
+      // The assigned MCP path rethrows this shape after it durably records the
+      // pending invocation and review card (assigned-mcp-tools.ts). It is matched
+      // structurally, so a plain error carrying the same fields is equivalent.
+      const approvalRequired = (details: Record<string, unknown>) =>
+        Object.assign(new Error("Tool action requires approval"), {
+          status: 409, reasonCode: "approval_required", details,
+        });
+      const planState = async () => (await db.select().from(orchestrationPlans)
+        .where(eq(orchestrationPlans.id, plan.id)))[0]!;
+      const interventionCount = async () => (await db.select().from(supervisionInterventions)
+        .where(eq(supervisionInterventions.planId, plan.id))).length;
+      const pendingInvocation = async (callId: string, overrides: Record<string, unknown> = {}) =>
+        (await db.insert(toolInvocations).values({
+          companyId: f.home, runId: run.id, agentId: f.presence.id, issueId: task.id,
+          toolName: "railway:list_projects", idempotencyKey: `aw-native-tool:${run.id}:${callId}`,
+          status: "awaiting_approval", approvalState: "pending", ...overrides,
+        }).returning())[0]!;
+      const call = (callId: string) => ({ tool: "app_railway_list_projects_000000000000", callId, arguments: {} });
+
+      it("keeps the plan running when the pending approval is durably recorded", async () => {
+        const before = await planState();
+        expect(before.status).toBe("running");
+        const interventionsBefore = await interventionCount();
+        const row = await pendingInvocation("pending-approval-call");
+        const error = approvalRequired({ invocationId: row.id, tool: row.toolName, issueId: task.id });
+        await expect(withOrchestrationNativeTool(db, nativeBinding(), call("pending-approval-call"),
+          async () => { throw error; }, true)).rejects.toBe(error);
+        expect(await planState()).toMatchObject({ status: "running", version: before.version });
+        expect(await interventionCount()).toBe(interventionsBefore);
+      });
+
+      it("still fences an approval-required error without its durable pending invocation", async () => {
+        const before = await planState();
+        const interventionsBefore = await interventionCount();
+        const error = approvalRequired({ invocationId: randomUUID(), tool: "railway:list_projects", issueId: task.id });
+        await expect(withOrchestrationNativeTool(db, nativeBinding(), call("unrecorded-approval-call"),
+          async () => { throw error; }, true)).rejects.toBe(error);
+        expect(await planState()).toMatchObject({ status: "paused", version: before.version + 1 });
+        expect(await interventionCount()).toBe(interventionsBefore + 1);
+      });
+
+      it.each([
+        ["a settled result", { resultHash: "a".repeat(64) }],
+        ["an approved invocation", { status: "succeeded", approvalState: "approved" }],
+      ])("still fences when the invocation has %s", async (_label, overrides) => {
+        const before = await planState();
+        const row = await pendingInvocation("settled-approval-call", overrides);
+        const error = approvalRequired({ invocationId: row.id, tool: row.toolName, issueId: task.id });
+        await expect(withOrchestrationNativeTool(db, nativeBinding(), call("settled-approval-call"),
+          async () => { throw error; }, true)).rejects.toBe(error);
+        expect(await planState()).toMatchObject({ status: "paused", version: before.version + 1 });
+      });
+    });
+    it("limits plan-created Tasks to C0 backlog drafts without delegation", async () => {
+      let effects = 0;
+      const call = {
+        tool: "create_task",
+        callId: "bounded-backlog-task",
+        arguments: { idempotencyKey: "bounded-backlog-task", title: "Private draft", status: "backlog" },
+      };
+      await expect(withOrchestrationNativeTool(db, nativeBinding(), call,
+        async () => { effects++; return { task: { id: randomUUID() } }; })).resolves.toMatchObject({
+        task: { id: expect.any(String) },
+      });
+      await expect(withOrchestrationNativeTool(db, nativeBinding(), call,
+        async () => { effects++; return {}; })).rejects.toMatchObject({ status: 409 });
+      await expect(withOrchestrationNativeTool(db, nativeBinding(), {
+        tool: "create_task",
+        callId: "unqualified-todo-task",
+        arguments: { idempotencyKey: "unqualified-todo-task", title: "Would start work", status: "todo" },
+      }, async () => { effects++; return { task: { id: randomUUID() } }; })).rejects.toMatchObject({ status: 403 });
+      const [c1Task] = await db.insert(issues).values({ companyId: f.home, title: "C1 Task plan fixture",
+        status: "todo", assigneeAgentId: f.presence.id }).returning();
+      const [c1Run] = await db.insert(heartbeatRuns).values({ companyId: f.home, agentId: f.presence.id,
+        responsibleUserId: f.userId, status: "running", runtimeMode: "native", nativeIssueId: c1Task!.id,
+        contextSnapshot: { issueId: c1Task!.id } }).returning();
+      const c1Prepared = await agentRuntimeFabricService(db).prepare({ companyId: f.home, agentId: f.presence.id,
+        runId: c1Run!.id, responsibleUserId: f.userId, issueId: c1Task!.id, query: c1Task!.title });
+      const c1Plan = await orchestrationService(db).create(f.actor, f.home, {
+        issueId: c1Task!.id, expectedIssueUpdatedAt: c1Task!.updatedAt.toISOString(), workload: "semantic", riskClass: "C1",
+        completionContract: { objective: "Save one internal C1 draft", requiredOutputs: [{ key: "result" }],
+          businessInvariants: ["Use authorized sources only"] },
+        budgets: { maxModelCostMinor: 6, maxToolActions: 2 }, workers: [{ key: "writer", issueId: c1Task!.id }],
+      });
+      await db.update(orchestrationPlans).set({ status: "running", startedAt: new Date(),
+        executionPrincipal: { type: "user", userId: f.userId } }).where(eq(orchestrationPlans.id, c1Plan.id));
+      const [c1Worker] = await db.update(orchestrationWorkers).set({ status: "running", attemptCount: 1 })
+        .where(eq(orchestrationWorkers.planId, c1Plan.id)).returning();
+      await db.insert(orchestrationWorkerAttempts).values({ companyId: f.home, planId: c1Plan.id,
+        workerId: c1Worker!.id, agentId: f.presence.id, runId: c1Run!.id,
+        executionManifestId: c1Prepared!.record.id, attempt: 1 });
+      await db.update(issues).set({ executionRunId: c1Run!.id }).where(eq(issues.id, c1Task!.id));
+      await expect(withOrchestrationNativeTool(db, { companyId: f.home, issueId: c1Task!.id,
+        agentId: f.presence.id, runId: c1Run!.id }, {
+        tool: "create_task",
+        callId: "unqualified-c1-task",
+        arguments: { idempotencyKey: "unqualified-c1-task", title: "Material plan", status: "backlog" },
+      }, async () => { effects++; return {}; })).rejects.toMatchObject({ status: 403 });
+      for (const [callId, extra] of [
+        ["unqualified-assignment-task", { assigneeActorId: randomUUID() }],
+        ["unqualified-placement-task", { projectId: randomUUID() }],
+        ["unqualified-plan-task", { initialPlan: "PRIVATE execution plan" }],
+        ["unqualified-dependency-task", { blockedByTaskIds: [randomUUID()] }],
+        ["unqualified-repository-task", { repositoryId: randomUUID() }],
+        ["unqualified-workspace-task", { workspaceId: randomUUID() }],
+        ["unqualified-approval-task", { approvalId: randomUUID() }],
+      ] as const) {
+        await expect(withOrchestrationNativeTool(db, nativeBinding(), {
+          tool: "create_task",
+          callId,
+          arguments: { idempotencyKey: callId, title: "Unqualified material field", status: "backlog", ...extra },
+        }, async () => { effects++; return {}; })).rejects.toMatchObject({ status: 403 });
+      }
+      const [materialTask] = await db.insert(issues).values({ companyId: f.home, title: "Material Task plan fixture",
+        status: "todo", assigneeAgentId: f.presence.id }).returning();
+      const [materialRun] = await db.insert(heartbeatRuns).values({ companyId: f.home, agentId: f.presence.id,
+        responsibleUserId: f.userId, status: "running", runtimeMode: "native", nativeIssueId: materialTask!.id,
+        contextSnapshot: { issueId: materialTask!.id } }).returning();
+      const materialPrepared = await agentRuntimeFabricService(db).prepare({ companyId: f.home, agentId: f.presence.id,
+        runId: materialRun!.id, responsibleUserId: f.userId, issueId: materialTask!.id, query: materialTask!.title });
+      const materialPlan = await orchestrationService(db).create(f.actor, f.home, {
+        issueId: materialTask!.id, expectedIssueUpdatedAt: materialTask!.updatedAt.toISOString(), workload: "semantic",
+        actionClass: "data_mutation", riskClass: "C2",
+        completionContract: { objective: "Save one internal material Task", requiredOutputs: [{ key: "result" }],
+          businessInvariants: ["Use authorized sources only"],
+          requiredPostconditions: [{ kind: "tool_receipt", toolName: "create_task", argumentsHash: "a".repeat(64) }] },
+        budgets: { maxModelCostMinor: 6, maxToolActions: 2 }, workers: [{ key: "writer", issueId: materialTask!.id }],
+      });
+      await db.update(orchestrationPlans).set({ status: "running", startedAt: new Date(),
+        executionPrincipal: { type: "user", userId: f.userId } }).where(eq(orchestrationPlans.id, materialPlan.id));
+      const [materialWorker] = await db.update(orchestrationWorkers).set({ status: "running", attemptCount: 1 })
+        .where(eq(orchestrationWorkers.planId, materialPlan.id)).returning();
+      await db.insert(orchestrationWorkerAttempts).values({ companyId: f.home, planId: materialPlan.id,
+        workerId: materialWorker!.id, agentId: f.presence.id, runId: materialRun!.id,
+        executionManifestId: materialPrepared!.record.id, attempt: 1 });
+      await db.update(issues).set({ executionRunId: materialRun!.id }).where(eq(issues.id, materialTask!.id));
+      await expect(withOrchestrationNativeTool(db, { companyId: f.home, issueId: materialTask!.id,
+        agentId: f.presence.id, runId: materialRun!.id }, {
+        tool: "create_task",
+        callId: "unqualified-material-plan-task",
+        arguments: { idempotencyKey: "unqualified-material-plan-task", title: "Material plan", status: "backlog" },
+      }, async () => { effects++; return {}; })).rejects.toMatchObject({ status: 403 });
+      expect(effects).toBe(1);
+      expect(await db.select().from(toolInvocations).where(eq(toolInvocations.runId, run.id))).toHaveLength(1);
+    });
     it("withholds Native read output after membership changes during dispatch without retaining source bodies", async () => {
       await expect(
         withOrchestrationNativeTool(
@@ -1613,7 +2265,119 @@ async function makeFixtureTreeWritable(target: string): Promise<void> {
         )[0],
       ).toMatchObject({ status: "paused", toolActionsUsed: 1 });
     });
+    it.each(["success", "revoked", "provider_error"] as const)(
+      "drains an in-flight authority watch before settling the caller: %s", async mode => {
+        const originalCheck = agentRunCancellation.assertAgentRunWriteAllowed;
+        const originalInterval = globalThis.setInterval;
+        let tick: (() => void) | undefined;
+        let blockWatch = false;
+        let releaseWatch!: () => void, watchEntered!: () => void;
+        const released = new Promise<void>(resolve => { releaseWatch = resolve; });
+        const entered = new Promise<void>(resolve => { watchEntered = resolve; });
+        const intervalSpy = vi.spyOn(globalThis, "setInterval").mockImplementation((callback, delay, ...args) => {
+          const timer = originalInterval(callback, delay, ...args);
+          if (!tick && delay === 1000 && typeof callback === "function") {
+            tick = () => { callback(...args); };
+            clearInterval(timer);
+          }
+          return timer;
+        });
+        const checkSpy = vi.spyOn(agentRunCancellation, "assertAgentRunWriteAllowed")
+          .mockImplementation(async (...args) => {
+            if (blockWatch) {
+              blockWatch = false;
+              watchEntered();
+              await released;
+            }
+            await originalCheck(...args);
+          });
+        duringCall = async () => {
+          if (!tick) throw new Error("The model authority watch was not registered");
+          blockWatch = true;
+          tick();
+          await entered;
+          if (mode === "provider_error") throw new Error("Fixture provider failed after the watch started");
+        };
+        let settled = false;
+        const response = gateway().call(claims, input()).then(
+          value => ({ ok: true as const, value }), error => ({ ok: false as const, error }));
+        void response.then(() => { settled = true; });
+        try {
+          await Promise.race([entered, response.then(() => {
+            throw new Error("The model call ended before its authority watch entered");
+          })]);
+          await vi.waitFor(async () => {
+            expect((await ledger())[0]?.status).toBe(mode === "provider_error" ? "unknown" : "completed");
+          }, { timeout: 10000, interval: 20 });
+          // Allow the foreground completion to finish; the only deliberately
+          // held operation is the periodic real authority checker above.
+          await new Promise(resolve => setTimeout(resolve, 250));
+          expect(settled).toBe(false);
+          if (mode === "revoked") await db.delete(companyMemberships).where(and(
+            eq(companyMemberships.companyId, f.home), eq(companyMemberships.principalId, f.userId)));
+          releaseWatch();
+          const result = await response;
+          if (mode === "success") {
+            expect(result.ok).toBe(true);
+            if (result.ok) expect(result.value.text).toBe("Retained bounded draft");
+          } else expect(result.ok).toBe(false);
+          expect(calls).toBe(1);
+          expect((await ledger())[0]?.status).toBe(mode === "provider_error" ? "unknown" : "completed");
+        } finally {
+          releaseWatch();
+          await response;
+          checkSpy.mockRestore();
+          intervalSpy.mockRestore();
+        }
+      },
+    );
+    it("withholds a known response when caller cancellation arrives during the final current-authority read", async () => {
+      const originalCheck = agentRunCancellation.assertAgentRunWriteAllowed;
+      const originalInterval = globalThis.setInterval;
+      const caller = new AbortController();
+      let releaseRead!: () => void, readEntered!: () => void;
+      const released = new Promise<void>(resolve => { releaseRead = resolve; });
+      const entered = new Promise<void>(resolve => { readEntered = resolve; });
+      let held = false;
+      const intervalSpy = vi.spyOn(globalThis, "setInterval").mockImplementation((callback, delay, ...args) => {
+        const timer = originalInterval(callback, delay, ...args);
+        if (delay === 1000) clearInterval(timer);
+        return timer;
+      });
+      const checkSpy = vi.spyOn(agentRunCancellation, "assertAgentRunWriteAllowed")
+        .mockImplementation(async (...args) => {
+          if (!held && (await ledger())[0]?.status === "completed") {
+            held = true;
+            readEntered();
+            await released;
+          }
+          await originalCheck(...args);
+        });
+      const response = gateway().call(claims, input(), caller.signal).then(
+        value => ({ ok: true as const, value }), error => ({ ok: false as const, error }));
+      try {
+        await Promise.race([entered, response.then(() => {
+          throw new Error("The model call ended before its final current-authority read");
+        })]);
+        expect((await ledger())[0]?.status).toBe("completed");
+        caller.abort();
+        releaseRead();
+        const result = await response;
+        expect(result.ok).toBe(false);
+        if (!result.ok) expect(result.error).toMatchObject({ status: 409, details: { code: "worker_model_result_withheld" } });
+        expect(calls).toBe(1);
+        expect((await ledger())[0]).toMatchObject({ status: "completed", usage: { inputTokens, outputTokens: 20 } });
+        expect((await db.select().from(orchestrationPlans).where(eq(orchestrationPlans.id, plan.id)))[0]?.status).toBe("paused");
+      } finally {
+        releaseRead();
+        await response;
+        checkSpy.mockRestore();
+        intervalSpy.mockRestore();
+      }
+    });
     it("reserves before actual transport, keeps the encrypted key private and leaves completion to Native verification", async () => {
+      const beforeDispatch = (await db.select({ status: issues.status }).from(issues).where(eq(issues.id, task.id)))[0]!;
+      expect(beforeDispatch.status).toBe("in_progress");
       const result = await gateway().call(claims, input());
       expect(result).toMatchObject({
         text: "Retained bounded draft",
@@ -1627,10 +2391,21 @@ async function makeFixtureTreeWritable(target: string): Promise<void> {
         purpose: "worker_model",
         workerAttemptId: binding.workerAttemptId,
       });
+      const [runAfterDispatch] = await db.select({ profile: heartbeatRuns.runnerProfileJson })
+        .from(heartbeatRuns).where(and(eq(heartbeatRuns.companyId, f.home), eq(heartbeatRuns.id, run.id)));
+      const persistedWireIntents = (runAfterDispatch?.profile as Record<string, unknown> | null)?.nativeAwModelWireIntents;
+      expect(persistedWireIntents).toEqual([expect.objectContaining({
+        callId: "draft-1",
+        modelPurpose: "worker_model",
+        sourceDispatchDigest: expect.stringMatching(/^[0-9a-f]{64}$/),
+        sourceSetHash: nativeSha256(fixtureSourceClosure.sourceSet),
+        consumedSourceSet: fixtureSourceClosure.sourceSet,
+        idempotencyKey: expect.stringContaining(`worker-model:${run.id}`),
+      })]);
       expect(
         (await db.select().from(issues).where(eq(issues.id, task.id)))[0]
           ?.status,
-      ).toBe("todo");
+      ).toBe(beforeDispatch.status);
       await expect(gateway().call(claims, input())).rejects.toMatchObject({
         status: 409,
       });
@@ -1748,17 +2523,26 @@ async function makeFixtureTreeWritable(target: string): Promise<void> {
       "company",
       "Task source",
     ])(
-      "retains unknown debit and requests Native Stop on %s during inference",
+      "preserves known or unknown provider usage without disclosure when %s changes during inference",
       async (kind) => {
         duringCall = () => change(kind);
         await expect(gateway().call(claims, input())).rejects.toMatchObject({
           status: 409,
         });
         expect(calls).toBe(1);
-        expect((await ledger())[0]).toMatchObject({
-          status: "unknown",
-          maximumMinor: 3,
-        });
+        if (kind === "Task source") {
+          // Whether the watcher aborts before the fixture returns a response
+          // depends on scheduling. A source change during the in-flight call
+          // must always leave usage unknown and prevent publication.
+          expect((await ledger())[0]).toMatchObject({ status: "unknown", maximumMinor: 3, usage: null });
+        } else {
+          expect(providerSignalAbortedBeforeResponse).toBe(false);
+          expect((await ledger())[0]).toMatchObject({
+            status: "completed",
+            maximumMinor: 3,
+            usage: { inputTokens, outputTokens: 20 },
+          });
+        }
         expect(
           (
             await db
@@ -1773,7 +2557,7 @@ async function makeFixtureTreeWritable(target: string): Promise<void> {
           .where(eq(supervisionInterventions.planId, plan.id));
         expect(stop[0]).toMatchObject({
           decisionAction: "ESCALATE_HUMAN",
-          reasonCode: "worker_model_unsettled",
+          reasonCode: kind === "Task source" ? "worker_model_unsettled" : "worker_model_result_withheld",
         });
         await expect(gateway().call(claims, input())).rejects.toThrow();
         expect(calls).toBe(1);
@@ -1783,11 +2567,69 @@ async function makeFixtureTreeWritable(target: string): Promise<void> {
       inputTokens = profile.inputTokensUpperBound + 1;
       await expect(gateway().call(claims, input())).rejects.toMatchObject({
         status: 409,
+        details: { code: "worker_model_unsettled" },
       });
       expect((await ledger())[0]).toMatchObject({
         status: "unknown",
         maximumMinor: 3,
       });
+      const interventions = await db.select().from(supervisionInterventions)
+        .where(eq(supervisionInterventions.planId, plan.id));
+      expect(interventions[0]).toMatchObject({ reasonCode: "worker_model_unsettled" });
+      expect(calls).toBe(1);
+    });
+    it("revalidates the exact represented-Human guest read binding before bounded worker admission", async () => {
+      const currentHuman = await seedCurrentHumanSourceActor(db, [f.home, f.guest], f.userId);
+      const providers = agentProviderBindingService(db), guestBinding = await providers.create(f.actor, f.guest, f.guestPresence.id, {
+        providerType: "paperclip_native", providerAgentRef: f.guestPresence.id, providerEndpointRef: null, isolationMode: "isolated_per_presence" });
+      await providers.attach(f.actor, f.guest, f.guestPresence.id, { providerBindingId: guestBinding.id, providerProfileRef: f.guestPresence.id });
+      await providers.recordDiscovery(f.guest, f.guestPresence.id, { provider: "paperclip_native", version: "bounded-worker-guest-fixture",
+        features: Object.fromEntries(PROVIDER_CAPABILITY_FEATURES.map(key => [key, false])) as Record<(typeof PROVIDER_CAPABILITY_FEATURES)[number], boolean>,
+        skills: [], tools: [], discoveredAt: new Date().toISOString() }, { connect: true, identity: true, start: true, stream: true, wait: true, cancel: true, memoryScoping: true });
+      await crossCompanyContextService(db).setPolicy(f.actor, f.guest, crossCompanyPolicySchema.parse({ allowRead: true }));
+      const [delegatedTask] = await db.insert(issues).values({ companyId: f.home, title: "Revalidate delegated read at bounded worker admission",
+        status: "todo", assigneeAgentId: f.presence.id }).returning();
+      const [delegatedRun] = await db.insert(heartbeatRuns).values({ companyId: f.home, agentId: f.presence.id, responsibleUserId: f.userId,
+        status: "running", runtimeMode: "native", nativeIssueId: delegatedTask!.id, issueId: delegatedTask!.id,
+        contextSnapshot: { issueId: delegatedTask!.id } }).returning();
+      const query = "Read the explicitly shared guest source for a bounded draft";
+      const request = await agentRuntimeFabricService(db).requestScope(currentHuman, f.home, f.presence.id, { executionScope: {
+        primaryCompanyId: f.home, primaryAgentPresenceId: f.presence.id,
+        delegatedScopes: [{ companyId: f.guest, agentPresenceId: f.guestPresence.id, accessMode: "read", purpose: query }],
+      }, query, issueId: delegatedTask!.id });
+      const prepared = await agentRuntimeFabricService(db).prepare({ companyId: f.home, agentId: f.presence.id, runId: delegatedRun!.id,
+        responsibleUserId: f.userId, issueId: delegatedTask!.id, query, scopeRequestId: request.id });
+      expect(prepared!.manifest.executionScope.delegatedScopes).toMatchObject([{ companyId: f.guest, accessMode: "read" }]);
+      const delegatedPlan = await orchestrationService(db).create(f.actor, f.home, { issueId: delegatedTask!.id,
+        expectedIssueUpdatedAt: delegatedTask!.updatedAt.toISOString(), workload: "semantic", riskClass: "C0",
+        completionContract: { objective: "Produce a bounded internal draft from authorized sources", requiredOutputs: [{ key: "result" }], businessInvariants: ["Retain source company authority"] },
+        budgets: { maxModelCostMinor: 6, maxToolActions: 2 }, workers: [{ key: "writer", issueId: delegatedTask!.id }] });
+      await db.update(orchestrationPlans).set({ status: "running", startedAt: new Date(), executionPrincipal: { type: "user", userId: f.userId } }).where(eq(orchestrationPlans.id, delegatedPlan.id));
+      const [delegatedWorker] = await db.update(orchestrationWorkers).set({ status: "running", attemptCount: 1 })
+        .where(eq(orchestrationWorkers.planId, delegatedPlan.id)).returning();
+      const [delegatedAttempt] = await db.insert(orchestrationWorkerAttempts).values({ companyId: f.home, planId: delegatedPlan.id,
+        workerId: delegatedWorker!.id, agentId: f.presence.id, runId: delegatedRun!.id, executionManifestId: prepared!.record.id, attempt: 1 }).returning();
+      await db.update(issues).set({ executionRunId: delegatedRun!.id }).where(eq(issues.id, delegatedTask!.id));
+      const delegatedWorkerBinding: WorkerModelBinding = { planId: delegatedPlan.id, workerId: delegatedWorker!.id,
+        workerAttemptId: delegatedAttempt!.id, executionManifestId: prepared!.record.id, expectedPlanVersion: delegatedPlan.version };
+      await expect(gateway().issue({ companyId: f.home, agentId: f.presence.id, runId: delegatedRun!.id,
+        responsibleUserId: f.userId, binding: delegatedWorkerBinding })).resolves.toMatchObject({ inputTokensUpperBound: profile.inputTokensUpperBound });
+      let nativeReadCalls = 0;
+      const nativeBinding = { companyId: f.home, issueId: delegatedTask!.id, agentId: f.presence.id, runId: delegatedRun!.id };
+      const nativeRead = { tool: "get_task_context", callId: "bounded-guest-read-context", arguments: {} };
+      await expect(withOrchestrationNativeTool(db, nativeBinding, nativeRead, async () => {
+        nativeReadCalls++;
+        return { taskId: delegatedTask!.id };
+      })).resolves.toEqual({ taskId: delegatedTask!.id });
+      await db.delete(companyMemberships).where(and(eq(companyMemberships.companyId, f.guest), eq(companyMemberships.principalId, f.userId)));
+      await expect(gateway().issue({ companyId: f.home, agentId: f.presence.id, runId: delegatedRun!.id,
+        responsibleUserId: f.userId, binding: delegatedWorkerBinding })).rejects.toMatchObject({ status: 403 });
+      await expect(withOrchestrationNativeTool(db, nativeBinding, { ...nativeRead, callId: "revoked-bounded-guest-read" }, async () => {
+        nativeReadCalls++;
+        return { taskId: delegatedTask!.id };
+      })).rejects.toMatchObject({ status: 403 });
+      expect(nativeReadCalls).toBe(1);
+      expect(calls).toBe(0);
     });
     it("binds company, run, attempt, manifest and current source instead of accepting caller prices or destinations", async () => {
       for (const altered of [
@@ -1878,8 +2720,9 @@ async function makeFixtureTreeWritable(target: string): Promise<void> {
         status: 409,
       });
       expect((await ledger())[0]).toMatchObject({
-        status: "unknown",
+        status: "completed",
         maximumMinor: 3,
+        usage: { inputTokens, outputTokens: 20 },
       });
       expect(
         (

@@ -1,0 +1,45 @@
+{
+  "scope": "Selected inline wake comment renditions and original native first-bootstrap persistence; partial source handoff only",
+  "sources": {
+    "server/src/services/heartbeat.ts": "dd76a93d6b52f37a4291783b6d7c4a40a9d7fc803301bcc3885cbc0314b2d4f6",
+    "server/src/services/agent-conversations.ts": "15763522a561265dd4828cf33613031fab9f945c834c860ed6771e290ce43ad2",
+    "server/src/__tests__/issue-comment-redaction.test.ts": "97fb92a321261341ea6a1089ba80135b7fd56996b3a051fc1abff12a687100dc",
+    "server/src/__tests__/heartbeat-process-recovery.test.ts": "9dac1c070f3571b902c9cb67e3e95c12148ee2a9d68d31168ae6548f321fd09a"
+  },
+  "baseline": {
+    "initialExit": 1,
+    "initial": "One genuine callback loss and one fixture duplicate identifier failure; original exact bytes retained. Fixture metadata corrected to actual typed sections.",
+    "correctedExit": 1,
+    "correctedFailures": 2,
+    "correctedDurationSeconds": 117.71
+  },
+  "current": {
+    "exit": 0,
+    "passed": 8,
+    "durationSeconds": 56.88
+  },
+  "nativeBootstrapAndCancellation": {
+    "exit": 0,
+    "passed": 3,
+    "filtered": 303,
+    "durationSeconds": 70.39,
+    "providerFactoryCalls": 0
+  },
+  "serverCompiler": {
+    "exit": 0
+  },
+  "allRecordedPinsMatch": true,
+  "sourceArchivesUncompressedSha256": {
+    "up03-inline-comment-capture-native-red-test.txt.gz": "97fb92a321261341ea6a1089ba80135b7fd56996b3a051fc1abff12a687100dc",
+    "up03-inline-comment-capture-draft.test.txt.gz": "731b18556b31194e0f9aa5c0eb8f10931d2f99214a96a595972a44f1bd186e13",
+    "up03-inline-comment-capture-fixture-failure-test.txt.gz": "731b18556b31194e0f9aa5c0eb8f10931d2f99214a96a595972a44f1bd186e13",
+    "up03-inline-comment-capture-native-red-owner.txt.gz": "1c599d28a37ccfe9a2070a9958cf36c42434437ece814fbf4dc8fe83d235f261"
+  },
+  "limits": [
+    "Captures retain selected PostgreSQL microsecond version and nullable snapshot beside final post-quarantine, budget and secret-redacted comment rendition hash. Default public wake DTO unchanged.",
+    "Deleted, foreign and missing comments omitted; exact first profile/input retained after actual Task/plan/comment edits.",
+    "Known snapshot fixture establishes structural DB binding only, not producer qualification.",
+    "Single-comment fallback, attachments, annotations and remaining input families need separate capture. No complete receipt/protocol writer, current source permission, actual provider transport or effect qualification enabled.",
+    "Original private Memory copy and temporal source failures, canonical graph and full V10/release checks remain open."
+  ]
+}

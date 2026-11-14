@@ -1,7 +1,5 @@
 import {
-  DeleteObjectCommand,
   HeadObjectCommand,
-  ListObjectsV2Command,
   ListObjectVersionsCommand,
   S3Client,
 } from "@aws-sdk/client-s3";
@@ -15,63 +13,13 @@ import {
 } from "@paperclipai/db";
 import type { SaasPlatformConfig } from "../../saas-platform-config.js";
 import { conflict } from "../../errors.js";
+import { eraseS3Prefix } from "../../storage/s3-erasure.js";
 export function companyObjectErasure(db: Db, config: SaasPlatformConfig) {
   const options = {
     region: config.objects.region,
     endpoint: config.objects.endpoint,
     forcePathStyle: true,
   };
-  async function erasePrefix(client: S3Client, bucket: string, prefix: string) {
-    let removed = 0;
-    for (let page = 0; page < 10000; page++) {
-      const versions = await client.send(
-        new ListObjectVersionsCommand({
-          Bucket: bucket,
-          Prefix: prefix,
-          MaxKeys: 100,
-        }),
-      );
-      const records = [
-        ...(versions.Versions ?? []),
-        ...(versions.DeleteMarkers ?? []),
-      ];
-      if (!records.length) break;
-      for (const record of records) {
-        if (!record.Key?.startsWith(prefix) || !record.VersionId)
-          throw conflict("Object version scope mismatch");
-        await client.send(
-          new DeleteObjectCommand({
-            Bucket: bucket,
-            Key: record.Key,
-            VersionId: record.VersionId,
-          }),
-        );
-        removed++;
-      }
-      if (page === 9999)
-        throw conflict("Object version erasure ceiling reached");
-    }
-    // Delete from the first page repeatedly: no cursor can skip keys as earlier objects disappear.
-    for (let page = 0; page < 10000; page++) {
-      const listed = await client.send(
-        new ListObjectsV2Command({
-          Bucket: bucket,
-          Prefix: prefix,
-          MaxKeys: 100,
-        }),
-      );
-      if (!listed.Contents?.length) return removed;
-      for (const item of listed.Contents) {
-        if (!item.Key?.startsWith(prefix))
-          throw conflict("Object erasure prefix mismatch");
-        await client.send(
-          new DeleteObjectCommand({ Bucket: bucket, Key: item.Key }),
-        );
-        removed++;
-      }
-    }
-    throw conflict("Object erasure page ceiling reached");
-  }
   function targets(companyId: string) {
     const storagePrefix = (
       process.env.PAPERCLIP_STORAGE_S3_PREFIX ?? ""
@@ -179,7 +127,7 @@ export function companyObjectErasure(db: Db, config: SaasPlatformConfig) {
           )
         )
           throw conflict("Backup object scope mismatch");
-        await erasePrefix(retention, config.backups.bucket, backup.objectKey);
+        await eraseS3Prefix(retention, config.backups.bucket, backup.objectKey);
         try {
           await retention.send(
             new HeadObjectCommand({
@@ -205,17 +153,17 @@ export function companyObjectErasure(db: Db, config: SaasPlatformConfig) {
           .set({ status: "DELETED", deletedAt: now })
           .where(eq(runtimeBackups.id, backup.id));
       }
-      const artifacts = await erasePrefix(
+      const artifacts = await eraseS3Prefix(
         client,
         owned.artifacts.bucket,
         owned.artifacts.prefix,
       );
-      const runLogs = await erasePrefix(
+      const runLogs = await eraseS3Prefix(
         client,
         owned.runLogs.bucket,
         owned.runLogs.prefix,
       );
-      const exports = await erasePrefix(
+      const exports = await eraseS3Prefix(
         client,
         owned.exports.bucket,
         owned.exports.prefix,

@@ -1,0 +1,42 @@
+
+ RUN  v4.1.11 /workspace/v10-dep-qualification/server
+
+··[04:05:06] [33mWARN[39m: [36mexternal object issue sync failed[39m 
+    err: {
+      "type": "TypeError",
+      "message": "runner.insert is not a function",
+      "stack":
+          TypeError: runner.insert is not a function
+              at getOrCreateRow (/workspace/v10-dep-qualification/server/src/services/instance-settings.ts:527:10)
+              at process.processTicksAndRejections (node:internal/process/task_queues:104:5)
+              at Object.getExperimental (/workspace/v10-dep-qualification/server/src/services/instance-settings.ts:603:19)
+              at Object.enabled (/workspace/v10-dep-qualification/server/src/routes/issues.ts:3943:8)
+              at isEnabled (/workspace/v10-dep-qualification/server/src/services/external-objects.ts:380:52)
+              at syncIssue (/workspace/v10-dep-qualification/server/src/services/external-objects.ts:494:11)
+              at safeSync (/workspace/v10-dep-qualification/server/src/services/external-objects.ts:588:7)
+              at Object.syncIssueSafely (/workspace/v10-dep-qualification/server/src/services/external-objects.ts:595:5)
+              at /workspace/v10-dep-qualification/server/src/routes/issues.ts:12839:7
+    }
+[04:05:06] [33mWARN[39m: [36mexternal object issue sync failed[39m 
+    err: {
+      "type": "TypeError",
+      "message": "runner.insert is not a function",
+      "stack":
+          TypeError: runner.insert is not a function
+              at getOrCreateRow (/workspace/v10-dep-qualification/server/src/services/instance-settings.ts:527:10)
+              at process.processTicksAndRejections (node:internal/process/task_queues:104:5)
+              at Object.getExperimental (/workspace/v10-dep-qualification/server/src/services/instance-settings.ts:603:19)
+              at Object.enabled (/workspace/v10-dep-qualification/server/src/routes/issues.ts:3943:8)
+              at isEnabled (/workspace/v10-dep-qualification/server/src/services/external-objects.ts:380:52)
+              at syncIssue (/workspace/v10-dep-qualification/server/src/services/external-objects.ts:494:11)
+              at safeSync (/workspace/v10-dep-qualification/server/src/services/external-objects.ts:588:7)
+              at Object.syncIssueSafely (/workspace/v10-dep-qualification/server/src/services/external-objects.ts:595:5)
+              at /workspace/v10-dep-qualification/server/src/routes/issues.ts:12839:7
+    }
+······
+
+ Test Files  1 passed (1)
+      Tests  8 passed (8)
+   Start at  04:04:53
+   Duration  13.00s (transform 9.25s, setup 77ms, import 12.65s, tests 153ms, environment 0ms)
+

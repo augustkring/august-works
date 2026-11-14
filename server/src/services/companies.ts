@@ -2,6 +2,7 @@ import { and, count, eq, gte, inArray, isNull, lt, notInArray, sql } from "drizz
 import type { Db } from "@paperclipai/db";
 import {
   companies,
+  companyDeletionOperations,
   companyLogos,
   assets,
   agents,
@@ -39,6 +40,7 @@ import {
   customerFeedbackRetention,
   saasNotifications,
 } from "@paperclipai/db";
+import { assertCompanyManagedSecretErasureComplete } from "./secrets.js";
 import { conflict, notFound, unprocessable } from "../errors.js";
 import { isCloudManagedInstance } from "./cloud-instance.js";
 import { notifyCloudOfPrimaryCompanyLifecycleChange } from "./cloud-lifecycle-sync.js";
@@ -54,6 +56,7 @@ import { environmentService } from "./environments.js";
 import { heartbeatService } from "./heartbeat.js";
 import { logActivity } from "./activity-log.js";
 import { builtInAgentService } from "./built-in-agents.js";
+import { companyTransferRunService } from "./company-transfer-runs.js";
 
 
 const UUID_RE = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
@@ -148,6 +151,8 @@ export function companyService(db: Db) {
     id: companies.id,
     name: companies.name,
     description: companies.description,
+    locale: companies.locale,
+    timezone: companies.timezone,
     status: companies.status,
     issuePrefix: companies.issuePrefix,
     issueCounter: companies.issueCounter,
@@ -436,8 +441,14 @@ export function companyService(db: Db) {
           await tx.delete(assets).where(eq(assets.id, existing.logoAssetId));
         }
 
+        // Private responsibility-contact IDs are exposed only by the dedicated
+        // no-store owner settings route, never in generic Company responses.
+        const { securityContactUserId: _securityContactUserId,
+          supportIncidentContactUserId: _supportIncidentContactUserId, ...publicUpdated } = updated;
+        void _securityContactUserId;
+        void _supportIncidentContactUserId;
         const [hydrated] = await hydrateCompanySpend([{
-          ...updated,
+          ...publicUpdated,
           logoAssetId: logoAssetId === undefined ? existing.logoAssetId : logoAssetId,
         }], tx);
 
@@ -498,14 +509,49 @@ export function companyService(db: Db) {
       return result.company;
     },
 
-    archive: async (id: string, actor: CompanyActivityActor = SYSTEM_COMPANY_ACTOR) => {
+    archive: async (
+      id: string,
+      actor: CompanyActivityActor = SYSTEM_COMPANY_ACTOR,
+      options: { offboardingOperationId?: string; now?: Date } = {},
+    ) => {
       const result = await db.transaction(async (tx) => {
         const existing = await tx
           .select({ status: companies.status })
           .from(companies)
           .where(eq(companies.id, id))
+          .for("update")
           .then((rows) => rows[0] ?? null);
         if (!existing) return null;
+
+        const offboardingOperation = options.offboardingOperationId
+          ? await tx
+              .select({ id: companyDeletionOperations.id, stage: companyDeletionOperations.stage,
+                status: companyDeletionOperations.status, notBefore: companyDeletionOperations.notBefore })
+              .from(companyDeletionOperations)
+              .where(and(eq(companyDeletionOperations.id, options.offboardingOperationId),
+                eq(companyDeletionOperations.companyId, id)))
+              .for("update")
+              .then((rows) => rows[0] ?? null)
+          : null;
+        if (options.offboardingOperationId && !offboardingOperation)
+          throw conflict("Company deletion operation changed before archive", { code: "offboarding_operation_changed" });
+        const offboardingRevokeDue = !!offboardingOperation &&
+          ["revoke", "revoke_finalizing"].includes(offboardingOperation.stage) &&
+          ["requested", "processing", "waiting_retention"].includes(offboardingOperation.status) &&
+          offboardingOperation.notBefore <= (options.now ?? new Date());
+        const offboardingLeaseUntil = offboardingRevokeDue
+          ? new Date((options.now ?? new Date()).getTime() + 60_000)
+          : null;
+
+        if (options.offboardingOperationId && !offboardingRevokeDue) {
+          const row = await getCompanyQuery(tx)
+            .where(eq(companies.id, id))
+            .then((rows) => rows[0] ?? null);
+          if (!row) return null;
+          const [hydrated] = await hydrateCompanySpend([row], tx);
+          return { company: enrichCompany(hydrated), cascade: null, wasAlreadyArchived: true,
+            offboardingRevokeDue: false, offboardingLeaseUntil: null };
+        }
 
         const wasAlreadyArchived = existing.status === "archived";
 
@@ -516,7 +562,28 @@ export function companyService(db: Db) {
             .where(eq(companies.id, id));
         }
 
-        const cascade = wasAlreadyArchived ? null : await applyArchiveCascadeInTx(tx, id);
+        // Company deletion marks the company archived in its request
+        // transaction so admission is fenced immediately. Its current revoke
+        // phase must still run this canonical cascade; ordinary repeated
+        // archive calls retain their idempotent no-op behavior.
+        const cascade = wasAlreadyArchived && !offboardingRevokeDue
+          ? null
+          : await applyArchiveCascadeInTx(tx, id);
+
+        if (offboardingRevokeDue && options.offboardingOperationId) {
+          // Claim the durable revoke phase before calling native Stop outside
+          // this transaction. A stale worker then sees a different stage; if
+          // the process dies during Stop, the bounded notBefore lease lets the
+          // existing operation worker retry the same canonical cascade.
+          await tx
+            .update(companyDeletionOperations)
+            .set({ status: "processing", stage: "revoke_finalizing",
+              notBefore: offboardingLeaseUntil! })
+            .where(and(eq(companyDeletionOperations.id, options.offboardingOperationId),
+              eq(companyDeletionOperations.companyId, id),
+              inArray(companyDeletionOperations.stage, ["revoke", "revoke_finalizing"]),
+              inArray(companyDeletionOperations.status, ["requested", "processing", "waiting_retention"])));
+        }
 
         const row = await getCompanyQuery(tx)
           .where(eq(companies.id, id))
@@ -526,14 +593,44 @@ export function companyService(db: Db) {
         return {
           company: enrichCompany(hydrated),
           cascade,
+          wasAlreadyArchived,
+          offboardingRevokeDue,
+          offboardingLeaseUntil,
         };
       });
       if (!result) return null;
 
-      // Same doorbell rule as update(): the archive is committed, so ring
-      // before finalization, which can throw without undoing it.
-      if (result.cascade) {
-        void notifyCloudOfPrimaryCompanyLifecycleChange(id);
+      if (result.offboardingRevokeDue && options.offboardingOperationId) {
+        try {
+          if (result.cascade) {
+            if (!result.wasAlreadyArchived) void notifyCloudOfPrimaryCompanyLifecycleChange(id);
+            await finalizeArchive(id, actor, result.cascade);
+          }
+          await db
+            .update(companyDeletionOperations)
+            .set({ status: "processing", stage: "runtimes", notBefore: options.now ?? new Date(), errorCode: null })
+            .where(and(eq(companyDeletionOperations.id, options.offboardingOperationId),
+              eq(companyDeletionOperations.companyId, id), eq(companyDeletionOperations.stage, "revoke_finalizing"),
+              eq(companyDeletionOperations.notBefore, result.offboardingLeaseUntil!),
+              inArray(companyDeletionOperations.status, ["requested", "processing", "waiting_retention"])));
+        } catch (error) {
+          // Record a retry only while this caller still owns the exact lease.
+          // A late stop/error from an expired worker cannot extend a newer
+          // worker's same-stage lease or overwrite its recovered state.
+          await db
+            .update(companyDeletionOperations)
+            .set({ notBefore: new Date((options.now ?? new Date()).getTime() + 60_000),
+              errorCode: "offboarding_reconciliation_pending" })
+            .where(and(eq(companyDeletionOperations.id, options.offboardingOperationId),
+              eq(companyDeletionOperations.companyId, id), eq(companyDeletionOperations.stage, "revoke_finalizing"),
+              eq(companyDeletionOperations.notBefore, result.offboardingLeaseUntil!),
+              eq(companyDeletionOperations.status, "processing")));
+          throw error;
+        }
+      } else if (result.cascade) {
+        // Same doorbell rule as update(): the archive is committed, so ring
+        // before finalization, which can throw without undoing it.
+        if (!result.wasAlreadyArchived) void notifyCloudOfPrimaryCompanyLifecycleChange(id);
         await finalizeArchive(id, actor, result.cascade);
       }
 
@@ -546,6 +643,8 @@ export function companyService(db: Db) {
         // Preserve its original semantics only after protected images have
         // settled; it cannot report completion while leaving their objects.
         await tx.select({ id: companies.id }).from(companies).where(eq(companies.id, id)).for("update");
+        await companyTransferRunService.assertCompanyExportErasureComplete(tx as unknown as Db, id);
+        await assertCompanyManagedSecretErasureComplete(tx, id);
         const holds = await tx.select({ id: customerFeedbackRetention.id }).from(customerFeedbackRetention).where(and(
           eq(customerFeedbackRetention.companyId, id), eq(customerFeedbackRetention.legalHold, true),
           sql`(${customerFeedbackRetention.holdReleaseAt} is null or ${customerFeedbackRetention.holdReleaseAt}>clock_timestamp())`,

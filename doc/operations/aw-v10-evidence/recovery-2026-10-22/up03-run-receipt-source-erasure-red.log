@@ -1,0 +1,35 @@
+(!) Your Vite config uses features that are unsupported by `configLoader: 'native'`, which is planned to become the default in a future major version of Vite:
+  - `__dirname` (vitest.config.ts:7:25). Use `import.meta.dirname` instead
+Set `VITE_CONFIG_NATIVE_IGNORE_WARNING=true` to suppress this warning.
+
+ RUN  v4.1.11 /workspace/blentera-v10
+
+ ❯ |@paperclipai/db| src/native-run-input-source-receipt.test.ts (8 tests | 1 failed | 7 skipped) 15024ms
+     × preserves original source-version erasure and stamps durable run erasure before any resurrection 432ms
+
+⎯⎯⎯⎯⎯⎯⎯ Failed Tests 1 ⎯⎯⎯⎯⎯⎯⎯
+
+ FAIL  |@paperclipai/db| src/native-run-input-source-receipt.test.ts > Original run input receipt database binding > preserves original source-version erasure and stamps durable run erasure before any resurrection
+PostgresError: Native run input receipt cannot be removed
+ ❯ ErrorResponse ../../node_modules/.pnpm/postgres@3.4.9_patch_hash=sryle6qd5qfmnxvoebal4gashi/node_modules/postgres/src/connection.js:819:30
+ ❯ handle ../../node_modules/.pnpm/postgres@3.4.9_patch_hash=sryle6qd5qfmnxvoebal4gashi/node_modules/postgres/src/connection.js:493:6
+ ❯ Socket.data ../../node_modules/.pnpm/postgres@3.4.9_patch_hash=sryle6qd5qfmnxvoebal4gashi/node_modules/postgres/src/connection.js:324:9
+ ❯ cachedError ../../node_modules/.pnpm/postgres@3.4.9_patch_hash=sryle6qd5qfmnxvoebal4gashi/node_modules/postgres/src/query.js:170:23
+ ❯ new Query ../../node_modules/.pnpm/postgres@3.4.9_patch_hash=sryle6qd5qfmnxvoebal4gashi/node_modules/postgres/src/query.js:36:24
+ ❯ sql ../../node_modules/.pnpm/postgres@3.4.9_patch_hash=sryle6qd5qfmnxvoebal4gashi/node_modules/postgres/src/index.js:112:11
+ ❯ write src/native-run-input-source-receipt.test.ts:43:29
+     41|   }
+     42|   async function write(row:Receipt,receipt:Receipt,extra:Receipt={}){
+     43|     const [updated]=await db`update heartbeat_runs set runner_profile_…
+       |                             ^
+     44|       where id=${row.id} returning *`;
+     45|     return updated!;
+
+⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯[1/1]⎯
+
+
+ Test Files  1 failed (1)
+      Tests  1 failed | 7 skipped (8)
+   Start at  07:10:15
+   Duration  25.20s (transform 5.40s, setup 0ms, import 9.76s, tests 15.02s, environment 0ms)
+

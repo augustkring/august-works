@@ -1,3 +1,4 @@
+import { PRODUCT_IDENTITY } from "@paperclipai/shared/product-identity";
 import { AgentAvatar } from "@/components/AgentAvatar";
 import { useCallback, useEffect, useMemo, useState, type FormEvent, type ReactNode } from "react";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
@@ -2995,7 +2996,7 @@ export function PipelineItemDetailView({ pipelineId, caseId }: { pipelineId: str
                 <AlertTriangle className="mt-0.5 h-4 w-4 shrink-0" />
                 <p>
                   Moving this item may skip stage automation, review expectations, and configured transition paths.
-                  Paperclip will still enforce blockers and other hard safety checks.
+                  {PRODUCT_IDENTITY.productName} will still enforce blockers and other hard safety checks.
                 </p>
               </div>
             </div>
@@ -3045,7 +3046,7 @@ export function PipelineItemDetailView({ pipelineId, caseId }: { pipelineId: str
           <DialogHeader>
             <DialogTitle>{retryDialogScope === "previous_stage" ? "Retry previous step" : "Re-run this step"}</DialogTitle>
             <DialogDescription>
-              Review the automation preflight before Paperclip dispatches a fresh run.
+              Review the automation preflight before {PRODUCT_IDENTITY.productName} dispatches a fresh run.
             </DialogDescription>
           </DialogHeader>
           {retryPlan.isLoading ? (

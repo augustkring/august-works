@@ -1,4 +1,5 @@
 import { describe, expect, it } from "vitest";
+import { PRODUCT_IDENTITY } from "@paperclipai/shared/product-identity";
 import {
   canSubmitGenericConnect,
   customHeaderError,
@@ -92,7 +93,7 @@ describe("genericConnectGuidance", () => {
 
   it("does not ask the operator to resolve an internal name conflict", () => {
     const guidance = genericConnectGuidance("tool_access_name_conflict", null);
-    expect(guidance).toMatchObject({ title: "Paperclip couldn’t name this connection", focus: "none" });
+    expect(guidance).toMatchObject({ title: `${PRODUCT_IDENTITY.productName} couldn’t name this connection`, focus: "none" });
     expect(guidance.body).not.toContain("different name");
   });
 

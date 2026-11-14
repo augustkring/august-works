@@ -1,0 +1,55 @@
+{
+  "status": "bounded checkpoint; full V10 and PR qualification remain open",
+  "recordedAt": "2026-10-22T21:54:51.510499+00:00",
+  "checks": [
+    {
+      "log": "up03-memory-intrinsic-agent-red.log",
+      "result": "FAIL: actual native private source shared and reviewed; another Agent for same Human incorrectly received shared payload. 1 failed,31 skipped."
+    },
+    {
+      "log": "up03-memory-intrinsic-agent-green.log",
+      "result": "FAIL overall: 32 payload +4 Context tests passed; maintenance beforeAll exceeded its old 30s budget and14 were skipped. No50-pass claim."
+    },
+    {
+      "log": "up03-maintenance-timeout-retry.log",
+      "result": "PASS:14 original Memory maintenance tests, using existing canonical embedded-Postgres setup timeout; assertions unchanged."
+    },
+    {
+      "log": "up03-db-transaction-types.log",
+      "result": "PASS: normal @paperclipai/db typecheck and migration checks after separating native query/transaction Db type from createDb pool ownership."
+    }
+  ],
+  "change": "Private Memory ancestry retains original Agent as well as original Human; Board source review remains possible under original policies. Native transactions no longer require owning the pool client.",
+  "currentOwnedSourceHashes": {
+    "packages/db/src/client.ts": "e6d02b0ed11848d635a06af54cc643873f948b6a3ab2b29da5b475c2592f744e",
+    "server/src/services/memory/memory-privacy.ts": "fed411e5c8715992c4a487d7487675cfdd0d96e64c140041680c2ea89b8565b0",
+    "server/src/__tests__/v10-private-payload.integration.test.ts": "2ff07df03312c0f7c10790591ce0af625249d4cf65661f570d43990de13e2a5c",
+    "server/src/services/memory/memory-maintenance.test.ts": "11927ab45486118a115d119b4a0cbbe54f4b3f7774b75951f7d1a7397b2d7400"
+  },
+  "sourceHashLimit": "These four hashes were recorded after capture, not independently pinned before each historical command. Raw logs retain failures and setup timeout. Resolver work and later edits require their own checks.",
+  "receipts": [
+    {
+      "path": "doc/operations/aw-v10-evidence/recovery-2026-10-22/up03-memory-intrinsic-agent-red.log.txt",
+      "sha256": "d551ba6565bb56e2bf61a4a1b82585c0f1e26848d02c5a674996250b4cac7b02"
+    },
+    {
+      "path": "doc/operations/aw-v10-evidence/recovery-2026-10-22/up03-memory-intrinsic-agent-green.log.txt",
+      "sha256": "b8ced86eec5f23b2c23f4d648fe0b29d8cafb99f1d111e34371e53117bd692d2"
+    },
+    {
+      "path": "doc/operations/aw-v10-evidence/recovery-2026-10-22/up03-maintenance-timeout-retry.log.txt",
+      "sha256": "ea9df556d505f3a97dc7b5fb75e87d1877ad56cc002211eee396c08d3bbc90cb"
+    },
+    {
+      "path": "doc/operations/aw-v10-evidence/recovery-2026-10-22/up03-db-transaction-types.log.txt",
+      "sha256": "d2be944d049061005c38b2f822647334d1d700a86e136ca6b4e751e84b98aa9d"
+    }
+  ],
+  "open": [
+    "SQL Task/Project Memory and Foundation source closure",
+    "temporal policy anchors versus captured payload dependencies",
+    "native resolver self-source corruption",
+    "whole repository typecheck/tests/build",
+    "full V10 implementation and native/provider/browser/release gates"
+  ]
+}

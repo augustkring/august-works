@@ -1,0 +1,40 @@
+(!) Your Vite config uses features that are unsupported by `configLoader: 'native'`, which is planned to become the default in a future major version of Vite:
+  - `__dirname` (vitest.config.ts:7:25). Use `import.meta.dirname` instead
+Set `VITE_CONFIG_NATIVE_IGNORE_WARNING=true` to suppress this warning.
+
+ RUN  v4.1.11 /workspace/blentera-v10
+
+[08:50:58] [33mWARN[39m: [36mNative authentication provider event[39m [90m{"component":"native-authentication"}[39m
+[08:51:27] [31mERROR[39m: [36mNative authentication request failed[39m [90m{"component":"native-authentication"}[39m
+ ❯ |@paperclipai/server| src/__tests__/native-two-factor.integration.test.ts (21 tests | 2 failed) 44281ms
+     × rolls back a protected native effect 'change-password' after its 'session' deadline expires 5832ms
+     × rolls back a protected native effect 'two-factor/disable' after its 'session' deadline expires 5967ms
+
+⎯⎯⎯⎯⎯⎯⎯ Failed Tests 2 ⎯⎯⎯⎯⎯⎯⎯
+
+ FAIL  |@paperclipai/server| src/__tests__/native-two-factor.integration.test.ts > maintained native TOTP and recovery lifecycle > rolls back a protected native effect 'change-password' after its 'session' deadline expires
+ FAIL  |@paperclipai/server| src/__tests__/native-two-factor.integration.test.ts > maintained native TOTP and recovery lifecycle > rolls back a protected native effect 'two-factor/disable' after its 'session' deadline expires
+AssertionError: expected false to be true // Object.is equality
+
+- Expected
++ Received
+
+- true
++ false
+
+ ❯ src/__tests__/native-two-factor.integration.test.ts:271:49
+    269|     } finally { release(); await holder; }
+    270|     const response = await changing;
+    271|     expect(blocked).toBe(true); expect(expired).toBe(true);
+       |                                                 ^
+    272|     expect(response.status).toBe(403);
+    273|     expect(response.body.code).toBe("recent_authentication_required");
+
+⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯[1/2]⎯
+
+
+ Test Files  1 failed (1)
+      Tests  2 failed | 19 passed (21)
+   Start at  08:50:14
+   Duration  75.17s (transform 20.31s, setup 158ms, import 30.40s, tests 44.28s, environment 0ms)
+

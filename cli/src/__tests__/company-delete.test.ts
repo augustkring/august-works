@@ -6,6 +6,8 @@ function makeCompany(overrides: Partial<Company>): Company {
   return {
     id: "11111111-1111-1111-1111-111111111111",
     name: "Alpha",
+    locale: "en",
+    timezone: "UTC",
     description: null,
     status: "active",
     pauseReason: null,

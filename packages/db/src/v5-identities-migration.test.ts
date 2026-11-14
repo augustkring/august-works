@@ -21,6 +21,13 @@ describe.skipIf(!support.supported)("V5 identity migration", () => {
       await sql`DROP FUNCTION aw_v5_ensure_agent_identity()`;
       await sql`DROP TABLE agent_execution_manifest_items`;
       await sql`DROP TABLE agent_execution_authorizations`;
+      // Later Native migrations add references to the V5 scope-request row.
+      // Detach only these current-schema FKs in the disposable historical
+      // fixture, then restore their exact definitions after the V5 table is
+      // recreated; production migration integrity remains unchanged.
+      const scopeRequestDependents = await sql<{ table_name: string; constraint_name: string; definition: string }[]>`SELECT conrelid::regclass::text AS table_name, conname AS constraint_name, pg_get_constraintdef(oid) AS definition
+        FROM pg_constraint WHERE contype='f' AND confrelid='agent_execution_scope_requests'::regclass`;
+      for (const dependent of scopeRequestDependents) await sql`ALTER TABLE ${sql(dependent.table_name)} DROP CONSTRAINT ${sql(dependent.constraint_name)}`;
       await sql`DROP TABLE agent_execution_scope_requests`;
       // V7 adds references to the V5 manifest. Detach only those foreign keys
       // in this disposable historical fixture, retaining their real definitions
@@ -55,6 +62,14 @@ describe.skipIf(!support.supported)("V5 identity migration", () => {
         if (statement.trim().startsWith('ALTER TABLE "heartbeat_runs"')) continue;
         if (statement.trim()) await sql.unsafe(statement);
       }
+      for (const dependent of scopeRequestDependents) await sql`ALTER TABLE ${sql(dependent.table_name)} ADD CONSTRAINT ${sql(dependent.constraint_name)} ${sql.unsafe(dependent.definition)}`;
+      // The disposable V5 replay does not replay migration 0576, which adds
+      // this exact candidate key before its Native reservation FK can exist.
+      // Restore the canonical key so retained current-schema FKs are reattached
+      // against the same target identity as in the production migration chain.
+      await sql`ALTER TABLE agent_execution_manifests
+        ADD CONSTRAINT agent_execution_manifests_company_agent_run_manifest_uq
+        UNIQUE (company_id, agent_id, run_id, id)`;
       for (const dependent of manifestDependents) await sql`ALTER TABLE ${sql(dependent.table_name)} ADD CONSTRAINT ${sql(dependent.constraint_name)} ${sql.unsafe(dependent.definition)}`;
       await sql`ALTER TABLE agents ALTER COLUMN agent_identity_id SET DEFAULT NULL`;
       await sql`ALTER TABLE agents ALTER COLUMN agent_identity_id SET NOT NULL`;

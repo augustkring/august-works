@@ -1,0 +1,60 @@
+(!) Your Vite config uses features that are unsupported by `configLoader: 'native'`, which is planned to become the default in a future major version of Vite:
+  - `__dirname` (vitest.config.ts:7:25). Use `import.meta.dirname` instead
+Set `VITE_CONFIG_NATIVE_IGNORE_WARNING=true` to suppress this warning.
+
+ RUN  v4.1.11 /workspace/blentera-v10
+
+ ✓ |@paperclipai/server| src/__tests__/v9-agent-procedure-pins.integration.test.ts > Canonical text-only Role Pack procedure pins > refuses missing required procedures without installing a catalog or disabling the Role Pack 273ms
+ × |@paperclipai/server| src/__tests__/v9-agent-procedure-pins.integration.test.ts > Canonical text-only Role Pack procedure pins > uses all default required procedures in a pinned Task-only runtime without executable capabilities 1578ms
+   → Context task does not match its actual run
+ × |@paperclipai/server| src/__tests__/v9-agent-procedure-pins.integration.test.ts > Canonical text-only Role Pack procedure pins > refuses a resumed run after an approved procedure is revoked 1046ms
+   → Context task does not match its actual run
+ × |@paperclipai/server| src/__tests__/v9-agent-procedure-pins.integration.test.ts > Canonical text-only Role Pack procedure pins > refuses a missing or superseded worker definition pin even when required procedures stay identical 1135ms
+   → Context task does not match its actual run
+ ✓ |@paperclipai/server| src/__tests__/v9-agent-procedure-pins.integration.test.ts > Canonical text-only Role Pack procedure pins > rejects a cached definition before writing retained runtime copies and accepts the actual current version 1337ms
+ ✓ |@paperclipai/server| src/__tests__/v9-agent-procedure-pins.integration.test.ts > Canonical text-only Role Pack procedure pins > does not load unrelated optional catalog procedures 936ms
+ ✓ |@paperclipai/server| src/__tests__/v9-agent-procedure-pins.integration.test.ts > Canonical text-only Role Pack procedure pins > pins procedure bodies and refuses an actual active version replacement 1922ms
+ × |@paperclipai/server| src/__tests__/v9-agent-procedure-pins.integration.test.ts > Canonical text-only Role Pack procedure pins > consumes the exact approved Playbook even when its ordinary trigger does not match 1759ms
+   → Context task does not match its actual run
+ ✓ |@paperclipai/server| src/__tests__/v9-agent-procedure-pins.integration.test.ts > Canonical text-only Role Pack procedure pins > captures exact authored sources and retained Memory roots for the combined runtime input 2373ms
+ ✓ |@paperclipai/server| src/__tests__/v9-agent-procedure-pins.integration.test.ts > Canonical text-only Role Pack procedure pins > keeps draft Playbook edits outside the pin and refuses replacement of the approved revision 1934ms
+ × |@paperclipai/server| src/__tests__/v9-agent-procedure-pins.integration.test.ts > Canonical text-only Role Pack procedure pins > erases only actual consuming Playbook runtime copies and refuses restoration of the erased identity 2102ms
+   → Context task does not match its actual run
+ ✓ |@paperclipai/server| src/__tests__/v9-agent-procedure-pins.integration.test.ts > Canonical text-only Role Pack procedure pins > retains exact approved preference roots before copying their body and physically erases only their consumer 3313ms
+ ✓ |@paperclipai/server| src/__tests__/v9-agent-procedure-pins.integration.test.ts > Canonical text-only Role Pack procedure pins > loads only pinned approved knowledge into the actual read-only runtime envelope 1370ms
+ ✓ |@paperclipai/server| src/__tests__/v9-agent-procedure-pins.integration.test.ts > Canonical text-only Role Pack procedure pins > closes and deletes actual knowledge runtime copies while preserving an unrelated consumer 2596ms
+
+⎯⎯⎯⎯⎯⎯⎯ Failed Tests 5 ⎯⎯⎯⎯⎯⎯⎯
+
+ FAIL  |@paperclipai/server| src/__tests__/v9-agent-procedure-pins.integration.test.ts > Canonical text-only Role Pack procedure pins > uses all default required procedures in a pinned Task-only runtime without executable capabilities
+ FAIL  |@paperclipai/server| src/__tests__/v9-agent-procedure-pins.integration.test.ts > Canonical text-only Role Pack procedure pins > refuses a resumed run after an approved procedure is revoked
+ FAIL  |@paperclipai/server| src/__tests__/v9-agent-procedure-pins.integration.test.ts > Canonical text-only Role Pack procedure pins > refuses a missing or superseded worker definition pin even when required procedures stay identical
+ FAIL  |@paperclipai/server| src/__tests__/v9-agent-procedure-pins.integration.test.ts > Canonical text-only Role Pack procedure pins > consumes the exact approved Playbook even when its ordinary trigger does not match
+ FAIL  |@paperclipai/server| src/__tests__/v9-agent-procedure-pins.integration.test.ts > Canonical text-only Role Pack procedure pins > erases only actual consuming Playbook runtime copies and refuses restoration of the erased identity
+Error: Context task does not match its actual run
+ ❯ forbidden src/errors.ts:21:10
+     19|
+     20| export function forbidden(message = "Forbidden", details?: unknown) {
+     21|   return new HttpError(403, message, details);
+       |          ^
+     22| }
+     23|
+ ❯ src/services/context/context-manifest.ts:193:17
+ ❯ scope ../node_modules/.pnpm/postgres@3.4.9_patch_hash=sryle6qd5qfmnxvoebal4gashi/node_modules/postgres/src/index.js:279:18
+ ❯ sql.begin ../node_modules/.pnpm/postgres@3.4.9_patch_hash=sryle6qd5qfmnxvoebal4gashi/node_modules/postgres/src/index.js:257:14
+ ❯ withProviderDeadline src/services/context/context-engine.ts:151:12
+ ❯ withContextStageDeadline src/services/context/context-engine.ts:181:12
+ ❯ Object.assemble src/services/context/context-engine.ts:736:30
+ ❯ freshContext src/services/agent-runtime-fabric.ts:48:20
+ ❯ Object.prepare src/services/agent-runtime-fabric.ts:178:23
+
+⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯
+Serialized Error: { status: 403, details: undefined }
+⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯[1/5]⎯
+
+
+ Test Files  1 failed (1)
+      Tests  5 failed | 9 passed (14)
+   Start at  10:40:25
+   Duration  86.34s (transform 36.13s, setup 193ms, import 50.88s, tests 34.64s, environment 0ms)
+

@@ -1,0 +1,3 @@
+timeout_seconds=240
+test_file=src/__tests__/heartbeat-dependency-scheduling.test.ts
+test_pattern=heartbeat dependency-aware queued run selection

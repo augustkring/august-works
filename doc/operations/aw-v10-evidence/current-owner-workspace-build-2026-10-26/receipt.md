@@ -1,0 +1,3 @@
+# Full workspace build
+
+`pnpm-9 build` passed exit0 in the qualified frozen dependency worktree. The complete source-sync pins and raw output are retained here. Its Git checkout remains detached at886014cae5a7d6ed5a9ab99d62613ec7646308cb, so the generated build-info commit reports that checkout base; the source files actually built are identified by the retained synchronized hashes, not that generated commit label. This is a local software build result, not a production deployment or final CI artifact qualification. Later Memory and browser changes require their relevant checks; actual runtime temporal/erasure acceptance remains separate.

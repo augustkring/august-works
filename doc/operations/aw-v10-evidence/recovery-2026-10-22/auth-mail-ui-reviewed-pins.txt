@@ -1,0 +1,4 @@
+211b5479a6a16aeac9ac8f47aa75a083f15ff7185bae98133cd6e055a44a1d07  ui/src/pages/SaasWelcome.tsx
+44eff3763c72d12549b3e78b04f6bd05415c27bdfe775d9b650736f2b3ead2a3  ui/src/pages/SaasWelcome.test.tsx
+36ebe49c4c92facadc6b04156b6c2e3ba9fe5003dc98394d0f8c0eb14e79d748  ui/src/i18n/experience/en.json
+2f133a4404ced12e0994561ac40df741e83cb9140aeae26f75714cb58dbe9283  ui/src/i18n/experience/da.json

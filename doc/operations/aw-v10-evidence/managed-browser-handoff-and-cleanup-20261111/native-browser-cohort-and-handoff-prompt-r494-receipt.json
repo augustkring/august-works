@@ -1,0 +1,66 @@
+{
+  "cacheAdvice": [
+    {
+      "elapsedSeconds": 2.521126471023308,
+      "filesAdvised": 372020,
+      "memoryAfter": 6127906816,
+      "contentChanged": false,
+      "activeTemporaryWorkspacesExcluded": true
+    }
+  ],
+  "harnessSha256": "bafea5850649c61ca27cbe7f37c1f0182382e11d0a38cd14e288f9b9d4fd4649",
+  "command": [
+    "node",
+    "/workspace/blentera-v10/node_modules/vitest/vitest.mjs",
+    "run",
+    "--config",
+    "vitest.config.ts",
+    "src/__tests__/agent-conversations.test.ts",
+    "src/services/native-runtime/native-opencode-managed-browser.integration.test.ts",
+    "-t",
+    "chat prompt policy|routes every canonical managed Native browser case",
+    "--maxWorkers=1"
+  ],
+  "cwd": "/workspace/blentera-v10/server",
+  "leaseWaitSeconds": 4.6178989578038454e-05,
+  "sourceManifest": "native-browser-cohort-and-handoff-prompt-r494-source-manifest.json",
+  "filesystemFloorBytes": {
+    "/workspace": 122880000,
+    "/tmp": 1073741824
+  },
+  "globalMemoryReserveBytes": 2147483648,
+  "exit": 0,
+  "seconds": 26.026613572001224,
+  "stopReason": null,
+  "nodeHeapMiB": 1536,
+  "ownedDescendantRssLimitBytes": 8589934592,
+  "observedPeakOwnedDescendantRssBytes": 1900433408,
+  "processRssAtObservedPeak": [
+    {
+      "pid": 639934,
+      "parentPid": 639886,
+      "executable": "node",
+      "rssBytes": 986939392,
+      "nodeOptions": "--max-old-space-size=1536"
+    },
+    {
+      "pid": 640048,
+      "parentPid": 639934,
+      "executable": "node",
+      "rssBytes": 913494016,
+      "nodeOptions": "--max-old-space-size=1536"
+    }
+  ],
+  "rssAccounting": "sum of per-process RSS, including shared pages in each mapped process; sampled observation, not unique physical memory",
+  "trackedPidCount": 6,
+  "observedPostgresRelatedPids": [
+    640025,
+    640035
+  ],
+  "uniqueTempRoot": "/var/tmp/mpg-vk12cp8b",
+  "samplingIntervalSeconds": 0.2,
+  "samples": 111,
+  "memoryBefore": "low 0\nhigh 0\nmax 0\noom 0\noom_kill 0\noom_group_kill 0\n",
+  "memoryAfter": "low 0\nhigh 0\nmax 0\noom 0\noom_kill 0\noom_group_kill 0\n",
+  "qualification": "software fixture with actual embedded PostgreSQL; no external provider/SDK/host proof"
+}

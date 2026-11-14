@@ -1,0 +1,14 @@
+
+ RUN  v4.1.11 /workspace/v10-dep-qualification/server
+
+[07:45:51] [31mERROR[39m: [36mNative authentication provider event[39m [90m{"component":"native-authentication"}[39m
+ ✓ src/__tests__/account-deletion-sso-reauth.integration.test.ts > account deletion through verified OIDC and native reauthentication > requires a signed fresh OIDC auth_time, nonce and exact state, then consumes a session-bound proof atomically 1840ms
+ ✓ src/__tests__/account-deletion-sso-reauth.integration.test.ts > account deletion through verified OIDC and native reauthentication > requires a real native TOTP session after the fresh OIDC callback for 2FA accounts 340ms
+ ✓ src/__tests__/account-deletion-sso-reauth.integration.test.ts > account deletion through verified OIDC and native reauthentication > requires qualified SSO and an already enrolled native passkey for an operator with an unset PR flag 758ms
+ ✓ src/__tests__/account-deletion-sso-reauth.integration.test.ts > account deletion through verified OIDC and native reauthentication > rejects password-only deletion for a configured local operator while its PR flag is false 165ms
+
+ Test Files  1 passed (1)
+      Tests  4 passed (4)
+   Start at  07:45:29
+   Duration  25.01s (transform 11.36s, setup 75ms, import 17.27s, tests 7.50s, environment 0ms)
+

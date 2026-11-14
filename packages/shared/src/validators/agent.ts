@@ -204,9 +204,12 @@ export type AgentApiKeyScope = z.infer<typeof agentApiKeyScopeSchema>;
 export type TaskBridgeAgentKeyScope = z.infer<typeof taskBridgeAgentKeyScopeSchema>;
 export type SkillTestAgentKeyScope = z.infer<typeof skillTestAgentKeyScopeSchema>;
 
-export function normalizeAgentApiKeyScope(value: unknown): AgentApiKeyScope {
+export function normalizeAgentApiKeyScope(value: unknown): AgentApiKeyScope | null {
+  // Standard keys are stored as null; absent legacy JWT claims are standard.
+  // Malformed restrictions must never silently become an unrestricted key.
+  if (value == null) return { kind: "standard" };
   const parsed = agentApiKeyScopeSchema.safeParse(value);
-  return parsed.success ? parsed.data : { kind: "standard" };
+  return parsed.success ? parsed.data : null;
 }
 
 export const createAgentKeySchema = z.object({

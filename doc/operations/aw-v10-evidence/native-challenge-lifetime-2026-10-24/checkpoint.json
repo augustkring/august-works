@@ -1,0 +1,40 @@
+{
+  "parentCommit": "62ee804fd81208540254129272942e4b7443c8f4",
+  "sourcePins": {
+    "packages/db/src/migrations/0520_native_challenge_lifetime.sql": "da3a8288c6882196b593c68d7e5a2413c795ae67b24b0c15b1b35c5268df13e7",
+    "packages/db/src/migrations/meta/0520_snapshot.json": "bad85dd28cc3121a8c09ae8060fdd6d670e8c3b00073f74b515e2f8d68e596ec",
+    "packages/db/src/migrations/meta/_journal.json": "6763240a58d548f5c35dd2fd1988893b94526e48aec3d1d2bf1854684c5f9b13",
+    "server/src/__tests__/authenticator-lifetime.integration.test.ts": "9940ad8994bb0e5bcd9a71460920fca0574457f91cad354119bffded70827b93",
+    "server/src/__tests__/v6-account-deletion.integration.test.ts": "063b1d9ab7ca4dc723ceb97382af9ae535752170062d0c6d2a162ec3923890b9",
+    "server/src/services/saas/account-deletion.ts": "c59dd0959fa99192727ebdb53dd61c795fd39d46c188b6d6f8bdf9a0c741168b"
+  },
+  "checks": {
+    "baseline": {
+      "exit": 1,
+      "failed": 3,
+      "filtered": 8
+    },
+    "nativePostgresHttp": {
+      "exit": 0,
+      "passed": 37,
+      "suites": 3
+    },
+    "serverCompiler": {
+      "exit": 0
+    },
+    "nativeMigrationChecks": {
+      "exit": 0
+    }
+  },
+  "observations": [
+    "The original native lifetime policy left typed JSON registration/authentication challenges after password rotation, factor activation and user deletion. Three new regression cases fail on the parent product sources; the exact test is archived.",
+    "A new native custom Drizzle migration parses only the maintained provider ceremony ownership shape. It clears owned JSON challenges after actual generation changes and native user deletion. The original irreversible account erasure owner also clears this shape while retaining a scrubbed user row.",
+    "Native challenge writes pin the current user and refuse canonical erasure markers, absent owners and already-held conflicting user locks. Anonymous discoverable authentication without an account remains supported.",
+    "Malformed/non-provider verification values and another user's pending challenges survive unrelated cleanup. Existing TOTP nonce and backup-code behavior stays covered by the complete suites.",
+    "The new migration was generated through native drizzle-kit custom generation and native snapshot pruning. No committed SQL was rewritten. All migrations were applied to actual PostgreSQL by the integration suites."
+  ],
+  "limits": [
+    "JSON challenge fixture bytes test storage lifetime and privacy, not cryptographic WebAuthn or MFA ceremonies.",
+    "The compiler excludes tests. Targeted native checks do not qualify full V10, operator/enterprise recovery, replicas, backup restoration or PR readiness."
+  ]
+}

@@ -1,0 +1,43 @@
+{
+  "scope": "Retain actual verified JWT expiry throughout the original Foundation Source callback",
+  "sources": {
+    "server/src/services/authorization.ts": "eaecc2352c6a55c0e761ad4a71b2af1fc59614f7bbc20f109383f731df1025f3",
+    "server/src/middleware/auth.ts": "3a3feb64d3e86f3e9be3a32b9abb8b472352571d5e96899af90fd9cd802b39b0",
+    "server/src/types/express.d.ts": "98364ac7cd59490185f8f86a62c99ceaec647d88097acf0e12ea6f10a04da841",
+    "server/src/agent-auth-jwt.ts": "743f6b63a896419ce9bf4d23f31c19bfc8c48aeacabf9c72492e0a1c6c5ed292",
+    "server/src/__tests__/foundation-read-source-authority.integration.test.ts": "36b4e56fa33a448ae449344daa8439776f9ba0ab274c30a55b53784d360b3a02",
+    "server/src/__tests__/agent-auth-middleware.test.ts": "14b33b14768236851b3eb2e15b966317089cf843d04a32adb88b6d90e99d3eb4"
+  },
+  "baseline": {
+    "failed": 2,
+    "filtered": 12,
+    "seconds": 58.1,
+    "exit": 1,
+    "log": "up03-authenticated-jwt-expiry-baseline.log",
+    "finding": "Real middleware JWT accepted before a real Source row wait or callback hold returns200 after actual signer/verifier expiry in both cases. No fake clocks; actual pg blocking observed; exact failed source compressed."
+  },
+  "implementation": "Original verifier retains claims.exp in milliseconds on internal actor. Existing pinFoundationActor rejects expired/nonfinite supplied deadline and adds its minimum to existing callback expiry guard. Actual signer/verifier and original permission, principal, run, key and scope rules unchanged. Optional metadata preserves trusted server-owned actors without HTTP JWT.",
+  "verification": {
+    "sourceAndUnchangedMiddleware": {
+      "passed": 45,
+      "files": 2,
+      "seconds": 76.23,
+      "exit": 0,
+      "log": "up03-authenticated-jwt-expiry-source.log",
+      "assertions": "Both waiting and callback-return expiry deny403; fresh JWT200 and old expired JWT fresh authentication401. All prior Source cases and original middleware assertions retained."
+    },
+    "serverCompiler": {
+      "exit": 0,
+      "log": "up03-authenticated-jwt-expiry-server-types.log"
+    },
+    "finalPinsMatch": true,
+    "processesClosed": true
+  },
+  "review": "Root traced and verified original owners; bounded read-only gpt-6-luna review found no concrete defect.",
+  "limits": [
+    "Actual scratch HTTP route with original middleware/native callback, not all customer endpoints or credential transports.",
+    "Cookie/session logout, general SQL current credential lifetime and complete source graph remain separate.",
+    "Full workspace typecheck records earlier ba7cd42ca; this slice has final server compilation and targeted suites only.",
+    "Original private Memory/temporal failures, complete source receipts and all broad V10/PR/release gates remain open."
+  ]
+}

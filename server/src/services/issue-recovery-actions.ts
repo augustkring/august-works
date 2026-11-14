@@ -76,6 +76,10 @@ export type ResolveIssueRecoveryActionInput = {
 };
 
 function toReadModel(row: IssueRecoveryActionRow): IssueRecoveryAction {
+  const evidence = { ...row.evidence };
+  // Current reader session identifiers are retained only for deferred
+  // admission checks; they are never part of a Task/API projection.
+  delete evidence.workspaceReconstructionReader;
   return {
     id: row.id,
     companyId: row.companyId,
@@ -90,7 +94,7 @@ function toReadModel(row: IssueRecoveryActionRow): IssueRecoveryAction {
     returnOwnerAgentId: row.returnOwnerAgentId,
     cause: row.cause,
     fingerprint: row.fingerprint,
-    evidence: row.evidence,
+    evidence,
     nextAction: row.nextAction,
     wakePolicy: row.wakePolicy,
     monitorPolicy: row.monitorPolicy,

@@ -1,0 +1,17 @@
+{
+  "purpose": "scoped software qualification; no physical host or whole-V10 acceptance",
+  "baselineHead": "93a57970ea7a3b5bd6801c5684028b4857370bf7",
+  "parents": {
+    "server/src/services/execution-sandbox/qualification.ts": "e599d3d206f4a05de21210825c26e4165569dc9a9b1a7dd27f3f89977ef27e88",
+    "server/src/__tests__/v7-sandbox-qualification-faults.test.ts": "c2bb37b1a5c5111985e404a8e4cb49c323fafa2593ed1f86b352dbd63d760950"
+  },
+  "qualifiedOverlay": {
+    "server/src/services/execution-sandbox/qualification.ts": "d72f6782c808570e9b80681f62e7c16f99088723b0725faa85b54200edb851bf",
+    "server/src/__tests__/v7-sandbox-qualification-faults.test.ts": "fd7c4c0bc3344b90a53e8265f4465ecf501a35efe4c69278b0502cec557853ec"
+  },
+  "targetedTestsPassed": 51,
+  "fullServerTypecheckExit": 0,
+  "restoreVerified": true,
+  "archiveSha256": "e03c80f09b79af636c98c32bd6b4661ad57daf33cd18c3dabb2494e24f314309",
+  "archiveBytes": 384301
+}

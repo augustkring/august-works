@@ -1,0 +1,13 @@
+{
+  "scope": "Narrow Host35 report summary only; not overall suite or product qualification",
+  "sourceLogPath": "/workspace/v10-preparation/v10-149-r14.38.4.35-qualification-clock-private/qualification-r14.38.4.35-targeted/managed-source-target-vitest.log",
+  "sourceLogSha256": "e9d26e1b697616172b56d0619b29ff868f6859a4aa6fee284aac6381adb981a4",
+  "reportedProbeCount": 19,
+  "reportedPassed": 19,
+  "reportedSoftwareProbeCount": 14,
+  "reportedCredentialProbeCount": 5,
+  "reportedExceptions": [],
+  "qualificationClockVitestExit": "1",
+  "managedSourceTargetVitestExit": "1",
+  "limitations": "The 19 report rows are all pass, but the Host35 Vitest command itself exited 1 (14 passed, 2 failed); this is not a full qualification pass. The captured log is a fixture/report path and contains no actual paid-model invocation."
+}

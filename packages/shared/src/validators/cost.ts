@@ -1,5 +1,5 @@
 import { z } from "zod";
-import { BILLING_TYPES, COST_STATUSES } from "../constants.js";
+import { BILLING_TYPES, COST_STATUSES, NATIVE_CONVERSATION_MODEL_BILLING_PREFIX } from "../constants.js";
 
 export const createCostEventSchema = z.object({
   agentId: z.string().guid(),
@@ -7,7 +7,10 @@ export const createCostEventSchema = z.object({
   projectId: z.string().guid().optional().nullable(),
   goalId: z.string().guid().optional().nullable(),
   heartbeatRunId: z.string().guid().optional().nullable(),
-  billingCode: z.string().optional().nullable(),
+  billingCode: z.string().refine(
+    (value) => !value.startsWith(NATIVE_CONVERSATION_MODEL_BILLING_PREFIX),
+    "Native conversation billing codes are reserved for the model ledger",
+  ).optional().nullable(),
   provider: z.string().min(1),
   biller: z.string().min(1).optional(),
   billingType: z.enum(BILLING_TYPES).optional().default("unknown"),

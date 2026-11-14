@@ -121,6 +121,33 @@ test("the V7 authenticated suite is covered by its dedicated product-browser lan
   assert.match(workflow, /journey: V7 authenticated discovery and governance\s+config: tests\/e2e\/aw-v7-authenticated\.config\.ts\s+spec: tests\/e2e\/aw-v7-authenticated\.spec\.ts/);
 });
 
+test("V10 authenticated suites run in dedicated authenticated browser lanes", () => {
+  const workflow = readFileSync(path.join(repoRoot, ".github", "workflows", "aw-v4-verification.yml"), "utf8");
+  for (const [spec, config, journey] of [
+    ["aw-v10-native-auth.spec.ts", "aw-v10-native-auth.config.ts", "V10 authenticated native auth"],
+    ["aw-v10-support.spec.ts", "aw-v10-support.config.ts", "V10 authenticated support Help"],
+  ]) {
+    assert.ok(IGNORED_SPECS.includes(spec), `${spec} must not run in the local_trusted default lane`);
+    assert.match(readFileSync(playwrightConfig, "utf8"), new RegExp(`"${spec}"`));
+    assert.match(readFileSync(path.join(repoRoot, "tests", "e2e", config), "utf8"), /import authenticated from "\.\/aw-v5-authenticated\.config\.js"/);
+    assert.match(workflow, new RegExp(`journey: ${journey}\\s+config: tests/e2e/${config}\\s+spec: tests/e2e/${spec.replaceAll(".", "\\.")}`));
+  }
+  for (const spec of ["agent-chat-sessions.spec.ts", "agent-chat-projects.spec.ts"]) {
+    assert.ok(IGNORED_SPECS.includes(spec), `${spec} must run in the authenticated lane`);
+    assert.match(readFileSync(playwrightConfig, "utf8"), new RegExp(`"${spec}"`));
+  }
+  const chatConfig = readFileSync(path.join(repoRoot, "tests/e2e/aw-v10-agent-chat.config.ts"), "utf8");
+  assert.match(chatConfig, /PAPERCLIP_E2E_AUTH_MODE = "authenticated"/);
+  assert.match(chatConfig, /testMatch: \["agent-chat-sessions\.spec\.ts", "agent-chat-projects\.spec\.ts"\]/);
+  assert.match(workflow, /journey: V10 authenticated agent chat\s+config: tests\/e2e\/aw-v10-agent-chat\.config\.ts\s+spec: 'tests\/e2e\/agent-chat-\(sessions\|projects\)\\\.spec\\\.ts'/);
+  const localRunner = readFileSync(path.join(repoRoot, "scripts/e2e-runner.mjs"), "utf8");
+  assert.match(readFileSync(path.join(repoRoot, "package.json"), "utf8"), /"test:e2e": "node scripts\/e2e-runner\.mjs"/);
+  assert.match(localRunner, /if \(args\.length > 0\) process\.exit\(defaultStatus\)/);
+  assert.match(localRunner, /if \(args\[0\] === "--"\) args\.shift\(\)/);
+  assert.match(localRunner, /aw-v10-agent-chat\.config\.ts/);
+  assert.match(localRunner, /process\.exit\(defaultStatus !== 0 \? defaultStatus : chatStatus\)/);
+});
+
 test("the duration manifest only names specs that still exist", () => {
   const durations = loadShardDurations(durationsManifest);
   assert.ok(Object.keys(durations).length > 0, "expected a populated duration manifest");
@@ -264,9 +291,11 @@ test("the trusted PR workflow limits full CI to merge-relevant stack layers", ()
   const verify = jobs.get("verify");
   assert.match(
     verify,
-    /^ {4}needs: \[gate, policy, typecheck_release_registry, general_tests, verify_paperclip_runner, build, docker_context_integrity\]$/m,
+    /^ {4}needs: \[gate, policy, help_docs, typecheck_release_registry, general_tests, verify_paperclip_runner, build, docker_context_integrity\]$/m,
   );
   assert.match(verify, /POLICY_RESULT: \$\{\{ needs\.policy\.result \}\}/);
+  assert.match(verify, /HELP_DOCS_RESULT: \$\{\{ needs\.help_docs\.result \}\}/);
+  assert.match(verify, /test "\$HELP_DOCS_RESULT" = "success"/);
   assert.match(verify, /test "\$TYPECHECK_RELEASE_REGISTRY_RESULT" = "skipped"/);
   assert.match(verify, /test "\$GENERAL_TESTS_RESULT" = "skipped"/);
   // Runner verification must participate in the legacy aggregate required

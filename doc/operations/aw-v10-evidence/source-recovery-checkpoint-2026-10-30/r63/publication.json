@@ -1,0 +1,7 @@
+{
+  "sourceParent": "7897d34ee909dfdfdb2ecbf8be95fa6b17a57cc4",
+  "workingSourceDiffSha256Preserved": "d54ecc657147be02958b154994a755b0d6fbb42c5008572f84a9118708c0605d",
+  "scope": "recovery only; no activation, final software qualification or merge claim",
+  "dependsOn": "r62 and its committed recovery ancestors",
+  "archiveSha256": "6eedd0b7c9ef49608512027c60a24d821b68f2aece91e203b4104a03338f8c11"
+}

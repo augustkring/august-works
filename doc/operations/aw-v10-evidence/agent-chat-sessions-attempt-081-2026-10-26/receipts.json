@@ -1,0 +1,24 @@
+{
+  "status": "in_progress",
+  "sourceCommit": "18493d08327c207e557f5a811bdaa7b2dff77ad1",
+  "sourceCommitMeaning": "Archive checkout identity; scoped runs may predate it. Only separately recorded unchanged-source gates establish final tested source identity.",
+  "meaning": "Authenticated source-recovery case completed initial and metric turns, then failed the new source-capture assertion: dispatch intent and association were exact, but the captured tool_result source was null and receipt inputs absent.",
+  "logs": [
+    {
+      "name": "agent-chat-sessions-081-20261026-test",
+      "exitCode": 1,
+      "exitSidecar": "agent-chat-sessions-081-20261026-test.exit",
+      "rawSha256": "c1983579008d6ac2011df49a4a44ca62db67b3bf914f187cd0b4487043eae4c2",
+      "sanitizedSha256": "c1983579008d6ac2011df49a4a44ca62db67b3bf914f187cd0b4487043eae4c2",
+      "archiveSha256": "45c6dbac106d11c6b5055a40bb291b47ea650191c679f471c3358e3cc1aacb62",
+      "redactions": {
+        "ansi": 0,
+        "bearer": 0,
+        "jwt": 0,
+        "credential_field": 0,
+        "url_credential": 0
+      },
+      "summary": []
+    }
+  ]
+}

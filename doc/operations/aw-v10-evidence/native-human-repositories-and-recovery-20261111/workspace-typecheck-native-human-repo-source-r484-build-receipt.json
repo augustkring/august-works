@@ -1,0 +1,32 @@
+{
+  "cacheAdvice": [
+    {
+      "elapsedSeconds": 4.138839780993294,
+      "filesAdvised": 621761,
+      "memoryAfter": 6120980480,
+      "contentChanged": false
+    },
+    {
+      "elapsedSeconds": 6.727718842012109,
+      "filesAdvised": 621763,
+      "memoryAfter": 6924120064,
+      "contentChanged": false
+    }
+  ],
+  "steps": [
+    {
+      "command": [
+        "pnpm",
+        "--workspace-concurrency=1",
+        "-r",
+        "typecheck"
+      ],
+      "exit": 0,
+      "seconds": 275.48605568299536,
+      "peakGroupRssBytes": 6252421120,
+      "stopped": null
+    }
+  ],
+  "memoryBefore": "low 0\nhigh 0\nmax 0\noom 0\noom_kill 0\noom_group_kill 0\n",
+  "memoryAfter": "low 0\nhigh 0\nmax 0\noom 0\noom_kill 0\noom_group_kill 0\n"
+}

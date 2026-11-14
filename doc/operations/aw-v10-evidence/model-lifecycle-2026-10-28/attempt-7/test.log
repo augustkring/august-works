@@ -1,0 +1,38 @@
+(!) Your Vite config uses features that are unsupported by `configLoader: 'native'`, which is planned to become the default in a future major version of Vite:
+  - `__dirname` (vitest.config.ts:7:25). Use `import.meta.dirname` instead
+Set `VITE_CONFIG_NATIVE_IGNORE_WARNING=true` to suppress this warning.
+
+ RUN  v4.1.11 /workspace/blentera-v10
+
+ ❯ |@paperclipai/server| src/__tests__/v9-runtime-candidates.integration.test.ts (8 tests | 1 failed) 5059ms
+     × constructs a body-free selectable proposal and preserves Original configuration, bindings and liabilities 148ms
+
+⎯⎯⎯⎯⎯⎯⎯ Failed Tests 1 ⎯⎯⎯⎯⎯⎯⎯
+
+ FAIL  |@paperclipai/server| src/__tests__/v9-runtime-candidates.integration.test.ts > Canonical saved runtime proposals have no live effect > constructs a body-free selectable proposal and preserves Original configuration, bindings and liabilities
+Error: Failed query: insert into "workflows" ("id", "company_id", "project_id", "folder_id", "name", "description", "status", "published_revision_id", "draft_revision_id", "created_by_user_id", "created_by_agent_id", "authoring_source_run_ids", "created_at", "updated_at", "archived_at") values ($1, $2, default, default, $3, default, default, $4, default, default, default, default, default, default, default)
+params: 05dc7b9b-6b50-48cc-a4b6-0308d6132d88,08548a38-c353-4157-a6c2-e297fec48bdc,Fixture workflow,ab2395b8-a725-40f9-850c-1903fcf63b05
+ ❯ PostgresJsPreparedQuery.queryWithCache ../../v10-dep-qualification/node_modules/.pnpm/drizzle-orm@0.45.2_@opentelemetry+api@1.9.1_kysely@0.29.5_pg@8.18.0_postgres@3.4.9_patch_hash_uil4xuf7icnddjurbgy2qn5oo4/node_modules/src/pg-core/session.ts:73:10
+ ❯ src/__tests__/v9-runtime-candidates.integration.test.ts:62:5
+     60|     const runs = await db.select().from(heartbeatRuns), liabilities = …
+     61|     const workflowId = randomUUID(), revisionId = randomUUID();
+     62|     await db.insert(workflows).values({ id: workflowId, companyId: f.h…
+       |     ^
+     63|     await db.insert(workflowRevisions).values({ id: revisionId, compan…
+     64|       graph: { version: 1, nodes: [{ id: "agent-step", type: "agent", …
+
+Caused by: PostgresError: workflow published revision pointer is invalid
+ ❯ ErrorResponse ../../v10-dep-qualification/node_modules/.pnpm/postgres@3.4.9_patch_hash=sryle6qd5qfmnxvoebal4gashi/node_modules/postgres/src/connection.js:819:30
+ ❯ handle ../../v10-dep-qualification/node_modules/.pnpm/postgres@3.4.9_patch_hash=sryle6qd5qfmnxvoebal4gashi/node_modules/postgres/src/connection.js:493:6
+ ❯ Socket.data ../../v10-dep-qualification/node_modules/.pnpm/postgres@3.4.9_patch_hash=sryle6qd5qfmnxvoebal4gashi/node_modules/postgres/src/connection.js:324:9
+
+⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯
+Serialized Error: { severity_local: 'ERROR', severity: 'ERROR', code: '23514', where: 'PL/pgSQL function aw_check_workflow_revision_pointers() line 32 at RAISE', file: 'pl_exec.c', routine: 'exec_stmt_raise', query: 'insert into "workflows" ("id", "company_id", "project_id", "folder_id", "name", "description", "status", "published_revision_id", "draft_revision_id", "created_by_user_id", "created_by_agent_id", "authoring_source_run_ids", "created_at", "updated_at", "archived_at") values ($1, $2, default, default, $3, default, default, $4, default, default, default, default, default, default, default)', parameters: [ '05dc7b9b-6b50-48cc-a4b6-0308d6132d88', '08548a38-c353-4157-a6c2-e297fec48bdc', 'Fixture workflow', 'ab2395b8-a725-40f9-850c-1903fcf63b05' ], args: [ '05dc7b9b-6b50-48cc-a4b6-0308d6132d88', '08548a38-c353-4157-a6c2-e297fec48bdc', 'Fixture workflow', 'ab2395b8-a725-40f9-850c-1903fcf63b05' ], types: [ 2950, 2950, 25, 2950 ] }
+⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯[1/1]⎯
+
+
+ Test Files  1 failed (1)
+      Tests  1 failed | 7 passed (8)
+   Start at  10:19:48
+   Duration  19.03s (transform 9.79s, setup 74ms, import 13.75s, tests 5.06s, environment 0ms)
+

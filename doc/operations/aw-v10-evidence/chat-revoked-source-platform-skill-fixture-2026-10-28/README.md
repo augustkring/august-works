@@ -1,0 +1,11 @@
+# Slack attachment source-revocation test fixture — 2026-10-28
+
+GitHub GeneralTests chat shard job `122769634903` reported ten failures at the shared expected-source-denial assertion in `server/src/__tests__/chat-channels.integration.test.ts:53612`. The checked-in CI log was available at `/tmp/v10-ci-job-122769634903.log` and records the expected `paperclip_runner_chat_attachment_source_denied`, but the earlier call fails first with `A material Co-worker operation requires the current Run and responsible Human`.
+
+These tests construct `heartbeatRuns` directly instead of going through heartbeat. The fixture had neither `responsibleUserId` nor the required `platformSkillAdmission` pin. The actual material-operation guard therefore stopped each case before the revoked source state was evaluated. The test fixture now seeds the current `owner-user` through `seedCurrentHumanSourceActor`, gives that principal the owner role in this isolated test company, records `responsibleUserId` on the run, and calls the existing `preparePlatformSkillAdmission` helper with `blenteraPlatformContractHashes()`. That admits the canonical immutable 14-file Platform Skill and current operation/tool-catalog contract hashes on the existing run profile. No production guard was changed and the denial assertions are unchanged.
+
+`attempt-1-tests.log` and `.exit` preserve the first focused local reproduction (10 failed); its pretest source/release hashes are in `attempt-1-source-pins-pretest.txt`. `attempt-2-tests.log` and `.exit` preserve the focused post-fix run: 10 passed, 1,041 skipped by the name filter, exit 0. Its pretest hashes are recorded in `attempt-2-source-pins-pretest.txt`; `source-pins-after-test.txt` is an after-run digest. The release-file hashes cover the canonical 14-file package plus its release manifest. No full chat shard rerun was needed because all ten selected cases passed and each reached the original source-denial assertions.
+
+Command, run under `/workspace/v10-preparation/v10-pg-tests.lock` with pinned pnpm:
+
+`/workspace/v10-preparation/pinned-bin/pnpm exec vitest run src/__tests__/chat-channels.integration.test.ts -t "keeps a verified Slack" --reporter=verbose --maxWorkers=1`

@@ -1,0 +1,3 @@
+# R71 recovery delta
+
+Recovery only. This checkpoint extends R70 with the Host68 changed/new source and compact prior Host64–68 evidence, Native R1123/R1124 frozen candidates and reviewer message, Native R115 local artifact-staging validation, and prepared-inactive R5 metadata. Host69 is frozen but is not included in this bounded capture; its actual Worker run is unrun. Host68’s actual Worker diagnostic remains a failure; R1123/R1124 PostgreSQL cases are not run; R115 has scoped Host68 component-unit qualification only, not full Host/model/Native qualification. No full Native, Worker, or final aggregate acceptance is claimed.

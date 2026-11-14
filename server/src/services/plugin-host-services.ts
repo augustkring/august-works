@@ -49,6 +49,7 @@ import { pluginRegistryService } from "./plugin-registry.js";
 import { pluginStateStore } from "./plugin-state-store.js";
 import { pluginDatabaseService } from "./plugin-database.js";
 import { pluginManagedAgentService } from "./plugin-managed-agents.js";
+import { pluginAgentRuntimeState } from "./plugin-agent-runtime-state.js";
 import { pluginManagedRoutineService } from "./plugin-managed-routines.js";
 import { pluginManagedSkillService } from "./plugin-managed-skills.js";
 import {
@@ -2792,6 +2793,11 @@ export function buildHostServices(
         const agent = await agents.getById(params.agentId);
         return (inCompany(agent, companyId) ? agent : null) as Agent | null;
       },
+      async getRuntime(params) {
+        const companyId = ensureCompanyId(params.companyId);
+        await ensurePluginAvailableForCompany(companyId);
+        return pluginAgentRuntimeState(db, pluginId, companyId, params.agentId);
+      },
       async pause(params) {
         const companyId = ensureCompanyId(params.companyId);
         await ensurePluginAvailableForCompany(companyId);
@@ -3123,8 +3129,10 @@ export function buildHostServices(
           else delete executionWorkspacePolicy.authorizationPolicy;
           await db
             .update(projectsTable)
-            .set({ executionWorkspacePolicy, updatedAt: new Date() })
-            .where(eq(projectsTable.id, project.id));
+            .set({ executionWorkspacePolicy, payloadSourceSnapshot: sql`case when ${projectsTable.executionWorkspacePolicy}
+              is distinct from ${JSON.stringify(executionWorkspacePolicy)}::jsonb then null else ${projectsTable.payloadSourceSnapshot} end`,
+              updatedAt: new Date() })
+            .where(and(eq(projectsTable.companyId, companyId), eq(projectsTable.id, project.id)));
         } else if (params.resourceType === "issue") {
           const issue = requireInCompany("Issue", await issues.getById(params.resourceId), companyId);
           const executionPolicy = issue.executionPolicy && typeof issue.executionPolicy === "object"
@@ -3134,8 +3142,10 @@ export function buildHostServices(
           else delete executionPolicy.authorizationPolicy;
           await db
             .update(issuesTable)
-            .set({ executionPolicy, updatedAt: new Date() })
-            .where(eq(issuesTable.id, issue.id));
+            .set({ executionPolicy, payloadSourceSnapshot: sql`case when ${issuesTable.executionPolicy}
+              is distinct from ${JSON.stringify(executionPolicy)}::jsonb then null else ${issuesTable.payloadSourceSnapshot} end`,
+              updatedAt: new Date() })
+            .where(and(eq(issuesTable.companyId, companyId), eq(issuesTable.id, issue.id)));
         } else {
           const company = await companies.getById(params.resourceId);
           if (!company || company.id !== companyId) throw new Error("Company not found");

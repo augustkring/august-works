@@ -909,6 +909,7 @@ export class CodexAppServerDriver implements HarnessDriver {
       ...input,
       taskEnvelope: this.#options.taskEnvelope,
       conversationMode: this.#direct() ? "direct" : "task",
+      verbatimNativeEnvelope: this.#options.verbatimNativeEnvelope,
       now: this.#options.now ?? (() => new Date()),
       runnerInstanceId: this.#options.runnerInstanceId ?? "runner-codex",
       driverKind: this.#options.driverIdentity?.kind ?? DRIVER_KIND,

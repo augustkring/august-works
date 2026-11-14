@@ -1,10 +1,12 @@
+import { currentResourcePolicy, isResourceAdmissionDeferred, resourceAdmissionDeferredError } from "../resource-governance.js";
 import { automationArtifactService } from "../automation-artifacts/automation-artifact-service.js";
 import { withNativeAnalyticalReader, type NativeReadScope } from "../analytical-reader.js";
 import {assertLearnedAssetAnalyticalSources,learningActorFromPrincipal} from "../learning/learning-analytical-sources.js";
 import { lockAnalyticalCompany } from "../analytical-privacy.js";
 import { assertLearnedWorkflowPayloadAccess } from "../analytical-context-authority.js";
 import { admitOrchestrationWorkflow } from "../orchestration/orchestration-admission.js";
-import type { AuthorizationActor } from "../authorization.js";
+import { authorizationService, type AuthorizationActor } from "../authorization.js";
+import { accessService } from "../access.js";
 import { assertSaasDomainAdmission } from "../saas/domain-admission.js";
 import { WorkflowCheckpointError } from "./workflow-errors.js";
 import { assertWorkflowTaskAssignmentAuthorized } from "./workflow-task-authority.js";
@@ -19,7 +21,7 @@ import { subworkflowConfig, requireSubworkflowRevision, assertSubworkflowGraph }
 import { executeWorkflowMap } from "./workflow-map.js";
 import { randomUUID } from "node:crypto";
 import { isDeepStrictEqual } from "node:util";
-import { and, asc, desc, eq, inArray, lt, or, sql } from "drizzle-orm";
+import { and, asc, desc, eq, inArray, isNull, lt, or, sql } from "drizzle-orm";
 import type { Db } from "@paperclipai/db";
 import {
   agents,
@@ -85,7 +87,7 @@ import {
   workflowRetryDelayMs,
   workflowStepIdempotencyKey,
 } from "./workflow-execution-policy.js";
-import { workflowNodeDefinitions, workflowNodeRegistryService } from "./workflow-node-registry.js";
+import { workflowNodeDefinitionByType, workflowNodeRegistryService } from "./workflow-node-registry.js";
 import { resolveToolActionWait, scheduleToolActionWait } from "./workflow-tool-action-wait.js";
 import { executeNativeWorkflowQuery } from "./workflow-native-nodes.js";
 import { executeWorkflowHttpRequest } from "./workflow-http-request.js";
@@ -123,6 +125,27 @@ export interface WorkflowRunActor {
   runId?: string | null;
   responsibleUserId?: string | null;
   memoryRecordIds?: string[];
+  /** Original verified request carrier; in-memory only, never persisted or DTO-controlled. */
+  authorizationActor?: AuthorizationActor;
+}
+
+function workflowSourceActor(companyId: string, actor: WorkflowRunActor): AuthorizationActor | undefined {
+  const original = actor.authorizationActor;
+  // A display principal is not a verified board session. HTTP readers must
+  // carry the original authenticated actor; background callers may use the
+  // canonical run-derived actor only for non-user execution principals.
+  if (!original) return actor.principal.type === "user"
+    ? undefined
+    : learningActorFromPrincipal(companyId, actor.principal, actor.runId);
+  const sameRun = (original.runId ?? null) === (actor.runId ?? null);
+  const matches = actor.principal.type === "user"
+    ? original.type === "board" && original.source !== "local_implicit" && original.userId === actor.principal.userId && sameRun
+    : actor.principal.type === "agent"
+      ? original.type === "agent" && original.companyId === companyId && original.agentId === actor.principal.agentId &&
+        (original.onBehalfOfUserId ?? null) === (actor.principal.responsibleUserId ?? null) && sameRun
+      : actor.principal.service === "local-board" && original.type === "board" && original.source === "local_implicit" && sameRun;
+  if (!matches) throw forbidden("Original Workflow reader identity does not match its execution principal.", { code: "workflow_execution_actor_mismatch" });
+  return original;
 }
 
 type WorkflowHeartbeatRuntime = IssueAssignmentWakeupDeps & {
@@ -342,6 +365,7 @@ function assertIdempotentRequestMatches(
     triggerPayload: Record<string, unknown>;
     retryOfRunId?: string | null;
     idempotencyRootRunId?: string | null;
+    humanCoverageId?: string | null;
   },
 ) {
   if (
@@ -351,6 +375,7 @@ function assertIdempotentRequestMatches(
     existing.triggerId !== (input.triggerId ?? null) ||
     existing.retryOfRunId !== (input.retryOfRunId ?? null) ||
     existing.idempotencyRootRunId !== (input.idempotencyRootRunId ?? null) ||
+    existing.humanCoverageId !== (input.humanCoverageId ?? null) ||
     !isDeepStrictEqual(existing.triggerPayload ?? {}, input.triggerPayload)
   ) {
     throw conflict("Idempotency key was already used for a different workflow run request", {
@@ -377,6 +402,9 @@ export interface EnqueueWorkflowRunInput {
   parentWorkflowRunId?: string;
   parentNodeId?: string;
   customerTestCommand?: WorkflowTestCommand;
+  humanCoverageId?: string | null;
+  coverageScopeType?: "manual" | "task";
+  coverageTaskId?: string | null;
 }
 
 export async function enqueueWorkflowRunInTransaction(
@@ -395,7 +423,7 @@ export async function enqueueWorkflowRunInTransaction(
       ["workflows:read", "workflows:edit", "workflows:run"]);
     await assertCustomerWorkflowTestAuthority(executor, input.companyId, input.actor.principal);
   }
-  await assertLearnedAssetAnalyticalSources(executor,input.companyId,"workflow_revision",input.revisionId,learningActorFromPrincipal(input.companyId,input.actor.principal,input.actor.runId));
+  await assertLearnedAssetAnalyticalSources(executor,input.companyId,"workflow_revision",input.revisionId,workflowSourceActor(input.companyId,input.actor));
   if (input.idempotencyKey) {
     const existing = await getIdempotentRun(
       executor,
@@ -448,6 +476,21 @@ export async function enqueueWorkflowRunInTransaction(
     throw conflict("A test command cannot admit live workflow work");
   }
 
+  if (input.humanCoverageId) {
+    const userId = input.actor.principal.type === "user" ? input.actor.principal.userId : null;
+    const credential = input.actor.authorizationActor;
+    if (!userId || !credential || credential.type !== "board" || credential.source !== "session" || credential.userId !== userId ||
+        !input.coverageScopeType || (input.coverageScopeType === "task") !== Boolean(input.coverageTaskId)) {
+      throw forbidden("Human workflow coverage requires its named delegatee's current authenticated session.", { code: "workflow_coverage_session_required" });
+    }
+    await accessService(executor).authorizeWorkflowCoverage({
+      tx: executor as unknown as Parameters<Parameters<Db["transaction"]>[0]>[0],
+      companyId: input.companyId, coverageId: input.humanCoverageId, delegateeUserId: userId,
+      workflowId: input.workflowId, workflowRevisionId: input.revisionId,
+      scopeType: input.coverageScopeType, taskId: input.coverageTaskId ?? null,
+    });
+  }
+
   const now = new Date();
   const [run] = await executor
     .insert(workflowRuns)
@@ -456,6 +499,7 @@ export async function enqueueWorkflowRunInTransaction(
       workflowId: input.workflowId,
       workflowRevisionId: input.revisionId,
       triggerId: input.triggerId ?? null,
+      humanCoverageId: input.humanCoverageId ?? null,
       status: "queued",
       source: input.source,
       triggerPayload: input.triggerPayload,
@@ -502,6 +546,7 @@ export async function enqueueWorkflowRunInTransaction(
         triggerId: input.triggerId ?? null,
         retryOfRunId: input.retryOfRunId ?? null,
         idempotencyRootRunId: input.idempotencyRootRunId ?? null,
+        humanCoverageId: input.humanCoverageId ?? null,
       },
     },
   );
@@ -543,6 +588,31 @@ async function createQueuedRun(
   }
 }
 
+async function authorizePersistedWorkflowCoverage(
+  tx: Parameters<Parameters<Db["transaction"]>[0]>[0], pending: typeof workflowRuns.$inferSelect,
+) {
+  if (!pending.humanCoverageId) return;
+  const companyId = pending.companyId;
+  // Queue claims can be performed by the workflow recovery worker after
+  // the interactive session has ended. The immutable run admission keeps
+  // the delegatee identity; revalidate that identity's live rights here.
+  const userId = pending.executionPrincipal?.type === "user"
+    ? pending.executionPrincipal.userId : null;
+  const payloadTask = typeof pending.triggerPayload.task === "object" && pending.triggerPayload.task !== null
+    ? (pending.triggerPayload.task as Record<string, unknown>).id : null;
+  const taskId = pending.source === "task" && typeof payloadTask === "string" ? payloadTask : null;
+  if (!userId || pending.responsibleUserId !== userId ||
+      !["manual", "task"].includes(pending.source) || (pending.source === "task" && !taskId)) {
+    throw forbidden("Covered workflow run has no exact Human delegatee admission identity.", { code: "workflow_coverage_session_required" });
+  }
+  await accessService(tx as unknown as Db).authorizeWorkflowCoverage({
+    tx: tx as unknown as Parameters<Parameters<Db["transaction"]>[0]>[0], companyId,
+    coverageId: pending.humanCoverageId, delegateeUserId: userId,
+    workflowId: pending.workflowId, workflowRevisionId: pending.workflowRevisionId,
+    scopeType: pending.source === "task" ? "task" : "manual", taskId,
+  });
+}
+
 async function claimQueuedRun(
   db: Db,
   companyId: string,
@@ -551,54 +621,65 @@ async function claimQueuedRun(
   actor: WorkflowRunActor,
 ) {
   const publications: ActivityPublication[] = [];
-  const claimed = await db.transaction(async (tx) => {
-    const now = new Date();
-    const leaseExpiresAt = new Date(now.getTime() + WORKFLOW_EXECUTION_LEASE_MS);
-    const [row] = await tx
-      .update(workflowRuns)
-      .set({
-        status: "running",
-        executionOwnerId: ownerId,
-        leaseExpiresAt,
-        ownerHeartbeatAt: now,
-        startedAt: now,
-        updatedAt: now,
-      })
-      .where(
-        and(
-          eq(workflowRuns.companyId, companyId),
-          eq(workflowRuns.id, runId),
-          eq(workflowRuns.status, "queued"),
-        ),
-      )
-      .returning();
-    if (!row) return null;
-    const { publication } = await persistWorkflowActivity(
-      tx as unknown as Db,
-      actor,
-      {
-        companyId,
-        action: "workflow.run_started",
-        entityType: "workflow_run",
-        entityId: runId,
-        details: { executionOwnerId: ownerId },
-      },
-    );
-    publications.push(publication);
-    return row;
-  });
+  let claimed: typeof workflowRuns.$inferSelect | null;
+  try {
+    claimed = await db.transaction(async (tx) => {
+      const [pending] = await tx.select().from(workflowRuns).where(and(
+        eq(workflowRuns.companyId, companyId), eq(workflowRuns.id, runId), eq(workflowRuns.status, "queued"),
+      )).for("update");
+      if (!pending) return null;
+      await authorizePersistedWorkflowCoverage(tx, pending);
+      // Coverage and both principals' current rights may have waited behind
+      // concurrent transactions. Sample the execution lease clock only after
+      // those locks and authorization checks have settled.
+      const now = new Date();
+      const leaseExpiresAt = new Date(now.getTime() + WORKFLOW_EXECUTION_LEASE_MS);
+      const [row] = await tx
+        .update(workflowRuns)
+        .set({
+          status: "running",
+          executionOwnerId: ownerId,
+          leaseExpiresAt,
+          ownerHeartbeatAt: now,
+          startedAt: now,
+          updatedAt: now,
+        })
+        .where(
+          and(
+            eq(workflowRuns.companyId, companyId),
+            eq(workflowRuns.id, runId),
+            eq(workflowRuns.status, "queued"),
+          ),
+        )
+        .returning();
+      if (!row) return null;
+      const { publication } = await persistWorkflowActivity(
+        tx as unknown as Db,
+        actor,
+        {
+          companyId,
+          action: "workflow.run_started",
+          entityType: "workflow_run",
+          entityId: runId,
+          details: { executionOwnerId: ownerId, humanCoverageId: row.humanCoverageId ?? null },
+        },
+      );
+      publications.push(publication);
+      return row;
+    });
+  } catch (error) {
+    if (isResourceAdmissionDeferred(error)) throw resourceAdmissionDeferredError();
+    throw error;
+  }
   publishActivities(publications);
   return claimed;
 }
 
 type WorkflowNode = WorkflowGraphV1["nodes"][number];
 
-const WORKFLOW_NODE_DEFINITIONS = new Map(
-  workflowNodeDefinitions().map((definition) => [definition.type, definition]),
-);
-
 function workflowNodeDefinition(node: WorkflowNode) {
-  const definition = WORKFLOW_NODE_DEFINITIONS.get(node.type);
+  // Resolve after module initialization: routine imports also reach this registry.
+  const definition = workflowNodeDefinitionByType(node.type);
   if (!definition) {
     throw new WorkflowCheckpointError(
       "workflow_node_definition_missing",
@@ -787,7 +868,7 @@ async function completeRunningStep(
   actor: WorkflowRunActor,
   artifactBinding?: { artifactId: string; versionId: string },
 ) {
-  await assertLearnedAssetAnalyticalSources(db,run.companyId,"workflow_revision",run.workflowRevisionId,learningActorFromPrincipal(run.companyId,actor.principal,actor.runId));
+  await assertLearnedAssetAnalyticalSources(db,run.companyId,"workflow_revision",run.workflowRevisionId,workflowSourceActor(run.companyId,actor));
   const finishedAt = new Date();
   const durationMs = Math.max(
     0,
@@ -802,7 +883,7 @@ async function completeRunningStep(
       eq(workflowStepRuns.companyId, run.companyId), eq(workflowStepRuns.workflowRunId, run.id),
       eq(workflowStepRuns.id, runningStep.id), eq(workflowStepRuns.status, "running")));
     if (!retainedStep) throw conflict("Workflow step changed before checkpoint", { code: "workflow_step_completion_conflict" });
-    await assertLearnedWorkflowPayloadAccess(scopedDb, run.companyId, learningActorFromPrincipal(run.companyId, actor.principal, actor.runId),
+    await assertLearnedWorkflowPayloadAccess(scopedDb, run.companyId, workflowSourceActor(run.companyId, actor),
       { workflowRunId: run.id }, "task");
     if (artifactBinding) {
       if (retainedStep.automationArtifactVersionId !== artifactBinding.versionId) {
@@ -1462,7 +1543,7 @@ async function prepareRunnableStep(
   inputJson: unknown,
   actor: WorkflowRunActor,
 ): Promise<{ checkpoint: WorkflowStepRow | null; running: WorkflowStepRow | null }> {
-  await assertLearnedAssetAnalyticalSources(db,run.companyId,"workflow_revision",run.workflowRevisionId,learningActorFromPrincipal(run.companyId,actor.principal,actor.runId));
+  await assertLearnedAssetAnalyticalSources(db,run.companyId,"workflow_revision",run.workflowRevisionId,workflowSourceActor(run.companyId,actor));
   const attempts = await nodeAttempts(db, run, nodeId);
   const succeeded = attempts.find((step) => step.status === "succeeded") ?? null;
   if (succeeded) return { checkpoint: succeeded, running: null };
@@ -2437,9 +2518,10 @@ async function createWorkflowTask(
         : null);
   let deduplicated = false;
   const publications: ActivityPublication[] = [];
+  const privacyActor = workflowSourceActor(run.companyId, actor);
 
   const issue = await db.transaction(async (tx) => {
-    const created = await issueService(db).create(
+    const create = () => issueService(db).create(
       run.companyId,
       {
         title: config.title,
@@ -2453,6 +2535,7 @@ async function createWorkflowTask(
         originRunId: run.id,
         originFingerprint: idempotencyKey,
         responsibleUserId,
+        ...(actor.principal.type === "agent" ? { actorRunId: actor.runId ?? null } : {}),
         ...actorFields,
         actorResponsibleUserId: responsibleUserId,
         trustExplicitResponsibleUserId: Boolean(responsibleUserId),
@@ -2463,7 +2546,13 @@ async function createWorkflowTask(
         },
       },
       tx as unknown as Db,
+      undefined,
+      privacyActor ? { privacyActor } : {},
     );
+    const created = privacyActor
+      ? await authorizationService(tx as unknown as Db).withReadWorkflowSources(
+        run.companyId, privacyActor, [run.id], create)
+      : await create();
 
     if (!deduplicated) {
       const { publication } = await persistWorkflowActivity(
@@ -2946,7 +3035,8 @@ async function createWorkflowAgentTaskIssueInTransaction(
         ? actor.principal.userId
         : null);
   let deduplicated = false;
-  const issue = await issueService(db).create(
+  const privacyActor = workflowSourceActor(run.companyId, actor);
+  const create = () => issueService(db).create(
     run.companyId,
     {
       title: taskConfig.title,
@@ -2970,7 +3060,12 @@ async function createWorkflowAgentTaskIssueInTransaction(
       },
     },
     executor,
+    undefined,
+    privacyActor ? { privacyActor } : {},
   );
+  const issue = privacyActor
+    ? await authorizationService(executor).withReadWorkflowSources(run.companyId, privacyActor, [run.id], create)
+    : await create();
 
   const publications: ActivityPublication[] = [];
   if (!deduplicated) {
@@ -4487,10 +4582,11 @@ async function scheduleTaskCompletionWait(
         ? actor.principal.userId
         : null);
   const publications: ActivityPublication[] = [];
+  const privacyActor = workflowSourceActor(run.companyId, actor);
 
   await db.transaction(async (tx) => {
     let deduplicated = false;
-    const issue = await issueService(db).create(
+    const create = () => issueService(db).create(
       run.companyId,
       {
         title: config.title,
@@ -4514,7 +4610,12 @@ async function scheduleTaskCompletionWait(
         },
       },
       tx as unknown as Db,
+      undefined,
+      privacyActor ? { privacyActor } : {},
     );
+    const issue = privacyActor
+      ? await authorizationService(tx as unknown as Db).withReadWorkflowSources(run.companyId, privacyActor, [run.id], create)
+      : await create();
 
     const now = new Date();
     const [wait] = await tx
@@ -6046,11 +6147,13 @@ async function startSubworkflowWait(db: Db, run: typeof workflowRuns.$inferSelec
   if (child) await executeClaimedRun(db, child, actor, runtimeDeps);
   const [parent] = await db.select().from(workflowRuns).where(eq(workflowRuns.id, run.id));
   const wait = parent ? await activeWaitForRun(db, parent) : null;
-  if (parent?.status === "waiting" && wait?.kind === "subworkflow") await resolveSubworkflowWait(db, parent, wait, new Date(), runtimeDeps);
+  if (parent?.status === "waiting" && wait?.kind === "subworkflow") await resolveSubworkflowWait(db, parent, wait, new Date(), runtimeDeps, actor);
 }
 
 async function resolveSubworkflowWait(db: Db, run: typeof workflowRuns.$inferSelect, wait: typeof workflowWaits.$inferSelect,
-  now: Date, runtimeDeps: WorkflowExecutorRuntimeDeps): Promise<"recovered" | "raced" | "deferred"> {
+  now: Date, runtimeDeps: WorkflowExecutorRuntimeDeps, continuationActor?: WorkflowRunActor): Promise<"recovered" | "raced" | "deferred"> {
+  if (continuationActor && (!run.executionPrincipal || !isDeepStrictEqual(continuationActor.principal, run.executionPrincipal) ||
+    (continuationActor.runId ?? null) !== (run.executionAgentRunId ?? null))) return "deferred";
   const [child] = wait.referenceId ? await db.select().from(workflowRuns).where(and(eq(workflowRuns.companyId, run.companyId),
     eq(workflowRuns.id, wait.referenceId), eq(workflowRuns.parentWorkflowRunId, run.id), eq(workflowRuns.parentNodeId, wait.nodeId))) : [];
   const expired = Boolean(wait.timeoutAt && wait.timeoutAt <= now);
@@ -6059,28 +6162,63 @@ async function resolveSubworkflowWait(db: Db, run: typeof workflowRuns.$inferSel
     await workflowExecutorService(db, runtimeDeps).cancelRun(run.companyId, child.id, { reason: "Parent subworkflow timeout" },
       { principal: { type: "system", service: "workflow-subworkflow" } });
   }
-  const actor: WorkflowRunActor = { principal: run.executionPrincipal ?? { type: "system", service: "workflow-subworkflow" },
-    runId: run.executionAgentRunId, responsibleUserId: run.responsibleUserId };
   let errorCode = !child ? "workflow_subworkflow_missing" : expired ? "workflow_subworkflow_timeout" : "workflow_subworkflow_failed";
   let succeeded = child?.status === "succeeded" && (!wait.timeoutAt || Boolean(child.finishedAt && child.finishedAt <= wait.timeoutAt));
-  const detail = succeeded ? await getRunDetail(db, run.companyId, child!.id,
-    learningActorFromPrincipal(run.companyId, actor.principal, actor.runId), "task") : null;
-  const childRevision = succeeded ? await revisionForRun(db, child!) : null;
-  const terminalNodes = new Set(childRevision?.graph.nodes.filter((item) => !childRevision.graph.edges.some((edge) => edge.source === item.id)).map((item) => item.id) ?? []);
-  const resultSteps = detail?.steps.filter((item) => item.status === "succeeded" && terminalNodes.has(item.nodeId)) ?? [];
-  const result = resultSteps.length === 1 ? resultSteps[0]!.outputJson : Object.fromEntries(resultSteps.map((item) => [item.nodeId, item.outputJson]));
-  if (succeeded && childRevision) validateWorkflowOutput(childRevision.outputSchema, result);
+  // A recovered wait has no authenticated request carrier. Persisted execution
+  // principals are display/attribution data and cannot be promoted into a
+  // source reader. Keep the durable wait intact until a current owner replays
+  // the idempotent start request and resumes it with a fresh verified carrier.
+  if (succeeded && !continuationActor) return "deferred";
+  const actor: WorkflowRunActor = continuationActor ?? {
+    principal: { type: "system", service: "workflow-subworkflow-recovery" },
+    responsibleUserId: run.responsibleUserId,
+  };
+  const sourceReader = succeeded ? workflowSourceActor(run.companyId, actor) : undefined;
+  if (succeeded && !sourceReader) return "deferred";
+  let resultSteps: NonNullable<Awaited<ReturnType<typeof getRunDetail>>>["steps"] = [];
+  let result: unknown = {};
   const publications: ActivityPublication[] = [];
   const resumed = await db.transaction(async (tx) => {
+    const scopedDb = tx as unknown as Db;
+    // Successful replay resumes execution under the retained coverage too.
+    // Pin both Humans/current scope before copying child data or taking the
+    // same company privacy fences used by Source withdrawal.
+    if (succeeded) await authorizePersistedWorkflowCoverage(tx, run);
+    // Keep source currentness and the copied child result in one transaction;
+    // analytical/erasure writers use these same company locks.
+    await lockAnalyticalCompany(scopedDb, run.companyId);
     await lockMemoryPrivacy(tx as unknown as Db, run.companyId);
+    if (succeeded) {
+      const detail = await getRunDetail(scopedDb, run.companyId, child!.id, sourceReader, "task");
+      if (!detail) {
+        succeeded = false;
+        errorCode = "workflow_subworkflow_missing";
+      } else {
+        const childRevision = await revisionForRun(scopedDb, child!);
+        const terminalNodes = new Set(childRevision?.graph.nodes.filter((item) => !childRevision.graph.edges.some((edge) => edge.source === item.id)).map((item) => item.id) ?? []);
+        resultSteps = detail.steps.filter((item) => item.status === "succeeded" && terminalNodes.has(item.nodeId));
+        result = resultSteps.length === 1 ? resultSteps[0]!.outputJson : Object.fromEntries(resultSteps.map((item) => [item.nodeId, item.outputJson]));
+        if (childRevision) validateWorkflowOutput(childRevision.outputSchema, result);
+      }
+    }
     const references = [...new Set(resultSteps.flatMap((item) => item.memoryRecordIds ?? []))];
     try { await assertMemoryRecordsRetained(tx as unknown as Db, run.companyId, references); }
     catch { succeeded = false; errorCode = "workflow_memory_source_deleted"; }
     const [owned] = await tx.select().from(workflowRuns).where(and(eq(workflowRuns.id, run.id), eq(workflowRuns.companyId, run.companyId))).for("update");
-    if (owned?.status !== "waiting" || owned.executionOwnerId) return null;
+    if (!owned || owned.status !== "waiting" || owned.executionOwnerId ||
+      owned.humanCoverageId !== run.humanCoverageId || (continuationActor &&
+      (!owned.executionPrincipal || !isDeepStrictEqual(continuationActor.principal, owned.executionPrincipal) ||
+        (continuationActor.runId ?? null) !== (owned.executionAgentRunId ?? null)))) return null;
+    // Locks preserve revocation ordering, but coverage TTL can expire while
+    // Source/privacy or parent ownership waits are pending. Sample it again
+    // after those waits, immediately before consuming the durable wait.
+    if (succeeded) await authorizePersistedWorkflowCoverage(tx, owned);
     const [resolved] = await tx.update(workflowWaits).set({ status: expired ? "timed_out" : "resolved", resolvedAt: now,
       resolvedByType: "system", resolvedById: "workflow-subworkflow", resolutionJson: { childRunId: child?.id ?? null, outcome: succeeded ? "succeeded" : "failed" }, updatedAt: now })
-      .where(and(eq(workflowWaits.id, wait.id), eq(workflowWaits.status, "active"))).returning();
+      .where(and(eq(workflowWaits.id, wait.id), eq(workflowWaits.companyId, run.companyId), eq(workflowWaits.workflowRunId, run.id),
+        eq(workflowWaits.nodeId, wait.nodeId), eq(workflowWaits.kind, "subworkflow"),
+        wait.referenceId === null ? isNull(workflowWaits.referenceId) : eq(workflowWaits.referenceId, wait.referenceId),
+        eq(workflowWaits.status, "active"))).returning();
     if (!resolved) return null;
     const [step] = await tx.select().from(workflowStepRuns).where(and(eq(workflowStepRuns.workflowRunId, run.id), eq(workflowStepRuns.companyId, run.companyId),
       eq(workflowStepRuns.nodeId, wait.nodeId), eq(workflowStepRuns.status, "waiting"), eq(workflowStepRuns.childWorkflowRunId, wait.referenceId!))).for("update");
@@ -6101,6 +6239,15 @@ async function resolveSubworkflowWait(db: Db, run: typeof workflowRuns.$inferSel
   if (succeeded) await executeClaimedRun(db, resumed, actor, runtimeDeps);
   else await failRun(db, resumed, actor, errorCode, "Child workflow did not complete successfully");
   return "recovered";
+}
+
+async function resumeSubworkflowWaitForCurrentActor(db: Db, run: typeof workflowRuns.$inferSelect,
+  actor: WorkflowRunActor, now: Date, runtimeDeps: WorkflowExecutorRuntimeDeps): Promise<"recovered" | "raced" | "deferred"> {
+  if (run.status !== "waiting" || !run.executionPrincipal || !isDeepStrictEqual(actor.principal, run.executionPrincipal) ||
+    (actor.runId ?? null) !== (run.executionAgentRunId ?? null)) return "deferred";
+  const wait = await activeWaitForRun(db, run);
+  if (wait?.kind !== "subworkflow") return "deferred";
+  return resolveSubworkflowWait(db, run, wait, now, runtimeDeps, actor);
 }
 
 async function executeWorkflowGraph(
@@ -6402,7 +6549,7 @@ async function executeWorkflowGraph(
               await lockMemoryPrivacy(scopedDb, ownedRun.companyId);
               // A current read admits staging; only the persisted exact step
               // binding below admits execution. Both stay under privacy locks.
-              const reader = learningActorFromPrincipal(ownedRun.companyId, actor.principal, actor.runId);
+              const reader = workflowSourceActor(ownedRun.companyId, actor);
               const inspect = () => automationArtifactService(scopedDb).getDetail(ownedRun.companyId, artifactId, actor);
               if (reader?.type === "agent") await withNativeAnalyticalReader(scopedDb, ownedRun.companyId, reader, inspect, "task");
               else await inspect();
@@ -6720,6 +6867,9 @@ async function executeWorkflowGraph(
         return;
       }
     } catch (error) {
+      // Capacity denial rolls back the original resume transaction; retain the
+      // existing queued/waiting checkpoint rather than failing its node.
+      if (isResourceAdmissionDeferred(error)) return;
       if (error instanceof WorkflowRetryableNodeError && runningStep) {
         const scheduled = await scheduleWorkflowStepRetry(
           db,
@@ -6829,11 +6979,29 @@ async function executeClaimedRun(
   // A recovery worker owns the lease, but does not become the authority for
   // effects. Keep the initiating principal and recheck its current membership.
   if (run.executionPrincipal) {
-    actor = {
+    const originalAuthorizationActor = actor.authorizationActor;
+    const candidateActor: WorkflowRunActor = {
       principal: run.executionPrincipal,
       runId: run.executionAgentRunId,
       responsibleUserId: run.responsibleUserId,
     };
+    const matchingVerifiedCarrier = originalAuthorizationActor &&
+      isDeepStrictEqual(actor.principal, run.executionPrincipal) &&
+      (actor.runId ?? null) === (run.executionAgentRunId ?? null) &&
+      workflowSourceActor(run.companyId, {
+        ...candidateActor,
+        authorizationActor: originalAuthorizationActor,
+      })
+        ? originalAuthorizationActor
+        : undefined;
+    if (originalAuthorizationActor && !matchingVerifiedCarrier) {
+      await failRun(db, run, candidateActor, "workflow_execution_actor_mismatch",
+        "The original authenticated Workflow actor does not match this execution");
+      return;
+    }
+    actor = matchingVerifiedCarrier
+      ? { ...candidateActor, authorizationActor: matchingVerifiedCarrier }
+      : candidateActor;
     try {
       await assertActorCompanyScope(db, run.companyId, actor);
     } catch {
@@ -6842,7 +7010,7 @@ async function executeClaimedRun(
       return;
     }
   }
-  try{await assertLearnedAssetAnalyticalSources(db,run.companyId,"workflow_revision",run.workflowRevisionId,learningActorFromPrincipal(run.companyId,actor.principal,actor.runId));}
+  try{await assertLearnedAssetAnalyticalSources(db,run.companyId,"workflow_revision",run.workflowRevisionId,workflowSourceActor(run.companyId,actor));}
   catch{await failRun(db,run,actor,"analytical_source_access_lost","The original Learning analytical source is unavailable");return;}
   const revision = await revisionForRun(db, run);
   if (!revision) {
@@ -8324,7 +8492,7 @@ export function workflowExecutorService(
         );
       }
 
-      const detail = await getRunDetail(db, companyId, runId,learningActorFromPrincipal(companyId,actor.principal,actor.runId),"task");
+      const detail = await getRunDetail(db, companyId, runId,workflowSourceActor(companyId,actor),"task");
       if (!detail) throw new Error("Workflow run disappeared during cancellation");
       return detail;
     },
@@ -8462,7 +8630,7 @@ export function workflowExecutorService(
         await executeClaimedRun(db, claimed, actor, runtimeDeps);
       }
 
-      const detail = await getRunDetail(db, companyId, queued.run.id,learningActorFromPrincipal(companyId,actor.principal,actor.runId),"task");
+      const detail = await getRunDetail(db, companyId, queued.run.id,workflowSourceActor(companyId,actor),"task");
       if (!detail) throw new Error("Workflow retry disappeared after execution");
       return detail;
     },
@@ -8544,7 +8712,7 @@ export function workflowExecutorService(
         }
       }
 
-      const detail = await getRunDetail(db, companyId, runId,learningActorFromPrincipal(companyId,actor.principal,actor.runId),"task");
+      const detail = await getRunDetail(db, companyId, runId,workflowSourceActor(companyId,actor),"task");
       if (!detail) throw new Error("Workflow run disappeared after execution");
       return detail;
     },
@@ -8555,6 +8723,7 @@ export function workflowExecutorService(
       rawInput: StartWorkflowRun,
       actor: WorkflowRunActor,
       idempotencyKey: string | null,
+      humanCoverageId: string | null = null,
     ): Promise<WorkflowRunDetail> => {
       const parsed = startWorkflowRunSchema.safeParse(rawInput);
       if (!parsed.success) {
@@ -8586,6 +8755,9 @@ export function workflowExecutorService(
         idempotencyKey,
         correlationId: randomUUID(),
         actor,
+        humanCoverageId,
+        coverageScopeType: "manual",
+        coverageTaskId: null,
       });
 
       if (queued.created) {
@@ -8598,9 +8770,11 @@ export function workflowExecutorService(
           });
         }
         await executeClaimedRun(db, claimed, actor, runtimeDeps);
+      } else if (queued.run.status === "waiting") {
+        await resumeSubworkflowWaitForCurrentActor(db, queued.run, actor, new Date(), runtimeDeps);
       }
 
-      const detail = await getRunDetail(db, companyId, queued.run.id,learningActorFromPrincipal(companyId,actor.principal,actor.runId),"task");
+      const detail = await getRunDetail(db, companyId, queued.run.id,workflowSourceActor(companyId,actor),"task");
       if (!detail) throw new Error("Workflow run disappeared after execution");
       return detail;
     },
@@ -8612,6 +8786,7 @@ export function workflowExecutorService(
       rawInput: StartWorkflowRun,
       actor: WorkflowRunActor,
       idempotencyKey: string | null,
+      humanCoverageId: string | null = null,
     ): Promise<WorkflowRunDetail> => {
       const parsed = startWorkflowRunSchema.safeParse(rawInput);
       if (!parsed.success) {
@@ -8674,17 +8849,21 @@ export function workflowExecutorService(
         triggerId: null,
         source: "task",
         triggerPayload,
-        responsibleUserId:
-          actor.responsibleUserId ??
-          issue.responsibleUserId ??
-          (actor.principal.type === "user"
-            ? actor.principal.userId
-            : actor.principal.type === "agent"
-              ? actor.principal.responsibleUserId ?? null
-              : null),
+        responsibleUserId: humanCoverageId && actor.principal.type === "user"
+          ? actor.principal.userId
+          : actor.responsibleUserId ??
+            issue.responsibleUserId ??
+            (actor.principal.type === "user"
+              ? actor.principal.userId
+              : actor.principal.type === "agent"
+                ? actor.principal.responsibleUserId ?? null
+                : null),
         idempotencyKey,
         correlationId: `task:${issue.id}:${randomUUID()}`,
         actor,
+        humanCoverageId,
+        coverageScopeType: "task",
+        coverageTaskId: issue.id,
       });
 
       if (queued.created) {
@@ -8703,9 +8882,11 @@ export function workflowExecutorService(
           });
         }
         await executeClaimedRun(db, claimed, actor, runtimeDeps);
+      } else if (queued.run.status === "waiting") {
+        await resumeSubworkflowWaitForCurrentActor(db, queued.run, actor, new Date(), runtimeDeps);
       }
 
-      const detail = await getRunDetail(db, companyId, queued.run.id,learningActorFromPrincipal(companyId,actor.principal,actor.runId),"task");
+      const detail = await getRunDetail(db, companyId, queued.run.id,workflowSourceActor(companyId,actor),"task");
       if (!detail) throw new Error("Workflow run disappeared after task invocation");
       return detail;
     },
@@ -8791,25 +8972,65 @@ export function workflowExecutorService(
     }> => {
       const safeLimit = Math.min(Math.max(limit, 1), 100);
       const queuedBefore = new Date(now.getTime() - ABANDONED_QUEUED_RUN_AGE_MS);
-      const candidates = await db
-        .select()
-        .from(workflowRuns)
-        .where(
-          options.cancellationOnly ? eq(workflowRuns.status, "cancelling") : or(
-            and(
-              eq(workflowRuns.status, "queued"),
-              lt(workflowRuns.updatedAt, queuedBefore),
+      const queuedBeforeIso = queuedBefore.toISOString();
+      const resourcePolicy = options.cancellationOnly ? null : await currentResourcePolicy(db);
+      const durablePool = resourcePolicy?.pools.find(value => value.resource === "durable_execution");
+      let candidates: (typeof workflowRuns.$inferSelect)[];
+      if (durablePool) {
+        // Keep the existing queued run as the only queue owner. Under an
+        // explicit durable pool, pick at most the oldest stale run per company
+        // using latest progress from started rows; settlement touches count as
+        // progress recency, not as admission receipts.
+        const otherCandidates = await db.select().from(workflowRuns).where(or(
+          and(inArray(workflowRuns.status, ["running", "recovering"]), lt(workflowRuns.leaseExpiresAt, now)),
+          eq(workflowRuns.status, "waiting"), eq(workflowRuns.status, "cancelling"),
+        )).orderBy(asc(workflowRuns.updatedAt)).limit(safeLimit);
+        const ids = await db.execute<{ id: string }>(sql`
+          with rules as materialized (select * from jsonb_to_recordset(${JSON.stringify(durablePool.companies)}::jsonb)
+            as r("companyId" uuid,"hardLimit" bigint,"fairnessClass" text,priority integer)),
+          queued_companies as materialized (select distinct company_id from workflow_runs
+            where status='queued' and updated_at<${queuedBeforeIso}::timestamptz),
+          progress as materialized (select q.company_id,p.updated_at as progress_at from queued_companies q
+            left join lateral (select h.updated_at from workflow_runs h where h.company_id=q.company_id and h.started_at is not null
+              order by h.updated_at desc nulls last,h.id desc nulls last limit 1) p on true),
+          classes as (select coalesce(r."fairnessClass",h.company_id::text) as class,max(h.progress_at) as progress_at
+            from progress h left join rules r on r."companyId"=h.company_id group by 1),
+          eligible as (select m.id,m.company_id,m.updated_at,h.progress_at as company_progress_at,
+            c.progress_at as class_progress_at,r.priority from queued_companies q
+            join lateral (select queued.id,queued.company_id,queued.updated_at from workflow_runs queued
+              where queued.company_id=q.company_id and queued.status='queued' and queued.updated_at<${queuedBeforeIso}::timestamptz
+              order by queued.updated_at,queued.id limit 1) m on true
+            left join rules r on r."companyId"=m.company_id
+            left join progress h on h.company_id=m.company_id
+            left join classes c on c.class=coalesce(r."fairnessClass",m.company_id::text)
+            where public.aw_v10_resource_durable_occupancy(null)<${durablePool.hardLimit}
+              and (r."hardLimit" is null or public.aw_v10_resource_durable_occupancy(m.company_id)<r."hardLimit"))
+          select id from eligible order by class_progress_at nulls first,company_progress_at nulls first,
+            priority desc nulls last,updated_at,id limit ${safeLimit}`);
+        const queuedIds = ids.map(row => row.id);
+        const queuedRows = queuedIds.length ? await db.select().from(workflowRuns)
+          .where(inArray(workflowRuns.id, queuedIds)) : [];
+        const queuedById = new Map(queuedRows.map(row => [row.id, row]));
+        const orderedQueued = queuedIds.flatMap(id => queuedById.has(id) ? [queuedById.get(id)!] : []);
+        // Independent caps preserve the queue's existing budget and guarantee
+        // cleanup/cancellation a turn under a sustained stale-queue backlog.
+        // With the caller's 100-row cap this processes at most 200 rows.
+        candidates = [...otherCandidates, ...orderedQueued];
+      } else {
+        candidates = await db
+          .select()
+          .from(workflowRuns)
+          .where(
+            options.cancellationOnly ? eq(workflowRuns.status, "cancelling") : or(
+              and(eq(workflowRuns.status, "queued"), lt(workflowRuns.updatedAt, queuedBefore)),
+              and(inArray(workflowRuns.status, ["running", "recovering"]), lt(workflowRuns.leaseExpiresAt, now)),
+              eq(workflowRuns.status, "waiting"),
+              eq(workflowRuns.status, "cancelling"),
             ),
-            and(
-              inArray(workflowRuns.status, ["running", "recovering"]),
-              lt(workflowRuns.leaseExpiresAt, now),
-            ),
-            eq(workflowRuns.status, "waiting"),
-            eq(workflowRuns.status, "cancelling"),
-          ),
-        )
-        .orderBy(asc(workflowRuns.updatedAt))
-        .limit(safeLimit);
+          )
+          .orderBy(asc(workflowRuns.updatedAt))
+          .limit(safeLimit);
+      }
 
       let recovered = 0;
       let raced = 0;
@@ -8826,8 +9047,9 @@ export function workflowExecutorService(
           if (outcome === "recovered") recovered += 1;
           else if (outcome === "raced") raced += 1;
           else deferred += 1;
-        } catch {
-          failedRunIds.push(candidate.id);
+        } catch (error) {
+          if (isResourceAdmissionDeferred(error)) deferred += 1;
+          else failedRunIds.push(candidate.id);
         }
       }
       return {

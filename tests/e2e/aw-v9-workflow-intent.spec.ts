@@ -1,5 +1,7 @@
 import { createRequire } from "node:module";
 import { expect, test, type APIResponse } from "@playwright/test";
+import { registerEnglishAccountLocaleIsolation } from "./account-locale-isolation";
+registerEnglishAccountLocaleIsolation(test);
 const axePath = createRequire(import.meta.url).resolve("axe-core/axe.min.js");
 async function json(response: APIResponse) {
   expect(response.ok(), `${response.status()}: ${await response.text()}`).toBe(true);
@@ -43,6 +45,7 @@ test("described workflow recovers its original request after reload, with Danish
     await page.getByRole("textbox", { name: "Workflow name", exact: true }).fill("Enquiry review");
     await page.getByRole("textbox", { name: "What should this achieve?", exact: true }).fill("PRIVATE-MARKER Prepare a summary");
     expect(posts).toBe(0);
+    await expect(page.getByRole("button", { name: "Save draft", exact: true })).toBeEnabled();
     await page.getByRole("button", { name: "Save draft", exact: true }).focus();
     await page.keyboard.press("Enter");
     await expect(page.getByRole("main")).toContainText("The draft request is unconfirmed.");

@@ -1,0 +1,112 @@
+(!) Your Vite config uses features that are unsupported by `configLoader: 'native'`, which is planned to become the default in a future major version of Vite:
+  - `__dirname` (vitest.config.ts:7:25). Use `import.meta.dirname` instead
+Set `VITE_CONFIG_NATIVE_IGNORE_WARNING=true` to suppress this warning.
+
+ RUN  v4.1.11 /workspace/blentera-v10
+
+ ↓ |@paperclipai/server| src/__tests__/company-portability.test.ts > company portability > renders high-volume YAML blocks without overflowing the call stack
+ ↓ |@paperclipai/server| src/__tests__/company-portability.test.ts > company portability > renders high-volume frontmatter arrays without overflowing the call stack
+ ↓ |@paperclipai/server| src/__tests__/company-portability.test.ts > company portability > parses canonical GitHub import URLs with explicit ref and package path
+ ↓ |@paperclipai/server| src/__tests__/company-portability.test.ts > company portability > parses canonical GitHub import URLs with explicit companyPath
+ ↓ |@paperclipai/server| src/__tests__/company-portability.test.ts > company portability > exports referenced skills as stubs by default with sanitized Paperclip extension data
+ ↓ |@paperclipai/server| src/__tests__/company-portability.test.ts > company portability > round-trips company locale and timezone defaults while preserving legacy package fallbacks
+ ↓ |@paperclipai/server| src/__tests__/company-portability.test.ts > company portability > does not load or emit skills when agents are included but skills are disabled
+ ↓ |@paperclipai/server| src/__tests__/company-portability.test.ts > company portability > refuses to read external instruction roots without an instance-admin export grant
+ ↓ |@paperclipai/server| src/__tests__/company-portability.test.ts > company portability > requires an explicit current actor for source-free export
+ ↓ |@paperclipai/server| src/__tests__/company-portability.test.ts > company portability > withdraws source-free export after the current Human membership is suspended
+ ↓ |@paperclipai/server| src/__tests__/company-portability.test.ts > company portability > stops a pending agent import when the current Human session or target membership is revoked
+ ↓ |@paperclipai/server| src/__tests__/company-portability.test.ts > company portability > exports agent permission grants through the Paperclip extension and manifest
+ ↓ |@paperclipai/server| src/__tests__/company-portability.test.ts > company portability > exports hire approval policy only when approval is required
+ ↓ |@paperclipai/server| src/__tests__/company-portability.test.ts > company portability > exports legacy inline sensitive env values as declarations without values
+ ↓ |@paperclipai/server| src/__tests__/company-portability.test.ts > company portability > exports default sidebar order into the Paperclip extension and manifest
+ ↓ |@paperclipai/server| src/__tests__/company-portability.test.ts > company portability > expands referenced skills when requested
+ ↓ |@paperclipai/server| src/__tests__/company-portability.test.ts > company portability > exports catalog skill provenance in portable Paperclip frontmatter
+ ↓ |@paperclipai/server| src/__tests__/company-portability.test.ts > company portability > exports only selected skills when skills filter is provided
+ ↓ |@paperclipai/server| src/__tests__/company-portability.test.ts > company portability > warns and exports all skills when skills filter matches nothing
+ ↓ |@paperclipai/server| src/__tests__/company-portability.test.ts > company portability > exports the company logo into images/ and references it from .paperclip.yaml
+ ↓ |@paperclipai/server| src/__tests__/company-portability.test.ts > company portability > exports duplicate skill slugs into readable namespaced paths
+ ↓ |@paperclipai/server| src/__tests__/company-portability.test.ts > company portability > builds export previews without tasks by default
+ ↓ |@paperclipai/server| src/__tests__/company-portability.test.ts > company portability > prefetches task export records with bounded concurrency
+ ↓ |@paperclipai/server| src/__tests__/company-portability.test.ts > company portability > exports portable project workspace metadata and remaps it on import
+ ↓ |@paperclipai/server| src/__tests__/company-portability.test.ts > company portability > normalizes invalid imported project icon names to null
+ ↓ |@paperclipai/server| src/__tests__/company-portability.test.ts > company portability > infers portable git metadata from a local checkout without task warning fan-out
+ ↓ |@paperclipai/server| src/__tests__/company-portability.test.ts > company portability > collapses repeated task workspace warnings into one summary per missing workspace
+ ↓ |@paperclipai/server| src/__tests__/company-portability.test.ts > company portability > round-trips the saved visual persona through the portable bundle
+ ↓ |@paperclipai/server| src/__tests__/company-portability.test.ts > company portability > reads env inputs back from .paperclip.yaml during preview import
+ ↓ |@paperclipai/server| src/__tests__/company-portability.test.ts > company portability > keeps support case archives reserved and informational during import
+ ↓ |@paperclipai/server| src/__tests__/company-portability.test.ts > company portability > confirms cancellation before the first write and fences at later import checkpoints
+ ↓ |@paperclipai/server| src/__tests__/company-portability.test.ts > company portability > requires an exact current-Human review before manual cross-company work and denies private claims
+ ✓ |@paperclipai/server| src/__tests__/company-portability.test.ts > company portability > materializes required agent env inputs from import secretValues as company secrets 23ms
+ ↓ |@paperclipai/server| src/__tests__/company-portability.test.ts > company portability > imports agent permission grants from package metadata
+ ✓ |@paperclipai/server| src/__tests__/company-portability.test.ts > company portability > retains the completed secret receipt for reconciliation after a later import failure 4ms
+ ↓ |@paperclipai/server| src/__tests__/company-portability.test.ts > company portability > fails closed on an inline import that arrived with fewer files than declared
+ ↓ |@paperclipai/server| src/__tests__/company-portability.test.ts > company portability > imports an inline bundle whose file count matches the declared count
+ ✓ |@paperclipai/server| src/__tests__/company-portability.test.ts > company portability > reparents imported roots to pre-existing target managers before resolving imported hierarchy 7ms
+ ↓ |@paperclipai/server| src/__tests__/company-portability.test.ts > company portability > exports project env as portable inputs without concrete values
+ ↓ |@paperclipai/server| src/__tests__/company-portability.test.ts > company portability > reads project env inputs back from .paperclip.yaml during preview import
+ ↓ |@paperclipai/server| src/__tests__/company-portability.test.ts > company portability > exports routines as recurring task packages with Paperclip routine extensions
+ ↓ |@paperclipai/server| src/__tests__/company-portability.test.ts > company portability > skips built-in managed agents and routines during export
+ ↓ |@paperclipai/server| src/__tests__/company-portability.test.ts > company portability > imports recurring task packages as routines instead of one-time issues
+ ↓ |@paperclipai/server| src/__tests__/company-portability.test.ts > company portability > suffixes a manifest-derived company name that collides with an existing company
+ ↓ |@paperclipai/server| src/__tests__/company-portability.test.ts > company portability > skips name de-duplication for agent-safe imports so collisions stay unobservable
+ ↓ |@paperclipai/server| src/__tests__/company-portability.test.ts > company portability > honors an explicitly typed company name even when it collides
+ ✓ |@paperclipai/server| src/__tests__/company-portability.test.ts > company portability > pauses imported agents and routines when pauseAutomations is requested 40ms
+ ↓ |@paperclipai/server| src/__tests__/company-portability.test.ts > company portability > leaves imported agents and routines active when pauseAutomations is absent
+ ↓ |@paperclipai/server| src/__tests__/company-portability.test.ts > company portability > migrates legacy schedule.recurrence imports into routine triggers
+ ↓ |@paperclipai/server| src/__tests__/company-portability.test.ts > company portability > imports recurring tasks without a project or assignee as paused routines
+ ✓ |@paperclipai/server| src/__tests__/company-portability.test.ts > company portability > imports a vendor-neutral package without .paperclip.yaml 3ms
+ ↓ |@paperclipai/server| src/__tests__/company-portability.test.ts > company portability > preserves agent role from frontmatter when extension block omits it
+ ↓ |@paperclipai/server| src/__tests__/company-portability.test.ts > company portability > treats no-separator auth and api key env names as secrets during export
+ ✓ |@paperclipai/server| src/__tests__/company-portability.test.ts > company portability > imports packaged skills and restores desired skill refs on agents 20ms
+ ↓ |@paperclipai/server| src/__tests__/company-portability.test.ts > company portability > imports a packaged company logo and attaches it to the target company
+ ↓ |@paperclipai/server| src/__tests__/company-portability.test.ts > company portability > copies source company memberships for safe new-company imports
+ ↓ |@paperclipai/server| src/__tests__/company-portability.test.ts > company portability > disables timer heartbeats and strips raw provider tracing on created imports
+ ✓ |@paperclipai/server| src/__tests__/company-portability.test.ts > company portability > imports only selected files and leaves unchecked company metadata alone 8ms
+ ✓ |@paperclipai/server| src/__tests__/company-portability.test.ts > company portability > applies adapter overrides while keeping imported AGENTS content implicit 10ms
+ ✓ |@paperclipai/server| src/__tests__/company-portability.test.ts > company portability > does not implicitly add local adapter permission bypass defaults on import 10ms
+ ↓ |@paperclipai/server| src/__tests__/company-portability.test.ts > company portability > carries labels by name through export and import round-trip
+ ↓ |@paperclipai/server| src/__tests__/company-portability.test.ts > company portability > reuses existing target labels on name collision and keeps the target color
+ ↓ |@paperclipai/server| src/__tests__/company-portability.test.ts > company portability > drops unresolvable raw labelIds from old bundles with a warning instead of failing
+ ↓ |@paperclipai/server| src/__tests__/company-portability.test.ts > company portability > carries blockers, documents, work products, and monitors through export and import
+ ↓ |@paperclipai/server| src/__tests__/company-portability.test.ts > company portability > skips blockers and documents of tasks excluded from the import selection
+ ↓ |@paperclipai/server| src/__tests__/company-portability.test.ts > company portability > carries task timestamps and parent links through export and import
+ ↓ |@paperclipai/server| src/__tests__/company-portability.test.ts > company portability > drops self-referencing and cyclic parent links from a hand-built bundle with warnings
+ ↓ |@paperclipai/server| src/__tests__/company-portability.test.ts > company portability > carries issue attachments as content-addressed blobs through export and import
+ ↓ |@paperclipai/server| src/__tests__/company-portability.test.ts > company portability > skips attachment export with a per-task warning when storage is unavailable
+ ↓ |@paperclipai/server| src/__tests__/company-portability.test.ts > company portability > skips all attachment imports with one warning when the target has no storage
+ ↓ |@paperclipai/server| src/__tests__/company-portability.test.ts > company portability > fails closed when a bundle blob does not match its declared sha256
+ ↓ |@paperclipai/server| src/__tests__/company-portability.test.ts > company portability > skips oversized and missing-blob attachments with warnings instead of failing
+ ↓ |@paperclipai/server| src/__tests__/company-portability.test.ts > company portability > carries embedded asset images through export and import with rewritten references
+ ↓ |@paperclipai/server| src/__tests__/company-portability.test.ts > company portability > skips embedded image references that are foreign or dangling with one aggregate warning
+ ↓ |@paperclipai/server| src/__tests__/company-portability.test.ts > company portability > leaves embedded image references untouched when their blob is missing at import
+ ↓ |@paperclipai/server| src/__tests__/company-portability.test.ts > company portability > prunes embedded asset entries and blobs when the referencing files are excluded from the export selection
+ ↓ |@paperclipai/server| src/__tests__/company-portability.test.ts > company portability > previews unstamped v5 task data and refuses unqualified source release
+ ↓ |@paperclipai/server| src/__tests__/company-portability.test.ts > company portability > refuses same-company legacy task copies without current native source proof
+ ↓ |@paperclipai/server| src/__tests__/company-portability.test.ts > company portability > keeps packages declaring schemaVersions below 5 importable
+ ↓ |@paperclipai/server| src/__tests__/company-portability.test.ts > company portability > imports a legacy package carrying the retired brand color and attachment limit
+ ↓ |@paperclipai/server| src/__tests__/company-portability.test.ts > company portability > rejects packages produced by a newer Paperclip
+ ↓ |@paperclipai/server| src/__tests__/company-portability.test.ts > company portability > preserves issue comment presentation fields through export and import
+ ↓ |@paperclipai/server| src/__tests__/company-portability.test.ts > company portability > does not export raw comment author user ids
+ ↓ |@paperclipai/server| src/__tests__/company-portability.test.ts > company portability > downgrades user-authored imported comments to system when no importing user exists
+ ↓ |@paperclipai/server| src/__tests__/company-portability.test.ts > company portability > strips root AGENTS frontmatter when importing a nested agent entry path
+ ↓ |@paperclipai/server| src/__tests__/company-portability.test.ts > company portability > rejects dangerous adapter types on agent-safe imports
+ ↓ |@paperclipai/server| src/__tests__/company-portability.test.ts > company portability > reports unsafe project workspace commands on agent-safe import preview
+ ↓ |@paperclipai/server| src/__tests__/company-portability.test.ts > company portability > reports invalid imported project env on agent-safe import preview
+ ↓ |@paperclipai/server| src/__tests__/company-portability.test.ts > company portability > rejects unsafe routine and issue execution overrides on agent-safe import apply
+ ✓ |@paperclipai/server| src/__tests__/company-portability.test.ts > company portability > imports new agents as active while preserving future hire approval settings 9ms
+ ✓ |@paperclipai/server| src/__tests__/company-portability.test.ts > company portability > normalizes adapter config on replace imports before updating existing agents 9ms
+ ↓ |@paperclipai/server| src/__tests__/company-portability.test.ts > company portability > nameOverrides applied after collision detection do not re-validate uniqueness
+ ↓ |@paperclipai/server| src/__tests__/company-portability.test.ts > company portability > handles circular reportsTo chains without infinite recursion during export
+ ↓ |@paperclipai/server| src/__tests__/company-portability.test.ts > company portability > resolves issue assignee to existing agent when agent is skipped
+ ↓ |@paperclipai/server| src/__tests__/company-portability.test.ts > company portability > handles a package with only skills (no agents or projects)
+ ↓ |@paperclipai/server| src/__tests__/company-portability.test.ts > company portability > preview import detects no agents to import when agents are excluded
+ ✓ |@paperclipai/server| src/__tests__/company-portability.test.ts > company portability > rejects runner imports while disabled and accepts the same selection when enabled 15ms
+ ↓ |@paperclipai/server| src/__tests__/company-portability.test.ts > dedupeImportedCompanyName > returns the base name when nothing collides
+ ↓ |@paperclipai/server| src/__tests__/company-portability.test.ts > dedupeImportedCompanyName > suffixes past every taken candidate, case-insensitively
+ ↓ |@paperclipai/server| src/__tests__/company-portability.test.ts > dedupeImportedCompanyName > ignores surrounding whitespace in existing names
+
+ Test Files  1 passed (1)
+      Tests  12 passed | 88 skipped (100)
+   Start at  12:30:21
+   Duration  18.29s (transform 8.67s, setup 75ms, import 13.23s, tests 4.86s, environment 0ms)
+

@@ -1,0 +1,71 @@
+
+ RUN  v4.1.11 /workspace/v10-dep-qualification/server
+
+ ✓ src/__tests__/tool-gateway-service.test.ts > Blentera platform contract hashes > records existing Agent APIs without registering tools or MCP exposure 17ms
+ ✓ src/__tests__/tool-gateway-service.test.ts > Blentera platform contract hashes > exports stable operation and first-party tool catalog hashes 30ms
+ ✓ src/__tests__/tool-gateway-service.test.ts > Blentera platform contract hashes > pins V1, V2, and V3 procedure-contract releases without repinning old Runs 9ms
+ ✓ src/__tests__/tool-gateway-service.test.ts > Blentera platform contract hashes > keeps Task progress replay routed by its canonical manifest alias and owner 0ms
+ ✓ src/__tests__/tool-gateway-service.test.ts > Blentera platform contract hashes > classifies the required least-authority domain projections without claiming unqualified channels 1ms
+ ↓ src/__tests__/tool-gateway-service.test.ts > tool gateway service > executes a pinned connector through a workflow and denies catalogue drift before another provider call
+ ↓ src/__tests__/tool-gateway-service.test.ts > tool gateway service > parks a user workflow for signed tool review, recovers its receipt, and blocks late approval after cancellation
+ ↓ src/__tests__/tool-gateway-service.test.ts > tool gateway service > exposes Memory self-tools only when the Memory feature gates are enabled
+ ↓ src/__tests__/tool-gateway-service.test.ts > tool gateway service > exposes AI workflow authoring tools only behind the full authoring feature gate
+ ↓ src/__tests__/tool-gateway-service.test.ts > tool gateway service > does not let a plugin shadow a reserved first-party name while its feature gate is closed
+ ↓ src/__tests__/tool-gateway-service.test.ts > tool gateway service > routes an MCP Task comment through the current Native owner and binds its honest transport identity
+ ↓ src/__tests__/tool-gateway-service.test.ts > tool gateway service > projects only current readable Projects through the canonical service and Human intersection
+ ↓ src/__tests__/tool-gateway-service.test.ts > tool gateway service > creates an idempotent local Support request under the current Native Human and approved safe context
+ ↓ src/__tests__/tool-gateway-service.test.ts > tool gateway service > reads public service status separately from Support intake under current run, Human, policy, and Skill pins
+ ↓ src/__tests__/tool-gateway-service.test.ts > tool gateway service > executes create_workflow through the governed gateway without publishing
+ ↓ src/__tests__/tool-gateway-service.test.ts > tool gateway service > gates write tools with an action request and executes only stored reviewed arguments once
+ ↓ src/__tests__/tool-gateway-service.test.ts > tool gateway service > approves a pending action request directly from the review queue and preserves signed arguments
+ ↓ src/__tests__/tool-gateway-service.test.ts > tool gateway service > commits one human decision and delivers once after the original run yields, including after service restart
+ ↓ src/__tests__/tool-gateway-service.test.ts > tool gateway service > waits for all reviews, then delivers both outcomes in one durable continuation
+ ↓ src/__tests__/tool-gateway-service.test.ts > tool gateway service > keeps reviewed results from different source runs in separate non-coalescing wakes
+ ↓ src/__tests__/tool-gateway-service.test.ts > tool gateway service > bounds many outcomes and recovers their full-result reference after wake commit
+ ↓ src/__tests__/tool-gateway-service.test.ts > tool gateway service > retires a former assignee's continuation after reassignment
+ ↓ src/__tests__/tool-gateway-service.test.ts > tool gateway service > recovers expired reviews beyond a full batch of approvals that cannot recover
+ ↓ src/__tests__/tool-gateway-service.test.ts > tool gateway service > settles expired reviews and interrupted execution without replaying an uncertain external action
+ ↓ src/__tests__/tool-gateway-service.test.ts > tool gateway service > remembers a read action atomically, allows changed arguments, and preserves explicit denials and definition review
+ ↓ src/__tests__/tool-gateway-service.test.ts > tool gateway service > rolls back approval when remembered permission cannot be saved
+ ↓ src/__tests__/tool-gateway-service.test.ts > tool gateway service > refuses to approve an action request through a different interaction
+ ↓ src/__tests__/tool-gateway-service.test.ts > tool gateway service > prevents another run from consuming an approved action request by id
+ ↓ src/__tests__/tool-gateway-service.test.ts > tool gateway service > executes an approved identical-args race once and returns the winner result
+ ↓ src/__tests__/tool-gateway-service.test.ts > tool gateway service > refuses to execute an approved action after its issue closes
+ ↓ src/__tests__/tool-gateway-service.test.ts > tool gateway service > keeps pre-execute-on-approve approved requests inert
+ ↓ src/__tests__/tool-gateway-service.test.ts > tool gateway service > does not let a stale legacy consumer overwrite the winning approved execution
+ ↓ src/__tests__/tool-gateway-service.test.ts > tool gateway service > does not leave unsigned action requests pending when signing is unavailable
+ ↓ src/__tests__/tool-gateway-service.test.ts > tool gateway service > explains how to recover when an approval-required session has no task
+ ↓ src/__tests__/tool-gateway-service.test.ts > tool gateway service > cancels a stale pending action request when direct approval sees an invalid signature
+ ↓ src/__tests__/tool-gateway-service.test.ts > tool gateway service > declines a pending action request and rejects the invocation (PAP-10859)
+ ↓ src/__tests__/tool-gateway-service.test.ts > tool gateway service > expires a stale identical request and creates a fresh approval
+ ↓ src/__tests__/tool-gateway-service.test.ts > tool gateway service > adds formal board approval for destructive tool actions and fails closed until approved
+ ↓ src/__tests__/tool-gateway-service.test.ts > tool gateway service > maps remote MCP elicitation to a durable issue interaction
+ ↓ src/__tests__/tool-gateway-service.test.ts > tool gateway service > initializes a fresh Streamable HTTP session before a stateful tools/call
+ ↓ src/__tests__/tool-gateway-service.test.ts > tool gateway service > hides cached Chat unread filters and blocks agent and board requests before provider dispatch
+ ↓ src/__tests__/tool-gateway-service.test.ts > tool gateway service > explains Google Workspace preview enrollment when a tool call is denied
+ ↓ src/__tests__/tool-gateway-service.test.ts > tool gateway service > fences scoped HTTP transport at native authority boundaries: token_run_cancel
+ ↓ src/__tests__/tool-gateway-service.test.ts > tool gateway service > fences scoped HTTP transport at native authority boundaries: initialize_grant_revoke
+ ↓ src/__tests__/tool-gateway-service.test.ts > tool gateway service > fences scoped HTTP transport at native authority boundaries: notification_run_cancel
+ ↓ src/__tests__/tool-gateway-service.test.ts > tool gateway service > fences scoped HTTP transport at native authority boundaries: notification_destination_change
+ ↓ src/__tests__/tool-gateway-service.test.ts > tool gateway service > fences scoped HTTP transport at native authority boundaries: call_grant_revoke
+ ↓ src/__tests__/tool-gateway-service.test.ts > tool gateway service > fences scoped HTTP transport at native authority boundaries: unauthorized_refresh
+ ↓ src/__tests__/tool-gateway-service.test.ts > tool gateway service > fences scoped HTTP transport at native authority boundaries: refresh_grant_revoke
+ ↓ src/__tests__/tool-gateway-service.test.ts > tool gateway service > fences scoped HTTP transport at native authority boundaries: token_grant_revoke
+ ↓ src/__tests__/tool-gateway-service.test.ts > tool gateway service > fences scoped HTTP transport at native authority boundaries: token_grant_revoke_ordinary
+ ↓ src/__tests__/tool-gateway-service.test.ts > tool gateway service > fences scoped HTTP transport at native authority boundaries: healthy_refresh
+ ↓ src/__tests__/tool-gateway-service.test.ts > tool gateway service > fences scoped HTTP transport at native authority boundaries: healthy_last_rate_slot
+ ↓ src/__tests__/tool-gateway-service.test.ts > tool gateway service > injects Vercel tokens at dispatch and refreshes exactly once after an upstream 401
+ ↓ src/__tests__/tool-gateway-service.test.ts > tool gateway service > keeps managed GitHub personal identity even under a legacy shared policy
+ ↓ src/__tests__/tool-gateway-service.test.ts > tool gateway service > reselects a duplicate only before GitHub dispatch (upstream failure: false)
+ ↓ src/__tests__/tool-gateway-service.test.ts > tool gateway service > reselects a duplicate only before GitHub dispatch (upstream failure: true)
+ ↓ src/__tests__/tool-gateway-service.test.ts > tool gateway service > refreshes a customer OAuth grant once and retries after an upstream 401
+ ↓ src/__tests__/tool-gateway-service.test.ts > tool gateway service > marks a managed OAuth grant reconnect-required after one rejected refresh retry
+ ↓ src/__tests__/tool-gateway-service.test.ts > tool gateway service > fails clearly when remote MCP elicitation has no issue interaction path
+ ↓ src/__tests__/tool-gateway-service.test.ts > tool gateway service > blocks malicious plugin tool results before they reach the agent
+ ↓ src/__tests__/tool-gateway-service.test.ts > tool gateway service > passes original sensitive arguments to plugin executors while redacting stored summaries
+
+ Test Files  1 passed (1)
+      Tests  5 passed | 57 skipped (62)
+   Start at  07:06:26
+   Duration  15.50s (transform 10.70s, setup 71ms, import 15.25s, tests 58ms, environment 0ms)
+

@@ -1,5 +1,4 @@
 import type { NativeNotificationChannelGateway } from "./notifications/channel-delivery.js";
-import { instanceSettings } from "@paperclipai/db";
 import { v9FeatureEnabled } from "@paperclipai/shared";
 import { safeCardForPublication } from "./chat-card-rendering.js";
 import { withSlackBoardLease } from "./slack-board-lease.js";
@@ -19,7 +18,7 @@ import { githubChatManagementService } from "./chat-github-management.js";
 import { githubReviewCheckService } from "./chat-github-checks.js";
 import { githubAutomaticReviewEvent, githubAutomaticAdmission, githubPreviousAssessment } from "./chat-github-events.js";
 import { githubReviewPrompt } from "./chat-github-review-policy.js";
-import { chatGitHubConfigurations, chatGitHubReviews } from "@paperclipai/db";
+import { chatGitHubConfigurations, chatGitHubReviews, chatGitHubResourceMigrations } from "@paperclipai/db";
 import type { GitHubReviewEventContext, GitHubReviewPolicy } from "@paperclipai/shared";
 import { githubChatReviewService } from "./chat-github-reviews.js";
 import { githubChatRegistrationService } from "./chat-github-registration.js";
@@ -32,6 +31,8 @@ import { takePhotonCompanion } from "./photon/attachments.js";
 import { writePhotonCheckpoint } from "./photon/receiver.js";
 import { PhotonState } from "./photon/state.js";
 import { nativeSha256 } from "./native-runtime/canonical.js";
+import { credentialFingerprint, runtimeGeneration } from "./chat-runtime-fence.js";
+import { readCanonicalInboundWakeupDbSource } from "./native-runtime/chat-inbound-wakeup-owner.js";
 import { HEIF_CONTENT_TYPES, photonHeifPreview, validatePhotonImage } from "./photon/media.js";
 import { projectSafeChatPublicationText } from "./chat-publication-projection.js";
 import { PhotonAnswerValidationError, nativePhotonInteraction, publishPhotonPrompt, photonResponseCommand, parsePhotonQuestionAnswer, type PhotonPromptReceipt, type PhotonInteractionBinding, type PhotonDraft } from "./photon/interactions.js";
@@ -258,7 +259,8 @@ import {
   queueIssueAssignmentWakeup,
   type IssueAssignmentWakeupDeps,
 } from "./issue-assignment-wakeup.js";
-import { issueService } from "./issues.js";
+import { issueService, lockIssuePrivacyTree } from "./issues.js";
+import { canActorReadIssuePrivacy, type AuthorizationActor } from "./authorization.js";
 import {
   authorizeNativeChatReviewPresentation,
   NativeChatReviewPresentationContentionError,
@@ -957,25 +959,6 @@ function githubRecoveryWindow(value: unknown): GitHubRecoveryWindow | null {
     : null;
 }
 
-function runtimeGeneration(setup: ChatEndpointSetupState): number {
-  const value = Number((setup as InternalSetupState).runtimeGeneration ?? 0);
-  return Number.isSafeInteger(value) && value >= 0 ? value : 0;
-}
-
-function credentialFingerprint(refs: ToolCredentialSecretRef[]): string {
-  const stable = refs
-    .map((ref) => ({
-      configPath: ref.configPath,
-      secretId: ref.secretId,
-      versionSelector: ref.versionSelector ?? "latest",
-    }))
-    .sort((left, right) =>
-      `${left.configPath}:${left.secretId}:${left.versionSelector}`.localeCompare(
-        `${right.configPath}:${right.secretId}:${right.versionSelector}`,
-      ),
-    );
-  return createHash("sha256").update(JSON.stringify(stable)).digest("hex");
-}
 
 const ATTACHMENT_FAILURE_NOTICE_PREFIX = "attachment-failure-notice:";
 
@@ -7265,6 +7248,46 @@ export function chatChannelService(db: Db, options: ChatChannelServiceOptions) {
     return typeof value === "string" && /^\d+$/.test(value) ? value : null;
   }
 
+  async function rebindMigratedChatIssueOrigins(
+    tx: DbTransaction,
+    endpoint: EndpointRow,
+    resourceId: string,
+    previousThreadPrefix: string,
+    migratedThreadPrefix: string,
+    caseInsensitive: boolean,
+  ) {
+    const threadIdentity = caseInsensitive
+      ? sql`lower(c.external_thread_id)`
+      : sql`c.external_thread_id`;
+    const prefixIdentity = caseInsensitive
+      ? sql`lower(${previousThreadPrefix})`
+      : sql`${previousThreadPrefix}`;
+    const isExactOrChildThread = sql`(
+      ${threadIdentity} = ${prefixIdentity}
+      or (
+        left(${threadIdentity}, char_length(${prefixIdentity})) = ${prefixIdentity}
+        and substring(c.external_thread_id from char_length(${previousThreadPrefix}) + 1 for 1) = ':'
+      )
+    )`;
+    const migratedThreadId = sql`case
+      when ${threadIdentity} = ${prefixIdentity} then ${migratedThreadPrefix}
+      else ${migratedThreadPrefix} || substring(
+        c.external_thread_id from char_length(${previousThreadPrefix}) + 1
+      )
+    end`;
+    await tx.execute(sql`update issues as i
+      set origin_id = ${endpoint.id}::text || ':' || (${migratedThreadId}) || ':' || c.session_generation::text
+      from chat_conversations as c
+      where c.company_id = ${endpoint.companyId}
+        and c.endpoint_id = ${endpoint.id}
+        and c.resource_id = ${resourceId}
+        and i.company_id = c.company_id
+        and i.id = c.issue_id
+        and i.origin_kind = 'chat_channel'
+        and i.origin_id = ${endpoint.id}::text || ':' || c.external_thread_id || ':' || c.session_generation::text
+        and ${isExactOrChildThread}`);
+  }
+
   async function upsertProviderResourceRow(
     tx: DbTransaction,
     endpoint: EndpointRow,
@@ -7334,9 +7357,20 @@ export function chatChannelService(db: Db, options: ChatChannelServiceOptions) {
 
         const oldRepository = stableResource.providerResourceId;
         const oldThreadPrefix = `github:${oldRepository}`;
+        await tx.insert(chatGitHubResourceMigrations).values({
+          companyId: endpoint.companyId,
+          endpointId: endpoint.id,
+          resourceId: stableResource.id,
+          providerRepositoryId: stableGitHubId,
+          fromRepository: oldRepository,
+          toRepository: item.providerResourceId,
+        }).onConflictDoNothing();
         const newThreadPrefix = `github:${item.providerResourceId}`;
         const oldProviderUrl = `https://github.com/${oldRepository}`;
         const newProviderUrl = `https://github.com/${item.providerResourceId}`;
+        await rebindMigratedChatIssueOrigins(
+          tx, endpoint, stableResource.id, oldThreadPrefix, newThreadPrefix, true,
+        );
         await tx
           .update(chatEndpointResources)
           .set({
@@ -10501,9 +10535,8 @@ export function chatChannelService(db: Db, options: ChatChannelServiceOptions) {
     },
   ): Promise<void> {
     if (input.v9Confirmation) {
-      const [settings] = await tx.select({ experimental: instanceSettings.experimental })
-        .from(instanceSettings).where(eq(instanceSettings.singletonKey, "default")).for("share");
-      if (!v9FeatureEnabled(settings?.experimental ?? {}, "action_cards_v9"))
+      const experimental = await instanceSettingsService(tx).getExperimental({ db: tx, lock: "share" });
+      if (!v9FeatureEnabled(experimental, "action_cards_v9"))
         throw forbidden("This chat action is no longer authorized", { code: "chat_action_authorization_changed" });
     }
     const endpoint = await runtimeCallbackEndpoint(
@@ -11279,7 +11312,9 @@ export function chatChannelService(db: Db, options: ChatChannelServiceOptions) {
       // empty turn that contains no usable bytes.
       await tx
         .update(issueComments)
-        .set({ body: visibleFailure, updatedAt: new Date() })
+        .set({ body: visibleFailure, updatedAt: new Date(),
+          payloadSourceSnapshot: sql`case when ${issueComments.body} is distinct from ${visibleFailure} then null else ${issueComments.payloadSourceSnapshot} end`,
+        })
         .where(
           and(
             eq(issueComments.id, input.commentId),
@@ -11829,37 +11864,12 @@ export function chatChannelService(db: Db, options: ChatChannelServiceOptions) {
         payload.requestedByActorId !== action.principalId)
     )
       throw deny();
-    const source = await tx
-      .select({
-        authorUserId: issueComments.authorUserId,
-        deletedAt: issueComments.deletedAt,
-      })
-      .from(chatMessageLinks)
-      .innerJoin(
-        issueComments,
-        and(
-          eq(issueComments.id, chatMessageLinks.commentId),
-          eq(issueComments.companyId, action.companyId),
-          eq(issueComments.issueId, issue.id),
-        ),
-      )
-      .where(
-        and(
-          eq(chatMessageLinks.companyId, action.companyId),
-          eq(chatMessageLinks.endpointId, endpoint.id),
-          eq(chatMessageLinks.conversationId, conversation.id),
-          eq(chatMessageLinks.deliveryId, delivery.id),
-          eq(chatMessageLinks.commentId, payload.commentId),
-          eq(chatMessageLinks.direction, "inbound"),
-        ),
-      )
-      .limit(1)
-      .then((rows) => rows[0] ?? null);
-    if (
-      !source ||
-      (source.deletedAt && !notice?.terminal) ||
-      source.authorUserId !== expectedUserId
-    )
+    const source = await readCanonicalInboundWakeupDbSource(tx, {
+      action, expectedIssueId: issue.id, expectedAgentId: payload.agentId, expectedCommentId: payload.commentId,
+      expectedUserId, allowTerminalIssue: notice?.terminal === true, allowTerminalAction: notice?.terminal === true,
+      allowEarlyAction: true, allowDeletedSource: notice?.terminal === true,
+    });
+    if (source.endpoint.id !== endpoint.id || source.delivery.id !== delivery.id || source.conversation.id !== conversation.id)
       throw deny();
     return { issue, delivery, endpoint, conversation };
   }
@@ -13429,6 +13439,7 @@ export function chatChannelService(db: Db, options: ChatChannelServiceOptions) {
           issueId: source.issueId,
           taskKey: source.taskKey,
           source: `chat:${source.provider}`,
+          conversationSessionGeneration: source.sessionGeneration,
           wakeCommentId: source.commentIds.at(-1)!,
           wakeCommentIds: source.commentIds,
           retryOfRunId: source.failedRunId,
@@ -13446,6 +13457,7 @@ export function chatChannelService(db: Db, options: ChatChannelServiceOptions) {
           source: "on_demand",
           triggerDetail: "manual",
           reason: "retry_failed_run",
+          failedRunId: source.failedRunId,
           payload: context,
           contextSnapshot: context,
           allowRunCoalescing: false,
@@ -14449,6 +14461,7 @@ export function chatChannelService(db: Db, options: ChatChannelServiceOptions) {
         requestedByActorId: request.requestedByActorId,
         taskKey: context.issue.identifier,
         wakeCommentId: request.commentId,
+        conversationSessionGeneration: claimed.payload.sessionGeneration as number,
         attachmentOmissionReasons: claimed.payload.attachmentOmissionReasons as
           | Record<string, number>
           | undefined,
@@ -16076,6 +16089,7 @@ export function chatChannelService(db: Db, options: ChatChannelServiceOptions) {
         taskTx: DbOrTransaction,
         taskEndpoint: EndpointRow,
         taskUserId: string | null,
+        verifiedChatHumanUserId: string | null,
       ) => {
         let conversation = existingConversation;
         if (!conversation) {
@@ -16102,6 +16116,11 @@ export function chatChannelService(db: Db, options: ChatChannelServiceOptions) {
               idempotencyKey: `chat:${endpoint.id}:${thread.id}:${sessionGeneration}`,
             },
             taskTx,
+            undefined,
+            verifiedChatHumanUserId && verifiedChatHumanUserId === taskUserId
+              ? { verifiedChatHumanInput: { userId: verifiedChatHumanUserId, endpointId: taskEndpoint.id,
+                  principalId: principalResolution.principal.id } }
+              : undefined,
           );
           await taskTx
             .insert(chatConversations)
@@ -16143,7 +16162,7 @@ export function chatChannelService(db: Db, options: ChatChannelServiceOptions) {
             "Could not bind external conversation to a Paperclip task",
           );
 
-        const issue =
+        let issue =
           existingIssue?.id === conversation.issueId
             ? existingIssue
             : await taskTx
@@ -16159,9 +16178,9 @@ export function chatChannelService(db: Db, options: ChatChannelServiceOptions) {
               version: LOW_TRUST_REVIEW_PRESET_VERSION,
               rawOutputDisposition: LOW_TRUST_REVIEW_RAW_OUTPUT_DISPOSITION,
             } as const;
-            await taskTx
-              .update(issues)
-              .set({
+            const updatedIssue = await issuesSvc.update(
+              issue.id,
+              {
                 sourceTrust: {
                   preset: LOW_TRUST_REVIEW_PRESET,
                   disposition: "quarantined",
@@ -16192,14 +16211,13 @@ export function chatChannelService(db: Db, options: ChatChannelServiceOptions) {
                     },
                   },
                 },
-                updatedAt: new Date(),
-              })
-              .where(
-                and(
-                  eq(issues.id, issue.id),
-                  eq(issues.companyId, endpoint.companyId),
-                ),
-              );
+                payloadSourceSnapshot: issue.payloadSourceSnapshot ? null : undefined,
+                companyGuard: taskEndpoint.companyId,
+              },
+              taskTx,
+            );
+            if (!updatedIssue) throw notFound("Bound task not found");
+            issue = updatedIssue;
           }
 
         if (issue.status === "done" || issue.status === "cancelled") {
@@ -16312,6 +16330,10 @@ export function chatChannelService(db: Db, options: ChatChannelServiceOptions) {
                   disposition: "quarantined",
                   sourceIssueId: conversation!.issueId,
                 },
+            ...(verifiedChatHumanUserId && verifiedChatHumanUserId === taskUserId
+              ? { verifiedChatHumanInput: { userId: verifiedChatHumanUserId, endpointId: taskEndpoint.id,
+                  principalId: principalResolution.principal.id } }
+              : {}),
           },
           taskTx,
         );
@@ -16434,6 +16456,9 @@ export function chatChannelService(db: Db, options: ChatChannelServiceOptions) {
             currentEndpoint,
             principalResolution.principal.id,
           );
+        // Keep the linked principal's current Human identity separate from
+        // later GitHub automatic-admission attribution.
+        const linkedHumanUserId = currentPrincipalAuthorization.userId;
         const automaticAdmission = githubAutomatic ? await githubAutomaticAdmission(tx, currentEndpoint, githubAutomatic.context) : null;
         if (githubAutomatic && !automaticAdmission?.allowed) currentPrincipalAuthorization.allowed = false;
         if (automaticAdmission?.allowed) currentPrincipalAuthorization.userId = automaticAdmission.responsibleUserId ?? null;
@@ -16527,6 +16552,8 @@ export function chatChannelService(db: Db, options: ChatChannelServiceOptions) {
           tx,
           currentPrincipalAuthorization.sponsorUserId ? { ...currentEndpoint, sponsorUserId: currentPrincipalAuthorization.sponsorUserId } : currentEndpoint,
           currentPrincipalAuthorization.userId,
+          !githubAutomatic && !githubManual && linkedHumanUserId === currentPrincipalAuthorization.userId
+            ? linkedHumanUserId : null,
         );
       });
       if (!taskMutation) return;
@@ -24361,6 +24388,9 @@ export function chatChannelService(db: Db, options: ChatChannelServiceOptions) {
             ) {
               const previousThreadPrefix = `telegram:${previousProviderResourceId}`;
               const migratedThreadPrefix = `telegram:${providerResourceId}`;
+              await rebindMigratedChatIssueOrigins(
+                tx, currentEndpoint, previousResource.id, previousThreadPrefix, migratedThreadPrefix, false,
+              );
               await tx
                 .update(chatConversations)
                 .set({
@@ -30558,6 +30588,7 @@ export function chatChannelService(db: Db, options: ChatChannelServiceOptions) {
     clientIdempotencyKey: string,
     userId: string,
     attachmentIds: string[] = [],
+    manualInputActor?: AuthorizationActor,
   ) {
     const emailBoundary = await endpointRecord(endpointId);
     if (emailBoundary?.endpoint.publicationMode === "explicit")
@@ -30620,6 +30651,7 @@ export function chatChannelService(db: Db, options: ChatChannelServiceOptions) {
         if (!existing && !rejected) await runtimeFor(record.endpoint);
       }
     }
+    let manualInputSourcePublication: ActivityPublication | null = null;
     const publication = await db.transaction(async (tx) => {
       const conversation = await tx
         .select()
@@ -30703,11 +30735,16 @@ export function chatChannelService(db: Db, options: ChatChannelServiceOptions) {
         // addComment inserts before binding attachments. Roll back that insert
         // in a savepoint, then commit only the exact terminal rejection below.
         comment = await tx.transaction((inner) =>
-          issueService(inner as unknown as Db).addComment(
+          issueService(db).addComment(
             conversation.issueId,
             body,
             { userId },
-            { authorType: "user", attachmentIds },
+            { authorType: "user", attachmentIds,
+              ...(manualInputActor?.type === "board" && manualInputActor.source === "session" &&
+                manualInputActor.userId === userId ? {
+                  manualInputActor,
+                  onManualInputSourcePublication: (activity) => { manualInputSourcePublication = activity; },
+                } : {}) },
             inner,
           ),
         );
@@ -30851,6 +30888,10 @@ export function chatChannelService(db: Db, options: ChatChannelServiceOptions) {
       });
       return terminalPublication;
     });
+    if (manualInputSourcePublication) {
+      try { publishActivity(manualInputSourcePublication); }
+      catch (err) { logger.warn({ err }, "Failed to publish committed Board comment source activity"); }
+    }
     if ("rejection" in publication) {
       throw conflict(
         "Selected attachments are already bound to another comment",
@@ -31465,6 +31506,23 @@ export function chatChannelService(db: Db, options: ChatChannelServiceOptions) {
     );
   }
 
+  async function teamsBoardAuthorCanReadTask(
+    tx: DbTransaction,
+    companyId: string,
+    userId: string,
+    issueId: string,
+  ) {
+    if (!(await teamsBoardAuthorIsCurrent(tx, companyId, userId))) return false;
+    // Reuse the current native Task privacy/source resolver after provider
+    // waits; an active company membership alone does not authorize a private
+    // source payload.
+    return canActorReadIssuePrivacy(
+      tx,
+      { type: "board", source: "session", userId, companyIds: [companyId], ignoreInstanceAdmin: true },
+      { id: issueId, companyId },
+    );
+  }
+
   function teamsBoardFileIntentPayload(
     scope: NonNullable<Awaited<ReturnType<typeof teamsFileCurrentScope>>>,
     source: NonNullable<Awaited<ReturnType<typeof teamsFileSourceBinding>>>,
@@ -31586,10 +31644,11 @@ export function chatChannelService(db: Db, options: ChatChannelServiceOptions) {
         !scope.comment.authorUserId ||
         scope.comment.authorAgentId ||
         scope.comment.createdByRunId ||
-        !(await teamsBoardAuthorIsCurrent(
+        !(await teamsBoardAuthorCanReadTask(
           tx,
           scope.endpoint.companyId,
           scope.comment.authorUserId,
+          scope.conversation.issueId,
         ))
       )
         return null;
@@ -31879,6 +31938,7 @@ export function chatChannelService(db: Db, options: ChatChannelServiceOptions) {
               runtime.get(expected.endpointId))
         )
           throw denied();
+        await lockIssuePrivacyTree(tx, expected.companyId);
         const [publication] = await tx
           .select()
           .from(chatPublications)
@@ -33852,6 +33912,10 @@ export function chatChannelService(db: Db, options: ChatChannelServiceOptions) {
   } | null> {
     return db.transaction(async (tx) => {
       await input.credentialLease.assertOwned(tx);
+      // Recheck retained private Task sources under the source-lifecycle lock
+      // order before locking the publication receipt or claiming provider I/O.
+      if (input.publication.commentId)
+        await lockIssuePrivacyTree(tx, input.publication.companyId);
       const currentPublication = await tx
         .select({ id: chatPublications.id })
         .from(chatPublications)
@@ -33997,15 +34061,33 @@ export function chatChannelService(db: Db, options: ChatChannelServiceOptions) {
         return null;
       }
       let authorizationActionId: string | null = null;
+      const inboundWakeKey = input.publication.idempotencyKey.startsWith("wake:")
+        ? parseInboundWakePublicationKey(input.publication.idempotencyKey)
+        : null;
+      const isInboundWakePublication = input.publication.idempotencyKey.startsWith("wake:");
+      const isRemovedWakeNotice = inboundWakeKey?.state === "removed";
+      let authorizedInboundWake = false;
+      if (isRemovedWakeNotice) {
+        // Validate the exact removal receipt and visible prior queue notice
+        // before allowing the deleted source through the linked-author check.
+        authorizedInboundWake = await authorizeInboundWakePublication(tx, input.publication);
+        if (!authorizedInboundWake) return null;
+      }
       if (endpoint.provider === "slack") {
         const credentials = await resolveCredentials(endpoint, tx);
-        if (!await authorizeSlackBoardPublication(tx, endpoint, conversation, input.publication, credentials.botToken ?? "", fetchImpl)) return null;
+        if (!await authorizeSlackBoardPublication(tx, endpoint, conversation, input.publication,
+          credentials.botToken ?? "", fetchImpl, {
+            // A removed wake notice edits the already-published queue notice.
+            // Its exact wake receipt, current destination, owner and visible
+            // prior notice were validated above; tolerate only that source's
+            // soft deletion while rechecking the linked author below.
+            allowDeletedSource: Boolean(authorizedInboundWake && isRemovedWakeNotice),
+          })) return null;
       }
-      if (
-        input.publication.idempotencyKey.startsWith("wake:") &&
-        !(await authorizeInboundWakePublication(tx, input.publication))
-      )
-        return null;
+      if (isInboundWakePublication && !authorizedInboundWake) {
+        authorizedInboundWake = await authorizeInboundWakePublication(tx, input.publication);
+        if (!authorizedInboundWake) return null;
+      }
       // A native response alongside an older completion review has its own
       // narrow authorization. Recheck that exact proof, review and original
       // requester at the transport claim, including file publications whose

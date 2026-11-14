@@ -119,9 +119,16 @@ describe("captureRunFailure", () => {
     expect(captureException.mock.calls[0]![1]?.fingerprint).toEqual(["unknown", "claude-code"]);
   });
 
-  it("sets the five diagnostic values on the run_failure context", async () => {
+  it("sets the closed failure diagnostics on the run_failure context", async () => {
     const { sentryModule, captureException } = await importFreshSentryWithGateOpen();
-    const event = baseEvent();
+    const event = baseEvent({
+      executionDiagnostics: {
+        acpStalledToolKind: "execute",
+        acpStalledToolSilentMs: 1_800_000,
+        acpStalledToolPermissionRequestArrived: true,
+        acpPendingToolPermissionRequestArrivedCount: 1,
+      },
+    });
 
     sentryModule.captureRunFailure(event);
 
@@ -131,6 +138,7 @@ describe("captureRunFailure", () => {
       errorMessage: event.errorMessage,
       errorCode: event.errorCode,
       agentAdapter: event.agentAdapter,
+      executionDiagnostics: event.executionDiagnostics,
     });
   });
 

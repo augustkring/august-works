@@ -1,0 +1,50 @@
+(!) Your Vite config uses features that are unsupported by `configLoader: 'native'`, which is planned to become the default in a future major version of Vite:
+  - `__dirname` (vitest.config.ts:7:25). Use `import.meta.dirname` instead
+Set `VITE_CONFIG_NATIVE_IGNORE_WARNING=true` to suppress this warning.
+
+ RUN  v4.1.11 /workspace/blentera-v10
+
+ ❯ |@paperclipai/server| src/__tests__/company-transfer-runs.test.ts (10 tests | 2 failed) 3570ms
+     × recovers runs stranded in applying by a restart, leaving live runs alone 12ms
+     × fences a possibly committed import effect after restart and resumes its same run 30ms
+
+⎯⎯⎯⎯⎯⎯⎯ Failed Tests 2 ⎯⎯⎯⎯⎯⎯⎯
+
+ FAIL  |@paperclipai/server| src/__tests__/company-transfer-runs.test.ts > companyTransferRunService > recovers runs stranded in applying by a restart, leaving live runs alone
+AssertionError: expected 'failed' to be 'needs_reconciliation' // Object.is equality
+
+Expected: "needs_reconciliation"
+Received: "failed"
+
+ ❯ src/__tests__/company-transfer-runs.test.ts:308:33
+    306|     expect(recovered).not.toContain(open.id);
+    307|     const recoveredRun = (await companyTransferRunService.getRun(db, s…
+    308|     expect(recoveredRun.status).toBe("needs_reconciliation");
+       |                                 ^
+    309|     expect(recoveredRun.error).toMatch(/unknown|reconcil/i);
+    310|     expect(await companyTransferRunService.claimApply(db, stranded.id)…
+
+⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯[1/2]⎯
+
+ FAIL  |@paperclipai/server| src/__tests__/company-transfer-runs.test.ts > companyTransferRunService > fences a possibly committed import effect after restart and resumes its same run
+AssertionError: expected 'failed' to be 'needs_reconciliation' // Object.is equality
+
+Expected: "needs_reconciliation"
+Received: "failed"
+
+ ❯ src/__tests__/company-transfer-runs.test.ts:343:32
+    341|       expect(recovered).toContain(created.run.id);
+    342|       const uncertain = (await companyTransferRunService.getRun(restar…
+    343|       expect(uncertain.status).toBe("needs_reconciliation");
+       |                                ^
+    344|       expect(await companyTransferRunService.claimApply(restarted, cre…
+    345|
+
+⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯[2/2]⎯
+
+
+ Test Files  1 failed (1)
+      Tests  2 failed | 8 passed (10)
+   Start at  19:29:02
+   Duration  7.78s (transform 2.27s, setup 70ms, import 4.00s, tests 3.57s, environment 0ms)
+

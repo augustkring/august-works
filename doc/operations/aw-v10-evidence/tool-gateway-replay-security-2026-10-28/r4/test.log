@@ -1,0 +1,874 @@
+(!) Your Vite config uses features that are unsupported by `configLoader: 'native'`, which is planned to become the default in a future major version of Vite:
+  - `__dirname` (vitest.config.ts:7:25). Use `import.meta.dirname` instead
+Set `VITE_CONFIG_NATIVE_IGNORE_WARNING=true` to suppress this warning.
+
+ RUN  v4.1.11 /workspace/blentera-v10
+
+ ✓ |@paperclipai/server| src/__tests__/tool-gateway-service.test.ts > Blentera platform contract hashes > exports stable operation and first-party tool catalog hashes 6ms
+ ✓ |@paperclipai/server| src/__tests__/tool-gateway-service.test.ts > Blentera platform contract hashes > keeps Task progress replay routed by its canonical manifest alias and owner 1ms
+ ✓ |@paperclipai/server| src/__tests__/tool-gateway-service.test.ts > Blentera platform contract hashes > classifies the required least-authority domain projections without claiming unqualified channels 2ms
+ ✓ |@paperclipai/server| src/__tests__/tool-gateway-service.test.ts > tool gateway service > executes a pinned connector through a workflow and denies catalogue drift before another provider call 963ms
+ ✓ |@paperclipai/server| src/__tests__/tool-gateway-service.test.ts > tool gateway service > parks a user workflow for signed tool review, recovers its receipt, and blocks late approval after cancellation 2914ms
+ ✓ |@paperclipai/server| src/__tests__/tool-gateway-service.test.ts > tool gateway service > exposes Memory self-tools only when the Memory feature gates are enabled 476ms
+ ✓ |@paperclipai/server| src/__tests__/tool-gateway-service.test.ts > tool gateway service > exposes AI workflow authoring tools only behind the full authoring feature gate 400ms
+ ✓ |@paperclipai/server| src/__tests__/tool-gateway-service.test.ts > tool gateway service > does not let a plugin shadow a reserved first-party name while its feature gate is closed 98ms
+ ✓ |@paperclipai/server| src/__tests__/tool-gateway-service.test.ts > tool gateway service > routes an MCP Task comment through the current Native owner and binds its honest transport identity 7310ms
+ ✓ |@paperclipai/server| src/__tests__/tool-gateway-service.test.ts > tool gateway service > projects only current readable Projects through the canonical service and Human intersection 1551ms
+[11:27:06] [33mWARN[39m: [36mresponsible-user authorization intersection denied[39m [90m{"authzMode":"enforce","code":"RESPONSIBLE_USER_UNAVAILABLE","reason":"deny_missing_membership","action":"company_scope:read","resourceType":"company","companyId":"20dae040-ce17-4fc1-a681-6c88dde07fdc","actorAgentId":"4ba3080c-4c3a-4ac9-9a97-6ae369e00118","responsibleUserId":"gateway-service-status-human-d65f28bf-a5f3-449b-9159-8043b89f1e00"}[39m
+ ✓ |@paperclipai/server| src/__tests__/tool-gateway-service.test.ts > tool gateway service > creates an idempotent local Support request under the current Native Human and approved safe context 906ms
+ ✓ |@paperclipai/server| src/__tests__/tool-gateway-service.test.ts > tool gateway service > reads public service status separately from Support intake under current run, Human, policy, and Skill pins 526ms
+[11:27:07] [33mWARN[39m: [36mresponsible-user authorization intersection denied[39m [90m{"authzMode":"enforce","code":"RESPONSIBLE_USER_UNAVAILABLE","reason":"deny_missing_membership","action":"company_scope:read","resourceType":"company","companyId":"b50854d4-d192-4424-87a5-8f3c92edafc8","actorAgentId":"53a5da13-4634-4f71-b176-9334b210d717","responsibleUserId":"gateway-workflow-human-76418bda-9828-4fa3-bf90-f92ba62e600a"}[39m
+ ✓ |@paperclipai/server| src/__tests__/tool-gateway-service.test.ts > tool gateway service > executes create_workflow through the governed gateway without publishing 697ms
+ ✓ |@paperclipai/server| src/__tests__/tool-gateway-service.test.ts > tool gateway service > gates write tools with an action request and executes only stored reviewed arguments once 221ms
+ ✓ |@paperclipai/server| src/__tests__/tool-gateway-service.test.ts > tool gateway service > approves a pending action request directly from the review queue and preserves signed arguments 267ms
+ ✓ |@paperclipai/server| src/__tests__/tool-gateway-service.test.ts > tool gateway service > commits one human decision and delivers once after the original run yields, including after service restart 237ms
+ ✓ |@paperclipai/server| src/__tests__/tool-gateway-service.test.ts > tool gateway service > waits for all reviews, then delivers both outcomes in one durable continuation 266ms
+ ✓ |@paperclipai/server| src/__tests__/tool-gateway-service.test.ts > tool gateway service > keeps reviewed results from different source runs in separate non-coalescing wakes 292ms
+ ✓ |@paperclipai/server| src/__tests__/tool-gateway-service.test.ts > tool gateway service > bounds many outcomes and recovers their full-result reference after wake commit 889ms
+ ✓ |@paperclipai/server| src/__tests__/tool-gateway-service.test.ts > tool gateway service > retires a former assignee's continuation after reassignment 149ms
+[11:27:09] [33mWARN[39m: [36mCould not recover approved tool action[39m [90m{"actionRequestId":"00000000-0000-4000-8000-000000000000"}[39m
+    err: {
+      "type": "Error",
+      "location": {
+        "line": 1341,
+        "column": 81
+      }
+    }
+[11:27:09] [33mWARN[39m: [36mCould not recover approved tool action[39m [90m{"actionRequestId":"00000000-0000-4000-8000-000000000001"}[39m
+    err: {
+      "type": "Error",
+      "location": {
+        "line": 1341,
+        "column": 81
+      }
+    }
+[11:27:09] [33mWARN[39m: [36mCould not recover approved tool action[39m [90m{"actionRequestId":"00000000-0000-4000-8000-000000000002"}[39m
+    err: {
+      "type": "Error",
+      "location": {
+        "line": 1341,
+        "column": 81
+      }
+    }
+[11:27:09] [33mWARN[39m: [36mCould not recover approved tool action[39m [90m{"actionRequestId":"00000000-0000-4000-8000-000000000003"}[39m
+    err: {
+      "type": "Error",
+      "location": {
+        "line": 1341,
+        "column": 81
+      }
+    }
+[11:27:09] [33mWARN[39m: [36mCould not recover approved tool action[39m [90m{"actionRequestId":"00000000-0000-4000-8000-000000000004"}[39m
+    err: {
+      "type": "Error",
+      "location": {
+        "line": 1341,
+        "column": 81
+      }
+    }
+[11:27:09] [33mWARN[39m: [36mCould not recover approved tool action[39m [90m{"actionRequestId":"00000000-0000-4000-8000-000000000005"}[39m
+    err: {
+      "type": "Error",
+      "location": {
+        "line": 1341,
+        "column": 81
+      }
+    }
+[11:27:09] [33mWARN[39m: [36mCould not recover approved tool action[39m [90m{"actionRequestId":"00000000-0000-4000-8000-000000000006"}[39m
+    err: {
+      "type": "Error",
+      "location": {
+        "line": 1341,
+        "column": 81
+      }
+    }
+[11:27:09] [33mWARN[39m: [36mCould not recover approved tool action[39m [90m{"actionRequestId":"00000000-0000-4000-8000-000000000007"}[39m
+    err: {
+      "type": "Error",
+      "location": {
+        "line": 1341,
+        "column": 81
+      }
+    }
+[11:27:09] [33mWARN[39m: [36mCould not recover approved tool action[39m [90m{"actionRequestId":"00000000-0000-4000-8000-000000000008"}[39m
+    err: {
+      "type": "Error",
+      "location": {
+        "line": 1341,
+        "column": 81
+      }
+    }
+[11:27:09] [33mWARN[39m: [36mCould not recover approved tool action[39m [90m{"actionRequestId":"00000000-0000-4000-8000-000000000009"}[39m
+    err: {
+      "type": "Error",
+      "location": {
+        "line": 1341,
+        "column": 81
+      }
+    }
+[11:27:09] [33mWARN[39m: [36mCould not recover approved tool action[39m [90m{"actionRequestId":"00000000-0000-4000-8000-000000000010"}[39m
+    err: {
+      "type": "Error",
+      "location": {
+        "line": 1341,
+        "column": 81
+      }
+    }
+[11:27:09] [33mWARN[39m: [36mCould not recover approved tool action[39m [90m{"actionRequestId":"00000000-0000-4000-8000-000000000011"}[39m
+    err: {
+      "type": "Error",
+      "location": {
+        "line": 1341,
+        "column": 81
+      }
+    }
+[11:27:09] [33mWARN[39m: [36mCould not recover approved tool action[39m [90m{"actionRequestId":"00000000-0000-4000-8000-000000000012"}[39m
+    err: {
+      "type": "Error",
+      "location": {
+        "line": 1341,
+        "column": 81
+      }
+    }
+[11:27:09] [33mWARN[39m: [36mCould not recover approved tool action[39m [90m{"actionRequestId":"00000000-0000-4000-8000-000000000013"}[39m
+    err: {
+      "type": "Error",
+      "location": {
+        "line": 1341,
+        "column": 81
+      }
+    }
+[11:27:09] [33mWARN[39m: [36mCould not recover approved tool action[39m [90m{"actionRequestId":"00000000-0000-4000-8000-000000000014"}[39m
+    err: {
+      "type": "Error",
+      "location": {
+        "line": 1341,
+        "column": 81
+      }
+    }
+[11:27:09] [33mWARN[39m: [36mCould not recover approved tool action[39m [90m{"actionRequestId":"00000000-0000-4000-8000-000000000015"}[39m
+    err: {
+      "type": "Error",
+      "location": {
+        "line": 1341,
+        "column": 81
+      }
+    }
+[11:27:09] [33mWARN[39m: [36mCould not recover approved tool action[39m [90m{"actionRequestId":"00000000-0000-4000-8000-000000000016"}[39m
+    err: {
+      "type": "Error",
+      "location": {
+        "line": 1341,
+        "column": 81
+      }
+    }
+[11:27:09] [33mWARN[39m: [36mCould not recover approved tool action[39m [90m{"actionRequestId":"00000000-0000-4000-8000-000000000017"}[39m
+    err: {
+      "type": "Error",
+      "location": {
+        "line": 1341,
+        "column": 81
+      }
+    }
+[11:27:09] [33mWARN[39m: [36mCould not recover approved tool action[39m [90m{"actionRequestId":"00000000-0000-4000-8000-000000000018"}[39m
+    err: {
+      "type": "Error",
+      "location": {
+        "line": 1341,
+        "column": 81
+      }
+    }
+[11:27:09] [33mWARN[39m: [36mCould not recover approved tool action[39m [90m{"actionRequestId":"00000000-0000-4000-8000-000000000019"}[39m
+    err: {
+      "type": "Error",
+      "location": {
+        "line": 1341,
+        "column": 81
+      }
+    }
+[11:27:09] [33mWARN[39m: [36mCould not recover approved tool action[39m [90m{"actionRequestId":"00000000-0000-4000-8000-000000000020"}[39m
+    err: {
+      "type": "Error",
+      "location": {
+        "line": 1341,
+        "column": 81
+      }
+    }
+[11:27:09] [33mWARN[39m: [36mCould not recover approved tool action[39m [90m{"actionRequestId":"00000000-0000-4000-8000-000000000021"}[39m
+    err: {
+      "type": "Error",
+      "location": {
+        "line": 1341,
+        "column": 81
+      }
+    }
+[11:27:09] [33mWARN[39m: [36mCould not recover approved tool action[39m [90m{"actionRequestId":"00000000-0000-4000-8000-000000000022"}[39m
+    err: {
+      "type": "Error",
+      "location": {
+        "line": 1341,
+        "column": 81
+      }
+    }
+[11:27:09] [33mWARN[39m: [36mCould not recover approved tool action[39m [90m{"actionRequestId":"00000000-0000-4000-8000-000000000023"}[39m
+    err: {
+      "type": "Error",
+      "location": {
+        "line": 1341,
+        "column": 81
+      }
+    }
+[11:27:09] [33mWARN[39m: [36mCould not recover approved tool action[39m [90m{"actionRequestId":"00000000-0000-4000-8000-000000000024"}[39m
+    err: {
+      "type": "Error",
+      "location": {
+        "line": 1341,
+        "column": 81
+      }
+    }
+[11:27:09] [33mWARN[39m: [36mCould not recover approved tool action[39m [90m{"actionRequestId":"00000000-0000-4000-8000-000000000025"}[39m
+    err: {
+      "type": "Error",
+      "location": {
+        "line": 1341,
+        "column": 81
+      }
+    }
+[11:27:09] [33mWARN[39m: [36mCould not recover approved tool action[39m [90m{"actionRequestId":"00000000-0000-4000-8000-000000000026"}[39m
+    err: {
+      "type": "Error",
+      "location": {
+        "line": 1341,
+        "column": 81
+      }
+    }
+[11:27:09] [33mWARN[39m: [36mCould not recover approved tool action[39m [90m{"actionRequestId":"00000000-0000-4000-8000-000000000027"}[39m
+    err: {
+      "type": "Error",
+      "location": {
+        "line": 1341,
+        "column": 81
+      }
+    }
+[11:27:09] [33mWARN[39m: [36mCould not recover approved tool action[39m [90m{"actionRequestId":"00000000-0000-4000-8000-000000000028"}[39m
+    err: {
+      "type": "Error",
+      "location": {
+        "line": 1341,
+        "column": 81
+      }
+    }
+[11:27:09] [33mWARN[39m: [36mCould not recover approved tool action[39m [90m{"actionRequestId":"00000000-0000-4000-8000-000000000029"}[39m
+    err: {
+      "type": "Error",
+      "location": {
+        "line": 1341,
+        "column": 81
+      }
+    }
+[11:27:09] [33mWARN[39m: [36mCould not recover approved tool action[39m [90m{"actionRequestId":"00000000-0000-4000-8000-000000000030"}[39m
+    err: {
+      "type": "Error",
+      "location": {
+        "line": 1341,
+        "column": 81
+      }
+    }
+[11:27:09] [33mWARN[39m: [36mCould not recover approved tool action[39m [90m{"actionRequestId":"00000000-0000-4000-8000-000000000031"}[39m
+    err: {
+      "type": "Error",
+      "location": {
+        "line": 1341,
+        "column": 81
+      }
+    }
+[11:27:09] [33mWARN[39m: [36mCould not recover approved tool action[39m [90m{"actionRequestId":"00000000-0000-4000-8000-000000000032"}[39m
+    err: {
+      "type": "Error",
+      "location": {
+        "line": 1341,
+        "column": 81
+      }
+    }
+[11:27:09] [33mWARN[39m: [36mCould not recover approved tool action[39m [90m{"actionRequestId":"00000000-0000-4000-8000-000000000033"}[39m
+    err: {
+      "type": "Error",
+      "location": {
+        "line": 1341,
+        "column": 81
+      }
+    }
+[11:27:09] [33mWARN[39m: [36mCould not recover approved tool action[39m [90m{"actionRequestId":"00000000-0000-4000-8000-000000000034"}[39m
+    err: {
+      "type": "Error",
+      "location": {
+        "line": 1341,
+        "column": 81
+      }
+    }
+[11:27:09] [33mWARN[39m: [36mCould not recover approved tool action[39m [90m{"actionRequestId":"00000000-0000-4000-8000-000000000035"}[39m
+    err: {
+      "type": "Error",
+      "location": {
+        "line": 1341,
+        "column": 81
+      }
+    }
+[11:27:09] [33mWARN[39m: [36mCould not recover approved tool action[39m [90m{"actionRequestId":"00000000-0000-4000-8000-000000000036"}[39m
+    err: {
+      "type": "Error",
+      "location": {
+        "line": 1341,
+        "column": 81
+      }
+    }
+[11:27:09] [33mWARN[39m: [36mCould not recover approved tool action[39m [90m{"actionRequestId":"00000000-0000-4000-8000-000000000037"}[39m
+    err: {
+      "type": "Error",
+      "location": {
+        "line": 1341,
+        "column": 81
+      }
+    }
+[11:27:09] [33mWARN[39m: [36mCould not recover approved tool action[39m [90m{"actionRequestId":"00000000-0000-4000-8000-000000000038"}[39m
+    err: {
+      "type": "Error",
+      "location": {
+        "line": 1341,
+        "column": 81
+      }
+    }
+[11:27:09] [33mWARN[39m: [36mCould not recover approved tool action[39m [90m{"actionRequestId":"00000000-0000-4000-8000-000000000039"}[39m
+    err: {
+      "type": "Error",
+      "location": {
+        "line": 1341,
+        "column": 81
+      }
+    }
+[11:27:09] [33mWARN[39m: [36mCould not recover approved tool action[39m [90m{"actionRequestId":"00000000-0000-4000-8000-000000000040"}[39m
+    err: {
+      "type": "Error",
+      "location": {
+        "line": 1341,
+        "column": 81
+      }
+    }
+[11:27:09] [33mWARN[39m: [36mCould not recover approved tool action[39m [90m{"actionRequestId":"00000000-0000-4000-8000-000000000041"}[39m
+    err: {
+      "type": "Error",
+      "location": {
+        "line": 1341,
+        "column": 81
+      }
+    }
+[11:27:09] [33mWARN[39m: [36mCould not recover approved tool action[39m [90m{"actionRequestId":"00000000-0000-4000-8000-000000000042"}[39m
+    err: {
+      "type": "Error",
+      "location": {
+        "line": 1341,
+        "column": 81
+      }
+    }
+[11:27:09] [33mWARN[39m: [36mCould not recover approved tool action[39m [90m{"actionRequestId":"00000000-0000-4000-8000-000000000043"}[39m
+    err: {
+      "type": "Error",
+      "location": {
+        "line": 1341,
+        "column": 81
+      }
+    }
+[11:27:09] [33mWARN[39m: [36mCould not recover approved tool action[39m [90m{"actionRequestId":"00000000-0000-4000-8000-000000000044"}[39m
+    err: {
+      "type": "Error",
+      "location": {
+        "line": 1341,
+        "column": 81
+      }
+    }
+[11:27:09] [33mWARN[39m: [36mCould not recover approved tool action[39m [90m{"actionRequestId":"00000000-0000-4000-8000-000000000045"}[39m
+    err: {
+      "type": "Error",
+      "location": {
+        "line": 1341,
+        "column": 81
+      }
+    }
+[11:27:09] [33mWARN[39m: [36mCould not recover approved tool action[39m [90m{"actionRequestId":"00000000-0000-4000-8000-000000000046"}[39m
+    err: {
+      "type": "Error",
+      "location": {
+        "line": 1341,
+        "column": 81
+      }
+    }
+[11:27:09] [33mWARN[39m: [36mCould not recover approved tool action[39m [90m{"actionRequestId":"00000000-0000-4000-8000-000000000047"}[39m
+    err: {
+      "type": "Error",
+      "location": {
+        "line": 1341,
+        "column": 81
+      }
+    }
+[11:27:09] [33mWARN[39m: [36mCould not recover approved tool action[39m [90m{"actionRequestId":"00000000-0000-4000-8000-000000000048"}[39m
+    err: {
+      "type": "Error",
+      "location": {
+        "line": 1341,
+        "column": 81
+      }
+    }
+[11:27:09] [33mWARN[39m: [36mCould not recover approved tool action[39m [90m{"actionRequestId":"00000000-0000-4000-8000-000000000049"}[39m
+    err: {
+      "type": "Error",
+      "location": {
+        "line": 1341,
+        "column": 81
+      }
+    }
+[11:27:09] [33mWARN[39m: [36mCould not recover approved tool action[39m [90m{"actionRequestId":"00000000-0000-4000-8000-000000000050"}[39m
+    err: {
+      "type": "Error",
+      "location": {
+        "line": 1341,
+        "column": 81
+      }
+    }
+[11:27:09] [33mWARN[39m: [36mCould not recover approved tool action[39m [90m{"actionRequestId":"00000000-0000-4000-8000-000000000051"}[39m
+    err: {
+      "type": "Error",
+      "location": {
+        "line": 1341,
+        "column": 81
+      }
+    }
+[11:27:09] [33mWARN[39m: [36mCould not recover approved tool action[39m [90m{"actionRequestId":"00000000-0000-4000-8000-000000000052"}[39m
+    err: {
+      "type": "Error",
+      "location": {
+        "line": 1341,
+        "column": 81
+      }
+    }
+[11:27:09] [33mWARN[39m: [36mCould not recover approved tool action[39m [90m{"actionRequestId":"00000000-0000-4000-8000-000000000053"}[39m
+    err: {
+      "type": "Error",
+      "location": {
+        "line": 1341,
+        "column": 81
+      }
+    }
+[11:27:09] [33mWARN[39m: [36mCould not recover approved tool action[39m [90m{"actionRequestId":"00000000-0000-4000-8000-000000000054"}[39m
+    err: {
+      "type": "Error",
+      "location": {
+        "line": 1341,
+        "column": 81
+      }
+    }
+[11:27:09] [33mWARN[39m: [36mCould not recover approved tool action[39m [90m{"actionRequestId":"00000000-0000-4000-8000-000000000055"}[39m
+    err: {
+      "type": "Error",
+      "location": {
+        "line": 1341,
+        "column": 81
+      }
+    }
+[11:27:09] [33mWARN[39m: [36mCould not recover approved tool action[39m [90m{"actionRequestId":"00000000-0000-4000-8000-000000000056"}[39m
+    err: {
+      "type": "Error",
+      "location": {
+        "line": 1341,
+        "column": 81
+      }
+    }
+[11:27:09] [33mWARN[39m: [36mCould not recover approved tool action[39m [90m{"actionRequestId":"00000000-0000-4000-8000-000000000057"}[39m
+    err: {
+      "type": "Error",
+      "location": {
+        "line": 1341,
+        "column": 81
+      }
+    }
+[11:27:09] [33mWARN[39m: [36mCould not recover approved tool action[39m [90m{"actionRequestId":"00000000-0000-4000-8000-000000000058"}[39m
+    err: {
+      "type": "Error",
+      "location": {
+        "line": 1341,
+        "column": 81
+      }
+    }
+[11:27:09] [33mWARN[39m: [36mCould not recover approved tool action[39m [90m{"actionRequestId":"00000000-0000-4000-8000-000000000059"}[39m
+    err: {
+      "type": "Error",
+      "location": {
+        "line": 1341,
+        "column": 81
+      }
+    }
+[11:27:09] [33mWARN[39m: [36mCould not recover approved tool action[39m [90m{"actionRequestId":"00000000-0000-4000-8000-000000000060"}[39m
+    err: {
+      "type": "Error",
+      "location": {
+        "line": 1341,
+        "column": 81
+      }
+    }
+[11:27:09] [33mWARN[39m: [36mCould not recover approved tool action[39m [90m{"actionRequestId":"00000000-0000-4000-8000-000000000061"}[39m
+    err: {
+      "type": "Error",
+      "location": {
+        "line": 1341,
+        "column": 81
+      }
+    }
+[11:27:09] [33mWARN[39m: [36mCould not recover approved tool action[39m [90m{"actionRequestId":"00000000-0000-4000-8000-000000000062"}[39m
+    err: {
+      "type": "Error",
+      "location": {
+        "line": 1341,
+        "column": 81
+      }
+    }
+[11:27:09] [33mWARN[39m: [36mCould not recover approved tool action[39m [90m{"actionRequestId":"00000000-0000-4000-8000-000000000063"}[39m
+    err: {
+      "type": "Error",
+      "location": {
+        "line": 1341,
+        "column": 81
+      }
+    }
+[11:27:09] [33mWARN[39m: [36mCould not recover approved tool action[39m [90m{"actionRequestId":"00000000-0000-4000-8000-000000000064"}[39m
+    err: {
+      "type": "Error",
+      "location": {
+        "line": 1341,
+        "column": 81
+      }
+    }
+[11:27:09] [33mWARN[39m: [36mCould not recover approved tool action[39m [90m{"actionRequestId":"00000000-0000-4000-8000-000000000065"}[39m
+    err: {
+      "type": "Error",
+      "location": {
+        "line": 1341,
+        "column": 81
+      }
+    }
+[11:27:09] [33mWARN[39m: [36mCould not recover approved tool action[39m [90m{"actionRequestId":"00000000-0000-4000-8000-000000000066"}[39m
+    err: {
+      "type": "Error",
+      "location": {
+        "line": 1341,
+        "column": 81
+      }
+    }
+[11:27:09] [33mWARN[39m: [36mCould not recover approved tool action[39m [90m{"actionRequestId":"00000000-0000-4000-8000-000000000067"}[39m
+    err: {
+      "type": "Error",
+      "location": {
+        "line": 1341,
+        "column": 81
+      }
+    }
+[11:27:09] [33mWARN[39m: [36mCould not recover approved tool action[39m [90m{"actionRequestId":"00000000-0000-4000-8000-000000000068"}[39m
+    err: {
+      "type": "Error",
+      "location": {
+        "line": 1341,
+        "column": 81
+      }
+    }
+[11:27:09] [33mWARN[39m: [36mCould not recover approved tool action[39m [90m{"actionRequestId":"00000000-0000-4000-8000-000000000069"}[39m
+    err: {
+      "type": "Error",
+      "location": {
+        "line": 1341,
+        "column": 81
+      }
+    }
+[11:27:09] [33mWARN[39m: [36mCould not recover approved tool action[39m [90m{"actionRequestId":"00000000-0000-4000-8000-000000000070"}[39m
+    err: {
+      "type": "Error",
+      "location": {
+        "line": 1341,
+        "column": 81
+      }
+    }
+[11:27:09] [33mWARN[39m: [36mCould not recover approved tool action[39m [90m{"actionRequestId":"00000000-0000-4000-8000-000000000071"}[39m
+    err: {
+      "type": "Error",
+      "location": {
+        "line": 1341,
+        "column": 81
+      }
+    }
+[11:27:09] [33mWARN[39m: [36mCould not recover approved tool action[39m [90m{"actionRequestId":"00000000-0000-4000-8000-000000000072"}[39m
+    err: {
+      "type": "Error",
+      "location": {
+        "line": 1341,
+        "column": 81
+      }
+    }
+[11:27:09] [33mWARN[39m: [36mCould not recover approved tool action[39m [90m{"actionRequestId":"00000000-0000-4000-8000-000000000073"}[39m
+    err: {
+      "type": "Error",
+      "location": {
+        "line": 1341,
+        "column": 81
+      }
+    }
+[11:27:09] [33mWARN[39m: [36mCould not recover approved tool action[39m [90m{"actionRequestId":"00000000-0000-4000-8000-000000000074"}[39m
+    err: {
+      "type": "Error",
+      "location": {
+        "line": 1341,
+        "column": 81
+      }
+    }
+[11:27:09] [33mWARN[39m: [36mCould not recover approved tool action[39m [90m{"actionRequestId":"00000000-0000-4000-8000-000000000075"}[39m
+    err: {
+      "type": "Error",
+      "location": {
+        "line": 1341,
+        "column": 81
+      }
+    }
+[11:27:09] [33mWARN[39m: [36mCould not recover approved tool action[39m [90m{"actionRequestId":"00000000-0000-4000-8000-000000000076"}[39m
+    err: {
+      "type": "Error",
+      "location": {
+        "line": 1341,
+        "column": 81
+      }
+    }
+[11:27:09] [33mWARN[39m: [36mCould not recover approved tool action[39m [90m{"actionRequestId":"00000000-0000-4000-8000-000000000077"}[39m
+    err: {
+      "type": "Error",
+      "location": {
+        "line": 1341,
+        "column": 81
+      }
+    }
+[11:27:09] [33mWARN[39m: [36mCould not recover approved tool action[39m [90m{"actionRequestId":"00000000-0000-4000-8000-000000000078"}[39m
+    err: {
+      "type": "Error",
+      "location": {
+        "line": 1341,
+        "column": 81
+      }
+    }
+[11:27:09] [33mWARN[39m: [36mCould not recover approved tool action[39m [90m{"actionRequestId":"00000000-0000-4000-8000-000000000079"}[39m
+    err: {
+      "type": "Error",
+      "location": {
+        "line": 1341,
+        "column": 81
+      }
+    }
+[11:27:09] [33mWARN[39m: [36mCould not recover approved tool action[39m [90m{"actionRequestId":"00000000-0000-4000-8000-000000000080"}[39m
+    err: {
+      "type": "Error",
+      "location": {
+        "line": 1341,
+        "column": 81
+      }
+    }
+[11:27:09] [33mWARN[39m: [36mCould not recover approved tool action[39m [90m{"actionRequestId":"00000000-0000-4000-8000-000000000081"}[39m
+    err: {
+      "type": "Error",
+      "location": {
+        "line": 1341,
+        "column": 81
+      }
+    }
+[11:27:09] [33mWARN[39m: [36mCould not recover approved tool action[39m [90m{"actionRequestId":"00000000-0000-4000-8000-000000000082"}[39m
+    err: {
+      "type": "Error",
+      "location": {
+        "line": 1341,
+        "column": 81
+      }
+    }
+[11:27:09] [33mWARN[39m: [36mCould not recover approved tool action[39m [90m{"actionRequestId":"00000000-0000-4000-8000-000000000083"}[39m
+    err: {
+      "type": "Error",
+      "location": {
+        "line": 1341,
+        "column": 81
+      }
+    }
+[11:27:09] [33mWARN[39m: [36mCould not recover approved tool action[39m [90m{"actionRequestId":"00000000-0000-4000-8000-000000000084"}[39m
+    err: {
+      "type": "Error",
+      "location": {
+        "line": 1341,
+        "column": 81
+      }
+    }
+[11:27:09] [33mWARN[39m: [36mCould not recover approved tool action[39m [90m{"actionRequestId":"00000000-0000-4000-8000-000000000085"}[39m
+    err: {
+      "type": "Error",
+      "location": {
+        "line": 1341,
+        "column": 81
+      }
+    }
+[11:27:09] [33mWARN[39m: [36mCould not recover approved tool action[39m [90m{"actionRequestId":"00000000-0000-4000-8000-000000000086"}[39m
+    err: {
+      "type": "Error",
+      "location": {
+        "line": 1341,
+        "column": 81
+      }
+    }
+[11:27:09] [33mWARN[39m: [36mCould not recover approved tool action[39m [90m{"actionRequestId":"00000000-0000-4000-8000-000000000087"}[39m
+    err: {
+      "type": "Error",
+      "location": {
+        "line": 1341,
+        "column": 81
+      }
+    }
+[11:27:09] [33mWARN[39m: [36mCould not recover approved tool action[39m [90m{"actionRequestId":"00000000-0000-4000-8000-000000000088"}[39m
+    err: {
+      "type": "Error",
+      "location": {
+        "line": 1341,
+        "column": 81
+      }
+    }
+[11:27:09] [33mWARN[39m: [36mCould not recover approved tool action[39m [90m{"actionRequestId":"00000000-0000-4000-8000-000000000089"}[39m
+    err: {
+      "type": "Error",
+      "location": {
+        "line": 1341,
+        "column": 81
+      }
+    }
+[11:27:09] [33mWARN[39m: [36mCould not recover approved tool action[39m [90m{"actionRequestId":"00000000-0000-4000-8000-000000000090"}[39m
+    err: {
+      "type": "Error",
+      "location": {
+        "line": 1341,
+        "column": 81
+      }
+    }
+[11:27:09] [33mWARN[39m: [36mCould not recover approved tool action[39m [90m{"actionRequestId":"00000000-0000-4000-8000-000000000091"}[39m
+    err: {
+      "type": "Error",
+      "location": {
+        "line": 1341,
+        "column": 81
+      }
+    }
+[11:27:09] [33mWARN[39m: [36mCould not recover approved tool action[39m [90m{"actionRequestId":"00000000-0000-4000-8000-000000000092"}[39m
+    err: {
+      "type": "Error",
+      "location": {
+        "line": 1341,
+        "column": 81
+      }
+    }
+[11:27:09] [33mWARN[39m: [36mCould not recover approved tool action[39m [90m{"actionRequestId":"00000000-0000-4000-8000-000000000093"}[39m
+    err: {
+      "type": "Error",
+      "location": {
+        "line": 1341,
+        "column": 81
+      }
+    }
+[11:27:09] [33mWARN[39m: [36mCould not recover approved tool action[39m [90m{"actionRequestId":"00000000-0000-4000-8000-000000000094"}[39m
+    err: {
+      "type": "Error",
+      "location": {
+        "line": 1341,
+        "column": 81
+      }
+    }
+[11:27:09] [33mWARN[39m: [36mCould not recover approved tool action[39m [90m{"actionRequestId":"00000000-0000-4000-8000-000000000095"}[39m
+    err: {
+      "type": "Error",
+      "location": {
+        "line": 1341,
+        "column": 81
+      }
+    }
+[11:27:09] [33mWARN[39m: [36mCould not recover approved tool action[39m [90m{"actionRequestId":"00000000-0000-4000-8000-000000000096"}[39m
+    err: {
+      "type": "Error",
+      "location": {
+        "line": 1341,
+        "column": 81
+      }
+    }
+[11:27:09] [33mWARN[39m: [36mCould not recover approved tool action[39m [90m{"actionRequestId":"00000000-0000-4000-8000-000000000097"}[39m
+    err: {
+      "type": "Error",
+      "location": {
+        "line": 1341,
+        "column": 81
+      }
+    }
+[11:27:09] [33mWARN[39m: [36mCould not recover approved tool action[39m [90m{"actionRequestId":"00000000-0000-4000-8000-000000000098"}[39m
+    err: {
+      "type": "Error",
+      "location": {
+        "line": 1341,
+        "column": 81
+      }
+    }
+[11:27:09] [33mWARN[39m: [36mCould not recover approved tool action[39m [90m{"actionRequestId":"00000000-0000-4000-8000-000000000099"}[39m
+    err: {
+      "type": "Error",
+      "location": {
+        "line": 1341,
+        "column": 81
+      }
+    }
+ ✓ |@paperclipai/server| src/__tests__/tool-gateway-service.test.ts > tool gateway service > recovers expired reviews beyond a full batch of approvals that cannot recover 143ms
+ ✓ |@paperclipai/server| src/__tests__/tool-gateway-service.test.ts > tool gateway service > settles expired reviews and interrupted execution without replaying an uncertain external action 204ms
+ ✓ |@paperclipai/server| src/__tests__/tool-gateway-service.test.ts > tool gateway service > remembers a read action atomically, allows changed arguments, and preserves explicit denials and definition review 733ms
+ ✓ |@paperclipai/server| src/__tests__/tool-gateway-service.test.ts > tool gateway service > rolls back approval when remembered permission cannot be saved 182ms
+ ✓ |@paperclipai/server| src/__tests__/tool-gateway-service.test.ts > tool gateway service > refuses to approve an action request through a different interaction 119ms
+ ✓ |@paperclipai/server| src/__tests__/tool-gateway-service.test.ts > tool gateway service > prevents another run from consuming an approved action request by id 154ms
+ ✓ |@paperclipai/server| src/__tests__/tool-gateway-service.test.ts > tool gateway service > executes an approved identical-args race once and returns the winner result 161ms
+ ✓ |@paperclipai/server| src/__tests__/tool-gateway-service.test.ts > tool gateway service > refuses to execute an approved action after its issue closes 140ms
+ ✓ |@paperclipai/server| src/__tests__/tool-gateway-service.test.ts > tool gateway service > keeps pre-execute-on-approve approved requests inert 198ms
+ ✓ |@paperclipai/server| src/__tests__/tool-gateway-service.test.ts > tool gateway service > does not let a stale legacy consumer overwrite the winning approved execution 177ms
+ ✓ |@paperclipai/server| src/__tests__/tool-gateway-service.test.ts > tool gateway service > does not leave unsigned action requests pending when signing is unavailable 156ms
+ ✓ |@paperclipai/server| src/__tests__/tool-gateway-service.test.ts > tool gateway service > explains how to recover when an approval-required session has no task 76ms
+ ✓ |@paperclipai/server| src/__tests__/tool-gateway-service.test.ts > tool gateway service > cancels a stale pending action request when direct approval sees an invalid signature 137ms
+ ✓ |@paperclipai/server| src/__tests__/tool-gateway-service.test.ts > tool gateway service > declines a pending action request and rejects the invocation (PAP-10859) 130ms
+ ✓ |@paperclipai/server| src/__tests__/tool-gateway-service.test.ts > tool gateway service > expires a stale identical request and creates a fresh approval 167ms
+ ✓ |@paperclipai/server| src/__tests__/tool-gateway-service.test.ts > tool gateway service > adds formal board approval for destructive tool actions and fails closed until approved 192ms
+ ✓ |@paperclipai/server| src/__tests__/tool-gateway-service.test.ts > tool gateway service > maps remote MCP elicitation to a durable issue interaction 246ms
+ ✓ |@paperclipai/server| src/__tests__/tool-gateway-service.test.ts > tool gateway service > initializes a fresh Streamable HTTP session before a stateful tools/call 229ms
+ ✓ |@paperclipai/server| src/__tests__/tool-gateway-service.test.ts > tool gateway service > hides cached Chat unread filters and blocks agent and board requests before provider dispatch 244ms
+ ✓ |@paperclipai/server| src/__tests__/tool-gateway-service.test.ts > tool gateway service > explains Google Workspace preview enrollment when a tool call is denied 222ms
+ ✓ |@paperclipai/server| src/__tests__/tool-gateway-service.test.ts > tool gateway service > fences scoped HTTP transport at native authority boundaries: token_run_cancel 199ms
+ ✓ |@paperclipai/server| src/__tests__/tool-gateway-service.test.ts > tool gateway service > fences scoped HTTP transport at native authority boundaries: initialize_grant_revoke 198ms
+ ✓ |@paperclipai/server| src/__tests__/tool-gateway-service.test.ts > tool gateway service > fences scoped HTTP transport at native authority boundaries: notification_run_cancel 217ms
+ ✓ |@paperclipai/server| src/__tests__/tool-gateway-service.test.ts > tool gateway service > fences scoped HTTP transport at native authority boundaries: notification_destination_change 220ms
+ ✓ |@paperclipai/server| src/__tests__/tool-gateway-service.test.ts > tool gateway service > fences scoped HTTP transport at native authority boundaries: call_grant_revoke 212ms
+ ✓ |@paperclipai/server| src/__tests__/tool-gateway-service.test.ts > tool gateway service > fences scoped HTTP transport at native authority boundaries: unauthorized_refresh 197ms
+ ✓ |@paperclipai/server| src/__tests__/tool-gateway-service.test.ts > tool gateway service > fences scoped HTTP transport at native authority boundaries: refresh_grant_revoke 217ms
+ ✓ |@paperclipai/server| src/__tests__/tool-gateway-service.test.ts > tool gateway service > fences scoped HTTP transport at native authority boundaries: token_grant_revoke 165ms
+ ✓ |@paperclipai/server| src/__tests__/tool-gateway-service.test.ts > tool gateway service > fences scoped HTTP transport at native authority boundaries: token_grant_revoke_ordinary 181ms
+ ✓ |@paperclipai/server| src/__tests__/tool-gateway-service.test.ts > tool gateway service > fences scoped HTTP transport at native authority boundaries: healthy_refresh 223ms
+ ✓ |@paperclipai/server| src/__tests__/tool-gateway-service.test.ts > tool gateway service > fences scoped HTTP transport at native authority boundaries: healthy_last_rate_slot 198ms
+ ✓ |@paperclipai/server| src/__tests__/tool-gateway-service.test.ts > tool gateway service > injects Vercel tokens at dispatch and refreshes exactly once after an upstream 401 215ms
+ ✓ |@paperclipai/server| src/__tests__/tool-gateway-service.test.ts > tool gateway service > keeps managed GitHub personal identity even under a legacy shared policy 409ms
+ ✓ |@paperclipai/server| src/__tests__/tool-gateway-service.test.ts > tool gateway service > reselects a duplicate only before GitHub dispatch (upstream failure: false) 304ms
+ ✓ |@paperclipai/server| src/__tests__/tool-gateway-service.test.ts > tool gateway service > reselects a duplicate only before GitHub dispatch (upstream failure: true) 262ms
+ ✓ |@paperclipai/server| src/__tests__/tool-gateway-service.test.ts > tool gateway service > refreshes a customer OAuth grant once and retries after an upstream 401 242ms
+ ✓ |@paperclipai/server| src/__tests__/tool-gateway-service.test.ts > tool gateway service > marks a managed OAuth grant reconnect-required after one rejected refresh retry 234ms
+ ✓ |@paperclipai/server| src/__tests__/tool-gateway-service.test.ts > tool gateway service > fails clearly when remote MCP elicitation has no issue interaction path 154ms
+ ✓ |@paperclipai/server| src/__tests__/tool-gateway-service.test.ts > tool gateway service > blocks malicious plugin tool results before they reach the agent 87ms
+ ✓ |@paperclipai/server| src/__tests__/tool-gateway-service.test.ts > tool gateway service > passes original sensitive arguments to plugin executors while redacting stored summaries 55ms
+
+ Test Files  1 passed (1)
+      Tests  60 passed (60)
+   Start at  11:26:32
+   Duration  44.92s (transform 10.03s, setup 74ms, import 14.33s, tests 30.40s, environment 0ms)
+

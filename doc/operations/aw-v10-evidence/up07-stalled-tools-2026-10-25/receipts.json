@@ -1,0 +1,148 @@
+{
+  "status": "in_progress",
+  "sourceCommit": "ba40ea15a5f2b0059b0c262583fd2d70850aee27",
+  "sourceCommitMeaning": "Archive checkout identity; scoped runs may predate it. Only separately recorded unchanged-source gates establish final tested source identity.",
+  "meaning": "192 complete executor controls before final env-bound resolver change; final bound and Stop-focused controls cover that change. Separate complete fault, failure-report, recovery and Sentry suites. This is software evidence, not hosted Claude/provider qualification.",
+  "logs": [
+    {
+      "name": "up07-final-execute",
+      "exitCode": 0,
+      "exitSidecar": "up07-final-execute.exit",
+      "rawSha256": "7b559476f8204a443099b80f1a46615df3515e73668562a4e24c4f2e6ab4d735",
+      "sanitizedSha256": "7b559476f8204a443099b80f1a46615df3515e73668562a4e24c4f2e6ab4d735",
+      "archiveSha256": "0fac69a8fb0a796822d9b43c5c81b770b2982f1260c26b7fe61544e4872f7a21",
+      "redactions": {
+        "ansi": 0,
+        "bearer": 0,
+        "jwt": 0,
+        "credential_field": 0,
+        "url_credential": 0
+      },
+      "summary": [
+        "Test Files  1 passed (1)",
+        "Tests  192 passed (192)",
+        "Duration  163.28s (transform 1.96s, setup 0ms, import 2.89s, tests 160.27s, environment 0ms)"
+      ]
+    },
+    {
+      "name": "up07-final-fault-matrix",
+      "exitCode": 0,
+      "exitSidecar": "up07-final-fault-matrix.exit",
+      "rawSha256": "ab7ab1d26955cbad7b06d362d955014c9d1e6fa091e011a65e1e5131f7fe612a",
+      "sanitizedSha256": "ab7ab1d26955cbad7b06d362d955014c9d1e6fa091e011a65e1e5131f7fe612a",
+      "archiveSha256": "9c567727d627a235ab7dbca5fdb8995a5f1896c059c133ce979923abe9fe4f1d",
+      "redactions": {
+        "ansi": 0,
+        "bearer": 0,
+        "jwt": 0,
+        "credential_field": 0,
+        "url_credential": 0
+      },
+      "summary": [
+        "Test Files  1 passed (1)",
+        "Tests  20 passed (20)",
+        "Duration  4.30s (transform 1.63s, setup 0ms, import 2.55s, tests 1.64s, environment 0ms)"
+      ]
+    },
+    {
+      "name": "up07-final-run-failure-report",
+      "exitCode": 0,
+      "exitSidecar": "up07-final-run-failure-report.exit",
+      "rawSha256": "0a060e975fc68d36c521d81b90a7110ae1a93aaa5707ba449815dfa641f23736",
+      "sanitizedSha256": "3a41319560bf7fa278ba467904cc249b91106ae2b2b0cccb350fc6d1cba1bbb8",
+      "archiveSha256": "573251153bc697bbdbc397546dbe4ee050b06f7d0854af72ba22b104b4870a8d",
+      "redactions": {
+        "ansi": 6,
+        "bearer": 0,
+        "jwt": 0,
+        "credential_field": 0,
+        "url_credential": 0
+      },
+      "summary": [
+        "Test Files  1 passed (1)",
+        "Tests  25 passed (25)",
+        "Duration  7.93s (transform 2.21s, setup 72ms, import 4.04s, tests 3.70s, environment 0ms)"
+      ]
+    },
+    {
+      "name": "up07-final-recovery",
+      "exitCode": 0,
+      "exitSidecar": "up07-final-recovery.exit",
+      "rawSha256": "96bfd3189d153f409f5b4ea29f0007ec054d53b9dca064475eed310cf481c0fe",
+      "sanitizedSha256": "96bfd3189d153f409f5b4ea29f0007ec054d53b9dca064475eed310cf481c0fe",
+      "archiveSha256": "0726f5b23eaac31e28fd5de8969efae2f3caf3f334b4673919f6f603f52e6fa8",
+      "redactions": {
+        "ansi": 0,
+        "bearer": 0,
+        "jwt": 0,
+        "credential_field": 0,
+        "url_credential": 0
+      },
+      "summary": [
+        "Test Files  2 passed (2)",
+        "Tests  28 passed (28)",
+        "Duration  13.82s (transform 8.68s, setup 123ms, import 13.45s, tests 12ms, environment 0ms)"
+      ]
+    },
+    {
+      "name": "up07-final-sentry-context",
+      "exitCode": 0,
+      "exitSidecar": "up07-final-sentry-context.exit",
+      "rawSha256": "631a62adecd6face81e57abf977f40b3627d72874f1bcc404e707c6d13be85e5",
+      "sanitizedSha256": "631a62adecd6face81e57abf977f40b3627d72874f1bcc404e707c6d13be85e5",
+      "archiveSha256": "d3f64218ccad25f94745424259f7dd969631bfb59a2562eefa99ac3e70a37ecf",
+      "redactions": {
+        "ansi": 0,
+        "bearer": 0,
+        "jwt": 0,
+        "credential_field": 0,
+        "url_credential": 0
+      },
+      "summary": [
+        "Test Files  1 passed (1)",
+        "Tests  9 passed (9)",
+        "Duration  320ms (transform 68ms, setup 82ms, import 37ms, tests 55ms, environment 0ms)"
+      ]
+    },
+    {
+      "name": "up07-final-bound-focus",
+      "exitCode": 0,
+      "exitSidecar": "up07-final-bound-focus.exit",
+      "rawSha256": "9f02ad6b04d29a8ce4e75e08849b516094f298c4f7907652f101870b6a4fb9b2",
+      "sanitizedSha256": "9f02ad6b04d29a8ce4e75e08849b516094f298c4f7907652f101870b6a4fb9b2",
+      "archiveSha256": "6680e5f614e119503137bc69c7013f76203a21eaa934da0681c17bb8ff91fb48",
+      "redactions": {
+        "ansi": 0,
+        "bearer": 0,
+        "jwt": 0,
+        "credential_field": 0,
+        "url_credential": 0
+      },
+      "summary": [
+        "Test Files  1 passed (1)",
+        "Tests  3 passed | 189 skipped (192)",
+        "Duration  7.76s (transform 4.99s, setup 0ms, import 7.21s, tests 169ms, environment 0ms)"
+      ]
+    },
+    {
+      "name": "up07-final-stop-focus",
+      "exitCode": 0,
+      "exitSidecar": "up07-final-stop-focus.exit",
+      "rawSha256": "2f5974c37e8424659b93346e337c45986d236e63d843d7b82d0853cd5f865897",
+      "sanitizedSha256": "2f5974c37e8424659b93346e337c45986d236e63d843d7b82d0853cd5f865897",
+      "archiveSha256": "ad5e61b1a3df8d1d3b3a669bc7388b32af31669e653dde6f243c2193e1a09cc3",
+      "redactions": {
+        "ansi": 0,
+        "bearer": 0,
+        "jwt": 0,
+        "credential_field": 0,
+        "url_credential": 0
+      },
+      "summary": [
+        "Test Files  1 passed (1)",
+        "Tests  1 passed | 191 skipped (192)",
+        "Duration  7.95s (transform 5.27s, setup 0ms, import 7.72s, tests 71ms, environment 0ms)"
+      ]
+    }
+  ]
+}

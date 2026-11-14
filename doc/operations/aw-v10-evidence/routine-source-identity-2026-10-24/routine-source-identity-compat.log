@@ -1,0 +1,65 @@
+(!) Your Vite config uses features that are unsupported by `configLoader: 'native'`, which is planned to become the default in a future major version of Vite:
+  - `__dirname` (vitest.config.ts:7:25). Use `import.meta.dirname` instead
+Set `VITE_CONFIG_NATIVE_IGNORE_WARNING=true` to suppress this warning.
+
+ RUN  v4.1.11 /workspace/blentera-v10
+
+ ❯ |@paperclipai/server| src/__tests__/routines-service.test.ts (74 tests | 1 failed | 72 skipped) 19365ms
+     × defaults activity gates when restoring a legacy routine revision snapshot 167ms
+ ❯ |@paperclipai/server| src/__tests__/routine-source-identity.integration.test.ts (4 tests | 1 failed) 12693ms
+     × keeps the service-pinned older revision through routine updates and run completion 640ms
+
+⎯⎯⎯⎯⎯⎯⎯ Failed Tests 2 ⎯⎯⎯⎯⎯⎯⎯
+
+ FAIL  |@paperclipai/server| src/__tests__/routine-source-identity.integration.test.ts > Routine run and revision source identity > keeps the service-pinned older revision through routine updates and run completion
+AssertionError: expected { …(20) } to match object { …(4) }
+(16 matching properties omitted from actual)
+
+- Expected
++ Received
+
+  {
+    "companyId": "2e7956eb-a31c-4d8e-b6bc-9dae4305f7f4",
+    "routineId": "7662dff8-1aa0-4712-b3cc-8feddc475a6c",
+    "routineRevisionId": "0b0f08d3-a0b6-41fc-a9fb-374a92d7fb17",
+-   "status": "issue_created",
++   "status": "failed",
+  }
+
+ ❯ src/__tests__/routine-source-identity.integration.test.ts:67:17
+     65|     const originalRevisionId = routine.latestRevisionId!;
+     66|     const run = await owner.service.runRoutine(routine.id, { source: "…
+     67|     expect(run).toMatchObject({ companyId: owner.companyId, routineId:…
+       |                 ^
+     68|       routineRevisionId: originalRevisionId, status: "issue_created" }…
+     69|     expect(run.linkedIssueId).toBeTruthy();
+
+⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯[1/2]⎯
+
+ FAIL  |@paperclipai/server| src/__tests__/routines-service.test.ts > routine service live-execution coalescing > defaults activity gates when restoring a legacy routine revision snapshot
+Error: Failed query: update "routine_revisions" set "snapshot" = $1 where "routine_revisions"."id" = $2
+params: {"routine":{"id":"7eb19e9a-2c08-4584-ade5-18203675b064","env":null,"title":"ascii frog","goalId":null,"status":"active","priority":"medium","companyId":"68426d9c-02c7-46db-adf7-77c03ce3d992","projectId":"61b07d68-b9f7-4f54-9a63-bbdf0c7ac4dc","variables":[],"description":"Run the frog routine","catchUpPolicy":"skip_missed","parentIssueId":null,"assigneeAgentId":"da1c1f7e-cc3c-44b4-a5d5-a5e85b448ee7","concurrencyPolicy":"coalesce_if_active","responsibleUserId":"347cb6cd-c3d4-4676-b46f-237776ad6ec0","executionTargetRef":"da1c1f7e-cc3c-44b4-a5d5-a5e85b448ee7","executionTargetKind":"agent_task","managementReviewTemplate":null,"workflowExecutionPrincipal":null},"version":1,"triggers":[]},bf06691d-382b-45e1-9d2a-04294b6cefba
+ ❯ PostgresJsPreparedQuery.queryWithCache ../node_modules/.pnpm/drizzle-orm@0.45.2_@opentelemetry+api@1.9.1_kysely@0.29.5_pg@8.18.0_postgres@3.4.9_patch_hash_uil4xuf7icnddjurbgy2qn5oo4/node_modules/src/pg-core/session.ts:73:10
+ ❯ src/__tests__/routines-service.test.ts:1004:5
+    1002|     delete legacySnapshot.routine.activityGatePolicy;
+    1003|     delete legacySnapshot.routine.activityGateScope;
+    1004|     await db.update(routineRevisions).set({ snapshot: legacySnapshot }…
+       |     ^
+    1005|     await svc.update(routine.id, {
+    1006|       activityGatePolicy: "require_external_activity",
+
+Caused by: PostgresError: Routine revision snapshot is immutable
+ ❯ ErrorResponse ../node_modules/.pnpm/postgres@3.4.9_patch_hash=sryle6qd5qfmnxvoebal4gashi/node_modules/postgres/src/connection.js:819:30
+ ❯ handle ../node_modules/.pnpm/postgres@3.4.9_patch_hash=sryle6qd5qfmnxvoebal4gashi/node_modules/postgres/src/connection.js:493:6
+ ❯ Socket.data ../node_modules/.pnpm/postgres@3.4.9_patch_hash=sryle6qd5qfmnxvoebal4gashi/node_modules/postgres/src/connection.js:324:9
+
+⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯
+Serialized Error: { severity_local: 'ERROR', severity: 'ERROR', code: '23514', where: 'PL/pgSQL function aw_guard_routine_source_identity() line 75 at RAISE', file: 'pl_exec.c', routine: 'exec_stmt_raise', query: 'update "routine_revisions" set "snapshot" = $1 where "routine_revisions"."id" = $2', parameters: [ '{"routine":{"id":"7eb19e9a-2c08-4584-ade5-18203675b064","env":null,"title":"ascii frog","goalId":null,"status":"active","priority":"medium","companyId":"68426d9c-02c7-46db-adf7-77c03ce3d992","projectId":"61b07d68-b9f7-4f54-9a63-bbdf0c7ac4dc","variables":[],"description":"Run the frog routine","catchUpPolicy":"skip_missed","parentIssueId":null,"assigneeAgentId":"da1c1f7e-cc3c-44b4-a5d5-a5e85b448ee7","concurrencyPolicy":"coalesce_if_active","responsibleUserId":"347cb6cd-c3d4-4676-b46f-237776ad6ec0","executionTargetRef":"da1c1f7e-cc3c-44b4-a5d5-a5e85b448ee7","executionTargetKind":"agent_task","managementReviewTemplate":null,"workflowExecutionPrincipal":null},"version":1,"triggers":[]}', 'bf06691d-382b-45e1-9d2a-04294b6cefba' ], args: [ '{"routine":{"id":"7eb19e9a-2c08-4584-ade5-18203675b064","env":null,"title":"ascii frog","goalId":null,"status":"active","priority":"medium","companyId":"68426d9c-02c7-46db-adf7-77c03ce3d992","projectId":"61b07d68-b9f7-4f54-9a63-bbdf0c7ac4dc","variables":[],"description":"Run the frog routine","catchUpPolicy":"skip_missed","parentIssueId":null,"assigneeAgentId":"da1c1f7e-cc3c-44b4-a5d5-a5e85b448ee7","concurrencyPolicy":"coalesce_if_active","responsibleUserId":"347cb6cd-c3d4-4676-b46f-237776ad6ec0","executionTargetRef":"da1c1f7e-cc3c-44b4-a5d5-a5e85b448ee7","executionTargetKind":"agent_task","managementReviewTemplate":null,"workflowExecutionPrincipal":null},"version":1,"triggers":[]}', 'bf06691d-382b-45e1-9d2a-04294b6cefba' ], types: [ 3802, 2950 ] }
+⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯[2/2]⎯
+
+
+ Test Files  2 failed (2)
+      Tests  2 failed | 4 passed | 72 skipped (78)
+   Start at  15:57:35
+   Duration  115.73s (transform 38.61s, setup 1.51s, import 80.32s, tests 32.06s, environment 0ms)
+

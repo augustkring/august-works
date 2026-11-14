@@ -414,4 +414,55 @@ describeEmbeddedPostgres("current external-chat wake comment reader", () => {
       assertCurrentWakeCommentsRead(racingDb, seeded, binding),
     ).rejects.toThrow("native_current_wake_comments_binding_changed");
   });
+
+  it("lets a Task reader fence complete while the receipt writer waits on that Task", async () => {
+    const seeded = await seed({ bodies: ["Read before completing this wake"] });
+    const binding = await resolveCurrentWakeCommentsBinding(db, seeded);
+    if (!binding) throw new Error("Expected a current wake reader binding");
+    await expect(readCurrentWakeComments(db, binding, {})).resolves.toMatchObject({
+      complete: true,
+    });
+
+    let taskReadLocked!: () => void;
+    let releaseTaskRead!: () => void;
+    const taskReadAcquired = new Promise<void>((resolve) => {
+      taskReadLocked = resolve;
+    });
+    const keepTaskReadOpen = new Promise<void>((resolve) => {
+      releaseTaskRead = resolve;
+    });
+    const taskReader = db.transaction(async (tx) => {
+      await tx
+        .select({ id: issues.id })
+        .from(issues)
+        .where(eq(issues.id, seeded.issueId))
+        .for("share");
+      taskReadLocked();
+      await keepTaskReadOpen;
+    });
+    await taskReadAcquired;
+
+    let writerFinished = false;
+    let receiptWriter: Promise<Awaited<ReturnType<typeof readCurrentWakeComments>>> | null = null;
+    try {
+      const terminalFence = assertCurrentWakeCommentsRead(db, seeded);
+      const fenceCompletedBeforeTaskRelease = await Promise.race([
+        terminalFence.then(() => true),
+        new Promise<boolean>((resolve) => setTimeout(() => resolve(false), 500)),
+      ]);
+      expect(fenceCompletedBeforeTaskRelease).toBe(true);
+
+      receiptWriter = readCurrentWakeComments(db, binding, {}).finally(() => {
+        writerFinished = true;
+      });
+      await new Promise((resolve) => setTimeout(resolve, 50));
+      expect(writerFinished).toBe(false);
+    } finally {
+      releaseTaskRead();
+      await taskReader;
+    }
+    if (receiptWriter) {
+      await expect(receiptWriter).resolves.toMatchObject({ complete: true });
+    }
+  });
 });

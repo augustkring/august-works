@@ -1,3 +1,4 @@
+import { isResourceAdmissionDeferred } from "../services/resource-governance.js";
 import type { Request, Response, NextFunction } from "express";
 import type { Db } from "@paperclipai/db";
 import { ZodError } from "zod";
@@ -128,6 +129,12 @@ export function errorHandler(
   res: Response,
   _next: NextFunction,
 ) {
+  if (isResourceAdmissionDeferred(err)) {
+    res.setHeader("Retry-After", "1");
+    res.status(429).json({ error: "Configured execution capacity is occupied; the original work remains pending",
+      code: "resource_durable_execution_deferred", resource: "durable_execution", retryAfterSeconds: 1 });
+    return;
+  }
   // Drizzle wraps PostgreSQL constraint errors in `cause`. These named
   // V5 constraints are expected conflicts; never expose the SQL or parameters.
   let constraintError: unknown = err;

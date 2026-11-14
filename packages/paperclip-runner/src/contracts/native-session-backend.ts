@@ -152,6 +152,10 @@ export interface NativeSession {
   }): Promise<{
     turnId: string;
     effectiveCollaborationMode?: "default" | "plan";
+    /** Release provider work only after the runtime has durably acknowledged
+     * the exact input/turn binding. Stateless controllers use this before any
+     * paid request can pass their source receipt gate. */
+    releaseAfterInputAcknowledgement?: () => void | Promise<void>;
   }>;
   steer?(input: {
     turnId: string;

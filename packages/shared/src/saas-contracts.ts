@@ -1,5 +1,6 @@
 import { z } from "zod";
 import { activationWebsiteSchema } from "./activation.js";
+import { LOCAL_PASSWORD_MAX_UTF16_LENGTH } from "./local-password-policy.js";
 export const runtimeBackupPolicySchema = z
   .object({
     enabled: z.boolean(),
@@ -155,14 +156,53 @@ export const companyDeletionRequestSchema = z
   })
   .strict();
 
+export const companyDeletionRecoveryRequestSchema = z.object({
+  operationId: z.string().uuid(),
+  errorCode: z.enum(["secret_provider_erasure_identity_unresolved", "runtime_erasure_attempts_exhausted",
+    "offboarding_stage_invalid", "offboarding_provider_access_denied", "offboarding_provider_invalid_request", "company_export_storage_scope_changed"]),
+  failedAt: z.string().datetime(),
+}).strict();
+export const companyDeletionRecoveryResultSchema = z.object({
+  id: z.string().uuid(), companyId: z.string().uuid(), stage: z.string().min(1).max(100), status: z.literal("processing"),
+}).strict();
+export const companyDeletionFailuresQuerySchema = z.object({
+  after: z.string().uuid().optional(), expectedUserId: z.string().min(1).max(300).optional(),
+}).strict();
+export const companyDeletionFailuresResultSchema = z.object({
+  operations: z.array(z.object({
+    id: z.string().uuid(), companyId: z.string().uuid(), stage: z.string().min(1).max(100),
+    errorCode: z.string().max(100).nullable(),
+    lastFailure: z.object({ observedAt: z.string().datetime().nullable() }).strict(),
+  }).strict()).max(100),
+  nextCursor: z.string().uuid().nullable(),
+}).strict();
+
 export const accountDeletionRequestSchema = z
   .object({
     confirmation: z.literal("DELETE MY ACCOUNT"),
-    password: z.string().min(1).max(128),
+    password: z.string().min(1).max(LOCAL_PASSWORD_MAX_UTF16_LENGTH).optional(),
+    reauthenticationProofId: z.string().uuid().optional(),
     acknowledgeExport: z.literal(true),
     idempotencyKey: idempotencyKeySchema,
+    receiptRequired: z.literal(true).optional(),
   })
-  .strict();
+  .strict()
+  .refine(input => Boolean(input.password) || Boolean(input.reauthenticationProofId), {
+    message: "Provide a current password or verified sign-in confirmation",
+  });
+
+export const accountDeletionReceiptAccessSchema = z.object({
+  idempotencyKey: idempotencyKeySchema,
+}).strict();
+
+export const accountDeletionReceiptSchema = z.object({
+  scope: z.literal("personal_account"),
+  id: z.string().uuid(),
+  status: z.enum(["requested", "processing", "completed"]),
+  createdAt: z.string().datetime(),
+  completedAt: z.string().datetime().nullable(),
+}).strict();
+export type AccountDeletionReceipt = z.infer<typeof accountDeletionReceiptSchema>;
 
 export const runtimeModelProviderSchema = z
   .object({

@@ -4,9 +4,13 @@ import {
   type ActivityPublication,
 } from "./activity-log.js";
 import type { NativeStatusDecision } from "./native-runtime/status-arbiter.js";
-import { and, desc, eq, isNull, sql } from "drizzle-orm";
+import { createHash } from "node:crypto";
+import type { NativePayloadSourceInput, NativePayloadSourceSnapshot } from "@paperclipai/shared";
+import { and, desc, eq, exists, getTableColumns, inArray, isNull, sql } from "drizzle-orm";
 import {
   agentTaskSessions,
+  chatConversations,
+  chatMessageLinks,
   agentWakeupRequests,
   heartbeatRuns,
   issueComments,
@@ -17,8 +21,10 @@ import {
 } from "@paperclipai/db";
 
 import { sanitizeQuarantinedCommentForHigherTrust } from "./source-trust.js";
+import { readNativeChannelConversationScope, type NativeChannelConversationScope } from "./native-runtime/native-channel-conversation-owner.js";
 
 export type ConversationIdentity = {
+  originKind?: string | null;
   conversationAgentId?: string | null;
   conversationUserId?: string | null;
   conversationState?: string | null;
@@ -87,7 +93,7 @@ When the user asks to approve a plan before handoff, publish the plan and create
 
 Before handing off work, inspect available projects and repositories. Every task you create from this chat must belong to a suitable project. Reuse an appropriate existing project; otherwise use create_project. Consider all relevant available repositories and pass repositoryIds for one or multiple repositories when the work spans them. For existing GitHub repositories you can access that are absent from the catalog, pass their HTTPS repositoryUrls; this registers them with the project without creating remote GitHub repositories. You may combine known IDs and URLs and attach multiple repositories. The direct HTTP equivalent is POST /api/companies/{companyId}/projects with name, repositoryIds and/or repositoryUrls arrays, and an idempotencyKey. Include all selected repositories in that creation; do not combine these arrays with workspace. Never invent repository IDs or substitute inaccessible repositories. Ask when the choice is materially ambiguous or required access is missing. Non-code projects may need no repository.
 
-Create ordinary assigned tasks, never subtasks of this conversation. Give each task a clear outcome, context, acceptance criteria, project, and appropriate assignee. Use create_task with initialPlan to copy the relevant plan into the new task before execution starts. If using the HTTP API directly, POST /api/companies/{companyId}/issues with projectId, assigneeAgentId, status: "todo", initialPlan containing the relevant plan Markdown, and an idempotencyKey; omit parentId. Putting a plan in description does not create the task's plan document. Verify the new task's plan document before claiming the handoff is complete. Preserve the original plan here. Carry forward only the remaining execution steps, not completed planning, approval, project creation, or task creation steps. Include the source conversation ID, approved plan revision ID, and accepted interaction ID so the worker can verify the recorded approval. State the approved scope and what is already done; do not claim the new plan document has its own approval. The worker should execute that authorized scope, and ask again only if scope changes or another applicable gate requires it. When splitting work, include the relevant part of the plan in each task. Create and link each task before claiming it exists.
+Create ordinary assigned tasks, never subtasks of this conversation. Give each task a clear outcome, context, acceptance criteria, project, and appropriate assignee. Use create_task with initialPlan to copy the relevant plan into a new Task in Backlog before execution starts. If using the HTTP API directly, POST /api/companies/{companyId}/issues with projectId, assigneeAgentId, status: "backlog", initialPlan containing the relevant plan Markdown, and an idempotencyKey; omit parentId. Putting a plan in description does not create the Task's plan document. Verify each new Task's plan document before claiming the handoff is complete. Preserve the original chat plan here. Carry forward only remaining execution steps, not completed planning, approval, project creation, or task creation steps. Include the source conversation ID, approved chat-plan revision ID, and accepted interaction ID in each Task so the authorized handoff remains traceable; this chat-plan approval does not create or start a V10 execution plan. Do not move Tasks to To do, create/start V10 plans, or claim execution has begun. Tell the Human the draft Tasks are in Backlog and link the existing Orchestration page in the sidebar. The Human must review each Task's scope, output, intended action, risk, and model/tool/time limits, save and start its bounded plan in Orchestration, then move the Task to To do when ready to queue the assigned Agent. If the Human has not done that, leave the Task in Backlog. When splitting work, include the relevant part of the chat plan in each Task. Create and link each task before claiming it exists.
 
 For review or follow-up tasks, include the existing source materials the assignee needs, not just task identifiers or a rubric. Read the source task's saved documents and comments, then copy the relevant existing content into the handoff or attach resources the recipient can actually read. A new task's tools may only expose its own documents and history. Supplying existing source material is coordination, not creating the assigned deliverable.
 
@@ -125,7 +131,7 @@ export async function prepareConversationTurn(
       .from(issues)
       .where(and(eq(issues.id, issueId), eq(issues.companyId, run.companyId)))
       .for("update");
-    if (!isConversation(issue))
+    if (!issue || (!isConversation(issue) && issue.originKind !== "chat_channel"))
       return { context, reset: false, conversation: false };
     const commentId =
       typeof context.wakeCommentId === "string"
@@ -145,6 +151,34 @@ export async function prepareConversationTurn(
             ),
           )
       : [];
+    let channelScope: NativeChannelConversationScope | null = null;
+    if (issue.originKind === "chat_channel") {
+      if (!comment?.authorUserId || typeof context.wakeCommentId !== "string" || context.wakeCommentId !== comment.id) {
+        return { context, reset: false, conversation: false };
+      }
+      try {
+        channelScope = await readNativeChannelConversationScope(tx as unknown as Db, {
+          companyId: run.companyId, issueId, agentId: run.agentId, responsibleUserId: comment.authorUserId,
+          runId: run.id, sessionGeneration: typeof context.conversationSessionGeneration === "number"
+            ? context.conversationSessionGeneration : (await tx.select({ generation: chatConversations.sessionGeneration })
+              .from(chatConversations).where(and(eq(chatConversations.companyId, run.companyId), eq(chatConversations.issueId, issueId))).limit(1))[0]?.generation ?? -1,
+          sourceCommentId: comment.id, consumer: "run_admission",
+        });
+      } catch {
+        return { context, reset: false, conversation: false };
+      }
+      if (comment.conversationSessionGeneration != null && comment.conversationSessionGeneration !== channelScope.sessionGeneration)
+        return { context, reset: false, conversation: false };
+      if (issue.status !== "in_progress") await tx.update(issues).set({ status: "in_progress",
+        statusVersion: sql`${issues.statusVersion} + 1`, updatedAt: new Date() })
+        .where(and(eq(issues.companyId, run.companyId), eq(issues.id, issue.id), eq(issues.executionRunId, run.id)));
+      await tx.update(chatConversations).set({ state: "active", updatedAt: new Date() })
+        .where(and(eq(chatConversations.companyId, run.companyId), eq(chatConversations.id, channelScope.conversationId),
+          eq(chatConversations.sessionGeneration, channelScope.sessionGeneration)));
+      const next = { ...context, conversationSessionGeneration: channelScope.sessionGeneration, conversationMode: true };
+      await tx.update(heartbeatRuns).set({ contextSnapshot: next }).where(eq(heartbeatRuns.id, run.id));
+      return { context: next, reset: false, conversation: true, channelScope };
+    }
     const reset = Boolean(
       comment && comment.authorUserId && isConversationReset(comment.body),
     );
@@ -243,11 +277,59 @@ export async function settleConversationTurn(
       .from(issues)
       .where(and(eq(issues.id, issueId), eq(issues.companyId, run.companyId)))
       .for("update");
-    if (
-      !isConversation(issue) ||
-      (issue.executionRunId && issue.executionRunId !== run.id)
-    )
-      return false;
+    if (issue?.originKind === "chat_channel") {
+      const sourceCommentId = typeof context.wakeCommentId === "string" ? context.wakeCommentId : null;
+      const generation = context.conversationSessionGeneration;
+      if (!sourceCommentId || typeof generation !== "number" || issue.executionRunId !== run.id) return false;
+      const [response] = await tx.select({ id: issueComments.id }).from(issueComments).where(and(
+        eq(issueComments.companyId, run.companyId), eq(issueComments.issueId, issueId),
+        eq(issueComments.createdByRunId, run.id), eq(issueComments.authorAgentId, run.agentId), isNull(issueComments.deletedAt),
+      )).limit(1);
+      const [interaction] = !response ? await tx.select({ id: issueThreadInteractions.id }).from(issueThreadInteractions).where(and(
+        eq(issueThreadInteractions.companyId, run.companyId), eq(issueThreadInteractions.issueId, issueId),
+        eq(issueThreadInteractions.sourceRunId, run.id), eq(issueThreadInteractions.createdByAgentId, run.agentId),
+        eq(issueThreadInteractions.status, "pending"),
+      )).limit(1) : [];
+      if (!response && !interaction) return false;
+      let channelScope: NativeChannelConversationScope;
+      try {
+        const [wake] = await tx.select({ authorUserId: issueComments.authorUserId }).from(issueComments).where(and(
+          eq(issueComments.companyId, run.companyId), eq(issueComments.issueId, issueId), eq(issueComments.id, sourceCommentId),
+        )).limit(1);
+        if (!wake?.authorUserId) return false;
+        channelScope = await readNativeChannelConversationScope(tx as unknown as Db, {
+          companyId: run.companyId, issueId, agentId: run.agentId, responsibleUserId: wake.authorUserId,
+          runId: run.id, sessionGeneration: generation, sourceCommentId, consumer: "settlement",
+        });
+      } catch { return false; }
+      const [wake] = await tx.select({ id: issueComments.id, createdAt: issueComments.createdAt }).from(issueComments).where(and(
+        eq(issueComments.companyId, run.companyId), eq(issueComments.issueId, issueId), eq(issueComments.id, sourceCommentId),
+      )).limit(1);
+      const [pending] = wake ? await tx.select({ id: issueComments.id }).from(issueComments).where(and(
+        eq(issueComments.companyId, run.companyId), eq(issueComments.issueId, issueId), isNull(issueComments.deletedAt),
+        sql`${issueComments.authorUserId} is not null`,
+        exists(tx.select({ one: sql`1` }).from(chatMessageLinks).where(and(
+          eq(chatMessageLinks.companyId, run.companyId), eq(chatMessageLinks.commentId, issueComments.id),
+          eq(chatMessageLinks.conversationId, channelScope.conversationId), eq(chatMessageLinks.direction, "inbound")))),
+        sql`(${issueComments.createdAt}, ${issueComments.id}) > (select cursor.created_at, cursor.id from issue_comments cursor where cursor.id = ${wake.id}::uuid)`,
+      )).limit(1) : [];
+      const status = pending ? "in_progress" : "in_review";
+      const state = pending ? "active" : "waiting";
+      if (issue.status !== status) await tx.update(issues).set({ status, statusVersion: sql`${issues.statusVersion} + 1`,
+        completedAt: null, cancelledAt: null, updatedAt: new Date() }).where(and(
+        eq(issues.companyId, run.companyId), eq(issues.id, issueId), eq(issues.executionRunId, run.id),
+      ));
+      await tx.update(chatConversations).set({ state, updatedAt: new Date() }).where(and(
+        eq(chatConversations.companyId, run.companyId), eq(chatConversations.id, channelScope.conversationId),
+        eq(chatConversations.sessionGeneration, generation),
+      ));
+      publication = (await persistActivity(tx as unknown as Db, {
+        companyId: issue.companyId, actorType: "system", actorId: "conversation", action: "issue.updated",
+        entityType: "issue", entityId: issue.id, runId: run.id, details: { status, channelConversationState: state, sessionGeneration: generation },
+      })).publication;
+      return true;
+    }
+    if (!isConversation(issue) || (issue.executionRunId && issue.executionRunId !== run.id)) return false;
     const [response] = await tx
       .select({ id: issueComments.id })
       .from(issueComments)
@@ -353,17 +435,39 @@ export async function settleConversationTurn(
 }
 
 /** Fresh provider context uses only messages in this session, up to this turn. */
+export interface NativeCommentSourceCapture {
+  readonly input: Extract<NativePayloadSourceInput, { kind: "comment" }>;
+  // Preserve unknown history. A rendition hash is not a completeness proof.
+  readonly payloadSourceSnapshot: NativePayloadSourceSnapshot | null;
+  /** Narrow owner for an actual finalized Native presentation comment whose
+   * historical row predates comment Source Snapshot capture. */
+  readonly acceptedPresentationOwner?: import("./execution-continuation.js").NativeAcceptedFinalizedPresentationCommentOwner;
+}
+
 export async function conversationReplay(
   db: Db,
   companyId: string,
   issueId: string,
   wakeCommentId: string | null,
+  channelScope?: NativeChannelConversationScope | null,
 ) {
   const [issue] = await db
     .select()
     .from(issues)
     .where(and(eq(issues.id, issueId), eq(issues.companyId, companyId)));
-  if (!isConversation(issue)) return "";
+  if (!isConversation(issue) && !(issue?.originKind === "chat_channel" && channelScope &&
+      channelScope.companyId === companyId && channelScope.issueId === issueId && channelScope.sourceCommentId === wakeCommentId))
+    return { markdown: "", sourceCaptures: [] as NativeCommentSourceCapture[] };
+  if (channelScope) {
+    try {
+      const current = await readNativeChannelConversationScope(db, {
+        companyId, issueId, agentId: channelScope.agentId, responsibleUserId: channelScope.responsibleUserId,
+        runId: channelScope.runId, sessionGeneration: channelScope.sessionGeneration, sourceCommentId: channelScope.sourceCommentId, consumer: "history_replay",
+      });
+      if (current.conversationId !== channelScope.conversationId || current.deliveryId !== channelScope.deliveryId)
+        return { markdown: "", sourceCaptures: [] as NativeCommentSourceCapture[] };
+    } catch { return { markdown: "", sourceCaptures: [] as NativeCommentSourceCapture[] }; }
+  }
   const [boundary] = issue.conversationBoundaryCommentId
     ? await db
         .select()
@@ -382,13 +486,21 @@ export async function conversationReplay(
         )
     : [];
   const rows = await db
-    .select()
+    .select({
+      ...getTableColumns(issueComments),
+      // Preserve PostgreSQL microseconds from the same selected rendition;
+      // JavaScript Date would silently truncate this source version.
+      sourceVersion: sql<string>`extract(epoch from ${issueComments.updatedAt})::text`,
+    })
     .from(issueComments)
     .where(
       and(
         eq(issueComments.companyId, companyId),
         eq(issueComments.issueId, issueId),
         isNull(issueComments.deletedAt),
+        channelScope ? exists(db.select({ one: sql`1` }).from(chatMessageLinks).where(and(
+          eq(chatMessageLinks.companyId, companyId), eq(chatMessageLinks.commentId, issueComments.id),
+          eq(chatMessageLinks.conversationId, channelScope.conversationId), inArray(chatMessageLinks.direction, ["inbound", "outbound"])))) : undefined,
         boundary
           ? sql`(${issueComments.createdAt}, ${issueComments.id}) > (select cursor.created_at, cursor.id from issue_comments cursor where cursor.id = ${boundary.id}::uuid)`
           : undefined,
@@ -399,15 +511,22 @@ export async function conversationReplay(
     )
     .orderBy(desc(issueComments.createdAt), desc(issueComments.id))
     .limit(40);
-  return rows
-    .reverse()
-    .map((row) =>
-      JSON.stringify({
-        author: row.authorAgentId ? "agent" : "user",
-        body: sanitizeQuarantinedCommentForHigherTrust(row).body.slice(0, 8000),
-      }),
-    )
-    .join("\n");
+  const lines: string[] = [];
+  const sourceCaptures: NativeCommentSourceCapture[] = [];
+  for (const row of rows.reverse()) {
+    const line = JSON.stringify({
+      author: row.authorAgentId ? "agent" : "user",
+      body: sanitizeQuarantinedCommentForHigherTrust(row).body.slice(0, 8000),
+    });
+    lines.push(line);
+    sourceCaptures.push({
+      input: { kind: "comment", issueId: row.issueId, commentId: row.id, sourceVersion: row.sourceVersion,
+        // Exact collector rendition, not the PostgreSQL owner-envelope hash.
+        contentHash: createHash("sha256").update(line, "utf8").digest("hex") },
+      payloadSourceSnapshot: row.payloadSourceSnapshot,
+    });
+  }
+  return { markdown: lines.join("\n"), sourceCaptures };
 }
 
 /** Comment rows form a durable outbox for the narrow commit-to-enqueue crash window. */

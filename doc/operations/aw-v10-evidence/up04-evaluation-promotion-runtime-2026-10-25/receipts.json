@@ -1,0 +1,40 @@
+{
+  "schema": "aw.scoped-software-acceptance.v1",
+  "capturedAt": "2026-10-25T19:26:15.783325+00:00",
+  "gitHeadAtReceipt": "1b5a19d567f025cbe4377766f0098e20ad2c3539",
+  "command": "NODE_OPTIONS=--max-old-space-size=2048 flock -x /workspace/v10-preparation/v10-pg-tests.lock pnpm --dir server exec vitest run src/__tests__/skill-evaluation-promotion-runtime.integration.test.ts --maxWorkers=1 --reporter=verbose",
+  "exitCode": 0,
+  "testFilesPassed": 1,
+  "testsPassed": 1,
+  "testsSkipped": 0,
+  "durationSeconds": 48.95,
+  "processClosed": true,
+  "embeddedPostgresCleanedUp": true,
+  "stdoutSha256": "7961e9db98cb382a013c32c18e7cab0bdaf86121363a6711d05cded9d710fcb0",
+  "sourcePins": "source-pins.json",
+  "pinnedSourcesUnchangedAtExit": false,
+  "unchangedPinnedSourceCount": 11,
+  "sourceDrift": {
+    "server/src/services/costs.ts": {
+      "before": "50f64f3dae0ff44c31b6cbe30c719091bbbd6adc296acfe10045421fe522d49a",
+      "after": "5f9547dc8d2eb8f3d0111585913be5a96eb2ce8479a476298012b0cab0c7d965"
+    }
+  },
+  "sourceDriftAssessment": "costs.ts gained unpriced reporting/read-model fields during this run. The test, evaluation/promotion, Fabric, Skill resolver, eligible consumer, Agent and provider-binding owners stayed unchanged. The current committed delta leaves costService.createEvent used here unchanged. This receipt does not claim whole-module or whole-workspace unchanged-source acceptance.",
+  "earnedSoftwareBehavior": [
+    "Actual createDraft, suite creation, evaluation start and pinned test harness ownership",
+    "Twelve case/trial/arm observations scored by original evaluation service, including positive and negative trigger controls",
+    "Initial promotion plus champion/challenger promotion; no passed evaluation or validated/active/superseded Skill state inserted by test",
+    "Original Agent skill-sync owner assigns V1; Fabric-produced immutable manifest retains V1 after V2 promotion",
+    "Current eligible plugin/runtime reader reports retained V1 and current V2, preserving original manifest hash",
+    "Changed provider configuration refuses fresh admission and creates no manifest; original controlled conformance refresh admits fresh V2",
+    "Original lifecycle revocation refuses the current consumer"
+  ],
+  "limitations": [
+    "Runtime settlement and reported costs are controlled test boundary facts; no live model or deployed provider execution is qualified.",
+    "Human assessments are attributable fixture inputs; no causal business improvement or real provider performance is claimed.",
+    "This is scoped software integration evidence, not whole-workspace unchanged-source acceptance."
+  ],
+  "newlyQualifiedRuntimeProfiles": [],
+  "productionOwnerChangesByThisTask": []
+}

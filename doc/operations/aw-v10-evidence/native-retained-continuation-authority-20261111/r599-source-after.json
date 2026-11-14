@@ -1,0 +1,19 @@
+{
+  "files": {
+    "package.json": "631b595ef1b57251c2d6f8218ad1a367705072b3d2ec14a6f2010fc9abb9b6f7",
+    "pnpm-lock.yaml": "b70210ed554c63d425e34e4c075f0984309f74f0836d82d85f714b1c4deeb5b2",
+    "server/package.json": "08b8faa2b2b9c69530928aa0b283cf9e53e70e27a692a8cb9fdbee6dec3fb0f4",
+    "server/src/__tests__/heartbeat-managed-scheduler.integration.test.ts": "0c3bd88c8492882c007af90172c84e1c319bdd56e89262fc8b24d5e421517cc7",
+    "server/src/__tests__/helpers/managed-native-conversation-sandbox-host.ts": "c64df88daebfba1bb1bb78862f7f72f734ac06e2cacc301696c9ca13ee0c9e6e",
+    "server/src/__tests__/helpers/managed-native-opencode-e2e-fixture.ts": "889640059e65f36b4baf763e3d68822a304efe334f9587fc6eada00f83de6625",
+    "server/src/services/native-runtime/native-model-input-dispatch.integration.test.ts": "93bca50a2f7e2fd7d963bbba8f820517db0b800fcaccbd9d7e8c539504b63b71",
+    "server/src/services/native-runtime/native-session-executor.test.ts": "39f613983eac78330a10d2f17e64fa5dfb84f70e5ea2a59847aeb635296f7d7d",
+    "server/src/services/native-runtime/native-session-executor.ts": "4be1a963f80a317ecd2728bb869d506e09a0970d4b11607659366d115ee629db",
+    "server/src/storage/service.ts": "ea24b62d002f1ac3cfd52497e273f425841e4a96e310644ff6d12ce164e753a5",
+    "server/src/storage/types.ts": "c00cca8ebd7a80f60002a7d1b714fb726d664fe99a0fc04db6a197e809597b82",
+    "server/tsconfig.json": "41b38f5d62b35e02f2b15c294baf39d196a8e6af125bd4a4d7b5e30d9334d150",
+    "tests/e2e/fixtures/managed-pipeline-producer.ts": "f15317515b99886f0299cbb9fd8eac402eb6d2f2c9416d8bc00c893c34e2e77c"
+  },
+  "allPinsUnchanged": true,
+  "allMtimesUnchanged": true
+}

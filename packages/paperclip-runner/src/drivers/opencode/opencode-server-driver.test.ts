@@ -102,6 +102,81 @@ afterAll(async () => {
 });
 
 describe("OpenCodeServerDriver", () => {
+  it("routes only the explicitly selected Anthropic managed profile to the fixed Paperclip model broker", () => {
+    expect(openCodeServerDriverInternals.resolveManagedModelProviderConfiguration(
+      "anthropic/claude-fixture-2026",
+      { PAPERCLIP_MANAGED_MODEL_BROKER_ORIGIN: "https://paperclip.example",
+        PAPERCLIP_MANAGED_MODEL_INPUT_TOKENS_UPPER_BOUND: "100000",
+        PAPERCLIP_MANAGED_MODEL_MAX_OUTPUT_TOKENS: "1024" },
+    )).toEqual({
+      anthropic: {
+        options: {
+          baseURL: "https://paperclip.example/runtime-tools/model/v1",
+          apiKey: "paperclip-managed-model-broker",
+        },
+        models: { "claude-fixture-2026": { name: "claude-fixture-2026", tool_call: true,
+          limit: { context: 101024, output: 1024 } } },
+      },
+    });
+    expect(openCodeServerDriverInternals.resolveManagedModelProviderConfiguration(
+      "openrouter/deepseek/deepseek-v4-flash-0731",
+      {},
+    )).toEqual({ openrouter: { models: { "deepseek/deepseek-v4-flash-0731": { name: "deepseek/deepseek-v4-flash-0731" } } } });
+    expect(() => openCodeServerDriverInternals.resolveManagedModelProviderConfiguration(
+      "openrouter/arbitrary",
+      { PAPERCLIP_MANAGED_MODEL_BROKER_ORIGIN: "https://paperclip.example" },
+    )).toThrow("managed_model_broker_requires_anthropic");
+    expect(() => openCodeServerDriverInternals.resolveManagedModelProviderConfiguration(
+      "anthropic/arbitrary",
+      { PAPERCLIP_MANAGED_MODEL_BROKER_ORIGIN: "https://paperclip.example/untrusted",
+        PAPERCLIP_MANAGED_MODEL_INPUT_TOKENS_UPPER_BOUND: "100000",
+        PAPERCLIP_MANAGED_MODEL_MAX_OUTPUT_TOKENS: "1024" },
+    )).toThrow("managed_model_broker_origin_invalid");
+    expect(() => openCodeServerDriverInternals.resolveManagedModelProviderConfiguration(
+      "anthropic/arbitrary", { PAPERCLIP_MANAGED_MODEL_BROKER_ORIGIN: "https://paperclip.example" },
+    )).toThrow("managed_model_profile_limits_invalid");
+  });
+  it("pins the managed source plugin and removes OpenCode built-ins from actual prompt payloads", async () => {
+    await chmod(fixture, 0o755);
+    const root = await mkdtemp(join(tmpdir(), "paperclip-opencode-managed-source-"));
+    const workspace = await mkdtemp(join(tmpdir(), "paperclip-opencode-managed-workspace-"));
+    roots.push(root, workspace);
+    let promptPayload: Record<string, unknown> | null = null;
+    const driver = new OpenCodeServerDriver({
+      model: "anthropic/claude-fixture-2026",
+      systemInstructions: "CANONICAL_FROZEN_SOURCE_PROMPT",
+      runtimeDirectory: root,
+      command: fixture,
+      fetch: async (input, init) => {
+        if (String(input).endsWith("/prompt_async")) promptPayload = JSON.parse(String(init?.body)) as Record<string, unknown>;
+        return fetch(input, init);
+      },
+      environment: { PATH: process.env.PATH, PAPERCLIP_MANAGED_MODEL_BROKER_ORIGIN: "https://paperclip.example.test",
+        PAPERCLIP_MANAGED_MODEL_INPUT_TOKENS_UPPER_BOUND: "100000",
+        PAPERCLIP_MANAGED_MODEL_MAX_OUTPUT_TOKENS: "1024" },
+    });
+    const session = await driver.openSession({ runId: "managed-source", normalizedSessionId: "managed-source", workingDirectory: workspace });
+    const config = JSON.parse(await readFile(join(root, "managed-source", "config", "opencode", "opencode.json"), "utf8"));
+    const pluginPath = join(root, "managed-source", "config", "opencode", "plugins", "paperclip-source-witness.js");
+    const plugin = await readFile(pluginPath, "utf8");
+    expect(config.mcp.paperclip.timeout).toBe(90_000);
+    expect(config.tools).toEqual({ "*": false, "paperclip_*": true });
+    expect(config.permission).toMatchObject({ "*": "deny", "paperclip_*": "allow", "external_directory": "deny" });
+    expect(plugin).toContain("CANONICAL_FROZEN_SOURCE_PROMPT");
+    expect(plugin).toContain("experimental.chat.messages.transform");
+    expect(plugin).toContain("experimental.chat.system.transform");
+    expect(plugin).toContain("tool.definition");
+    expect(plugin).toContain("tool.execute.before");
+    expect(plugin).toContain("tool.execute.after");
+    expect(plugin).toContain("x-paperclip-opencode-source-witness");
+    expect(plugin).toContain('sourceClosure: "unsupported"');
+    expect(plugin).toContain('missingSourceFamilies: ["task", "history", "tool_result", "tool_schema"]');
+    expect((await stat(pluginPath)).mode & 0o777).toBe(0o400);
+    await session.startTurn({ message: { role: "user", text: "finish" } });
+    expect(promptPayload).not.toHaveProperty("tools");
+    expect(promptPayload).toMatchObject({ parts: [{ type: "text", text: "finish" }] });
+    await session.close();
+  });
   it("advertises within-turn plans as unsupported", async () => {
     const driver = new OpenCodeServerDriver({
       model: "openrouter/deepseek/deepseek-v4-flash-0731",
@@ -691,7 +766,7 @@ describe("OpenCodeServerDriver", () => {
     expect(
       (await stat(join(sessionRoot, "config", "opencode", "opencode.json")))
         .mode & 0o777,
-    ).toBe(0o600);
+    ).toBe(0o400);
     const config = await readFile(
       join(sessionRoot, "config", "opencode", "opencode.json"),
       "utf8",
@@ -863,9 +938,11 @@ describe("OpenCodeServerDriver", () => {
       environment: {
         PATH: process.env.PATH,
         OPENROUTER_API_KEY: "fixture-key",
-        PAPERCLIP_NATIVE_MCP_NAME: "paperclip-assigned",
-        PAPERCLIP_NATIVE_MCP_URL: "https://paperclip.example/mcp",
-        PAPERCLIP_NATIVE_MCP_TOKEN: "x".repeat(40),
+      },
+      assignedMcp: {
+        name: "paperclip-assigned",
+        url: "https://paperclip.example/mcp",
+        token: "x".repeat(40),
       },
       fetch: async (input, init) => {
         if (String(input).endsWith("/prompt_async"))
@@ -922,10 +999,11 @@ describe("OpenCodeServerDriver", () => {
         external_directory: { "*": "deny", [`${instructionRoot}/**`]: "allow" },
       },
       mcp: {
-        paperclip: { enabled: true },
+        paperclip: { enabled: true, timeout: 30_000 },
         "paperclip-assigned": {
           url: "https://paperclip.example/mcp",
           enabled: true,
+          timeout: 30_000,
         },
       },
     });
@@ -1475,6 +1553,100 @@ describe("OpenCodeServerDriver", () => {
     const evidence = files.find((name) => name.endsWith("fake-criteria-repair.json"));
     expect(evidence).toBeDefined();
     expect(JSON.parse(await readFile(join(root, evidence!), "utf8"))).toMatchObject({ result: { isError: true, content: [{ text: expect.stringContaining('"human_response"') }] } });
+    await session.close({ reason: "test" });
+  });
+
+  it.each(["acknowledged", "rejected", "non201", "closed", "no-pending", "foreign-turn"] as const)("settles an already in-flight dynamic tool before terminal completion: %s", async (outcome) => {
+    await chmod(fixture, 0o755);
+    const root = await mkdtemp(join(tmpdir(), "paperclip-opencode-tool-settlement-"));
+    const workspace = await mkdtemp(join(tmpdir(), "paperclip-opencode-workspace-"));
+    roots.push(root, workspace);
+    let entered!: () => void, release!: (value: unknown) => void, reject!: (reason: unknown) => void;
+    const started = new Promise<void>(resolve => { entered = resolve; });
+    const pending = new Promise<unknown>((resolve, fail) => { release = resolve; reject = fail; });
+    let providerEvents!: ReadableStreamDefaultController<Uint8Array>;
+    let markEventsReady!: () => void;
+    const eventsReady = new Promise<void>(resolve => { markEventsReady = resolve; });
+    const bounded = async <T,>(promise: Promise<T>): Promise<T> => {
+      let timer: ReturnType<typeof setTimeout> | undefined;
+      try {
+        return await Promise.race([promise, new Promise<never>((_, fail) => {
+          timer = setTimeout(() => fail(new Error("terminal settlement deadline")), 1_000);
+        })]);
+      } finally { clearTimeout(timer); }
+    };
+    const driver = new OpenCodeServerDriver({ model: "openrouter/deepseek/deepseek-v4-flash-0731",
+      runtimeDirectory: root, command: fixture,
+      environment: { PATH: process.env.PATH, OPENROUTER_API_KEY: "fixture-key" },
+      // Keep the real driver/MCP runtime, but own this turn's tool scheduling.
+      fetch: (url, init) => {
+        if (String(url).includes("/prompt_async")) return Promise.resolve(new Response("{}", { status: 200 }));
+        if (String(url).endsWith("/event")) return Promise.resolve(new Response(new ReadableStream<Uint8Array>({
+          start(controller) {
+            providerEvents = controller;
+            markEventsReady();
+            init?.signal?.addEventListener("abort", () => controller.close(), { once: true });
+          },
+        }), { status: 200, headers: { "Content-Type": "text/event-stream" } }));
+        return fetch(url, init);
+      },
+      dynamicToolHandler: async () => { entered(); return pending; },
+      taskEnvelope: createCodexTaskEnvelope({ objective: "Settle the admitted API call", contractRevision: "settlement-v1",
+        criteria: [{ id: "result", requirement: "Retain the bounded result" }] }),
+    });
+    const session = await driver.openSession({ runId: `settlement-${outcome}`, normalizedSessionId: `settlement-${outcome}`,
+      workingDirectory: workspace });
+    const dispatch = (session as unknown as { dispatchTool(call: { tool: string; callId: string; arguments: unknown }): Promise<unknown> }).dispatchTool.bind(session);
+    await session.startTurn({ message: { role: "user", text: "One already admitted provider response." } });
+    const api = outcome === "no-pending" ? Promise.resolve(null)
+      : dispatch({ tool: "call_api", callId: "approval", arguments: { operationId: "POST /api/issues/{id}/comments" } });
+    const apiOutcome = api.then(value => ({ value }), error => ({ error }));
+    if (outcome !== "no-pending") await started;
+    if (outcome === "foreign-turn") {
+      await bounded(eventsReady);
+      providerEvents.enqueue(new TextEncoder().encode(`data: ${JSON.stringify({ type: "session.idle",
+        properties: { sessionID: session.ids().providerSessionId } })}\n\n`));
+      await bounded((async () => {
+        while ((await session.snapshot()).activeTurnId !== null) await new Promise(resolve => setTimeout(resolve, 1));
+      })());
+      await session.startTurn({ message: { role: "user", text: "A distinct current turn." } });
+    }
+    const semantic = { schema: "paperclip.run_result.v1", reportedWorkDisposition: "done", summary: "Retained semantic result.",
+      completionClaim: { contractRevision: "settlement-v1", objectiveSatisfied: true,
+        criteria: [{ criterionId: "result", status: "satisfied", evidenceRefs: [] }], remainingWork: [] },
+      evidence: [], verification: [], attentionRequests: [], artifacts: [] };
+    const finish = dispatch({ tool: "paperclip_finish", callId: "finish", arguments: semantic });
+    const finishOutcome = finish.then(value => ({ value }), error => ({ error }));
+    if (outcome !== "no-pending" && outcome !== "foreign-turn") {
+      await Promise.resolve();
+      expect((await session.snapshot()).semanticResult).toBeNull();
+      expect((await session.transcript()).events.some(event => event.eventType === "run.result.proposed")).toBe(false);
+    }
+    if (outcome === "closed") await bounded(session.close({ reason: "test-cancel" }));
+    const failure = new Error("unknown API acknowledgement");
+    if (outcome === "rejected") reject(failure);
+    else if (outcome !== "closed" && outcome !== "foreign-turn")
+      release(outcome === "non201" ? { ok: false, status: 422 } : { ok: true, status: 201 });
+    // closed/foreign-turn intentionally leave the old API promise unresolved.
+    const settledFinish = await bounded(finishOutcome);
+    const transcript = (await session.transcript()).events;
+    if (outcome === "rejected" || outcome === "closed") {
+      expect(settledFinish).toHaveProperty("error");
+      expect((await session.snapshot()).semanticResult).toBeNull();
+      expect(transcript.some(event => event.eventType === "run.result.proposed")).toBe(false);
+      if (outcome === "rejected") expect(await apiOutcome).toEqual({ error: failure });
+    } else {
+      expect(settledFinish).toEqual({ value: { accepted: true } });
+      const apiIndex = transcript.findIndex(event => event.eventType === "item.completed" && event.itemId === "approval");
+      const resultIndex = transcript.findIndex(event => event.eventType === "run.result.proposed");
+      if (outcome === "foreign-turn" || outcome === "no-pending") expect(apiIndex).toBe(-1);
+      else {
+        expect(await apiOutcome).toEqual({ value: outcome === "non201" ? { ok: false, status: 422 } : { ok: true, status: 201 } });
+        expect(apiIndex).toBeGreaterThan(-1);
+        expect(resultIndex).toBeGreaterThan(apiIndex);
+      }
+      expect((await session.snapshot()).semanticResult?.result).toEqual(semantic);
+    }
     await session.close({ reason: "test" });
   });
 

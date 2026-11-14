@@ -1,0 +1,21 @@
+{
+  "generatedWith": "drizzle-kit 0.31.10 generate --custom --name role_pack_company_purge",
+  "generationRoot": "/workspace/v10-preparation/conversation-migration-generation-vq_kc6eq",
+  "journalPrefixExact": true,
+  "previousSnapshotIdExact": true,
+  "schemaUnchanged": true,
+  "files": [
+    {
+      "path": "packages/db/src/migrations/0552_role_pack_company_purge.sql",
+      "sha256": "555147456bb7e571cf5dfc9ff94184d8407433946d90d0550fe1dfdf61abd74a"
+    },
+    {
+      "path": "packages/db/src/migrations/meta/0552_snapshot.json",
+      "sha256": "66bb6bb985c2efc83e9a7124ccc147ab5ba2016441a6ac523f0148bd3ae58d18"
+    },
+    {
+      "path": "packages/db/src/migrations/meta/_journal.json",
+      "sha256": "2e1eeadaa7df4be3aaca91f012c325fb41a47499d1bbac7e79ae68233d68f717"
+    }
+  ]
+}

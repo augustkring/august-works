@@ -1,0 +1,11 @@
+{
+  "server/src/services/issues.ts": "47f49de4a0ae0e510d8bcb0e161ff8a796c16fb9004fd8e5591c93ce6b849b38",
+  "server/src/services/authorization.ts": "3e2b0bbf78061ddb5fe97007d3fb756b5f3b92fba225cb78ff5c0ae4fdabb91d",
+  "server/src/auth/authenticator-assurance.ts": "cd05f0913ee54171f9aca03c2c8bc1ecc2c7eb63a90d8acd5314bab28811d28e",
+  "server/src/agent-auth-jwt.ts": "743f6b63a896419ce9bf4d23f31c19bfc8c48aeacabf9c72492e0a1c6c5ed292",
+  "server/src/middleware/auth.ts": "b36a5179868bc43dc26b8abec45c6e75c8361f5588ebd0bc778462488a7e98d7",
+  "server/src/__tests__/generic-task-credential-lifetime.integration.test.ts": "56c2c71421d716c438a5f5a23274545fa165156051e5ad7afcf0e52b6f390146",
+  "tests/e2e/aw-v10-native-auth.spec.ts": "a615d0c15af21ebdff7f4701d01b9c46945fec4064db00434aeb47977bac98c8",
+  "tests/e2e/aw-v10-native-auth.config.ts": "6cae7be75201ec1681482ac8fa19124ab58230f705dc1fb492dfbf7145a15be6",
+  "pnpm-lock.yaml": "8a36edd8ee2893e7b29b4f99d4c590611aac1c6c133db45169dd8bf89fc737d9"
+}

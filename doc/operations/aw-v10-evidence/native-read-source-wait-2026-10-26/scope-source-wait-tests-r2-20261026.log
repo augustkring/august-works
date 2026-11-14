@@ -1,0 +1,30 @@
+
+ RUN  v4.1.11 /workspace/v10-dep-qualification/server
+
+ ❯ src/__tests__/v9-agent-procedure-pins.integration.test.ts (15 tests | 1 failed | 14 skipped) 4293ms
+     × does not deliver or record a Playbook read after the authenticated Native Run is withdrawn while waiting 763ms
+
+⎯⎯⎯⎯⎯⎯⎯ Failed Tests 1 ⎯⎯⎯⎯⎯⎯⎯
+
+ FAIL  src/__tests__/v9-agent-procedure-pins.integration.test.ts > Canonical text-only Role Pack procedure pins > does not deliver or record a Playbook read after the authenticated Native Run is withdrawn while waiting
+AssertionError: expected 'rejected:Execution manifest not found' to be 'pending' // Object.is equality
+
+Expected: "pending"
+Received: "rejected:Execution manifest not found"
+
+ ❯ src/__tests__/v9-agent-procedure-pins.integration.test.ts:210:28
+    208|     try {
+    209|       await new Promise(resolve => setTimeout(resolve, 50));
+    210|       expect(settledState).toBe("pending");
+       |                            ^
+    211|     } finally {
+    212|       release();
+
+⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯[1/1]⎯
+
+
+ Test Files  1 failed | 1 passed (2)
+      Tests  1 failed | 1 passed | 34 skipped (36)
+   Start at  06:23:35
+   Duration  26.04s (transform 9.19s, setup 140ms, import 16.69s, tests 8.94s, environment 0ms)
+

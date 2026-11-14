@@ -1,0 +1,31 @@
+
+ RUN  v4.1.11 /workspace/v10-dep-qualification/server
+
+··x·
+
+⎯⎯⎯⎯⎯⎯⎯ Failed Tests 1 ⎯⎯⎯⎯⎯⎯⎯
+
+ FAIL  src/__tests__/memory-routes.test.ts > Memory routes > does not attach Human Memory evidence after its original Task source is withdrawn
+Error: expected 404 "Not Found", got 409 "Conflict"
+ ❯ src/__tests__/memory-routes.test.ts:373:8
+    371|           seeded.contradictionSourceIssue.updatedAt.toISOString())[0]!…
+    372|       }],
+    373|     }).expect(404);
+       |        ^
+    374|     const [unchanged]=await db.select({evidenceCount:sql<number>`(sele…
+    375|       payloadSourceSnapshotInvalidated:memoryRecords.payloadSourceSnap…
+ ❯ Test._assertStatus ../node_modules/.pnpm/supertest@7.2.2/node_modules/supertest/lib/test.js:309:14
+ ❯ ../node_modules/.pnpm/supertest@7.2.2/node_modules/supertest/lib/test.js:365:13
+ ❯ Test._assertFunction ../node_modules/.pnpm/supertest@7.2.2/node_modules/supertest/lib/test.js:342:13
+ ❯ Test.assert ../node_modules/.pnpm/supertest@7.2.2/node_modules/supertest/lib/test.js:195:23
+ ❯ localAssert ../node_modules/.pnpm/supertest@7.2.2/node_modules/supertest/lib/test.js:138:14
+ ❯ Server.<anonymous> ../node_modules/.pnpm/supertest@7.2.2/node_modules/supertest/lib/test.js:152:11
+
+⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯[1/1]⎯
+
+
+ Test Files  1 failed (1)
+      Tests  1 failed | 3 passed (4)
+   Start at  02:18:12
+   Duration  23.91s (transform 9.90s, setup 73ms, import 14.03s, tests 9.69s, environment 0ms)
+

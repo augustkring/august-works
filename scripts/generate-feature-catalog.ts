@@ -1,10 +1,12 @@
-// Emits the feature-catalog.json release artifact the cloud harness imports
-// per app release and validates feature writes against. The catalog content
-// is derived from the instance-settings schema metadata in
+// Emits feature-catalog.json. The default schema v1 preserves the Cloud
+// harness tier contract. Pass --schema-version 2 to generate an explicit
+// lifecycle-rich candidate artifact from the same catalog; external consumer
+// support for v2 must be qualified before changing release defaults. The
+// catalog content is derived from instance-settings schema metadata in
 // packages/shared/src/feature-catalog.ts.
 //
 // Usage:
-//   tsx scripts/generate-feature-catalog.ts --version 2026.720.0 [--out path/to/feature-catalog.json]
+//   tsx scripts/generate-feature-catalog.ts --version 2026.720.0 [--schema-version 2] [--out path/to/feature-catalog.json]
 //
 // Without --out, the artifact is written to stdout.
 
@@ -15,13 +17,14 @@ import { renderFeatureCatalogArtifact } from "../packages/shared/src/feature-cat
 
 function usage(): never {
   console.error(
-    "Usage: tsx scripts/generate-feature-catalog.ts --version <catalogVersion> [--out <file>]",
+    "Usage: tsx scripts/generate-feature-catalog.ts --version <catalogVersion> [--schema-version 1|2] [--out <file>]",
   );
   process.exit(1);
 }
 
 let version = "";
 let outPath = "";
+let schemaVersion: 1 | 2 = 1;
 
 const args = process.argv.slice(2);
 for (let i = 0; i < args.length; i += 1) {
@@ -32,6 +35,12 @@ for (let i = 0; i < args.length; i += 1) {
     case "--out":
       outPath = args[++i] ?? "";
       break;
+    case "--schema-version": {
+      const value = args[++i] ?? "";
+      if (value !== "1" && value !== "2") usage();
+      schemaVersion = Number(value) as 1 | 2;
+      break;
+    }
     case "-h":
     case "--help":
       usage();
@@ -47,7 +56,7 @@ if (version.trim().length === 0) {
   usage();
 }
 
-const rendered = renderFeatureCatalogArtifact(version);
+const rendered = renderFeatureCatalogArtifact(version, schemaVersion);
 
 if (outPath) {
   const target = resolve(outPath);

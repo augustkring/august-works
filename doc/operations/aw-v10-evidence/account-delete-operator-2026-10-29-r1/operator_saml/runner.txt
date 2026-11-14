@@ -1,0 +1,3 @@
+timeout_seconds=240
+test_file=src/__tests__/account-deletion-saml-freshness.integration.test.ts
+test_pattern=forces SP-initiated fresh authentication and accepts only its exact signed \u0042earer assertion

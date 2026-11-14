@@ -1,0 +1,38 @@
+(!) Your Vite config uses features that are unsupported by `configLoader: 'native'`, which is planned to become the default in a future major version of Vite:
+  - `__dirname` (vitest.config.ts:7:25). Use `import.meta.dirname` instead
+Set `VITE_CONFIG_NATIVE_IGNORE_WARNING=true` to suppress this warning.
+
+ RUN  v4.1.11 /workspace/blentera-v10
+
+ ❯ |@paperclipai/server| src/__tests__/foundation-read-source-authority.integration.test.ts (17 tests | 2 failed | 13 skipped) 15190ms
+     × rechecks the authenticated agent token hash for issue:read after a real Source row wait 300ms
+     × rechecks the authenticated board token hash for issue:read after a real Source row wait 347ms
+
+⎯⎯⎯⎯⎯⎯⎯ Failed Tests 2 ⎯⎯⎯⎯⎯⎯⎯
+
+ FAIL  |@paperclipai/server| src/__tests__/foundation-read-source-authority.integration.test.ts > Foundation native Source authority lifetime > rechecks the authenticated agent token hash for issue:read after a real Source row wait
+ FAIL  |@paperclipai/server| src/__tests__/foundation-read-source-authority.integration.test.ts > Foundation native Source authority lifetime > rechecks the authenticated board token hash for issue:read after a real Source row wait
+AssertionError: expected 200 to be 403 // Object.is equality
+
+- Expected
++ Received
+
+- 403
++ 200
+
+ ❯ src/__tests__/foundation-read-source-authority.integration.test.ts:305:29
+    303|     } finally { release.resolve(); await holder; }
+    304|     const response = await pending;
+    305|     expect(response.status).toBe(403);
+       |                             ^
+    306|     expect(response.body.allowed).toBe(false);
+    307|     expect((await probe(replacementToken)).status).toBe(200);
+
+⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯[1/2]⎯
+
+
+ Test Files  1 failed (1)
+      Tests  2 failed | 2 passed | 13 skipped (17)
+   Start at  12:32:47
+   Duration  67.59s (transform 32.78s, setup 672ms, import 47.03s, tests 15.19s, environment 0ms)
+

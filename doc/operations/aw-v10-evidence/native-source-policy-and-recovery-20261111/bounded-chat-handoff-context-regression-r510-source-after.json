@@ -1,0 +1,143 @@
+{
+  "head": "75d90c4e22ce9d2545e70cdc679e5fe7b12f80a6",
+  "files": {
+    ".nvmrc": {
+      "sha256": "73fb1b615e2043a933be1c0895cde4358036acc28d785692509b822aa53c761f",
+      "bytes": 8,
+      "mtimeNs": 1794226789204376584
+    },
+    "package.json": {
+      "sha256": "631b595ef1b57251c2d6f8218ad1a367705072b3d2ec14a6f2010fc9abb9b6f7",
+      "bytes": 14972,
+      "mtimeNs": 1794226790631675063
+    },
+    "packages/paperclip-runner/src/live/runnerd-codex-transport.ts": {
+      "sha256": "d4fe1bf12a49cfb61aaf4c1a7bf4de6f43ab258b5e6cddab2bfd452da7c8a2b9",
+      "bytes": 254079,
+      "mtimeNs": 1794401004608717535
+    },
+    "pnpm-lock.yaml": {
+      "sha256": "b70210ed554c63d425e34e4c075f0984309f74f0836d82d85f714b1c4deeb5b2",
+      "bytes": 634978,
+      "mtimeNs": 1794226790807960284
+    },
+    "server/package.json": {
+      "sha256": "08b8faa2b2b9c69530928aa0b283cf9e53e70e27a692a8cb9fdbee6dec3fb0f4",
+      "bytes": 6179,
+      "mtimeNs": 1794226790837478863
+    },
+    "server/src/__tests__/heartbeat-context-summary.test.ts": {
+      "sha256": "99bd4084938d86e563c8195fac7327ff7fea3e27f607e88472a4cce10357c493",
+      "bytes": 29372,
+      "mtimeNs": 1794401983941986127
+    },
+    "server/src/__tests__/heartbeat-dependency-draft-controller.integration.test.ts": {
+      "sha256": "a8da296de88a570fa26016602effe52b3a7c0bcc2b1a16fda010a0994e800aeb",
+      "bytes": 210079,
+      "mtimeNs": 1794350044778605461
+    },
+    "server/src/__tests__/heartbeat-dependency-scheduling.test.ts": {
+      "sha256": "7d238a8887de4a8bdfbe8656c91477546538e71668dd507ea6a1bd1949c7c90e",
+      "bytes": 27192,
+      "mtimeNs": 1794332547705166850
+    },
+    "server/src/__tests__/heartbeat-managed-native-conversation-followup.integration.test.ts": {
+      "sha256": "5d249d8adc1c1da0d14224b30add4af4ebf35eff8b981d3ed53ad0d6cc9ec127",
+      "bytes": 10060,
+      "mtimeNs": 1794400901381541728
+    },
+    "server/src/__tests__/heartbeat-managed-native-interaction-retry.integration.test.ts": {
+      "sha256": "bdb997bb48648d666b67d3bbf83f9ed90012fa683d2c2a2310148770974dc214",
+      "bytes": 17250,
+      "mtimeNs": 1794399992673528632
+    },
+    "server/src/__tests__/heartbeat-managed-project-workspace.integration.test.ts": {
+      "sha256": "9edd533f69b8fc761490ca4b4063019675b4c26b751550e77ff102fe28646614",
+      "bytes": 53722,
+      "mtimeNs": 1794400338343816780
+    },
+    "server/src/__tests__/helpers/managed-native-conversation-frame.ts": {
+      "sha256": "f1c501456cbbb3b718c722a84c4763690f489e4abd7c58e81fddc693a8beb23a",
+      "bytes": 76117,
+      "mtimeNs": 1794400072408464160
+    },
+    "server/src/__tests__/helpers/managed-native-conversation-sandbox-host.ts": {
+      "sha256": "69a4542b5fc642fc88b42498ee9967eecc9654d51068839681360549e1b91f20",
+      "bytes": 419599,
+      "mtimeNs": 1794401004608717535
+    },
+    "server/src/__tests__/helpers/managed-native-opencode-e2e-fixture.ts": {
+      "sha256": "57a0ae5d8b09a88c95dfc305f5e0d7eeec0819d6c67cc17cbbd733ffeeea3721",
+      "bytes": 257591,
+      "mtimeNs": 1794401004609007961
+    },
+    "server/src/__tests__/native-opencode-managed-session-resumption.integration.test.ts": {
+      "sha256": "597bdedbeeeabbfce65356c11d9f0e3f64a4b17c15276c8befafd2903509e384",
+      "bytes": 25660,
+      "mtimeNs": 1794400338347895601
+    },
+    "server/src/services/heartbeat.ts": {
+      "sha256": "1f38f2fc6863e4bc96d7986bf3d44071b7d47dacf2a1d9d24d38dee70ddfb1d9",
+      "bytes": 1279963,
+      "mtimeNs": 1794395671935236254
+    },
+    "server/src/services/native-direct-input.ts": {
+      "sha256": "86064e23a513af3ee3bbff5071eb30ce4ed45f12439d30d87cf3eb99da396562",
+      "bytes": 562637,
+      "mtimeNs": 1794401048886389093
+    },
+    "server/src/services/native-runtime/heartbeat-managed-native-comment-handoff.integration.test.ts": {
+      "sha256": "0e8f729d2b099fda8c217c06580cd3fb7ecc63dfc8fb625c3f89cae742f583bb",
+      "bytes": 60073,
+      "mtimeNs": 1794400144820526644
+    },
+    "server/src/services/native-runtime/native-execution-input.test.ts": {
+      "sha256": "18ad2db8f88d675dac8cc3a4854fd6928b3c79e733e878e51f4cb03e308ad3b0",
+      "bytes": 136739,
+      "mtimeNs": 1794342776160333730
+    },
+    "server/src/services/native-runtime/native-execution-input.ts": {
+      "sha256": "38208e432d22845713799fcd71c109e23f5f3c9651acca14ee1fa7925fd60296",
+      "bytes": 132857,
+      "mtimeNs": 1794380779668481402
+    },
+    "server/src/services/native-runtime/native-opencode-managed-progress-conversation.integration.test.ts": {
+      "sha256": "805f168ee5771c3dde9124be6655f99d83d952e17349f5caf6acfd52106798f0",
+      "bytes": 34354,
+      "mtimeNs": 1794401048886667721
+    },
+    "server/src/services/native-runtime/native-project-repository-source.test.ts": {
+      "sha256": "3d663c8cbc73c823275963e06bb6d5d394f2a89652e1a129a811529575bfd711",
+      "bytes": 14778,
+      "mtimeNs": 1794233716228964467
+    },
+    "server/src/services/native-runtime/native-project-repository-source.ts": {
+      "sha256": "f7ecb0e5a49e4c6443d9deca9394764db238f351c659f208ec3425aa98395c26",
+      "bytes": 9673,
+      "mtimeNs": 1794234187638120900
+    },
+    "server/src/services/native-runtime/paperclip-runner-tool-authority.ts": {
+      "sha256": "522afcb6d29755d86693c80c82ca8d9653533be9e8c86f191c8296363d1d96bc",
+      "bytes": 181339,
+      "mtimeNs": 1794401048886389093
+    },
+    "server/src/services/optimizer/optimizer-workflow-runtime.test.ts": {
+      "sha256": "75ce1a0a2892c6d825da11feb5320841e5977a279f5670812ad6ab8a1f100f0b",
+      "bytes": 8437,
+      "mtimeNs": 1794229120874977950
+    },
+    "server/src/services/optimizer/optimizer-workflow-runtime.ts": {
+      "sha256": "d49e78356477d0703d52af08775adbfdfc08df0abfecc8fac5b4af1d8ec8c0e7",
+      "bytes": 12734,
+      "mtimeNs": 1794228810066234987
+    },
+    "server/vitest.config.ts": {
+      "sha256": "1c32f3f46cb9206de3cdbb1745d43abf17bd2b5c385183675835ba928c2d31b3",
+      "bytes": 1883,
+      "mtimeNs": 1794226791073414900
+    }
+  },
+  "allRecordedSourcePinsUnchanged": true,
+  "allQualificationInputPinsUnchanged": true,
+  "changedRecordedPaths": []
+}

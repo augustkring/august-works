@@ -1,0 +1,74 @@
+(!) Your Vite config uses features that are unsupported by `configLoader: 'native'`, which is planned to become the default in a future major version of Vite:
+  - `__dirname` (vitest.config.ts:7:25). Use `import.meta.dirname` instead
+Set `VITE_CONFIG_NATIVE_IGNORE_WARNING=true` to suppress this warning.
+
+ RUN  v4.1.11 /workspace/blentera-v10
+
+[05:08:48] [31mERROR[39m: [36mNative authentication provider event[39m [90m{"component":"native-authentication"}[39m
+[05:09:05] [33mWARN[39m: [36mSandbox remains quarantined; native Stop requires reconciliation[39m [90m{"companyId":"0366499d-18e4-4571-ad92-4b2d6e36987a","bindingId":"9b61d3c7-0cc4-4368-a014-aa7df720d274"}[39m
+[05:09:51] [31mERROR[39m: [36mfailed to publish activity event[39m [90m{"action":"instance.task_drain.started","companyId":"company-1"}[39m
+    err: {
+      "type": "Error",
+      "message": "live event bus unavailable",
+      "stack":
+          Error: live event bus unavailable
+              at /workspace/blentera-v10/server/src/__tests__/instance-settings-routes.test.ts:1122:15
+              at Mock (file:///workspace/blentera-v10/node_modules/.pnpm/@vitest+spy@4.1.11/node_modules/@vitest/spy/dist/index.js:332:34)
+              at publishActivitiesBestEffort (/workspace/blentera-v10/server/src/routes/instance-settings.ts:80:7)
+              at /workspace/blentera-v10/server/src/routes/instance-settings.ts:422:9
+              at processTicksAndRejections (node:internal/process/task_queues:104:5)
+    }
+[05:09:51] [31mERROR[39m: [36mfailed to publish activity event[39m [90m{"action":"instance.task_drain.started","companyId":"company-2"}[39m
+    err: {
+      "type": "Error",
+      "message": "live event bus unavailable",
+      "stack":
+          Error: live event bus unavailable
+              at /workspace/blentera-v10/server/src/__tests__/instance-settings-routes.test.ts:1122:15
+              at Mock (file:///workspace/blentera-v10/node_modules/.pnpm/@vitest+spy@4.1.11/node_modules/@vitest/spy/dist/index.js:332:34)
+              at publishActivitiesBestEffort (/workspace/blentera-v10/server/src/routes/instance-settings.ts:80:7)
+              at /workspace/blentera-v10/server/src/routes/instance-settings.ts:422:9
+              at processTicksAndRejections (node:internal/process/task_queues:104:5)
+    }
+[05:09:51] [31mERROR[39m: [36mfailed to publish activity event[39m [90m{"action":"instance.task_drain.stopped","companyId":"company-1"}[39m
+    err: {
+      "type": "Error",
+      "message": "live event bus unavailable",
+      "stack":
+          Error: live event bus unavailable
+              at /workspace/blentera-v10/server/src/__tests__/instance-settings-routes.test.ts:1173:15
+              at Mock (file:///workspace/blentera-v10/node_modules/.pnpm/@vitest+spy@4.1.11/node_modules/@vitest/spy/dist/index.js:332:34)
+              at publishActivitiesBestEffort (/workspace/blentera-v10/server/src/routes/instance-settings.ts:80:7)
+              at /workspace/blentera-v10/server/src/routes/instance-settings.ts:478:7
+              at processTicksAndRejections (node:internal/process/task_queues:104:5)
+    }
+[05:09:51] [31mERROR[39m: [36mfailed to publish activity event[39m [90m{"action":"instance.task_drain.stopped","companyId":"company-2"}[39m
+    err: {
+      "type": "Error",
+      "message": "live event bus unavailable",
+      "stack":
+          Error: live event bus unavailable
+              at /workspace/blentera-v10/server/src/__tests__/instance-settings-routes.test.ts:1173:15
+              at Mock (file:///workspace/blentera-v10/node_modules/.pnpm/@vitest+spy@4.1.11/node_modules/@vitest/spy/dist/index.js:332:34)
+              at publishActivitiesBestEffort (/workspace/blentera-v10/server/src/routes/instance-settings.ts:80:7)
+              at /workspace/blentera-v10/server/src/routes/instance-settings.ts:478:7
+              at processTicksAndRejections (node:internal/process/task_queues:104:5)
+    }
+[05:09:51] [31mERROR[39m: [36mfailed to publish activity event[39m [90m{"action":"instance.task_drain.started","companyId":"company-1"}[39m
+    err: {
+      "type": "Error",
+      "message": "live event bus unavailable",
+      "stack":
+          Error: live event bus unavailable
+              at /workspace/blentera-v10/server/src/__tests__/instance-settings-routes.test.ts:1192:58
+              at Mock (file:///workspace/blentera-v10/node_modules/.pnpm/@vitest+spy@4.1.11/node_modules/@vitest/spy/dist/index.js:332:34)
+              at publishActivitiesBestEffort (/workspace/blentera-v10/server/src/routes/instance-settings.ts:80:7)
+              at /workspace/blentera-v10/server/src/routes/instance-settings.ts:422:9
+              at processTicksAndRejections (node:internal/process/task_queues:104:5)
+    }
+
+ Test Files  8 passed (8)
+      Tests  148 passed (148)
+   Start at  05:07:51
+   Duration  126.46s (transform 22.61s, setup 829ms, import 75.31s, tests 47.91s, environment 1ms)
+

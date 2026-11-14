@@ -1,0 +1,95 @@
+{
+  "status": "in_progress",
+  "sourceCommit": "2483b506af51f37ceb5d1ff984033aaf56a6c703",
+  "sourceCommitMeaning": "Archive checkout identity; scoped runs may predate it. Only separately recorded unchanged-source gates establish final tested source identity.",
+  "meaning": "Latest qualified source: exact ten-task Home projection passes under unchanged1500ms deadline, and actual current company-authority withdrawal after a source-row wait denies. Two targeted tests pass,23filtered; this is not the full25-case file or final workspace gate.",
+  "logs": [
+    {
+      "name": "home-current-analytical-owner-20261026",
+      "exitCode": 0,
+      "exitSidecar": "home-current-analytical-owner-20261026.exit",
+      "rawSha256": "b99cf11fec30c8f14b3e94575da4f5f7443c0f1258dcd2e3eb3b821c4a99ca0d",
+      "sanitizedSha256": "b99cf11fec30c8f14b3e94575da4f5f7443c0f1258dcd2e3eb3b821c4a99ca0d",
+      "archiveSha256": "8c702013b99b8f255cd334ed3c981194f783a72a2501781d2a02673fd363c1d2",
+      "redactions": {
+        "ansi": 0,
+        "bearer": 0,
+        "jwt": 0,
+        "credential_field": 0,
+        "url_credential": 0
+      },
+      "summary": [
+        "Test Files  1 passed (1)",
+        "Tests  2 passed | 23 skipped (25)",
+        "Duration  29.81s (transform 9.18s, setup 81ms, import 12.61s, tests 17.00s, environment 0ms)"
+      ],
+      "sourceCommit": "2483b506af51f37ceb5d1ff984033aaf56a6c703"
+    },
+    {
+      "name": "home-current-full-file-20261026",
+      "exitCode": 0,
+      "exitSidecar": "home-current-full-file-20261026.exit",
+      "rawSha256": "cd6edbc793236595191edaa7b472f8f0d5a3a02d2b882e7d70bfbc1c1b9cf695",
+      "sanitizedSha256": "96136c7459ac1fe3ec801469ee2c432a6fddfc6a967adcc3ddfb92c319bad153",
+      "archiveSha256": "f62d2aa1edf530b5cae3d9a6e46f53eeba71194f264732e2b452c1afbbd864dd",
+      "redactions": {
+        "ansi": 18,
+        "bearer": 0,
+        "jwt": 0,
+        "credential_field": 0,
+        "url_credential": 0
+      },
+      "summary": [
+        "Test Files  1 passed (1)",
+        "Tests  25 passed (25)",
+        "Duration  56.66s (transform 8.39s, setup 69ms, import 11.56s, tests 44.92s, environment 0ms)"
+      ],
+      "sourceCommit": "2483b506af51f37ceb5d1ff984033aaf56a6c703"
+    },
+    {
+      "name": "v10-current-server-typecheck-20261026",
+      "exitCode": 1,
+      "exitSidecar": "v10-current-server-typecheck-20261026.exit",
+      "rawSha256": "5a5641752032b21e93ebe3816e88bdd0246f2923f89b0eb7d8aa55d4b774f4bc",
+      "sanitizedSha256": "5a5641752032b21e93ebe3816e88bdd0246f2923f89b0eb7d8aa55d4b774f4bc",
+      "archiveSha256": "7ff4250e6f095e3f9c0b1e4ad72d511118a2a179bac3abae6c0df245df231022",
+      "redactions": {
+        "ansi": 0,
+        "bearer": 0,
+        "jwt": 0,
+        "credential_field": 0,
+        "url_credential": 0
+      },
+      "summary": [],
+      "sourceCommit": "2483b506af51f37ceb5d1ff984033aaf56a6c703"
+    },
+    {
+      "name": "v10-current-token-gates-20261026",
+      "exitCode": 0,
+      "exitSidecar": "v10-current-token-gates-20261026.exit",
+      "rawSha256": "dc21c2bbad3ff70de97a72c8047fe6942ca6416474676cb98c49bf2fc5440027",
+      "sanitizedSha256": "dc21c2bbad3ff70de97a72c8047fe6942ca6416474676cb98c49bf2fc5440027",
+      "archiveSha256": "319045114c2a77b250b399c0b1caf639f275f1125cc81f600e4948db4dd7d73b",
+      "redactions": {
+        "ansi": 0,
+        "bearer": 0,
+        "jwt": 0,
+        "credential_field": 0,
+        "url_credential": 0
+      },
+      "summary": [],
+      "sourceCommit": "2483b506af51f37ceb5d1ff984033aaf56a6c703"
+    }
+  ],
+  "updates": [
+    {
+      "sourceCommit": "2483b506af51f37ceb5d1ff984033aaf56a6c703",
+      "meaning": "Full current qualified Home file passes25/25 after focused2-case proof. Current server typecheck failed solely at the diagnostic spy implicit-this type; that annotation is corrected after this snapshot and awaits recheck. Token gates pass0. These are scoped gates on the recorded source pins, not whole-workspace acceptance.",
+      "logs": [
+        "home-current-full-file-20261026",
+        "v10-current-server-typecheck-20261026",
+        "v10-current-token-gates-20261026"
+      ]
+    }
+  ]
+}

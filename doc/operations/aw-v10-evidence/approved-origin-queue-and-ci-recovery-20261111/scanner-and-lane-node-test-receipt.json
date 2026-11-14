@@ -1,0 +1,10 @@
+{
+  "command": "node --test scripts/platform-skill-migration-register.test.mjs scripts/__tests__/e2e-shard.test.mjs",
+  "exit": 0,
+  "tests": 17,
+  "passed": 17,
+  "failed": 0,
+  "durationMs": 652.234254,
+  "resultOrigin": "Root exec returned test summary; image/runtime not exercised",
+  "pins": "pins.json"
+}

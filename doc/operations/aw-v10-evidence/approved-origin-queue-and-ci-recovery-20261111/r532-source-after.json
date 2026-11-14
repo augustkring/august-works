@@ -1,0 +1,18 @@
+{
+  "files": {
+    "package.json": "631b595ef1b57251c2d6f8218ad1a367705072b3d2ec14a6f2010fc9abb9b6f7",
+    "pnpm-lock.yaml": "b70210ed554c63d425e34e4c075f0984309f74f0836d82d85f714b1c4deeb5b2",
+    "server/package.json": "08b8faa2b2b9c69530928aa0b283cf9e53e70e27a692a8cb9fdbee6dec3fb0f4",
+    "server/src/__tests__/helpers/managed-native-conversation-frame.ts": "a51eee559ffb881daeecb2efce11dd2957708cde955443454ebb761350736fb8",
+    "server/src/__tests__/v7-worker-model-gateway.integration.test.ts": "d25e49066b7da43f117400db654159df81441d8eed5092701992840fa04ff67b",
+    "server/src/modules/wake-queue/adapters/postgres.test.ts": "59e63fb9725bcb2a9b9ea84511dab36fa64669cfac1f89cb3649111fe2c33ab9",
+    "server/src/services/native-direct-input.ts": "70e652c90580dbd094d8fed2b62b1306604dba3381ecd5a9c17cac638240f1ca",
+    "server/src/services/native-runtime/managed-native-browser.fixture.ts": "3e23ffa933a3f96a70c099f7f558df59103d5cb51e397cdbe05ed9df524a3360",
+    "server/src/services/native-runtime/native-opencode-managed-channel-conversation.integration.test.ts": "6c50bb86817c32564439ccd855f26c298c2ce0e3eff56fef82bfcdfa2b5623f1",
+    "server/src/services/native-runtime/native-opencode-managed-conversation-frame.integration.test.ts": "f3fe8f2a1a60ef4482b8cbe15937093d88cde575feff98f5aa296f46de0f3459",
+    "server/src/services/tool-gateway.ts": "16025bb1d0bce4ac8150502d9a7149b18fedb86ea9b6383618b361e2ee3f8a4e",
+    "server/tsconfig.json": "41b38f5d62b35e02f2b15c294baf39d196a8e6af125bd4a4d7b5e30d9334d150"
+  },
+  "allPinsUnchanged": true,
+  "allMtimesUnchanged": true
+}
