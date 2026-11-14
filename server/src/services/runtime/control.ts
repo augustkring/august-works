@@ -655,7 +655,10 @@ async function currentWorkerNativePreparationRoot(tx: Db, source: CurrentSandbox
   return root;
 }
 
-async function currentConformanceNativeWorkspaceRoot(source: CurrentSandboxTaskSource, purpose: string | undefined): Promise<string | null> {
+/** The hidden provider-conformance Run's preparation owner. Every purpose
+ * except the initial workspace preparation is bound to the Run's persisted
+ * managed OpenCode source authority (exported for its regression tests). */
+export async function currentConformanceNativeWorkspaceRoot(source: CurrentSandboxTaskSource, purpose: string | undefined): Promise<string | null> {
   if (!purpose || !CONFORMANCE_NATIVE_PREPARATION_PURPOSES.has(purpose) || !source.providerConformanceBootstrap) return null;
   const { run, manifest } = source, task = source.source.task;
   const profile = run.runnerProfileJson && typeof run.runnerProfileJson === "object" && !Array.isArray(run.runnerProfileJson)

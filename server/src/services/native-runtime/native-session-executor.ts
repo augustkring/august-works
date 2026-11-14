@@ -15088,123 +15088,132 @@ async function createRunnerdBackendWithinSessionClaim(
       Boolean((input.runnerEnvironment ?? process.env).PAPERCLIP_MANAGED_MODEL_BROKER_ORIGIN?.trim()));
   let managedOpenCodeTools: Readonly<Record<string, unknown>>[] | null = null;
   let managedOpenCodeDynamicTools: Readonly<Record<string, unknown>>[] | null = null;
-  if (managedOpenCode && input.providerConformanceProbe) {
-    managedOpenCodeTools = [];
-    managedOpenCodeDynamicTools = [];
-  } else if (managedOpenCode) {
-    const workMode = input.execution.task.workMode as ManagedOpenCodeWorkMode;
-    const stageCommentCatalog = workMode === "standard" && input.conversationMode !== true && input.bootstrapSourceClosure?.sourceSet &&
-      await nativeStageCommentApiEligible(input.db,{...input.execution.binding,
-        preparedSourceSet:input.bootstrapSourceClosure.sourceSet});
-    const requiredManagedTools = nativeManagedOpenCodeRequiredToolNames(workMode, Boolean(input.nativeModelOutputCapture));
-    const allowedNames = new Set(nativeReview
-      ? ["read_document", "read_context", "get_task_context", "get_task_history", "read_chat_attachment", "query_business_metric",
-        "resolve_review", "paperclip_finish", "paperclip_block"]
-      : ["read_document", "write_document", "create_task", "request_human_input", "create_project", "self_remember", "read_context",
-        "report_progress", "call_api", "list_project_repositories", "get_task_context", "get_task_history",
-        "read_chat_attachment", "query_business_metric", "paperclip_finish", "paperclip_block"]);
-    const assignedCatalogToolNames = new Set<string>();
-    const schemas: Array<Record<string, unknown>> = dynamicTools.flatMap((raw): Array<Record<string, unknown>> => {
-      if (typeof raw.name !== "string") return [];
-      let name = raw.name;
-      const assignedCatalogTool = assignedMcpTools?.has(name) ?? false;
-      // The registered server catalog and retained source proof use the
-      // normalized Paperclip name. OpenCode's bridge adds `paperclip_` when it
-      // serializes that schema to the provider, so normalize wrappers even
-      // when they are members of the assigned MCP catalog.
-      for (const prefix of ["paperclip__", "paperclip_", "paperclip."]) {
-        if (name.startsWith(prefix)) { name = name.slice(prefix.length); break; }
-      }
-      if (assignedCatalogTool) assignedCatalogToolNames.add(name);
-      if ((!allowedNames.has(name) && !assignedCatalogTool && !(assignedMcpTools?.has(name) ?? false)) ||
-        (!nativeReview && !assignedCatalogTool && name === "self_remember" && workMode !== "standard") ||
-        (!nativeReview && !assignedCatalogTool && !managedSemanticActionAllowedInMode(name, workMode)) ||
-        (blockedHumanInteraction && !NATIVE_BLOCKED_INTERACTION_READ_TOOLS.has(name))) return [];
-      if ((name === "create_project" || name === "request_human_input" || name === "list_project_repositories") && !input.nativeModelOutputCapture) return [];
+  if (managedOpenCode) {
+    // The hidden provider-conformance Run is fixed-source and tool-free, but it
+    // binds the same source authority as every other managed OpenCode Run
+    // (empty tool catalog, conformance system text, provider artifact
+    // authority) before any Sandbox preparation command: RuntimeControl admits
+    // its erasure probe, artifact, harness-state and session-start commands
+    // only against that persisted authority.
+    let schemas: Array<Record<string, unknown>> = [];
+    if (input.providerConformanceProbe) {
+      managedOpenCodeTools = [];
+      managedOpenCodeDynamicTools = [];
+    } else {
+      const workMode = input.execution.task.workMode as ManagedOpenCodeWorkMode;
+      const stageCommentCatalog = workMode === "standard" && input.conversationMode !== true && input.bootstrapSourceClosure?.sourceSet &&
+        await nativeStageCommentApiEligible(input.db,{...input.execution.binding,
+          preparedSourceSet:input.bootstrapSourceClosure.sourceSet});
+      const requiredManagedTools = nativeManagedOpenCodeRequiredToolNames(workMode, Boolean(input.nativeModelOutputCapture));
+      const allowedNames = new Set(nativeReview
+        ? ["read_document", "read_context", "get_task_context", "get_task_history", "read_chat_attachment", "query_business_metric",
+          "resolve_review", "paperclip_finish", "paperclip_block"]
+        : ["read_document", "write_document", "create_task", "request_human_input", "create_project", "self_remember", "read_context",
+          "report_progress", "call_api", "list_project_repositories", "get_task_context", "get_task_history",
+          "read_chat_attachment", "query_business_metric", "paperclip_finish", "paperclip_block"]);
+      const assignedCatalogToolNames = new Set<string>();
+      schemas = dynamicTools.flatMap((raw): Array<Record<string, unknown>> => {
+        if (typeof raw.name !== "string") return [];
+        let name = raw.name;
+        const assignedCatalogTool = assignedMcpTools?.has(name) ?? false;
+        // The registered server catalog and retained source proof use the
+        // normalized Paperclip name. OpenCode's bridge adds `paperclip_` when it
+        // serializes that schema to the provider, so normalize wrappers even
+        // when they are members of the assigned MCP catalog.
+        for (const prefix of ["paperclip__", "paperclip_", "paperclip."]) {
+          if (name.startsWith(prefix)) { name = name.slice(prefix.length); break; }
+        }
+        if (assignedCatalogTool) assignedCatalogToolNames.add(name);
+        if ((!allowedNames.has(name) && !assignedCatalogTool && !(assignedMcpTools?.has(name) ?? false)) ||
+          (!nativeReview && !assignedCatalogTool && name === "self_remember" && workMode !== "standard") ||
+          (!nativeReview && !assignedCatalogTool && !managedSemanticActionAllowedInMode(name, workMode)) ||
+          (blockedHumanInteraction && !NATIVE_BLOCKED_INTERACTION_READ_TOOLS.has(name))) return [];
+        if ((name === "create_project" || name === "request_human_input" || name === "list_project_repositories") && !input.nativeModelOutputCapture) return [];
 
-      const schema = structuredClone(raw);
-      if (name === "call_api") {
-        // Keep the existing Project GET and add only the exact existing Project
-        // POST whose server owner verifies the managed call capture, signed
-        // Native effect claim, current task source, and Human-bound Project
-        // receipt. No other API operation becomes provider-visible.
-        const operationIds = nativeManagedCallApiOperationIds(workMode, Boolean(stageCommentCatalog));
-        schema.description = `Use only these authenticated API operations in ${workMode}: ${operationIds.join(", ")}.`;
-        const pathProperties: Record<string, unknown> = {};
-        if (operationIds.includes("GET /api/projects/{id}")) pathProperties.id = { type: "string", format: "uuid" };
-        if (operationIds.includes("POST /api/companies/{companyId}/projects")) pathProperties.companyId = { type: "string", format: "uuid" };
-        schema.inputSchema = {
-          type: "object",
-          additionalProperties: false,
-          properties: {
-            operationId: { type: "string", enum: operationIds },
-            pathParams: { type: "object", additionalProperties: false,
-              properties: pathProperties },
-            ...(operationIds.includes("POST /api/companies/{companyId}/projects")
-              ? { body: managedNativeProjectApiBodyJsonSchema() } : {}),
-          },
-          required: ["operationId", "pathParams"],
-        };
-      }
-      if (name === "list_project_repositories") {
-        schema.description = "List the current accountable Human's authorized GitHub repositories for Project selection. The result contains repository IDs, names and HTTPS URLs only; listing does not grant access or create a Project.";
-        schema.inputSchema = { type: "object", properties: {}, required: [], additionalProperties: false };
-      }
-      if (name === "call_api" && stageCommentCatalog) {
-        Object.assign(schema,nativeStageCommentApiToolDefinition(schema,input.execution.binding.issueId));
-      }
-      if (name === "create_project") {
-        // Managed OpenCode may create only an internal private Project from a
-        // minimal name/description/local-workspace label and optional explicit
-        // GitHub repository URLs. Repo IDs, fetches, credentials, publication,
-        // environment, and execution policy remain unavailable.
-        schema.description = "Create one private internal Project from the current governed task context with a required server-managed local workspace name. Optionally register HTTPS GitHub owner/repository URLs as additional workspaces; URLs are normalized and duplicates collapse. This does not select repository IDs, fetch repositories, provide credentials, or configure execution policy.";
-        schema.inputSchema = managedNativeProjectArgumentsJsonSchema();
-      }
-      return [{ ...schema, name }];
-    });
-    // The pinned OpenCode MCP bridge appends these canonical terminal tools at
-    // discovery time. Include the same server-owned definitions in the
-    // immutable tool catalog/hash so the broker can verify that exact list.
-    // Runnerd's OpenCode path appends this canonical semantic catalog from the
-    // Codex driver values. Hash those exact bridge-owned definitions so the
-    // managed broker validates the actual provider-visible list.
-    schemas.push(...codexSemanticToolSpecs().map(tool => {
-      const providerTool = structuredClone(tool) as Record<string, unknown>;
-      const inputSchema = record(providerTool.inputSchema);
-      if (inputSchema.type !== "object" || inputSchema.additionalProperties !== true)
-        throw new Error("managed_opencode_terminal_tool_schema_invalid");
-      // Pinned OpenCode 1.18.32's Anthropic conversion sets this root flag to
-      // false for these two terminal schemas. Model the exact provider-visible
-      // projection; server-side terminal parsing still enforces the complete
-      // canonical completion contract after the tool call returns.
-      providerTool.inputSchema = { ...inputSchema, additionalProperties: false };
-      return providerTool;
-    }));
-    const schemaNames = new Set(schemas.map(tool => typeof tool.name === "string" ? tool.name : ""));
-    const directAssignedTools = assignedMcpTools?.directDefinitions(definitions =>
-      runnerCodexDynamicToolsFit([...schemas, ...definitions])) ?? [];
-    schemas.push(...directAssignedTools.filter(tool => typeof tool.name !== "string" || !schemaNames.has(tool.name)));
-    const names = schemas.map((tool) => tool.name);
-    if ((nativeReview && (!names.includes("read_document") || !names.includes("resolve_review"))) ||
-      (!nativeReview && !blockedHumanInteraction && requiredManagedTools.some(name => !names.includes(name))) ||
-      !names.includes("paperclip_finish") || !names.includes("paperclip_block") || new Set(names).size !== names.length)
-      throw new Error("managed_opencode_source_profile_tools_incomplete");
-    managedOpenCodeTools = schemas;
-    // Runnerd's original MCP bridge owns and appends the two canonical
-    // terminal controls. Keep them in the broker's exact catalog proof, but
-    // pass only Paperclip CRUD tools to the bridge to avoid duplicate names.
-    managedOpenCodeDynamicTools = schemas.filter((tool) =>
-      (allowedNames.has(String(tool.name)) || assignedCatalogToolNames.has(String(tool.name)) ||
-        (assignedMcpTools?.has(String(tool.name)) ?? false)) &&
-      !["paperclip_finish", "paperclip_block"].includes(String(tool.name)));
-    const resumeToolNames = managedOpenCodeDynamicTools.map((tool) => String(tool.name));
-    if (new Set(resumeToolNames).size !== resumeToolNames.length ||
-      (!nativeReview && !blockedHumanInteraction && requiredManagedTools.some(name => !resumeToolNames.includes(name))) ||
-      (blockedHumanInteraction && !nativeReview && resumeToolNames.some(name => !NATIVE_BLOCKED_INTERACTION_READ_TOOLS.has(name))) ||
-      resumeToolNames.some(name => !allowedNames.has(name) && !assignedCatalogToolNames.has(name) &&
-        !(assignedMcpTools?.has(name) ?? false)))
-      throw new Error("managed_opencode_resume_tool_catalog_invalid");
+        const schema = structuredClone(raw);
+        if (name === "call_api") {
+          // Keep the existing Project GET and add only the exact existing Project
+          // POST whose server owner verifies the managed call capture, signed
+          // Native effect claim, current task source, and Human-bound Project
+          // receipt. No other API operation becomes provider-visible.
+          const operationIds = nativeManagedCallApiOperationIds(workMode, Boolean(stageCommentCatalog));
+          schema.description = `Use only these authenticated API operations in ${workMode}: ${operationIds.join(", ")}.`;
+          const pathProperties: Record<string, unknown> = {};
+          if (operationIds.includes("GET /api/projects/{id}")) pathProperties.id = { type: "string", format: "uuid" };
+          if (operationIds.includes("POST /api/companies/{companyId}/projects")) pathProperties.companyId = { type: "string", format: "uuid" };
+          schema.inputSchema = {
+            type: "object",
+            additionalProperties: false,
+            properties: {
+              operationId: { type: "string", enum: operationIds },
+              pathParams: { type: "object", additionalProperties: false,
+                properties: pathProperties },
+              ...(operationIds.includes("POST /api/companies/{companyId}/projects")
+                ? { body: managedNativeProjectApiBodyJsonSchema() } : {}),
+            },
+            required: ["operationId", "pathParams"],
+          };
+        }
+        if (name === "list_project_repositories") {
+          schema.description = "List the current accountable Human's authorized GitHub repositories for Project selection. The result contains repository IDs, names and HTTPS URLs only; listing does not grant access or create a Project.";
+          schema.inputSchema = { type: "object", properties: {}, required: [], additionalProperties: false };
+        }
+        if (name === "call_api" && stageCommentCatalog) {
+          Object.assign(schema,nativeStageCommentApiToolDefinition(schema,input.execution.binding.issueId));
+        }
+        if (name === "create_project") {
+          // Managed OpenCode may create only an internal private Project from a
+          // minimal name/description/local-workspace label and optional explicit
+          // GitHub repository URLs. Repo IDs, fetches, credentials, publication,
+          // environment, and execution policy remain unavailable.
+          schema.description = "Create one private internal Project from the current governed task context with a required server-managed local workspace name. Optionally register HTTPS GitHub owner/repository URLs as additional workspaces; URLs are normalized and duplicates collapse. This does not select repository IDs, fetch repositories, provide credentials, or configure execution policy.";
+          schema.inputSchema = managedNativeProjectArgumentsJsonSchema();
+        }
+        return [{ ...schema, name }];
+      });
+      // The pinned OpenCode MCP bridge appends these canonical terminal tools at
+      // discovery time. Include the same server-owned definitions in the
+      // immutable tool catalog/hash so the broker can verify that exact list.
+      // Runnerd's OpenCode path appends this canonical semantic catalog from the
+      // Codex driver values. Hash those exact bridge-owned definitions so the
+      // managed broker validates the actual provider-visible list.
+      schemas.push(...codexSemanticToolSpecs().map(tool => {
+        const providerTool = structuredClone(tool) as Record<string, unknown>;
+        const inputSchema = record(providerTool.inputSchema);
+        if (inputSchema.type !== "object" || inputSchema.additionalProperties !== true)
+          throw new Error("managed_opencode_terminal_tool_schema_invalid");
+        // Pinned OpenCode 1.18.32's Anthropic conversion sets this root flag to
+        // false for these two terminal schemas. Model the exact provider-visible
+        // projection; server-side terminal parsing still enforces the complete
+        // canonical completion contract after the tool call returns.
+        providerTool.inputSchema = { ...inputSchema, additionalProperties: false };
+        return providerTool;
+      }));
+      const schemaNames = new Set(schemas.map(tool => typeof tool.name === "string" ? tool.name : ""));
+      const directAssignedTools = assignedMcpTools?.directDefinitions(definitions =>
+        runnerCodexDynamicToolsFit([...schemas, ...definitions])) ?? [];
+      schemas.push(...directAssignedTools.filter(tool => typeof tool.name !== "string" || !schemaNames.has(tool.name)));
+      const names = schemas.map((tool) => tool.name);
+      if ((nativeReview && (!names.includes("read_document") || !names.includes("resolve_review"))) ||
+        (!nativeReview && !blockedHumanInteraction && requiredManagedTools.some(name => !names.includes(name))) ||
+        !names.includes("paperclip_finish") || !names.includes("paperclip_block") || new Set(names).size !== names.length)
+        throw new Error("managed_opencode_source_profile_tools_incomplete");
+      managedOpenCodeTools = schemas;
+      // Runnerd's original MCP bridge owns and appends the two canonical
+      // terminal controls. Keep them in the broker's exact catalog proof, but
+      // pass only Paperclip CRUD tools to the bridge to avoid duplicate names.
+      managedOpenCodeDynamicTools = schemas.filter((tool) =>
+        (allowedNames.has(String(tool.name)) || assignedCatalogToolNames.has(String(tool.name)) ||
+          (assignedMcpTools?.has(String(tool.name)) ?? false)) &&
+        !["paperclip_finish", "paperclip_block"].includes(String(tool.name)));
+      const resumeToolNames = managedOpenCodeDynamicTools.map((tool) => String(tool.name));
+      if (new Set(resumeToolNames).size !== resumeToolNames.length ||
+        (!nativeReview && !blockedHumanInteraction && requiredManagedTools.some(name => !resumeToolNames.includes(name))) ||
+        (blockedHumanInteraction && !nativeReview && resumeToolNames.some(name => !NATIVE_BLOCKED_INTERACTION_READ_TOOLS.has(name))) ||
+        resumeToolNames.some(name => !allowedNames.has(name) && !assignedCatalogToolNames.has(name) &&
+          !(assignedMcpTools?.has(name) ?? false)))
+        throw new Error("managed_opencode_resume_tool_catalog_invalid");
+    }
     const taskEnvelope = nativeSessionTaskEnvelope(input.execution);
     const sourceContextForAuthority = "runtimeContext" in input.execution ? input.execution.runtimeContext : null;
     const remoteInstructionRootForAuthority = remoteSessionRoot && sourceContextForAuthority
