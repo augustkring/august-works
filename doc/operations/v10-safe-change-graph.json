@@ -32716,7 +32716,7 @@
         },
         {
           "path": "scripts/__tests__/run-vitest-stable-shard.test.mjs",
-          "sha256": "0c6db5b3c1956074b2cd42adac4a6c3d6ac5927a0fe9e3102a0eefecb6a0618c"
+          "sha256": "eee218ee5dee5032d9c4281d72aba279a6685bdbb9d55fca34b37ad3cf4f47ce"
         },
         {
           "path": "scripts/assert-cloud-image-sentry.mjs",
@@ -32816,7 +32816,7 @@
         },
         {
           "path": "scripts/run-vitest-stable.mjs",
-          "sha256": "25605a5131504eb8b3d4f1d5f715502aedbd37fbdbfb5203bee95a459d3ab532"
+          "sha256": "92dded726f54814d92448aa2cb3d83579f496f856702f78cabd33896607a1d47"
         },
         {
           "path": "scripts/server-boot-smoke.sh",
@@ -73155,7 +73155,7 @@
       "id": "source:scripts/__tests__/run-vitest-stable-shard.test.mjs",
       "kind": "current_source_owner",
       "path": "scripts/__tests__/run-vitest-stable-shard.test.mjs",
-      "sha256": "0c6db5b3c1956074b2cd42adac4a6c3d6ac5927a0fe9e3102a0eefecb6a0618c",
+      "sha256": "eee218ee5dee5032d9c4281d72aba279a6685bdbb9d55fca34b37ad3cf4f47ce",
       "changeIds": [
         "SCR-V10-CI-RELEASE-AND-CATALOG-GOVERNANCE"
       ],
@@ -73530,7 +73530,7 @@
       "id": "source:scripts/run-vitest-stable.mjs",
       "kind": "current_source_owner",
       "path": "scripts/run-vitest-stable.mjs",
-      "sha256": "25605a5131504eb8b3d4f1d5f715502aedbd37fbdbfb5203bee95a459d3ab532",
+      "sha256": "92dded726f54814d92448aa2cb3d83579f496f856702f78cabd33896607a1d47",
       "changeIds": [
         "SCR-V10-CI-RELEASE-AND-CATALOG-GOVERNANCE"
       ],

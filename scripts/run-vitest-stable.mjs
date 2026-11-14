@@ -4,14 +4,18 @@ import { mkdirSync, mkdtempSync, readdirSync, readFileSync, realpathSync, rename
 import os from "node:os";
 import path from "node:path";
 import { fileURLToPath } from "node:url";
-import { loadShardDurations, selectGeneralServerShard } from "./general-server-shard.mjs";
+import {
+  loadShardDurations,
+  selectGeneralServerShard,
+  withSuitePreparationCost,
+} from "./general-server-shard.mjs";
 
 import { assertSelectedTests, partitionTestLines } from "./test-line-shard.mjs";
 
 const repoRoot = process.cwd();
 const scriptsDir = path.dirname(fileURLToPath(import.meta.url));
-const generalServerShardDurations = loadShardDurations(
-  path.join(scriptsDir, "general-server-shard-durations.json"),
+const generalServerShardDurations = withSuitePreparationCost(
+  loadShardDurations(path.join(scriptsDir, "general-server-shard-durations.json")),
 );
 const serializedShardDurations = loadShardDurations(
   path.join(scriptsDir, "serialized-shard-durations.json"),
