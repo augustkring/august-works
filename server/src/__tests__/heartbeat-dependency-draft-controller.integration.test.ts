@@ -277,7 +277,7 @@ describe("dependency scheduling through the installed Native text draft controll
     }, async ({ runId, issueId, stage }) => {
       if (stage === "claim" && redactSecret)
         await createRunSecretRedactionRegistry(db).register(f.home, runId, secret);
-      if (stage !== "dispatch") return;
+      if (stage !== "dispatch" || !await isNativeSelectedDispatch(runId)) return;
       reachedDispatch = true;
       const [run] = await db.select().from(heartbeatRuns).where(eq(heartbeatRuns.id, runId));
       const [taskVersion] = await db.execute<{ version: string; ownerHash: string; snapshot: unknown; digestValid: boolean | null }>(sql`select
@@ -1830,6 +1830,16 @@ describe("dependency scheduling through the installed Native text draft controll
     });
   }, 60_000);
 
+  // A fresh automation Native run passes the chat-control dispatch gate twice:
+  // once before Native selection (runtime still legacy, before inherited input
+  // is reconstructed) and again at the final provider handoff. Hooks that
+  // observe the provider handoff use only the Native-selected call.
+  async function isNativeSelectedDispatch(runId: string) {
+    const [current] = await db.select({ runtimeMode: heartbeatRuns.runtimeMode })
+      .from(heartbeatRuns).where(eq(heartbeatRuns.id, runId));
+    return current?.runtimeMode === "native";
+  }
+
   // Same current-Human/Plan and installed HTTP/listener owners as the two
   // cases above. The new cases share only their identical local setup/proofs.
   async function createDraftPlan(fixture: Awaited<ReturnType<typeof seedInstalledDraft>>, title: string, parentId?: string,
@@ -2250,6 +2260,7 @@ describe("dependency scheduling through the installed Native text draft controll
         { status: 200, headers: { "content-type": "application/json" } });
       };
       let secondDispatchMarkerObserved = false;
+      const preSelectionDispatchRunIds = new Set<string>();
       await withInstalledDraftTransport(fixture, fetch, async heartbeat => {
         try {
           entries.push(await createDraftPlan(fixture, "Marker admission holder draft"));
@@ -2300,7 +2311,15 @@ describe("dependency scheduling through the installed Native text draft controll
         const [row] = await db.select().from(heartbeatRuns)
           .where(and(eq(heartbeatRuns.companyId, f.home), eq(heartbeatRuns.id, runId)));
         expect(row).toBeDefined();
-        expect(row).toMatchObject({ invocationSource: "automation", runtimeMode: "native", driverKind: "aw_text_messages" });
+        // The pre-selection dispatch read is the first gate to consume the
+        // marker; the Native-selected provider handoff then sees it admitted.
+        if (preSelectionDispatchRunIds.has(runId)) {
+          expect(row).toMatchObject({ invocationSource: "automation", runtimeMode: "native", driverKind: "aw_text_messages" });
+          expect(readChatControlRecoveryAdmission(row!)).toBe("admitted");
+          return;
+        }
+        preSelectionDispatchRunIds.add(runId);
+        expect(row).toMatchObject({ invocationSource: "automation", runtimeMode: "legacy", runtimeModeResolvedAt: null });
         expect(readChatControlRecoveryAdmission(row!)).toBe("required");
         if (entryIndex === 1) {
           secondDispatchMarkerObserved = true;
@@ -2337,8 +2356,10 @@ describe("dependency scheduling through the installed Native text draft controll
       } else {
         expect(calls).toBe(1);
         expect(dispatchedPlanIds).toEqual([entries[0]!.plan.id]);
-        expect(secondRun).toMatchObject({ nativeIssueId: entries[1]!.task.id, invocationSource: "automation",
-          runtimeMode: "native", driverKind: "aw_text_messages", status: "failed",
+        // The pre-selection dispatch read fails closed before Native selection,
+        // so no Native session, driver, or issue binding is ever recorded.
+        expect(secondRun).toMatchObject({ nativeIssueId: null, invocationSource: "automation",
+          runtimeMode: "legacy", runtimeModeResolvedAt: null, nativeSessionId: null, driverKind: null, status: "failed",
           errorCode: CHAT_CONTROL_RECOVERY_UNRESOLVED_CODE,
           resultJson: expect.objectContaining({ automaticRecovery: { code: CHAT_CONTROL_RECOVERY_UNRESOLVED_CODE, providerDispatched: false } }) });
         const [secondWake] = await db.select().from(agentWakeupRequests)
@@ -2514,7 +2535,7 @@ describe("dependency scheduling through the installed Native text draft controll
         }
       };
       const beforeDispatch = async ({runId,issueId,stage}: {runId:string;issueId:string;stage:"claim"|"dispatch"}) => {
-        if (stage !== "dispatch" || phase !== "after_selection") return;
+        if (stage !== "dispatch" || phase !== "after_selection" || !await isNativeSelectedDispatch(runId)) return;
         if (!heartbeatOwner || !entry) throw new Error("cancellation_fence_owner_missing");
         dispatchReached = true;
         expect(issueId).toBe(entry.task.id);expect(runId).toBe(selectedRunId);
