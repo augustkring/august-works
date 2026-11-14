@@ -322,7 +322,8 @@ describe.sequential("issue goal context routes", () => {
     mockAnalyticalPayloadAccess.mockRejectedValue(new HttpError(403, "Analytical Source unavailable"));
     const res = await request(createApp()).get(`/api/issues/${legacyProjectLinkedIssue.id}${suffix}`);
     expect(res.status).toBe(403);
-    expect(mockAnalyticalPayloadAccess).toHaveBeenCalledWith(mockDb, "company-1", expect.objectContaining({ type: "board", userId: "local-board" }), { issueId: legacyProjectLinkedIssue.id });
+    // GET and heartbeat-context reads take the analytical privacy lock in read mode.
+    expect(mockAnalyticalPayloadAccess).toHaveBeenCalledWith(mockDb, "company-1", expect.objectContaining({ type: "board", userId: "local-board" }), { issueId: legacyProjectLinkedIssue.id }, undefined, { privacyLockMode: "read" });
     expect(mockGoalService.getById).not.toHaveBeenCalled();
     expect(mockProjectService.getById).not.toHaveBeenCalled();
     expect(mockDocumentsService.getIssueDocumentPayload).not.toHaveBeenCalled();

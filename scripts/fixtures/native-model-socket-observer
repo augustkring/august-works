@@ -5,4 +5,5 @@ set -eu
 case "${SUDO_UID-}" in ''|*[!0-9]*|0) exit 126 ;; esac
 [ "${#SUDO_UID}" -le 10 ] || exit 126
 [ "$(/usr/bin/id -u)" = 0 ] || exit 126
-exec /usr/bin/env -i PATH=/usr/bin:/bin PAPERCLIP_FIXTURE_ORIGINAL_UID="$SUDO_UID" /usr/local/libexec/paperclip-erasure-test-node/node --no-addons --disable-proto=throw /usr/local/libexec/paperclip-fixture-observers/native-model-socket-v1.mjs
+# --jitless keeps optimizing-compiler pages out of the 80 MiB VmHWM image bound on busy hosts.
+exec /usr/bin/env -i PATH=/usr/bin:/bin PAPERCLIP_FIXTURE_ORIGINAL_UID="$SUDO_UID" /usr/local/libexec/paperclip-erasure-test-node/node --no-addons --disable-proto=throw --jitless /usr/local/libexec/paperclip-fixture-observers/native-model-socket-v1.mjs

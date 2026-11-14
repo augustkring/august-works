@@ -127,7 +127,7 @@ describe("actual model-client kernel observation", () => {
 });
 
 
-import { managedModelProcessIdentityControls } from "./managed-native-model-transport.js";
+import { managedModelProcessIdentityControls, managedModelSocketOwnerResponseControls } from "./managed-native-model-transport.js";
 
 async function withNondumpableUidProcess(work: (value: { pid: number; start: string; status: string; directoryUid: number }) => Promise<void>) {
   const script = String.raw`import ctypes,json,os,sys
@@ -199,4 +199,23 @@ describe("actual process credential identity", () => {
       expect(managedModelProcessIdentityControls.processIdentity(pid, "runner").start).toBe(observed.start);
     });
   }, 30000);
+});
+
+describe("privileged socket-owner observer response shape", () => {
+  const { socketOwnerResponseShape: shape, observerImageRssLimitBytes: limit } = managedModelSocketOwnerResponseControls;
+  const complete = { complete: true, pid: 4242, inode: "987654321", local: "0100007F:04D2", remote: "0100007F:162E" };
+  it("classifies the observer's own over-bound memory_bound report instead of an unknown shape", () => {
+    expect(shape({ complete: false, stage: "memory_bound", errno: null, observerMaxRssBytes: limit + 1 })).toBe(true);
+    expect(shape({ complete: false, stage: "tuple", errno: null, observerMaxRssBytes: limit })).toBe(true);
+    expect(shape({ ...complete, observerMaxRssBytes: limit })).toBe(true);
+  });
+  it("never admits an over-bound peak as a complete or ordinary observation", () => {
+    expect(shape({ ...complete, observerMaxRssBytes: limit + 1 })).toBe(false);
+    expect(shape({ complete: false, stage: "owner_count", errno: null, observerMaxRssBytes: limit + 1 })).toBe(false);
+    expect(shape({ complete: false, stage: "memory_bound", errno: "EIO", observerMaxRssBytes: limit + 1 })).toBe(false);
+    expect(shape({ complete: false, stage: "memory_bound", errno: null, observerMaxRssBytes: limit })).toBe(false);
+    for (const observerMaxRssBytes of [0, -1, 1.5, "1", null, undefined, Number.MAX_SAFE_INTEGER + 1])
+      expect(shape({ ...complete, observerMaxRssBytes })).toBe(false);
+    for (const response of [null, [], "x", 1]) expect(shape(response)).toBe(false);
+  });
 });

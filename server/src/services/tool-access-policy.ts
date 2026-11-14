@@ -684,6 +684,47 @@ function scopeAllowsTool(scope: Record<string, unknown> | null, ctx: ToolAccessC
   return selectorMatches(scope, ctx);
 }
 
+/**
+ * Server-internal record of the rate-limit tokens that one tool call has
+ * already consumed, keyed by policy, bucket and window start.
+ *
+ * A call consumes its token in the admitting `decide` (`consumeRateLimit:
+ * true`). Later non-consuming re-checks made by the same call (for example the
+ * scoped transport re-checks before remote MCP dispatch) pass this ledger so
+ * the peek does not count the call's own token against it: with limit N the
+ * Nth admitted call must not reject itself. A token only offsets the count in
+ * the exact window it was consumed in. After a window rollover the new
+ * window's count never includes this call, so the ordinary `count >= limit`
+ * check applies and no extra call is admitted.
+ *
+ * This is deliberately not part of `ToolAccessDecisionInput`: it travels as a
+ * separate `decide` argument, and only ledgers made by
+ * `createToolRateLimitTokenLedger` are honoured, so no request body can set it.
+ */
+export interface ToolRateLimitTokenLedger {
+  heldIn(policyId: string, bucketKey: string, windowStartAt: Date): number;
+}
+
+export interface ToolAccessDecisionInternalOptions {
+  rateLimitTokens?: ToolRateLimitTokenLedger;
+}
+
+const rateLimitTokenLedgerEntries = new WeakMap<ToolRateLimitTokenLedger, Map<string, number>>();
+
+function rateLimitTokenKey(policyId: string, bucketKey: string, windowStartAt: Date) {
+  return JSON.stringify([policyId, bucketKey, windowStartAt.getTime()]);
+}
+
+export function createToolRateLimitTokenLedger(): ToolRateLimitTokenLedger {
+  const entries = new Map<string, number>();
+  const ledger: ToolRateLimitTokenLedger = Object.freeze({
+    heldIn: (policyId: string, bucketKey: string, windowStartAt: Date) =>
+      entries.get(rateLimitTokenKey(policyId, bucketKey, windowStartAt)) ?? 0,
+  });
+  rateLimitTokenLedgerEntries.set(ledger, entries);
+  return ledger;
+}
+
 export function toolAccessPolicyService(db: Db) {
   async function listPolicies(companyId: string) {
     return db
@@ -1065,8 +1106,14 @@ export function toolAccessPolicyService(db: Db) {
     return grants.some((grant) => scopeAllowsTool(grant.scope, ctx));
   }
 
-  async function enforceRateLimit(policy: typeof toolPolicies.$inferSelect, ctx: ToolAccessContext, consume: boolean) {
+  async function enforceRateLimit(
+    policy: typeof toolPolicies.$inferSelect,
+    ctx: ToolAccessContext,
+    consume: boolean,
+    rateLimitTokens?: ToolRateLimitTokenLedger,
+  ) {
     const rule = rateLimitRule(policy);
+    const tokenEntries = rateLimitTokens ? rateLimitTokenLedgerEntries.get(rateLimitTokens) : undefined;
     if (!rule) return null;
     const now = new Date();
     const start = windowStart(now, rule.windowSeconds);
@@ -1083,7 +1130,13 @@ export function toolAccessPolicyService(db: Db) {
     if (!consume) {
       const [existing] = await db.select().from(toolRateLimitCounters).where(counterWhere);
       const count = existing ? Math.max(0, existing.limit - existing.remaining) : 0;
-      return { limited: count >= rule.limit, count, limit: rule.limit, windowSeconds: rule.windowSeconds, bucketKey };
+      // A pre-check (no held token) keeps `count >= limit`: one more call would
+      // exceed the limit. A re-check by an admitted call excludes only the
+      // tokens that call consumed in this same window, so it becomes
+      // `count > limit` for a single held token.
+      const heldByThisCall = tokenEntries?.get(rateLimitTokenKey(policy.id, bucketKey, start)) ?? 0;
+      const othersCount = Math.max(0, count - heldByThisCall);
+      return { limited: othersCount >= rule.limit, count, limit: rule.limit, windowSeconds: rule.windowSeconds, bucketKey };
     }
 
     const [counter] = await db
@@ -1119,6 +1172,10 @@ export function toolAccessPolicyService(db: Db) {
       .returning({ remaining: toolRateLimitCounters.remaining });
     if (!counter) {
       return { limited: true, count: rule.limit, limit: rule.limit, windowSeconds: rule.windowSeconds, bucketKey };
+    }
+    if (tokenEntries) {
+      const tokenKey = rateLimitTokenKey(policy.id, bucketKey, start);
+      tokenEntries.set(tokenKey, (tokenEntries.get(tokenKey) ?? 0) + 1);
     }
     return {
       limited: false,
@@ -1185,7 +1242,7 @@ export function toolAccessPolicyService(db: Db) {
     });
   }
 
-  async function decideCore(input: ToolAccessDecisionInput): Promise<ToolAccessDecision> {
+  async function decideCore(input: ToolAccessDecisionInput, internal: ToolAccessDecisionInternalOptions = {}): Promise<ToolAccessDecision> {
     const loaded = await loadContext(input);
     if (!loaded.ok) return loaded.decision;
     const { ctx, redaction } = loaded;
@@ -1259,7 +1316,7 @@ export function toolAccessPolicyService(db: Db) {
             { redactionPlan: redaction.redactionPlan, policyExplanation },
           );
         }
-        const state = await enforceRateLimit(policy, ctx, input.consumeRateLimit === true);
+        const state = await enforceRateLimit(policy, ctx, input.consumeRateLimit === true, internal.rateLimitTokens);
         if (state?.limited) {
           return decision("rate_limited", "rate_limited", "Tool access rate limit exceeded.", effectiveProfileIds, [policy.id], { rateLimitState: state, redactionPlan: redaction.redactionPlan, policyExplanation });
         }
@@ -1320,8 +1377,12 @@ export function toolAccessPolicyService(db: Db) {
     return decision("deny", "deny_default", "No effective tool profile, grant, or allow policy permits this call.", effectiveProfileIds, [], { redactionPlan: redaction.redactionPlan });
   }
 
-  async function decide(input: ToolAccessDecisionInput): Promise<ToolAccessDecision> {
-    const base = await decideCore(input);
+  /**
+   * `internal` is server-only: HTTP routes pass a validated body as `input`
+   * and never a second argument. See `ToolRateLimitTokenLedger`.
+   */
+  async function decide(input: ToolAccessDecisionInput, internal: ToolAccessDecisionInternalOptions = {}): Promise<ToolAccessDecision> {
+    const base = await decideCore(input, internal);
     if (!base.allowed && base.decision !== "require_approval") return base;
     const loaded = await loadContext(input); if (!loaded.ok) return loaded.decision;
     if (loaded.ctx.agentId && (input.actor.actorType === "agent" || loaded.ctx.heartbeatRunId)) {

@@ -21,7 +21,15 @@
  * Reset it in afterEach with resetMockedLegacyDispatch(). The real guard is
  * covered by server/src/services/native-runtime/legacy-paid-transport-admission.test.ts
  * and by fixtures that do not opt in.
+ *
+ * vi.mock does not reach a worker process that a test spawns with tsx. Such a
+ * worker calls installMockedLegacyDispatchInChild() and passes the returned
+ * source to its script. The worker then gets the opt-in that is current in the
+ * test, and nothing more.
  */
+import fs from "node:fs/promises";
+import path from "node:path";
+import { pathToFileURL } from "node:url";
 import type * as PaidTransportAdmission from "../../services/native-runtime/paid-transport-admission.js";
 
 type PaidTransportAdmissionModule = typeof PaidTransportAdmission;
@@ -62,4 +70,47 @@ export function withMockedLegacyDispatchAdmission(actual: PaidTransportAdmission
       actual.assertNativePaidTransportAdmitted(input);
     },
   };
+}
+
+const ACTUAL_ADMISSION_URL = new URL("../../services/native-runtime/paid-transport-admission.ts", import.meta.url).href;
+
+/**
+ * Writes module hooks into `directory` for a spawned tsx worker and returns
+ * script source that installs them. The worker must run this source before it
+ * imports any server module, so it imports server modules dynamically after it.
+ * The worker receives only the opt-in that is current in the calling test.
+ */
+export async function installMockedLegacyDispatchInChild(directory: string): Promise<string> {
+  const wrapperPath = path.join(directory, "mocked-paid-transport-admission.mjs");
+  const hooksPath = path.join(directory, "mocked-paid-transport-admission-hooks.mjs");
+  const actual = JSON.stringify(ACTUAL_ADMISSION_URL);
+  await fs.writeFile(wrapperPath, [
+    `export * from ${actual};`,
+    `import * as actual from ${actual};`,
+    `import { admitMockedLegacyDispatch, admitMockedNativeDispatch, withMockedLegacyDispatchAdmission } from ${JSON.stringify(import.meta.url)};`,
+    `admitMockedLegacyDispatch(${JSON.stringify([...state.adapterTypes])});`,
+    `admitMockedNativeDispatch(${JSON.stringify([...state.nativeProviders])});`,
+    "const mocked = withMockedLegacyDispatchAdmission(actual);",
+    "export const withLegacyPaidTransportAdmission = mocked.withLegacyPaidTransportAdmission;",
+    "export const assertNativePaidTransportCandidate = mocked.assertNativePaidTransportCandidate;",
+    "export const assertNativePaidTransportAdmitted = mocked.assertNativePaidTransportAdmitted;",
+    "",
+  ].join("\n"), "utf8");
+  await fs.writeFile(hooksPath, [
+    "let actualUrl; let wrapperUrl;",
+    "export function initialize(data) { actualUrl = data.actualUrl; wrapperUrl = data.wrapperUrl; }",
+    "export async function resolve(specifier, context, nextResolve) {",
+    "  const resolved = await nextResolve(specifier, context);",
+    "  return resolved.url === actualUrl && context.parentURL !== wrapperUrl",
+    "    ? { ...resolved, url: wrapperUrl, shortCircuit: true } : resolved;",
+    "}",
+    "",
+  ].join("\n"), "utf8");
+  return [
+    `const { register: registerMockedPaidDispatchHooks } = await import("node:module");`,
+    `registerMockedPaidDispatchHooks(${JSON.stringify(pathToFileURL(hooksPath).href)}, { data: ${JSON.stringify({
+      actualUrl: ACTUAL_ADMISSION_URL,
+      wrapperUrl: pathToFileURL(wrapperPath).href,
+    })} });`,
+  ].join("\n");
 }

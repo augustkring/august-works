@@ -1,4 +1,5 @@
 import { mockedCodexAdapterConfig } from "./helpers/mocked-codex-config.js";
+import { spawn } from "node:child_process";
 import { randomUUID } from "node:crypto";
 import { mkdtemp, rm } from "node:fs/promises";
 import os from "node:os";
@@ -31,7 +32,9 @@ import {
   MAX_TURN_CONTINUATION_RETRY_REASON,
   MAX_TURN_CONTINUATION_WAKE_REASON,
   heartbeatService,
+  persistHeartbeatRunProcessMetadata,
 } from "../services/heartbeat.ts";
+import { recordNativeLocalProcessStopAfterExit } from "../services/native-local-process-stop.ts";
 import { runningProcesses } from "../adapters/index.ts";
 import { recoveryService } from "../services/recovery/service.ts";
 import { withQueuedCommentIdsInWakePayload } from "../services/issue-queued-comment-queue.ts";
@@ -316,6 +319,31 @@ describeEmbeddedPostgres("heartbeat stale queued-run invalidation", () => {
     });
   }
 
+  async function recordSettledNativeLocalOwner(runId: string, companyId: string) {
+    const child = spawn(process.execPath, ["-e", "setTimeout(() => process.exit(0), 60)"], {
+      detached: true,
+      stdio: "ignore",
+    });
+    if (!child.pid) throw new Error("Native owner proof child did not expose a PID");
+    const closed = new Promise<void>((resolve) => child.once("close", () => resolve()));
+    await persistHeartbeatRunProcessMetadata(db, runId, {
+      pid: child.pid,
+      processGroupId: child.pid,
+      startedAt: new Date().toISOString(),
+    });
+    await db.insert(environmentLeases).values({
+      companyId,
+      heartbeatRunId: runId,
+      provider: "local",
+      status: "active",
+      leasePolicy: "ephemeral",
+    });
+    await closed;
+    await db.update(environmentLeases).set({ status: "released", releasedAt: new Date(), cleanupStatus: "success" })
+      .where(eq(environmentLeases.heartbeatRunId, runId));
+    expect(await recordNativeLocalProcessStopAfterExit(db, companyId, runId)).toBe(true);
+  }
+
   it.each(["legacy", "native"])("delivers an accepted non-assignee queue after its %s owner finished", async runtimeMode => {
     const { companyId, agentId } = await seedCompanyAndAgent();
     const [recipient] = await db.insert(agents).values({ companyId, name: "Saved feedback recipient", role: "engineer",
@@ -325,7 +353,12 @@ describeEmbeddedPostgres("heartbeat stale queued-run invalidation", () => {
     const [owner] = await db.insert(heartbeatRuns).values({ companyId, agentId, invocationSource: "assignment", status: "succeeded",
       runtimeMode, nativeIssueId: runtimeMode === "native" ? issue.id : null, startedAt: new Date(), finishedAt: new Date(), contextSnapshot: { issueId: issue.id },
     }).returning();
-    if (runtimeMode === "native") await db.insert(nativeRunFinalizations).values({ runId: owner.id, companyId, issueId: issue.id, phase: "committed" });
+    if (runtimeMode === "native") {
+      await db.insert(nativeRunFinalizations).values({ runId: owner.id, companyId, issueId: issue.id, phase: "committed" });
+      // A finished Native owner releases the issue only with physical cleanup
+      // proof (native-owner-release.ts). Record the canonical local Stop.
+      await recordSettledNativeLocalOwner(owner.id, companyId);
+    }
     const [comment] = await db.insert(issueComments).values({ companyId, issueId: issue.id, body: "Saved feedback for the recipient",
       authorAgentId: agentId, createdByRunId: owner.id,
     }).returning();

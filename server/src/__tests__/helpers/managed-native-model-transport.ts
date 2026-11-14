@@ -82,6 +82,19 @@ function endpoint(address: string | undefined, port: number | undefined) {
   checked(address === "127.0.0.1" && Number.isInteger(port) && port! > 0 && port! <= 65535);
   return `0100007F:${port!.toString(16).padStart(4, "0").toUpperCase()}`;
 }
+const observerImageRssLimitBytes = 80 * 1024 * 1024;
+/** Top-level observer response shape. The observer reports its own over-bound
+ * peak only as a fail-closed memory_bound result, so that result is classified
+ * as observer_incomplete instead of an unknown shape. No result is accepted here. */
+function socketOwnerResponseShape(response: unknown): response is Record<string, unknown> {
+  if (!response || typeof response !== "object" || Array.isArray(response)) return false;
+  const value = response as Record<string, unknown>;
+  if (!Number.isSafeInteger(value.observerMaxRssBytes) || (value.observerMaxRssBytes as number) <= 0) return false;
+  return (value.observerMaxRssBytes as number) <= observerImageRssLimitBytes ? value.stage !== "memory_bound"
+    : value.complete === false && value.stage === "memory_bound" && value.errno === null;
+}
+/** Observer response classification only; it grants no socket ownership. */
+export const managedModelSocketOwnerResponseControls = Object.freeze({ socketOwnerResponseShape, observerImageRssLimitBytes });
 // CI-only fixed operation; a live model origin is still authorized by observation() below.
 function privilegedSocketOwner(client: Socket, until: number) {
   let phase: typeof socketOwnerFailurePhases[number] = "input_endpoint";
@@ -114,7 +127,7 @@ function privilegedSocketOwner(client: Socket, until: number) {
   const expectedNodeHash = fileHash("/proc/self/exe", 256 * 1024 * 1024);
   const qualification = () => {
     const identities: unknown[] = [];
-    for (const [file, expectedHash] of [[launcher, "ef02d5bc28b9886840627269d2bd5aa29bdc7b0582b939556c469db785461079"], [scanner, "a2f1183beaa1594c452bb17956e29f53030dc3de36ef59f830e82b3e186c08f4"],
+    for (const [file, expectedHash] of [[launcher, "62edb828425d9092fb5a00852525f510c24d45b18bcd0158e3286a846c410fd2"], [scanner, "a2f1183beaa1594c452bb17956e29f53030dc3de36ef59f830e82b3e186c08f4"],
       [node, expectedNodeHash], ["/usr/bin/sudo", null], ["/usr/bin/env", null], ["/usr/bin/id", null], ["/bin/sh", null]] as const) {
       const resolved = realpathSync(file), entry = lstatSync(file), metadata = lstatSync(resolved);
       checked(entry.uid === 0 && (entry.isSymbolicLink() || (entry.mode & 0o22) === 0));
@@ -151,10 +164,8 @@ function privilegedSocketOwner(client: Socket, until: number) {
   phase = "response_decode";
   const response: unknown = JSON.parse(result.stdout);
   phase = "response_shape";
-  checked(response && typeof response === "object" && !Array.isArray(response));
+  checked(socketOwnerResponseShape(response));
   const value = response as Record<string, unknown>;
-  checked(Number.isSafeInteger(value.observerMaxRssBytes) && (value.observerMaxRssBytes as number) > 0 &&
-    (value.observerMaxRssBytes as number) <= 80 * 1024 * 1024);
   if (value.complete === false) {
     phase = "observer_incomplete";
     const errnos = ["ENOENT", "ESRCH", "EACCES", "EPERM", "EBADF", "EIO", "ENOTDIR", "ELOOP", "EMFILE", "ENFILE", "EINVAL", "OTHER"];

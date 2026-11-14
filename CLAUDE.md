@@ -69,6 +69,7 @@ run these and commit any regenerated output:
 - `node scripts/platform-skill-migration-register.mjs` (add `--write` if it reports stale, for example after an `AGENTS.md` change)
 - `node scripts/build-reference-index.mjs --check`
 - `pnpm -s run check:v10-169-migration-phases`. It has no write mode: if it reports `source pin changed: <path>`, set that path's `sha256` in `doc/operations/aw-v10-evidence/v10-169-migration-phases-current-2026-10-30/phase-matrix.json` to the file's current `sha256sum`.
+- `node scripts/check-help-change-review.mjs --base <full base sha> --head <full head sha>`. If a source file linked from a help article changed, review that article and update `docs/help/change-review.json` (keep its `\u` escaping: write JSON with `ensure_ascii=True`).
 
 ## Evidence
 

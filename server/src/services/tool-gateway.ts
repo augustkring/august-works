@@ -191,7 +191,11 @@ import {
   REMOTE_URL_SECRET_CONFIG_PATH,
   remoteUrlCredentialMatchesPublicUrl,
 } from "./remote-url-credentials.js";
-import { toolAccessPolicyService } from "./tool-access-policy.js";
+import {
+  createToolRateLimitTokenLedger,
+  toolAccessPolicyService,
+  type ToolRateLimitTokenLedger,
+} from "./tool-access-policy.js";
 import { commitToolActionReview } from "./tool-action-review.js";
 import { issueThreadInteractionService } from "./issue-thread-interactions.js";
 import {
@@ -7430,6 +7434,10 @@ export function createToolGatewayService(
     useDefaultTimeout = false,
     signal?: AbortSignal,
     scopedContext?: ScopedToolGatewayContext,
+    // Tokens this same call consumed in its admitting decide. Paths that did
+    // not consume a token in this call (approved executions) omit it, so the
+    // re-checks below keep the strict pre-check semantics for them.
+    rateLimitTokens?: ToolRateLimitTokenLedger,
   ): Promise<RemoteHttpExecutionResult> {
     const { entry, connection } = await resolveConnectedRemoteTool(
       session,
@@ -7505,7 +7513,7 @@ export function createToolGatewayService(
         throw new ToolGatewayHttpError(403, "Scoped credential selection changed", "scoped_tool_grant_changed");
       }
       const currentAccess = await policyService.decide(policyInputForTool({ session, tool,
-        parameters, consumeRateLimit: false }));
+        parameters, consumeRateLimit: false }), { rateLimitTokens });
       if (!currentAccess.allowed && currentAccess.decision !== "require_approval")
         throw new ToolGatewayHttpError(403, currentAccess.explanation, currentAccess.reasonCode);
     };
@@ -8886,6 +8894,7 @@ export function createToolGatewayService(
     reasonCode: string;
     matchedPolicyIds: string[];
     timeoutMs?: number;
+    rateLimitTokens?: ToolRateLimitTokenLedger;
   }): Promise<
     | { decision: "allowed"; invocationId: string; result: unknown }
     | {
@@ -8936,6 +8945,9 @@ export function createToolGatewayService(
               args.invocationId,
               undefined,
               args.timeoutMs === undefined,
+              undefined,
+              undefined,
+              args.rateLimitTokens,
             )
           : args.tool.providerType === "mcp_local_stdio"
             ? await executeLocalStdioTool(
@@ -11785,7 +11797,8 @@ export function createToolGatewayService(
         idempotencyKey: `test-call:${randomUUID()}`,
         consumeRateLimit: true,
       });
-      const accessDecision = await policyService.decide(decisionInput);
+      const rateLimitTokens = createToolRateLimitTokenLedger();
+      const accessDecision = await policyService.decide(decisionInput, { rateLimitTokens });
       const recorded = await policyService.recordInvocation(
         decisionInput,
         accessDecision,
@@ -11968,6 +11981,7 @@ export function createToolGatewayService(
         reasonCode: accessDecision.reasonCode,
         matchedPolicyIds: accessDecision.matchedPolicyIds,
         timeoutMs: input.timeoutMs,
+        rateLimitTokens,
       });
     },
 
@@ -12853,6 +12867,10 @@ export function createToolGatewayService(
         }
       }
 
+      // Only the fresh-admission branch below consumes a rate-limit token in
+      // this call. An approved execution reuses an earlier admission and keeps
+      // the strict re-check semantics.
+      let rateLimitTokens: ToolRateLimitTokenLedger | undefined;
       if (input.approvedActionRequestId) {
         let [actionRequest] = await db
           .select()
@@ -13222,7 +13240,8 @@ export function createToolGatewayService(
           idempotencyKey: input.idempotencyKey,
           consumeRateLimit: true,
         });
-        let accessDecision = await policyService.decide(decisionInput);
+        rateLimitTokens = createToolRateLimitTokenLedger();
+        let accessDecision = await policyService.decide(decisionInput, { rateLimitTokens });
         if (accessDecision.allowed && tool.providerType === "paperclip_slack_chat" && SLACK_TOOLS.some(t => t.name === tool.upstreamToolName && t.risk === "approval")) {
           accessDecision = { ...accessDecision, allowed: false, decision: "require_approval", reasonCode: "requires_approval_policy", explanation: "Slack destructive actions, channel creation and invitations require approval." };
         }
@@ -13397,6 +13416,7 @@ export function createToolGatewayService(
                 input.timeoutMs === undefined,
                 input.signal,
                 scopedContext,
+                rateLimitTokens,
               )
             : tool.providerType === "mcp_local_stdio"
               ? await executeLocalStdioTool(

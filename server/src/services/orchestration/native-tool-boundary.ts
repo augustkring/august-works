@@ -1,4 +1,4 @@
-import { and, eq, sql } from "drizzle-orm";
+import { and, eq, isNull, sql } from "drizzle-orm";
 import {
   agents,
   agentIdentities,
@@ -387,6 +387,49 @@ export async function assertNativeToolPlanCurrent(
   return { ...bound, task };
 }
 
+const uuidPattern = /^[0-9a-f]{8}(?:-[0-9a-f]{4}){3}-[0-9a-f]{12}$/i;
+
+/** True only when an assigned tool call stopped at its Human approval gate and
+ * that exact pending invocation is durably recorded for this Run. The approval
+ * card is the Human decision, so the plan must not also be fenced. Any other
+ * error, or any doubt, keeps the existing fence. */
+async function durablyAwaitingHumanApproval(
+  db: Db,
+  b: Binding,
+  idempotencyKey: string,
+  error: unknown,
+): Promise<boolean> {
+  if (!error || typeof error !== "object") return false;
+  const facts = error as { status?: unknown; reasonCode?: unknown; details?: unknown };
+  if (facts.status !== 409 || facts.reasonCode !== "approval_required") return false;
+  const details = facts.details && typeof facts.details === "object" && !Array.isArray(facts.details)
+    ? facts.details as Record<string, unknown> : null;
+  if (!details || typeof details.invocationId !== "string" || !uuidPattern.test(details.invocationId) ||
+    typeof details.tool !== "string" || !details.tool || details.issueId !== b.issueId) return false;
+  try {
+    const [pending] = await db
+      .select({ id: toolInvocations.id })
+      .from(toolInvocations)
+      .where(
+        and(
+          eq(toolInvocations.companyId, b.companyId),
+          eq(toolInvocations.id, details.invocationId),
+          eq(toolInvocations.runId, b.runId),
+          eq(toolInvocations.agentId, b.agentId),
+          eq(toolInvocations.issueId, b.issueId),
+          eq(toolInvocations.toolName, details.tool),
+          eq(toolInvocations.idempotencyKey, idempotencyKey),
+          eq(toolInvocations.status, "awaiting_approval"),
+          eq(toolInvocations.approvalState, "pending"),
+          isNull(toolInvocations.resultHash),
+        ),
+      );
+    return !!pending;
+  } catch {
+    return false;
+  }
+}
+
 async function fence(db: Db, b: Binding, planId: string, reasonCode: string) {
   await withV7ActivityTransaction(db, async (tx, publications) => {
     await lockAnalyticalCompany(tx, b.companyId);
@@ -694,6 +737,10 @@ export async function withOrchestrationNativeTool(
             eq(toolInvocations.id, reservation.id),
           ),
         );
+    if (externallyMetered && reservation === null) {
+      failureStage = "approval_pending_check";
+      if (await durablyAwaitingHumanApproval(db, b, idempotencyKey, error)) throw error;
+    }
     failureStage = "fence_plan";
     await fence(db, b, preliminary.plan.id, "native_tool_result_unsettled");
     throw error;

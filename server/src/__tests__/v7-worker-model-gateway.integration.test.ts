@@ -2077,6 +2077,60 @@ async function makeFixtureTreeWritable(target: string): Promise<void> {
       ).rejects.toMatchObject({ status: 403 });
       expect(effects).toBe(1);
     });
+    describe("assigned tool calls stopped at their Human approval gate", () => {
+      // The assigned MCP path rethrows this shape after it durably records the
+      // pending invocation and review card (assigned-mcp-tools.ts). It is matched
+      // structurally, so a plain error carrying the same fields is equivalent.
+      const approvalRequired = (details: Record<string, unknown>) =>
+        Object.assign(new Error("Tool action requires approval"), {
+          status: 409, reasonCode: "approval_required", details,
+        });
+      const planState = async () => (await db.select().from(orchestrationPlans)
+        .where(eq(orchestrationPlans.id, plan.id)))[0]!;
+      const interventionCount = async () => (await db.select().from(supervisionInterventions)
+        .where(eq(supervisionInterventions.planId, plan.id))).length;
+      const pendingInvocation = async (callId: string, overrides: Record<string, unknown> = {}) =>
+        (await db.insert(toolInvocations).values({
+          companyId: f.home, runId: run.id, agentId: f.presence.id, issueId: task.id,
+          toolName: "railway:list_projects", idempotencyKey: `aw-native-tool:${run.id}:${callId}`,
+          status: "awaiting_approval", approvalState: "pending", ...overrides,
+        }).returning())[0]!;
+      const call = (callId: string) => ({ tool: "app_railway_list_projects_000000000000", callId, arguments: {} });
+
+      it("keeps the plan running when the pending approval is durably recorded", async () => {
+        const before = await planState();
+        expect(before.status).toBe("running");
+        const interventionsBefore = await interventionCount();
+        const row = await pendingInvocation("pending-approval-call");
+        const error = approvalRequired({ invocationId: row.id, tool: row.toolName, issueId: task.id });
+        await expect(withOrchestrationNativeTool(db, nativeBinding(), call("pending-approval-call"),
+          async () => { throw error; }, true)).rejects.toBe(error);
+        expect(await planState()).toMatchObject({ status: "running", version: before.version });
+        expect(await interventionCount()).toBe(interventionsBefore);
+      });
+
+      it("still fences an approval-required error without its durable pending invocation", async () => {
+        const before = await planState();
+        const interventionsBefore = await interventionCount();
+        const error = approvalRequired({ invocationId: randomUUID(), tool: "railway:list_projects", issueId: task.id });
+        await expect(withOrchestrationNativeTool(db, nativeBinding(), call("unrecorded-approval-call"),
+          async () => { throw error; }, true)).rejects.toBe(error);
+        expect(await planState()).toMatchObject({ status: "paused", version: before.version + 1 });
+        expect(await interventionCount()).toBe(interventionsBefore + 1);
+      });
+
+      it.each([
+        ["a settled result", { resultHash: "a".repeat(64) }],
+        ["an approved invocation", { status: "succeeded", approvalState: "approved" }],
+      ])("still fences when the invocation has %s", async (_label, overrides) => {
+        const before = await planState();
+        const row = await pendingInvocation("settled-approval-call", overrides);
+        const error = approvalRequired({ invocationId: row.id, tool: row.toolName, issueId: task.id });
+        await expect(withOrchestrationNativeTool(db, nativeBinding(), call("settled-approval-call"),
+          async () => { throw error; }, true)).rejects.toBe(error);
+        expect(await planState()).toMatchObject({ status: "paused", version: before.version + 1 });
+      });
+    });
     it("limits plan-created Tasks to C0 backlog drafts without delegation", async () => {
       let effects = 0;
       const call = {
