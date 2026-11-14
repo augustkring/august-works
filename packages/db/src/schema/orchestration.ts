@@ -96,7 +96,7 @@ export const orchestrationModelReservations = pgTable("orchestration_model_reser
   ) or (
     ${t.purpose}='review_model' and ${t.planId} is not null and ${t.workerId} is null and ${t.workerAttemptId} is null and
     ${t.reviewIssueId} is not null and ${t.reviewInteractionId} is not null and ${t.reviewDecisionId} is not null and
-    ${t.reviewSourceRunId} is not null and ${t.reviewSourceResultId} is not null and ${t.reviewSourceWorkerId} is not null and ${t.reviewSourceAgentId} is not null and ${t.reviewSourceAttemptId} is not null and ${t.reviewSourceReceiptDigest} is not null and ${t.reviewSourceReceiptDigest} ~ '^[a-f0-9]{64}$' and ${t.reviewSourceResultCanonicalSha256} is not null and ${t.reviewSourceResultCanonicalSha256} ~ '^sha256:[a-f0-9]{64}$' and
+    ${t.reviewSourceRunId} is not null and ${t.reviewSourceResultId} is not null and ${t.reviewSourceWorkerId} is not null and ${t.reviewSourceAgentId} is not null and ${t.reviewSourceAttemptId} is not null and ${t.reviewSourceReceiptDigest} is not null and ${t.reviewSourceReceiptDigest} ~ '^[a-f0-9]{64}$' and ${t.reviewSourceResultCanonicalSha256} is not null and ${t.reviewSourceResultCanonicalSha256} ~ '^(sha256:)?[a-f0-9]{64}$' and
     ${t.reviewAgentId} is not null and ${t.reviewRunId} is not null and ${t.reviewExecutionManifestId} is not null and ${t.reviewPlanVersion} is not null and ${t.reviewPlanVersion}>0 and
     ${t.conversationAgentId} is null and ${t.conversationRunId} is null and ${t.conversationIssueId} is null and
     ${t.conversationSessionGeneration} is null and ${t.executionManifestId} is null and ${t.executionManifestHash} is null and ${t.conversationTariffSnapshot} is null
