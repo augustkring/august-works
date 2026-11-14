@@ -1581,10 +1581,10 @@
     {
       "source": "server/src/services/issues.ts",
       "articleId": "recovering-work",
-      "sourceSha256": "0fdf7e89d67910247315adb184e6543bf3f547d0a95be81b7db9c88fb6edc152",
+      "sourceSha256": "8e9c18d331e14c55f24b3bf01a2532ad964758eef6673dc89d1fc47c701d6ee6",
       "articleSha256": "0296c2c8ae18c613eef9c17ea9679b146e8afbcd3504451a5511a218d6d8b955",
       "decision": "no_change",
-      "rationale": "Root reviewed the complete English and Danish recovery guidance. Current queue preservation and copyback/progress source ownership retain the original Task/comment authority; this adds no user action or new retry promise. Existing stop and recovery guidance remains accurate."
+      "rationale": "Reviewed the complete English and Danish recovery guidance. The source fix only keeps a Run-authored caller\u2019s requested comment source protocol inside its own transaction, so a managed progress comment keeps its source seal; a direct Human input still decides its protocol from freshness. It adds no user action, retry, stop or support step, so the existing guidance remains accurate."
     },
     {
       "source": "server/src/services/managed-repository-checkout.ts",
@@ -1685,10 +1685,10 @@
     {
       "source": "server/src/services/issues.ts",
       "articleId": "recovering-work-da",
-      "sourceSha256": "0fdf7e89d67910247315adb184e6543bf3f547d0a95be81b7db9c88fb6edc152",
+      "sourceSha256": "8e9c18d331e14c55f24b3bf01a2532ad964758eef6673dc89d1fc47c701d6ee6",
       "articleSha256": "ce0a7beaa56a5db23963d81eed8c19687d2efc5405773ec33dfd635a377090bc",
       "decision": "no_change",
-      "rationale": "Root reviewed the complete English and Danish recovery guidance. Current queue preservation and copyback/progress source ownership retain the original Task/comment authority; this adds no user action or new retry promise. Existing stop and recovery guidance remains accurate."
+      "rationale": "Reviewed the complete English and Danish recovery guidance. The source fix only keeps a Run-authored caller\u2019s requested comment source protocol inside its own transaction, so a managed progress comment keeps its source seal; a direct Human input still decides its protocol from freshness. It adds no user action, retry, stop or support step, so the existing guidance remains accurate."
     },
     {
       "source": "server/src/services/managed-repository-checkout.ts",
