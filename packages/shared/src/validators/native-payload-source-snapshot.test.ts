@@ -195,4 +195,15 @@ describe("Native Stage policy transform structural boundary", () => {
       { ...entry, decisionId: undefined }, { ...entry, receiptHash: "unverified" }])
       expect(nativePayloadSourceSnapshotSchema.safeParse({ ...snapshot(), transforms: [step] }).success).toBe(false);
   });
+  it("binds a review model dispatch to either stored Native result hash form", () => {
+    const dispatch = (sourceResultCanonicalSha256: string) => snapshot([{ kind: "review_model_dispatch", runId: randomUUID(),
+      reservationId: randomUUID(), callId: "call-1", planId: randomUUID(), issueId: randomUUID(), interactionId: randomUUID(),
+      decisionId: randomUUID(), sourceRunId: randomUUID(), sourceWorkerId: randomUUID(), sourceAgentId: randomUUID(),
+      sourceResultId: randomUUID(), sourceAttemptId: randomUUID(), expectedPlanVersion: 1, sourceReceiptDigest: hash,
+      sourceResultCanonicalSha256, reviewerAgentId: randomUUID(), executionManifestId: randomUUID(),
+      requestHash: hash, wireBodyHash: hash, responseHash: hash }]);
+    expect(nativePayloadSourceSnapshotSchema.safeParse(dispatch(hash)).success).toBe(true);
+    expect(nativePayloadSourceSnapshotSchema.safeParse(dispatch(`sha256:${hash}`)).success).toBe(true);
+    expect(nativePayloadSourceSnapshotSchema.safeParse(dispatch(`sha512:${hash}`)).success).toBe(false);
+  });
 });

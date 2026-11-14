@@ -7,6 +7,9 @@ export const NATIVE_PAYLOAD_SOURCE_REFERENCE_LIMIT = 256;
 // This validates shape, not source existence, tenant binding or permission.
 const id = z.string().regex(/^[0-9a-f]{8}(?:-[0-9a-f]{4}){3}-[0-9a-f]{12}$/);
 const sha256 = z.string().regex(/^[0-9a-f]{64}$/);
+// Native results store canonical_sha256 either plain (ControlPlanePort) or
+// "sha256:"-prefixed (durable coordinator); review bindings copy it verbatim.
+const nativeResultSha256 = z.string().regex(/^(sha256:)?[0-9a-f]{64}$/);
 const text = z.string().min(1).max(512).refine(value => value.trim().length > 0 && !/[\u0000-\u001f\u007f]/.test(value));
 const byteSize = z.number().int().min(0).max(Number.MAX_SAFE_INTEGER);
 const ids = z.array(id).max(NATIVE_PAYLOAD_SOURCE_REFERENCE_LIMIT);
@@ -77,7 +80,7 @@ export const nativePayloadSourceInputSchema = z.discriminatedUnion("kind", [
     nativeReview: z.object({ version: z.literal(1), companyId: id, issueId: id, reviewerRunId: id, reviewerAgentId: id,
       responsibleUserId: text, interactionId: id, decisionId: id, interactionCreatedAt: text, sourceRunCreatedAt: text, reviewerRunCreatedAt: text, interactionRequestHash: sha256,
       renderedRequestHash: sha256, decisionDigest: sha256, sourceRunId: id, sourceAgentId: id, sourceResponsibleUserId: text,
-      sourceReceiptDigest: sha256, sourceResultId: id, sourceResultCanonicalSha256: z.string().regex(/^sha256:[0-9a-f]{64}$/),
+      sourceReceiptDigest: sha256, sourceResultId: id, sourceResultCanonicalSha256: nativeResultSha256,
       sourceCompletionContractId: id, sourceCompletionContractSha256: sha256,
       reviewerCompletionContractId: id, reviewerCompletionContractSha256: sha256 }).strict().optional() }).strict(),
   z.object({ kind: z.literal("workspace_metadata"), runId: id, executionWorkspaceId: id,
@@ -87,7 +90,7 @@ export const nativePayloadSourceInputSchema = z.discriminatedUnion("kind", [
   z.object({ kind: z.literal("review_model_dispatch"), runId: id, reservationId: id, callId: text,
     planId: id, issueId: id, interactionId: id, decisionId: id, sourceRunId: id, sourceWorkerId: id, sourceAgentId: id,
     sourceResultId: id, sourceAttemptId: id, expectedPlanVersion: z.number().int().positive(),
-    sourceReceiptDigest: sha256, sourceResultCanonicalSha256: z.string().regex(/^sha256:[0-9a-f]{64}$/), reviewerAgentId: id, executionManifestId: id,
+    sourceReceiptDigest: sha256, sourceResultCanonicalSha256: nativeResultSha256, reviewerAgentId: id, executionManifestId: id,
     requestHash: sha256, wireBodyHash: sha256, responseHash: sha256 }).strict(),
   z.object({ kind: z.literal("conversation_model_dispatch"), runId: id, agentId: id, issueId: id,
     conversationSessionGeneration: z.number().int().nonnegative(), executionManifestId: id, executionManifestHash: sha256,

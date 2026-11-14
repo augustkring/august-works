@@ -17,8 +17,8 @@
   "sourceBaseCommit": "81d3445b98b1cd80ff400ede6bd44ea71d88d735",
   "officialMigrationInterval": {
     "first": 502,
-    "last": 580,
-    "latestOfficialMigration": "0580_aberrant_karma",
+    "last": 581,
+    "latestOfficialMigration": "0581_white_tigra",
     "latestOfficialMigrationCommit": null,
     "journalSource": "packages/db/src/migrations/meta/_journal.json"
   },
@@ -245,9 +245,10 @@
         547,
         553,
         576,
-        580
+        580,
+        581
       ],
-      "purpose": "Memory sharing publication provenance; workflow duration width; company-purpose budgets/reservations, package pinning, sandbox claim, durable plugin lifecycle and provider wire receipt immutability; native conversation reservation binding. Migration 0580 extends existing configured durable-execution admission and occupancy to original company export work and unknown allocated writes.",
+      "purpose": "Memory sharing publication provenance; workflow duration width; company-purpose budgets/reservations, package pinning, sandbox claim, durable plugin lifecycle and provider wire receipt immutability; native conversation reservation binding. Migration 0580 extends existing configured durable-execution admission and occupancy to original company export work and unknown allocated writes. Migration 0581 lets the review-model reservation CHECK accept both stored Native result hash forms (plain and sha256:-prefixed).",
       "authority": "Budget/reservation owner and durable provider receipts are authoritative before dispatch; plugin lifecycle rows control admitted runtime state; Memory share publication is explicit and scoped.",
       "durableState": [
         "memory_private_share_publications target binding/source owner",
@@ -272,6 +273,7 @@
         "packages/db/src/migrations/0553_cute_thor_girl.sql",
         "packages/db/src/migrations/0576_native_review_model_reservations.sql",
         "packages/db/src/migrations/0580_aberrant_karma.sql",
+        "packages/db/src/migrations/0581_white_tigra.sql",
         "packages/db/src/schema/company_transfer_runs.ts",
         "server/src/services/company-export-transfers.ts",
         "server/src/services/company-transfer-runs.ts",
@@ -673,7 +675,7 @@
         },
         {
           "path": "server/src/__tests__/private-0565-responsibility-scan.integration.test.ts",
-          "case": "binds a concrete native source reader for every applicable \u00a717 kind"
+          "case": "binds a concrete native source reader for every applicable §17 kind"
         },
         {
           "path": "server/src/__tests__/resource-governance.integration.test.ts",
@@ -1175,7 +1177,7 @@
     },
     {
       "path": "packages/db/src/migrations/meta/_journal.json",
-      "sha256": "7ce0800bc46b9af6728a94633dbb2810ed9fca8b00676ff69f522b03e21000af"
+      "sha256": "6001afdac3a7a6f5fd0a48691ac25fb411d3dd3f3c09845eaa2f93392aba461e"
     },
     {
       "path": "packages/db/src/native-input-source-protocol.test.ts",
@@ -1219,7 +1221,7 @@
     },
     {
       "path": "packages/shared/src/validators/native-payload-source-snapshot.ts",
-      "sha256": "026a2e29fd1bbb5f32aeedf77399ef3279e285ba2bc69376826b30f147ca3f1f"
+      "sha256": "771838fe5ea910835490d588320770caee8ed0930186643fddb60fa7531ef1ee"
     },
     {
       "path": "scripts/check-v10-169-migration-phase-register.mjs",
@@ -1594,6 +1596,14 @@
       "sha256": "8c96e3a9287b1909fd00d1e1f053ad6640376a4c499158af1420649a7ec6af35"
     },
     {
+      "path": "packages/db/src/migrations/0581_white_tigra.sql",
+      "sha256": "bba36e77e04c042536b44b7b26e8b718e012250197139448585ad3993147d230"
+    },
+    {
+      "path": "packages/db/src/migrations/meta/0581_snapshot.json",
+      "sha256": "3663f293410b3364295ec39560547b7244e7a7751818b1c171b6a812f2783092"
+    },
+    {
       "path": "packages/db/src/schema/company_transfer_runs.ts",
       "sha256": "6d8b07578bb745bd0b8bef1d59fb41d6875e647197b29af22520a55d46b5384c"
     },
@@ -1615,13 +1625,13 @@
     "baseCommit": "81d3445b98b1cd80ff400ede6bd44ea71d88d735",
     "command": "git diff --name-status 81d3445b98b1cd80ff400ede6bd44ea71d88d735 -- packages/db/src/migrations",
     "selection": "Union of added/modified/renamed-destination migration SQL files in the source-base git diff and all current journal entries absent from the source-base journal; this catches published journal entries whose SQL payload is still untracked.",
-    "currentAffectedCount": 79,
+    "currentAffectedCount": 80,
     "currentAffectedFirst": "0502_swift_maria_hill",
-    "currentAffectedLast": "0580_aberrant_karma"
+    "currentAffectedLast": "0581_white_tigra"
   },
   "sourcePinFinality": "Exact current source hashes after R622 actual PostgreSQL and R623 full typecheck/build; software scope only, no historical status promotion.",
   "latestMigrationPublication": {
-    "migration": "0580_aberrant_karma",
+    "migration": "0581_white_tigra",
     "sourceCommit": null,
     "sourceState": "Official generated source with exact current pins and local software receipts.",
     "qualificationScope": "Does not establish fleet cutover, deployed rollback/restore, provider/Host or Human qualification."
@@ -1644,7 +1654,8 @@
     "0577": "Adds typed prelaunch setup-container occupancy settlement and receipt reconciliation. This is resource cleanup evidence only; it is distinct from Native process-stop projection and makes no claim of process termination, provider erasure, or storage removal.",
     "0578": "Adds a company/endpoint/stable GitHub repository-scoped old-to-new coordinate receipt in the same transaction as repository rename and conversation/origin rebinding; no backfill or guessed aliases.",
     "0579": "Adds an optional unique lowercase SHA256 receipt-key hash to the original personal account deletion operation. It supports only the exact accepted personal request status after session revocation; historical NULL rows gain no receipt, and the schema does not grant account or company authority.",
-    "0580": "Extends existing shared durable-execution policy/admission to export claims and uncertain allocated writes, preserving original Native cleanup predicates, configured limits and Stop/settlement bypass. Adds only a partial active-liability index; no new queue or invented quota."
+    "0580": "Extends existing shared durable-execution policy/admission to export claims and uncertain allocated writes, preserving original Native cleanup predicates, configured limits and Stop/settlement bypass. Adds only a partial active-liability index; no new queue or invented quota.",
+    "0581": "Replaces only the review_source_result_canonical_sha256 pattern in orchestration_model_reservation_scope_ck so a review-model reservation accepts the stored Native result hash verbatim in either form (ControlPlanePort plain hex or durable-coordinator sha256: prefix). No backfill; the previous CHECK admitted no plain-hex rows, so no existing row can violate the new one."
   },
   "revisionDate": "2026-11-12",
   "sourceHead": "884dbba4a78603a791b65471e41fe950a23e2e4f",
@@ -1705,6 +1716,12 @@
       "sourceCommit": null,
       "sourceHead": "884dbba4a78603a791b65471e41fe950a23e2e4f",
       "sourceState": "Official Drizzle generation with exact SQL/snapshot/journal and current local software checks.",
+      "phaseBoundary": "Source inventory and selected software qualification only; prior phase statuses remain unchanged."
+    },
+    {
+      "migration": "0581_white_tigra",
+      "sourceCommit": null,
+      "sourceState": "Official Drizzle generation with exact SQL/snapshot/journal; shared validator regression tests and local migration apply/drift checks.",
       "phaseBoundary": "Source inventory and selected software qualification only; prior phase statuses remain unchanged."
     }
   ],

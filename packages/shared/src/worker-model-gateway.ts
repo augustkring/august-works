@@ -25,7 +25,7 @@ export const reviewModelBindingSchema = z.object({
   sourceAttemptId: z.string().uuid(),
   sourceResultId: z.string().uuid(),
   sourceReceiptDigest: z.string().regex(/^[a-f0-9]{64}$/),
-  sourceResultCanonicalSha256: z.string().regex(/^sha256:[a-f0-9]{64}$/),
+  sourceResultCanonicalSha256: z.string().regex(/^(sha256:)?[a-f0-9]{64}$/),
   reviewerAgentId: z.string().uuid(),
   reviewerRunId: z.string().uuid(),
   executionManifestId: z.string().uuid(),

@@ -4054,6 +4054,13 @@
       "when": 1794441666015,
       "tag": "0580_aberrant_karma",
       "breakpoints": true
+    },
+    {
+      "idx": 581,
+      "version": "7",
+      "when": 1794665716012,
+      "tag": "0581_white_tigra",
+      "breakpoints": true
     }
   ]
 }

@@ -903,11 +903,11 @@ export async function withManagedNativeHeartbeatFixture<T>(input: Omit<FrameInpu
   if (!input.managedTwoAgentSignoff && !input.managedOpenCodeConformance) await configureHostForAgent(agentId);
   const hostForAuthenticatedAgent = (authorization: string | undefined) => {
     const token = /^Bearer ([^\s]+)$/.exec(authorization ?? "")?.[1];
-    const scopes = input.managedOpenCodeConformance ? ["provider_conformance"] as const : ["worker_model", "conversation_model"] as const;
+    const scopes = input.managedOpenCodeConformance ? ["provider_conformance"] as const : ["worker_model", "conversation_model", "review_model"] as const;
     const claims = token ? scopes.map(scope => verifyRuntimeToolsToken(token, scope)).find(value => value !== null) : null;
     const agentHost = claims && (input.managedOpenCodeConformance
       ? claims.provider_conformance?.profileId !== undefined
-      : claims.company_id === companyId && ["worker_model", "conversation_model"].includes(claims.scope))
+      : claims.company_id === companyId && ["worker_model", "conversation_model", "review_model"].includes(claims.scope))
       ? hostsByAgent.get(claims.sub) : undefined;
     if (!agentHost) throw new Error("scheduler_fixture_authenticated_model_agent_unmapped");
     return agentHost;

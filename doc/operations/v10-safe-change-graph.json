@@ -23,8 +23,8 @@
   "qualificationBoundary": "Source hashes identify current candidate bytes and exact base comparisons. Requirement edges are source links, not closure. The inventory does not prove full behavior review, compatibility, rollback, Human approval, provider/hosted behavior, or release acceptance. Unknown owners and external facts remain open.",
   "migrationJournal": {
     "path": "packages/db/src/migrations/meta/_journal.json",
-    "sha256": "7ce0800bc46b9af6728a94633dbb2810ed9fca8b00676ff69f522b03e21000af",
-    "entryCount": 579,
+    "sha256": "6001afdac3a7a6f5fd0a48691ac25fb411d3dd3f3c09845eaa2f93392aba461e",
+    "entryCount": 580,
     "qualification": "journal order and current SQL source hashes only; not migration phase, mixed-version safety, rollback, or operator approval"
   },
   "sourceInputs": [
@@ -13908,7 +13908,7 @@
         },
         {
           "path": "server/src/__tests__/helpers/managed-native-heartbeat-fixture.ts",
-          "sha256": "522ea090f6536f6781e6247d465d2e04daecbfc36b77980fe9e9c56e5dadb4e2"
+          "sha256": "6c55209dda05b6a7a95763d8ca6ecbfaca71285993fa5a4e910b3113d4550b2e"
         },
         {
           "path": "server/src/__tests__/helpers/prepare-genuine-native-draft-conformance-fixture.ts",
@@ -20064,7 +20064,7 @@
         },
         {
           "path": "packages/db/src/migrations/meta/_journal.json",
-          "sha256": "7ce0800bc46b9af6728a94633dbb2810ed9fca8b00676ff69f522b03e21000af"
+          "sha256": "6001afdac3a7a6f5fd0a48691ac25fb411d3dd3f3c09845eaa2f93392aba461e"
         },
         {
           "path": "packages/db/src/native-input-source-protocol.test.ts",
@@ -20184,7 +20184,7 @@
         },
         {
           "path": "packages/db/src/schema/orchestration.ts",
-          "sha256": "ac4280165eec6c1b90c42a6962bc43ec6659b0dd981841c6019de920d9289d35"
+          "sha256": "4aff55870914a7052098c822c61a0338b10494bb7dafafe090ec56dccaedbf40"
         },
         {
           "path": "packages/db/src/schema/responsibility_scan.ts",
@@ -21956,7 +21956,7 @@
         },
         {
           "path": "packages/shared/src/worker-model-gateway.ts",
-          "sha256": "a1b41670d4c2e0eef5ef308086a2b84d83865e3267ba89d5325be84169863242"
+          "sha256": "9b9a465ae52bd955ac7e3d6149a571611c7ec70b47b78c5c9914422284fda3be"
         },
         {
           "path": "scripts/fixtures/native-model-socket-observer-check.mjs",
@@ -29251,11 +29251,11 @@
         },
         {
           "path": "packages/shared/src/validators/native-payload-source-snapshot.test.ts",
-          "sha256": "3428f71c8d8a3becd2995699fd933ebe3b04af1194fd99056c642d7024b67c8b"
+          "sha256": "5f148847d6b2e523e9478222580d77f1754ef62145ce66909771c9406e69c168"
         },
         {
           "path": "packages/shared/src/validators/native-payload-source-snapshot.ts",
-          "sha256": "026a2e29fd1bbb5f32aeedf77399ef3279e285ba2bc69376826b30f147ca3f1f"
+          "sha256": "771838fe5ea910835490d588320770caee8ed0930186643fddb60fa7531ef1ee"
         },
         {
           "path": "packages/shared/src/validators/plugin.ts",
@@ -46181,6 +46181,16 @@
       "qualification": "journal_order_and_current_sql_hash_only"
     },
     {
+      "id": "0581_white_tigra",
+      "kind": "journaled_migration_source",
+      "path": "packages/db/src/migrations/0581_white_tigra.sql",
+      "sha256": "bba36e77e04c042536b44b7b26e8b718e012250197139448585ad3993147d230",
+      "journalPosition": 579,
+      "journalIndex": 581,
+      "createdAt": 1794665716012,
+      "qualification": "journal_order_and_current_sql_hash_only"
+    },
+    {
       "id": "deleted:server/src/__tests__/heartbeat-workspace-finalize-branch.test.ts",
       "kind": "deleted_source_delta",
       "path": "server/src/__tests__/heartbeat-workspace-finalize-branch.test.ts",
@@ -52856,7 +52866,7 @@
       "id": "source:server/src/__tests__/helpers/managed-native-heartbeat-fixture.ts",
       "kind": "current_source_owner",
       "path": "server/src/__tests__/helpers/managed-native-heartbeat-fixture.ts",
-      "sha256": "522ea090f6536f6781e6247d465d2e04daecbfc36b77980fe9e9c56e5dadb4e2",
+      "sha256": "6c55209dda05b6a7a95763d8ca6ecbfaca71285993fa5a4e910b3113d4550b2e",
       "changeIds": [
         "SCR-V10-WORKFLOWS-DURABLE-OPERATIONS"
       ],
@@ -58665,7 +58675,7 @@
       "id": "source:packages/db/src/migrations/meta/_journal.json",
       "kind": "current_source_owner",
       "path": "packages/db/src/migrations/meta/_journal.json",
-      "sha256": "7ce0800bc46b9af6728a94633dbb2810ed9fca8b00676ff69f522b03e21000af",
+      "sha256": "6001afdac3a7a6f5fd0a48691ac25fb411d3dd3f3c09845eaa2f93392aba461e",
       "changeIds": [
         "SCR-V10-DATABASE-SCHEMA-AND-MIGRATIONS"
       ],
@@ -59115,7 +59125,7 @@
       "id": "source:packages/db/src/schema/orchestration.ts",
       "kind": "current_source_owner",
       "path": "packages/db/src/schema/orchestration.ts",
-      "sha256": "ac4280165eec6c1b90c42a6962bc43ec6659b0dd981841c6019de920d9289d35",
+      "sha256": "4aff55870914a7052098c822c61a0338b10494bb7dafafe090ec56dccaedbf40",
       "changeIds": [
         "SCR-V10-DATABASE-SCHEMA-AND-MIGRATIONS"
       ],
@@ -60735,7 +60745,7 @@
       "id": "source:packages/shared/src/worker-model-gateway.ts",
       "kind": "current_source_owner",
       "path": "packages/shared/src/worker-model-gateway.ts",
-      "sha256": "a1b41670d4c2e0eef5ef308086a2b84d83865e3267ba89d5325be84169863242",
+      "sha256": "9b9a465ae52bd955ac7e3d6149a571611c7ec70b47b78c5c9914422284fda3be",
       "changeIds": [
         "SCR-V10-MODEL-PROVIDER-AND-MIGRATION-MONITOR"
       ],
@@ -69528,7 +69538,7 @@
       "id": "source:packages/shared/src/validators/native-payload-source-snapshot.test.ts",
       "kind": "current_source_owner",
       "path": "packages/shared/src/validators/native-payload-source-snapshot.test.ts",
-      "sha256": "3428f71c8d8a3becd2995699fd933ebe3b04af1194fd99056c642d7024b67c8b",
+      "sha256": "5f148847d6b2e523e9478222580d77f1754ef62145ce66909771c9406e69c168",
       "changeIds": [
         "SCR-V10-SHARED-CONTRACTS"
       ],
@@ -69543,7 +69553,7 @@
       "id": "source:packages/shared/src/validators/native-payload-source-snapshot.ts",
       "kind": "current_source_owner",
       "path": "packages/shared/src/validators/native-payload-source-snapshot.ts",
-      "sha256": "026a2e29fd1bbb5f32aeedf77399ef3279e285ba2bc69376826b30f147ca3f1f",
+      "sha256": "771838fe5ea910835490d588320770caee8ed0930186643fddb60fa7531ef1ee",
       "changeIds": [
         "SCR-V10-SHARED-CONTRACTS"
       ],
@@ -83117,6 +83127,11 @@
     {
       "from": "0579_puzzling_morlocks",
       "to": "0580_aberrant_karma",
+      "relation": "drizzle_journal_order_only"
+    },
+    {
+      "from": "0580_aberrant_karma",
+      "to": "0581_white_tigra",
       "relation": "drizzle_journal_order_only"
     },
     {
