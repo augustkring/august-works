@@ -15569,7 +15569,10 @@ async function createRunnerdBackendWithinSessionClaim(
     const verified = await remoteCommandRunner.execute({
       command: providerNodeCommand,
       args: nativeProviderPackVerificationArgs(packRoot, expectedProviderPackManifest),
-      ...(input.prepareManagedWorkspace ? { env: { ...REMOTE_NATIVE_ERASER_ENV } } : {}),
+      // Both managed owners (the Worker preparation and the hidden conformance
+      // probe) are matched by exactNativeManagedArtifactCommand, which admits
+      // this check only with exactly the fixed eraser environment.
+      ...(input.prepareManagedWorkspace || input.providerConformanceProbe ? { env: { ...REMOTE_NATIVE_ERASER_ENV } } : {}),
       cwd: remoteTarget.remoteCwd,
       bypassSession: true,
       timeoutMs: 30_000,

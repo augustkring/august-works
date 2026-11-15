@@ -544,7 +544,8 @@ export function exactNativeConformanceWorkspaceRestoreCommand(input: {
     script === buildRemoteFileChunkReadCommand(archive, chunkIndex);
 }
 
-function exactNativeProviderArtifactChunkCommand(input: {
+/** Exported for the conformance runner-transport regression test. */
+export function exactNativeProviderArtifactChunkCommand(input: {
   request: import("@paperclipai/shared").RuntimeSandboxExecRelayRequest;
   taskRoot: string;
 }): boolean {

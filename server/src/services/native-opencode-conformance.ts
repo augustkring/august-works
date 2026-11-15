@@ -44,6 +44,7 @@ import type { EnvironmentRuntimeService } from "./environment-runtime.js";
 import { parseEnvironmentDriverConfig } from "./environment-config.js";
 import { contextManifestService } from "./context/context-manifest.js";
 import { createNativeOpenCodeConformanceProbeBackend } from "./native-runtime/native-session-executor.js";
+import { nativeRunnerOperatorSettings, type NativeRunnerOperatorSettings } from "./native-runtime/runner-operator-settings.js";
 import { parseNativeExecutionInput } from "../vendor/paperclip-runner/index.js";
 import { logger } from "../middleware/logger.js";
 
@@ -61,6 +62,20 @@ function logNativeOpenCodeConformanceFailure(stage: "probe" | "turn" | "evidence
     : typeof message === "string" && /^(?:managed_opencode|native)_[a-z0-9_]{1,100}$/.test(message) ? message : null;
   logger.warn({ err: error, stage, errorCode, groupId: context.groupId, runCount: context.runCount ?? null,
     probeKind: context.probeKind ?? null, step: context.step }, "native_opencode_conformance_failed");
+}
+
+/** The probe's runnerd backend. The runner transport (direct runner URL and
+ * CA bundle) and artifact settings come from the server's own environment
+ * through the same reader the heartbeat uses, never from the Sandbox runner
+ * environment or a caller. No provider-ingress grant is passed: the hidden
+ * probe Run has no per-run ingress authorization. */
+export function nativeOpenCodeConformanceBackendFactory(
+  input: Omit<Parameters<typeof createNativeOpenCodeConformanceProbeBackend>[0],
+    keyof NativeRunnerOperatorSettings | "runnerIngressAuthorized">,
+  serverEnvironment: Readonly<Record<string, string | undefined>> = process.env,
+): () => Promise<NativeSessionBackend> {
+  return async () => (await createNativeOpenCodeConformanceProbeBackend({ ...input,
+    ...nativeRunnerOperatorSettings(serverEnvironment) })).backend;
 }
 
 export type NativeOpenCodeRemoteProbeContext = Readonly<{
@@ -794,10 +809,9 @@ export function nativeOpenCodeConformanceService(db: Db, options: Options) {
           return { execution, runnerInstanceId, identity: { runId, sessionId: input.sessionId,
               companyId: input.companyId, issueId: input.taskId, agentId: input.agentId },
             workingDirectory: acquired.executionTarget.remoteCwd, leaseId: acquired.lease.id, workspaceSync, remoteTarget,
-            createBackend: async () => (await createNativeOpenCodeConformanceProbeBackend({ db, execution,
+            createBackend: nativeOpenCodeConformanceBackendFactory({ db, execution,
               runnerInstanceId, runnerExecutionTarget: acquired.executionTarget,
-              durableEnvironmentLeaseId: acquired.lease.id, runnerEnvironment,
-              runnerRemoteProviderPackPath: process.env.PAPERCLIP_RUNNER_REMOTE_PROVIDER_PACK_PATH?.trim() })).backend,
+              durableEnvironmentLeaseId: acquired.lease.id, runnerEnvironment }),
             settle: async (state: ManagedOpenCodeProbeResult["state"] = "unknown") => {
               if (settled) return;
               await workspaceSync.restoreWorkspace();
