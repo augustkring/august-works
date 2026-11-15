@@ -36,6 +36,12 @@ const state = vi.hoisted(() => ({
   createTransport: vi.fn((_options: Record<string, unknown>) => ({ transport: {} })),
   authorityHash: "c".repeat(64),
   reference: null as Record<string, unknown> | null,
+  persistProcess: vi.fn(async (_db: unknown, runId: string, _meta: Record<string, unknown>) => ({ id: runId }) as unknown),
+}));
+// CONF13: the Worker lane's process-identity owner, observed at its boundary.
+vi.mock("../heartbeat.js", async importOriginal => ({
+  ...await importOriginal<typeof import("../heartbeat.js")>(),
+  persistHeartbeatRunProcessMetadata: state.persistProcess,
 }));
 vi.mock("../../vendor/paperclip-runner/index.js", async importOriginal => ({
   ...await importOriginal<typeof import("../../vendor/paperclip-runner/index.js")>(),
@@ -149,6 +155,7 @@ describe("provider-conformance runner transport and preinstalled provider pack (
     process.env.PAPERCLIP_HOME = join(fixtureRoot, "home");
     state.createBackend.mockClear();
     state.createTransport.mockClear();
+    state.persistProcess.mockClear();
     setupRunnerPrpWebSocketServer(createHttpServer(), { apiUrl: "http://127.0.0.1:3100" });
   });
   afterEach(async () => {
@@ -283,10 +290,10 @@ describe("provider-conformance runner transport and preinstalled provider pack (
       PAPERCLIP_RUNNER_CA_BUNDLE_PATH: caBundle, PAPERCLIP_RUNNER_REMOTE_BINARY_PATH: runnerBinary,
       PAPERCLIP_RUNNER_REMOTE_PROVIDER_PACK_PATH: packRoot };
     const createBackend = (environment: Record<string, string | undefined> = serverEnvironment,
-      sandboxEnvironment: Record<string, string> = runnerEnvironment) =>
+      sandboxEnvironment: Record<string, string> = runnerEnvironment, extra: Record<string, unknown> = {}) =>
       nativeOpenCodeConformanceBackendFactory({ db: fakeDb(tables) as never, execution, runnerInstanceId: ids.runner,
         runnerExecutionTarget: target as never, durableEnvironmentLeaseId: ids.lease,
-        runnerEnvironment: sandboxEnvironment }, environment)();
+        runnerEnvironment: sandboxEnvironment, ...extra }, environment)();
     /** Build the backend and run its control-plane registration: transport
      * selection, runnerd staging and the provider pack. */
     const register = async (...args: Parameters<typeof createBackend>) => {
@@ -309,7 +316,7 @@ describe("provider-conformance runner transport and preinstalled provider pack (
       return handle.completion.then(() => undefined, (error: unknown) => error);
     };
     return { ids, taskRoot, execution, manifest, installedPack, stagedPack, commands, refusals, register, launch,
-      serverEnvironment, runnerEnvironment, caBundle };
+      serverEnvironment, runnerEnvironment, caBundle, createBackend };
   }
 
   it("stages the runner trust bundle through its credentialless conformance purpose (CONF4b)", async () => {
@@ -459,6 +466,52 @@ describe("provider-conformance runner transport and preinstalled provider pack (
     // Another pack root or manifest.
     expect(check({ ...REMOTE_NATIVE_ERASER_ENV }, "/tmp/other-provider-pack")).toBe(false);
     expect(check({ ...REMOTE_NATIVE_ERASER_ENV }, installedPack, { ...manifest, digest: `sha256:${"9".repeat(64)}` })).toBe(false);
+  });
+
+  // CONF13. The probe backend had no onSpawn, so the hidden Run kept a null
+  // processPid/processStartedAt although its remote runner was launched and
+  // monitored. Worker dispatch records it through persistHeartbeatRunProcessMetadata.
+  const spawnedBackendOnSpawn = () => (state.createBackend.mock.calls.at(-1)![1] as {
+    onSpawn?: (meta: Record<string, unknown>) => Promise<void> }).onSpawn;
+  const remoteMarker = (runner: string) => ({ pid: 4242, processGroupId: null,
+    startedAt: new Date(1_700_000_000_000).toISOString(), identitySource: "remote_marker", remoteRunnerInstanceId: runner });
+
+  it("records the probe runner's remote process identity through the Worker lane's owner (CONF13)", async () => {
+    const { ids, createBackend } = await fixture();
+    await createBackend();
+    const onSpawn = spawnedBackendOnSpawn();
+    expect(typeof onSpawn).toBe("function");
+    await onSpawn!(remoteMarker(ids.runner));
+    expect(state.persistProcess).toHaveBeenCalledTimes(1);
+    expect(state.persistProcess.mock.calls[0]![1]).toBe(ids.run);
+    expect(state.persistProcess.mock.calls[0]![2]).toEqual(remoteMarker(ids.runner));
+  });
+
+  it("refuses a probe runner identity that is not this backend's exact remote marker (CONF13)", async () => {
+    const { ids, createBackend } = await fixture();
+    await createBackend();
+    const onSpawn = spawnedBackendOnSpawn()!;
+    const { identitySource: _source, remoteRunnerInstanceId: _runner, ...local } = remoteMarker(ids.runner);
+    await expect(onSpawn(local)).rejects.toMatchObject({ status: 403 });
+    await expect(onSpawn(remoteMarker(randomUUID()))).rejects.toMatchObject({ status: 403 });
+    await expect(onSpawn({ ...remoteMarker(ids.runner), identitySource: "local" })).rejects.toMatchObject({ status: 403 });
+    expect(state.persistProcess).not.toHaveBeenCalled();
+    // The owner's own refusal, or a vanished Run, is never treated as recorded.
+    state.persistProcess.mockResolvedValueOnce(null);
+    await expect(onSpawn(remoteMarker(ids.runner))).rejects.toMatchObject({ status: 403 });
+    state.persistProcess.mockRejectedValueOnce(new Error("Remote process marker does not match a current Native remote run binding"));
+    await expect(onSpawn(remoteMarker(ids.runner))).rejects.toThrow("Remote process marker does not match");
+  });
+
+  it("keeps the process-identity recorder when a caller supplies its own onSpawn (CONF13)", async () => {
+    const { ids, createBackend, serverEnvironment, runnerEnvironment } = await fixture();
+    const callerOnSpawn = vi.fn(async () => undefined);
+    await createBackend(serverEnvironment, runnerEnvironment, { onSpawn: callerOnSpawn });
+    const onSpawn = spawnedBackendOnSpawn()!;
+    expect(onSpawn).not.toBe(callerOnSpawn);
+    await onSpawn(remoteMarker(ids.runner));
+    expect(callerOnSpawn).not.toHaveBeenCalled();
+    expect(state.persistProcess).toHaveBeenCalledTimes(1);
   });
 
   it("reads runner operator settings only from the given server environment", () => {

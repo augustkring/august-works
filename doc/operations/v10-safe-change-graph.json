@@ -25006,7 +25006,7 @@
         },
         {
           "path": "server/src/services/native-opencode-conformance.ts",
-          "sha256": "a15785bbfc4270a9a296f8d79e9ef2ee19798f98c9a58a10c27a035495868706"
+          "sha256": "c0417e69fbedbed303bd243815bf8684086697cfe845c538a216edd20ddebceb"
         },
         {
           "path": "server/src/services/native-owner-release.ts",
@@ -32085,7 +32085,7 @@
         },
         {
           "path": "server/src/__tests__/helpers/managed-native-conversation-sandbox-host.ts",
-          "sha256": "7cceef74213185e25549a8abad47e1a18e1060955308a7b6fb2f5fb9105be1a8"
+          "sha256": "f78c061ab4adc4736a63adfd08470e9980216086c629bc5536e49904edb018df"
         },
         {
           "path": "server/src/__tests__/helpers/managed-native-infrastructure-cleanup.test.ts",
@@ -63703,7 +63703,7 @@
       "id": "source:server/src/services/native-opencode-conformance.ts",
       "kind": "current_source_owner",
       "path": "server/src/services/native-opencode-conformance.ts",
-      "sha256": "a15785bbfc4270a9a296f8d79e9ef2ee19798f98c9a58a10c27a035495868706",
+      "sha256": "c0417e69fbedbed303bd243815bf8684086697cfe845c538a216edd20ddebceb",
       "changeIds": [
         "SCR-V10-NATIVE-RUNTIME-AND-AUTHORITY"
       ],
@@ -72375,7 +72375,7 @@
       "id": "source:server/src/__tests__/helpers/managed-native-conversation-sandbox-host.ts",
       "kind": "current_source_owner",
       "path": "server/src/__tests__/helpers/managed-native-conversation-sandbox-host.ts",
-      "sha256": "7cceef74213185e25549a8abad47e1a18e1060955308a7b6fb2f5fb9105be1a8",
+      "sha256": "f78c061ab4adc4736a63adfd08470e9980216086c629bc5536e49904edb018df",
       "changeIds": [
         "SCR-V10-PRODUCT-IDENTITY-HELP-LANGUAGE"
       ],

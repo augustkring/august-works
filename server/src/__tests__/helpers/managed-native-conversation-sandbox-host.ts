@@ -4275,8 +4275,21 @@ async function configureManagedSandboxRun(input: ManagedSandboxHostInput,
             request.modelBrokerSession?.sessionDeadlineAt === witness.sessionDeadlineAt &&
             request.modelBrokerSession?.expectedCapabilityHash === witness.expectedCapabilityHash &&
             (nativePreparationPurpose === "native_harness_state" || launchedWorkerMonitor);
-          if (argsMatch && request.modelBrokerSession?.phase === "refresh" && result.exitCode === 0 && !result.timedOut &&
-              witness.identityMatched) {
+          // The provider-conformance probe holds one single-turn model
+          // credential and never refreshes its broker session (the executor
+          // omits `refresh` for the probe lane). Its liveness monitor is the
+          // same signed identity check without a broker-session phase. Only
+          // that exact credentialless monitor stands in for `refresh` here,
+          // and only for a conformance Host; a conformance refresh is invalid
+          // (CONF13). Worker and conversation Hosts are unchanged.
+          const conformanceLiveness = nativeConformanceMode && witness.phase !== "invalid" && !request.modelBrokerSession &&
+            !request.modelBrokerCredential && !request.brokerCredential && nativePreparationPurpose === "native_harness_state" &&
+            requestArgv[4] === witness.identityPath && requestArgv[5] === witness.nonce &&
+            requestArgv[6] === witness.runnerId && requestArgv[7] === String(witness.pid);
+          if (nativeConformanceMode && request.modelBrokerSession?.phase === "refresh") {
+            witness.phase = "invalid"; witness.identityVerdict = "mismatch";
+          } else if ((argsMatch && request.modelBrokerSession?.phase === "refresh" || conformanceLiveness) &&
+              result.exitCode === 0 && !result.timedOut && witness.identityMatched) {
             const [run] = expectedRunId === witness.runId
               ? await db.select({ processPid: heartbeatRuns.processPid, processStartedAt: heartbeatRuns.processStartedAt })
                 .from(heartbeatRuns).where(and(eq(heartbeatRuns.companyId, companyId), eq(heartbeatRuns.id, witness.runId))).limit(1)
