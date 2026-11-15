@@ -11,6 +11,8 @@ import {
 } from "@paperclipai/db";
 import { conflict, forbidden } from "../errors.js";
 import { isUuidLike } from "@paperclipai/shared";
+import { lockAnalyticalCompany } from "./analytical-privacy.js";
+import { lockMemoryPrivacy } from "./memory/memory-privacy.js";
 import { queuedCommentIdsFromRunContext, queuedCommentIdsFromWakePayload } from "./issue-queued-comment-queue.js";
 
 /** Resolve an explicit click from persisted receipts, never caller context or message authors. */
@@ -428,6 +430,18 @@ export async function captureRunIdentity(
 ) {
   // Lock acquisition serializes with steering delivery and its durable acknowledgement.
   return db.transaction(async (tx) => {
+    // Native source transactions (model dispatch intent and acknowledgement,
+    // tool-result capture) hold these company boundaries exclusively, lock the
+    // run row, then read the Task FOR SHARE. Join that order before this
+    // transaction locks the Task and then the run. Otherwise an agent request
+    // (the auth middleware calls this on every request of a run with an
+    // identity) can hold the Task while one of them holds the run, and
+    // PostgreSQL aborts one side as a deadlock. The shared mode waits for those
+    // exclusive holders but never upgrades a boundary that a caller already
+    // holds shared, and leaves concurrent identity captures unserialized here;
+    // they still serialize on the Task and run rows below.
+    await lockAnalyticalCompany(tx as unknown as Db, input.companyId, "read");
+    await lockMemoryPrivacy(tx as unknown as Db, input.companyId, "read");
     await lockIdentityTask(tx, input.companyId, input.runId);
     const [run] = await tx
       .select()

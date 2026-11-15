@@ -1,7 +1,9 @@
 import { randomUUID } from "node:crypto";
 import { eq, sql } from "drizzle-orm";
 import { afterAll, beforeAll, describe, expect, it } from "vitest";
-import { agentWakeupRequests, agents, companies, createDb, heartbeatRuns, heartbeatRunEvents, issueComments, issueThreadInteractions, issues } from "@paperclipai/db";
+import { agentWakeupRequests, agents, companies, createDb, heartbeatRuns, heartbeatRunEvents, issueComments, issueThreadInteractions, issues, type Db } from "@paperclipai/db";
+import { lockAnalyticalCompany } from "../services/analytical-privacy.js";
+import { lockMemoryPrivacy } from "../services/memory/memory-privacy.js";
 import { getEmbeddedPostgresTestSupport, startEmbeddedPostgresTestDatabase } from "./helpers/embedded-postgres.js";
 import { acceptSteeredIdentity, captureRunIdentity, initializeRunIdentity, listRunIdentityContexts, rejectSteeredIdentity, reserveSteeredIdentity } from "../services/run-identity.js";
 
@@ -239,6 +241,38 @@ const support = await getEmbeddedPostgresTestSupport();
       await tx.update(heartbeatRuns).set({ updatedAt: new Date() }).where(eq(heartbeatRuns.id, input.runId));
     });
     await expect(initialization).resolves.toMatchObject({ responsibleUserId: "A" });
+  });
+
+  it("does not deadlock agent identity capture against a Native source transaction that holds the run", async () => {
+    // Native source transactions (dispatch intent, acknowledgement, tool-result
+    // capture) take the company privacy boundaries, lock the run, then read the
+    // Task FOR SHARE. The auth middleware captures identity on every agent
+    // request. Before it joined that order it locked the Task and then waited
+    // on the run, and PostgreSQL aborted one side as a deadlock.
+    const input = await seed();
+    await initializeRunIdentity(db, { ...input, messageIds: [input.messageIds[0]], responsibleUserId: "A", cause: "instruction" });
+    let capture!: ReturnType<typeof captureRunIdentity>;
+    await db.transaction(async (rawTx) => {
+      const tx = rawTx as unknown as Db;
+      await lockAnalyticalCompany(tx, input.companyId);
+      await lockMemoryPrivacy(tx, input.companyId);
+      await tx.select().from(heartbeatRuns).where(eq(heartbeatRuns.id, input.runId)).for("update");
+      const [backend] = await tx.execute(sql`select pg_backend_pid() as pid`) as unknown as Array<{ pid: number }>;
+      capture = captureRunIdentity(db, input);
+      capture.catch(() => undefined); // Asserted after this transaction settles.
+      // Wait until the capture is blocked by this transaction before reading the Task.
+      let waiting = false;
+      for (let attempt = 0; attempt < 200; attempt++) {
+        const [state] = await db.execute(sql`select exists (
+          select 1 from pg_stat_activity where ${backend.pid} = any(pg_blocking_pids(pid))
+        ) as waiting`) as unknown as Array<{ waiting: boolean }>;
+        if (state.waiting) { waiting = true; break; }
+        await new Promise(resolve => setTimeout(resolve, 10));
+      }
+      expect(waiting).toBe(true);
+      await tx.select({ id: issues.id }).from(issues).where(eq(issues.id, input.issueId)).for("share");
+    });
+    await expect(capture).resolves.toMatchObject({ context: { responsibleUserId: "A" } });
   });
 
   it("does not turn a company-default fallback into personal consent on continuation", async () => {
