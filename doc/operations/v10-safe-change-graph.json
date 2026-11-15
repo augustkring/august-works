@@ -7686,7 +7686,7 @@
         },
         {
           "path": "server/src/services/native-runtime/native-session-executor.ts",
-          "sha256": "1b58ce3ef952dd36ab4cbfcc44e88be6178eb7bce2ddf84977b69d0688387756"
+          "sha256": "fdd1bc96cc8f0bba618303774885bcdacf5060a963e6b97c19d1d9ff23305cad"
         },
         {
           "path": "server/src/services/native-runtime/native-session-resume.test.ts",
@@ -9364,7 +9364,7 @@
         },
         {
           "path": "server/src/services/native-runtime/native-session-executor.ts",
-          "sha256": "1b58ce3ef952dd36ab4cbfcc44e88be6178eb7bce2ddf84977b69d0688387756"
+          "sha256": "fdd1bc96cc8f0bba618303774885bcdacf5060a963e6b97c19d1d9ff23305cad"
         },
         {
           "path": "server/src/services/native-runtime/native-tool-task-privacy.integration.test.ts",
@@ -24698,11 +24698,11 @@
         },
         {
           "path": "packages/paperclip-runner/src/live/runnerd-codex-transport.test.ts",
-          "sha256": "d236971569b3ffc901e149ad123a733ba5015ee06829f58aee54b952c319dbe1"
+          "sha256": "f5a37927d8bf9553bdc0c4c49af6b736cc771080d95ba5cbe229241e6a5078df"
         },
         {
           "path": "packages/paperclip-runner/src/live/runnerd-codex-transport.ts",
-          "sha256": "d4fe1bf12a49cfb61aaf4c1a7bf4de6f43ab258b5e6cddab2bfd452da7c8a2b9"
+          "sha256": "b90f90eaec3321837821e9b54488d1daacaec7d1725db8670f6a1638cdeceb69"
         },
         {
           "path": "packages/paperclip-runner/src/native-session-runtime.test.ts",
@@ -49807,7 +49807,7 @@
       "id": "source:server/src/services/native-runtime/native-session-executor.ts",
       "kind": "current_source_owner",
       "path": "server/src/services/native-runtime/native-session-executor.ts",
-      "sha256": "1b58ce3ef952dd36ab4cbfcc44e88be6178eb7bce2ddf84977b69d0688387756",
+      "sha256": "fdd1bc96cc8f0bba618303774885bcdacf5060a963e6b97c19d1d9ff23305cad",
       "changeIds": [
         "SCR-V10-HOTSPOT-05",
         "SCR-V10-HOTSPOT-06"
@@ -62545,7 +62545,7 @@
       "id": "source:packages/paperclip-runner/src/live/runnerd-codex-transport.test.ts",
       "kind": "current_source_owner",
       "path": "packages/paperclip-runner/src/live/runnerd-codex-transport.test.ts",
-      "sha256": "d236971569b3ffc901e149ad123a733ba5015ee06829f58aee54b952c319dbe1",
+      "sha256": "f5a37927d8bf9553bdc0c4c49af6b736cc771080d95ba5cbe229241e6a5078df",
       "changeIds": [
         "SCR-V10-NATIVE-RUNTIME-AND-AUTHORITY"
       ],
@@ -62560,7 +62560,7 @@
       "id": "source:packages/paperclip-runner/src/live/runnerd-codex-transport.ts",
       "kind": "current_source_owner",
       "path": "packages/paperclip-runner/src/live/runnerd-codex-transport.ts",
-      "sha256": "d4fe1bf12a49cfb61aaf4c1a7bf4de6f43ab258b5e6cddab2bfd452da7c8a2b9",
+      "sha256": "b90f90eaec3321837821e9b54488d1daacaec7d1725db8670f6a1638cdeceb69",
       "changeIds": [
         "SCR-V10-NATIVE-RUNTIME-AND-AUTHORITY"
       ],

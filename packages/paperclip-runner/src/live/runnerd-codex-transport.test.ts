@@ -502,6 +502,60 @@ it("carries the provider attachment seed across consecutive authority rotations"
   });
 });
 
+it("accepts an archived predecessor identity only with exact verified cold-handoff evidence (CONF15 A2)", async () => {
+  const { mkdtempSync, mkdirSync, rmSync, writeFileSync } = await import("node:fs");
+  const prior = { runnerInstanceId: "runner-cold", environmentLeaseId: "lease-run-one",
+    runId: "run-one", normalizedSessionId: "session-cold" };
+  const desired = { runnerInstanceId: "runner-cold", environmentLeaseId: "lease-run-two",
+    runId: "run-two", normalizedSessionId: "session-cold", turnId: "turn-run-two", itemId: "item-run-two" };
+  const root = mkdtempSync(join(tmpdir(), "cold-lease-handoff-"));
+  try {
+    const archived = resolve(root, "continuity-breaks", "token-1", "control-plane");
+    mkdirSync(archived, { recursive: true });
+    const state = { schema: "paperclip.runner.durable.control-plane-state.v1",
+      identity: { ...prior, turnId: "turn-run-one", itemId: "item-run-one" },
+      commands: [{ type: "run.prepare", payload: { provider: { kind: "opencode" } } }] };
+    writeFileSync(resolve(archived, "control-plane-state.json"), JSON.stringify(state));
+    const handoff = { archivedControlPlaneDirectory: archived, priorIdentity: prior, evidenceDigest: "a".repeat(64) };
+    const seed = (value = handoff, target = desired, local = true) =>
+      runnerdRecoveryInternals.coldLeaseHandoffSeedState(root, value, target, local);
+    expect(seed()).toEqual(state);
+    // The archived state is only a seed: the next run.attach targets the new Run and lease.
+    expect(runnerdRecoveryInternals.rotatedRunAttachPayload(seed(), desired, null, undefined))
+      .toMatchObject({ provider: { kind: "opencode" } });
+    const refused = "native_runner_cold_lease_handoff_unproven";
+    // Missing or malformed evidence digest.
+    expect(() => seed({ ...handoff, evidenceDigest: "" })).toThrow(refused);
+    // Another runner instance, session, the same Run, or the same lease (ordinary rotation).
+    expect(() => seed(handoff, { ...desired, runnerInstanceId: "runner-other" })).toThrow(refused);
+    expect(() => seed(handoff, { ...desired, normalizedSessionId: "session-other" })).toThrow(refused);
+    expect(() => seed(handoff, { ...desired, runId: prior.runId })).toThrow(refused);
+    expect(() => seed(handoff, { ...desired, environmentLeaseId: prior.environmentLeaseId })).toThrow(refused);
+    // Evidence naming another prior Run or lease than the archived identity.
+    expect(() => seed({ ...handoff, priorIdentity: { ...prior, runId: "run-zero" } })).toThrow(refused);
+    expect(() => seed({ ...handoff, priorIdentity: { ...prior, environmentLeaseId: "lease-zero" } })).toThrow(refused);
+    // Only an archive under this root's continuity-breaks is accepted.
+    const outside = resolve(root, "authority-epochs", "epoch-1", "control-plane");
+    mkdirSync(outside, { recursive: true });
+    writeFileSync(resolve(outside, "control-plane-state.json"), JSON.stringify(state));
+    expect(() => seed({ ...handoff, archivedControlPlaneDirectory: outside })).toThrow(refused);
+    // An active control plane or local runner state is not a fresh runner.
+    mkdirSync(resolve(root, "runner"), { recursive: true });
+    writeFileSync(resolve(root, "runner", "runner-state.json"), "{}");
+    expect(() => seed()).toThrow(refused);
+    expect(seed(handoff, desired, false)).toEqual(state);
+    rmSync(resolve(root, "runner"), { recursive: true });
+    mkdirSync(resolve(root, "control-plane"));
+    expect(() => seed()).toThrow(refused);
+    rmSync(resolve(root, "control-plane"), { recursive: true });
+    // Warm-transition evidence in the archive is refused.
+    writeFileSync(resolve(archived, "control-plane-state.json"), JSON.stringify({ ...state, warmTransition: {} }));
+    expect(() => seed()).toThrow(refused);
+  } finally {
+    rmSync(root, { recursive: true, force: true });
+  }
+});
+
 it("replays the durable run attachment outcome and latest provider identity", () => {
   expect(
     runnerdRecoveryInternals.recoveredRunAttachment({

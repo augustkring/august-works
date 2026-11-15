@@ -35,7 +35,7 @@ import { REMOTE_NATIVE_ERASER_ENV, REMOTE_NATIVE_RUNTIME_ASSET_ERASURE_PROBE_SCR
   REMOTE_RUNNER_PROCESS_FINGERPRINT_SCRIPT, REMOTE_NATIVE_SESSION_FENCE_ACQUIRE_SCRIPT,
   REMOTE_NATIVE_SESSION_FENCE_RELEASE_SCRIPT } from "./remote-runner-identity.js";
 export { REMOTE_RUNNER_CHILD_LAUNCH_SCRIPT };
-import { remoteLeaseCleanupScope } from "../remote-execution-termination.js";
+import { hasRemoteTerminationReceipt, remoteLeaseCleanupScope } from "../remote-execution-termination.js";
 import {
   createRemoteRuntimeAssetLocator,
   isRemoteRuntimeAssetLocator,
@@ -126,7 +126,7 @@ import {
   paperclipSemanticAction,
 } from "../../vendor/paperclip-runner/index.js";
 import { managedOpenCodeTerminalToolSchemas } from "./managed-opencode-terminal-tools.js";
-import type { AdapterExecutionTarget } from "@paperclipai/adapter-utils/execution-target";
+import type { AdapterExecutionTarget, SandboxLeaseAcquisition } from "@paperclipai/adapter-utils/execution-target";
 import { createNativeSshCommandRunner } from "./native-ssh-command-runner.js";
 import type { CommandManagedRuntimeRunner } from "@paperclipai/adapter-utils/command-managed-runtime";
 import {
@@ -1989,6 +1989,11 @@ function runnerdStateBase(): string {
       "durable-sessions",
     )
   );
+}
+
+/** The session scope digest a failover backup stamp records. */
+export function nativeSessionScopeSha256(execution: NativeExecutionInput): string {
+  return createHash("sha256").update(nativeSessionScopeKey(execution)).digest("hex");
 }
 
 function scopedRunnerdStateRoot(execution: NativeExecutionInput): string {
@@ -14880,6 +14885,156 @@ export function serializeNativeRemoteCommands(runner: CommandManagedRuntimeRunne
   return { ...runner, execute };
 }
 
+/** Evidence that a prior Run's runner and lease are settled, so a fresh runner
+ * may resume the same provider session on the current Run's new lease (CONF15
+ * A2 "cold lease handoff"). Every condition is read from durable records; the
+ * prior Stop is proven by the termination receipt stored at release, never by
+ * re-verifying it after the successor's admission (CONF14). */
+export type NativeColdLeaseHandoffEvidence = {
+  priorIdentity: { runnerInstanceId: string; environmentLeaseId: string; runId: string; normalizedSessionId: string };
+  currentEnvironmentLeaseId: string;
+  /** Present only when the current lease is on another provider lease: the one
+   * failover backup the existing restore path must restore, nothing else. */
+  backup: { root: string; manifestSha256: string } | null;
+  evidenceDigest: string;
+};
+
+/** Closed refusal codes. `not_applicable` means no cold handoff was asked for
+ * (no prior Run on another lease); every other code fails closed. */
+export const NATIVE_COLD_LEASE_HANDOFF_REFUSALS = [
+  "not_applicable", "scope_mismatch", "warm_owner_present", "prior_stop_unverified",
+  "prior_coordinator_unsettled", "current_lease_mismatch", "backup_missing", "backup_stale", "backup_foreign",
+] as const;
+export type NativeColdLeaseHandoffRefusal = (typeof NATIVE_COLD_LEASE_HANDOFF_REFUSALS)[number];
+export type NativeColdLeaseHandoffVerification =
+  | { ok: true; evidence: NativeColdLeaseHandoffEvidence }
+  | { ok: false; refusal: NativeColdLeaseHandoffRefusal };
+
+const SETTLED_NATIVE_FINALIZATION_PHASES = new Set(["committed", "applied", "terminal_failure"]);
+
+/** A hidden provider-conformance probe Run never produces a result, assessment
+ * or decision: `releaseNativeOpenCodeConformanceCoordinator` terminalizes the
+ * Run and releases only the coordinator lease, keeping phase `observed` by
+ * design. That exact released shape, on that exact hidden Run, is its settled
+ * state. The settle receipt (the lease's remote termination receipt) is
+ * checked separately by the caller. No ordinary Run is accepted here. */
+function nativeConformanceProbeCoordinatorReleased(
+  coordinator: typeof nativeRunFinalizations.$inferSelect,
+  prior: typeof heartbeatRuns.$inferSelect,
+  task: { hiddenAt: Date | null; harnessKind: string | null } | undefined,
+): boolean {
+  const result = record(prior.resultJson);
+  return coordinator.phase === "observed" && coordinator.leaseOwner === null && coordinator.leaseExpiresAt === null &&
+    coordinator.resultId === null && coordinator.assessmentId === null && coordinator.decisionId === null &&
+    coordinator.issueId === prior.nativeIssueId && prior.triggerDetail === "provider_conformance" &&
+    prior.runtimeMode === "native" && prior.nativePhase === "observed" && result.nativeOpenCodeConformanceProbe === true &&
+    Boolean(task?.hiddenAt) && task?.harnessKind === "provider_conformance";
+}
+
+export async function verifyNativeColdLeaseHandoff(input: {
+  db: Db;
+  root: string;
+  identity: Record<string, unknown> | null;
+  execution: NativeExecutionInput;
+  runnerInstanceId: string;
+  target: {
+    environmentId?: string | null; leaseId?: string | null; remoteCwd: string;
+    reusableLeaseConfigured?: boolean; sandboxLeaseAcquisition?: SandboxLeaseAcquisition | null;
+  };
+}): Promise<NativeColdLeaseHandoffVerification> {
+  const { db, execution } = input;
+  const refuse = (refusal: NativeColdLeaseHandoffRefusal): NativeColdLeaseHandoffVerification => ({ ok: false, refusal });
+  const companyId = execution.binding.companyId;
+  const identity = input.identity;
+  // A handoff is asked for only by a prior Run of this session on another lease.
+  if (!durableIdentityMatchesSession(identity, execution) || identity.runId === execution.binding.runId ||
+    !input.target.leaseId || identity.environmentLeaseId === input.target.leaseId) return refuse("not_applicable");
+  // (1) Same company, Agent, Task, session scope and runner instance.
+  const [prior] = await db.select().from(heartbeatRuns).where(and(eq(heartbeatRuns.companyId, companyId),
+    eq(heartbeatRuns.id, identity.runId), eq(heartbeatRuns.agentId, execution.binding.agentId))).limit(1);
+  let priorExecution: NativeExecutionInput | null = null;
+  try { priorExecution = prior ? parseNativeExecutionInput(record(prior.runnerProfileJson).nativeExecutionInput) : null; }
+  catch { priorExecution = null; }
+  if (!prior || !priorExecution || identity.runnerInstanceId !== input.runnerInstanceId ||
+    prior.runnerInstanceId !== identity.runnerInstanceId || priorExecution.binding.runId !== prior.id ||
+    priorExecution.binding.companyId !== companyId || priorExecution.binding.agentId !== execution.binding.agentId ||
+    priorExecution.binding.issueId !== execution.binding.issueId ||
+    nativeSessionScopeKey(priorExecution) !== nativeSessionScopeKey(execution)) return refuse("scope_mismatch");
+  // (2) No warm-transition evidence and no in-memory session owner (busy or idle).
+  if (hasRetainedWarmTransitionEvidence(input.root) || warmNativeSessions.has(nativeSessionScopeKey(execution)))
+    return refuse("warm_owner_present");
+  // (3) Verified Stop of the prior Run: terminal, runner authority suspended,
+  // recorded process identity (CONF13), no pending process cleanup, and its
+  // lease settled for that Run with the stored remote termination receipt.
+  const verification = await verifyPriorRunnerdStateForSessionScope({ db, root: input.root, identity, execution,
+    allowVerifiedBackup: true, allowRetainedWarmRunner: false });
+  const [priorLease] = await db.select().from(environmentLeases).where(and(eq(environmentLeases.companyId, companyId),
+    eq(environmentLeases.id, identity.environmentLeaseId), eq(environmentLeases.heartbeatRunId, prior.id))).limit(1);
+  if (verification !== "verified" || !TERMINAL_HEARTBEAT_RUN_STATUSES.has(prior.status) || !prior.finishedAt ||
+    prior.processPid === null || prior.processStartedAt === null || prior.nativeProcessCleanupPending !== false ||
+    !priorLease || !hasRemoteTerminationReceipt(priorLease)) return refuse("prior_stop_unverified");
+  // (4) The prior Run's finalization coordinator is settled (or, only for the
+  // hidden conformance probe, released in its by-design `observed` shape).
+  const [coordinator] = await db.select().from(nativeRunFinalizations).where(and(
+    eq(nativeRunFinalizations.companyId, companyId), eq(nativeRunFinalizations.runId, prior.id))).limit(1);
+  const [priorTask] = prior.nativeIssueId ? await db.select({ hiddenAt: issues.hiddenAt, harnessKind: issues.harnessKind })
+    .from(issues).where(and(eq(issues.companyId, companyId), eq(issues.id, prior.nativeIssueId))).limit(1) : [];
+  if (!coordinator || coordinator.leaseOwner !== null || !(SETTLED_NATIVE_FINALIZATION_PHASES.has(coordinator.phase) ||
+    nativeConformanceProbeCoordinatorReleased(coordinator, prior, priorTask))) return refuse("prior_coordinator_unsettled");
+  // (5) The current lease is this Run's, active, on the same environment,
+  // provider and remoteCwd. Another provider lease is accepted only when this
+  // acquisition goes through the existing verified-backup restore path.
+  const [currentLease] = await db.select().from(environmentLeases).where(and(eq(environmentLeases.companyId, companyId),
+    eq(environmentLeases.id, input.target.leaseId), eq(environmentLeases.heartbeatRunId, execution.binding.runId))).limit(1);
+  const priorCwd = priorLease.metadata?.remoteCwd, currentCwd = currentLease?.metadata?.remoteCwd;
+  const acquisition = input.target.sandboxLeaseAcquisition ?? null;
+  if (!currentLease || currentLease.status !== "active" || !input.target.environmentId ||
+    currentLease.environmentId !== input.target.environmentId || priorLease.environmentId !== currentLease.environmentId ||
+    !currentLease.provider || currentLease.provider === "local" || priorLease.provider !== currentLease.provider ||
+    !currentLease.providerLeaseId || !priorLease.providerLeaseId || typeof priorCwd !== "string" ||
+    priorCwd !== currentCwd || currentCwd !== input.target.remoteCwd ||
+    (acquisition !== null && acquisition.providerLeaseId !== currentLease.providerLeaseId)) return refuse("current_lease_mismatch");
+  let backup: NativeColdLeaseHandoffEvidence["backup"] = null;
+  if (priorLease.providerLeaseId !== currentLease.providerLeaseId) {
+    const restoresBackup = acquisition?.outcome === "replacement"
+      ? acquisition.previousProviderLeaseId === priorLease.providerLeaseId
+      : shouldRestoreNativeHarnessBackupIntoSandbox({ acquisitionOutcome: acquisition?.outcome ?? null,
+          reusableLeaseConfigured: input.target.reusableLeaseConfigured, backupAvailable: true });
+    if (!restoresBackup) return refuse("current_lease_mismatch");
+    // (6) The backup the restore path will use: present and intact, the latest
+    // one taken from the prior Run's provider lease, and not foreign.
+    const currentRoot = resolve(harnessBackupRoot(input.root), "current");
+    const verified = verifyNativeHarnessBackup({ root: input.root, execution, runnerInstanceId: input.runnerInstanceId });
+    if (!verified || verified.root !== currentRoot) {
+      const manifestPath = resolve(currentRoot, "manifest.json");
+      if (!existsSync(manifestPath)) return refuse("backup_missing");
+      // A manifest that exists but is not a compatible intact backup for this
+      // exact session, runner instance and provider profile is foreign.
+      return refuse(compatibleNativeHarnessBackupManifests({ root: input.root, execution,
+        runnerInstanceId: input.runnerInstanceId }).some(candidate => candidate.root === currentRoot)
+        ? "backup_missing" : "backup_foreign");
+    }
+    const manifestSha256 = `sha256:${createHash("sha256").update(readFileSync(resolve(currentRoot, "manifest.json"))).digest("hex")}`;
+    const stamp = record(priorLease.metadata?.nativeHarnessBackup);
+    if (stamp.sessionScopeSha256 !== nativeSessionScopeSha256(execution) || stamp.normalizedSessionId !== nativeSessionKey(execution) ||
+      stamp.runnerInstanceId !== input.runnerInstanceId) return refuse("backup_foreign");
+    if (stamp.schema !== "paperclip.native-harness-backup-stamp.v2" || stamp.manifestSha256 !== manifestSha256 ||
+      stamp.authorizedProviderLeaseId !== priorLease.providerLeaseId ||
+      stamp.sourceProviderLeaseId !== priorLease.providerLeaseId ||
+      verified.manifest.sourceProviderLeaseId !== priorLease.providerLeaseId ||
+      stamp.completedAt !== verified.manifest.completedAt) return refuse("backup_stale");
+    backup = { root: currentRoot, manifestSha256 };
+  }
+  const priorIdentity = { runnerInstanceId: identity.runnerInstanceId, environmentLeaseId: identity.environmentLeaseId,
+    runId: identity.runId, normalizedSessionId: identity.normalizedSessionId };
+  return { ok: true, evidence: { priorIdentity, currentEnvironmentLeaseId: currentLease.id, backup,
+    evidenceDigest: nativeSha256({ version: 2, priorIdentity, currentRunId: execution.binding.runId,
+      currentEnvironmentLeaseId: currentLease.id, receipt: priorLease.metadata?.remoteExecutionTermination,
+      processPid: prior.processPid, processStartedAt: prior.processStartedAt.toISOString(),
+      coordinatorPhase: coordinator.phase, priorProviderLeaseId: priorLease.providerLeaseId,
+      providerLeaseId: currentLease.providerLeaseId, remoteCwd: currentCwd, backupManifestSha256: backup?.manifestSha256 ?? null }) } };
+}
+
 async function createRunnerdBackendWithinSessionClaim(
   input: Parameters<typeof createRunnerdBackend>[0],
   sessionScopeId: string,
@@ -15380,7 +15535,19 @@ async function createRunnerdBackendWithinSessionClaim(
   }
   const root = runnerdStateRoot(input.execution);
   const durableIdentity = readRunnerdDurableIdentity(root);
-  const durableBinding = retainedTransition
+  // CONF15 A2: a cold lease handoff is accepted only with the complete
+  // durable evidence above. A refused handoff fails closed with its closed
+  // code; when none is asked for, the durable binding is kept unchanged.
+  const coldLeaseHandoffVerification = !retainedTransition && managedOpenCodeDataHome &&
+    remoteTarget?.transport === "sandbox" && input.restartRecovery === undefined
+    ? await verifyNativeColdLeaseHandoff({ db: input.db, root, identity: durableIdentity, execution: input.execution,
+        runnerInstanceId: input.runnerInstanceId, target: remoteTarget })
+    : null;
+  if (coldLeaseHandoffVerification && !coldLeaseHandoffVerification.ok &&
+    coldLeaseHandoffVerification.refusal !== "not_applicable")
+    throw new Error(`native_cold_lease_handoff_${coldLeaseHandoffVerification.refusal}`);
+  const coldLeaseHandoff = coldLeaseHandoffVerification?.ok ? coldLeaseHandoffVerification.evidence : null;
+  const durableBinding = coldLeaseHandoff ? null : retainedTransition
     ? loadRunnerdDurableBinding(input.execution, retainedTransition)
     : durableIdentityMatchesSession(durableIdentity, input.execution)
       ? durableIdentity
@@ -15388,6 +15555,7 @@ async function createRunnerdBackendWithinSessionClaim(
   const effectiveRunnerInstanceId =
     durableBinding?.runnerInstanceId ?? input.runnerInstanceId;
   const effectiveEnvironmentLeaseId =
+    coldLeaseHandoff?.currentEnvironmentLeaseId ??
     durableBinding?.environmentLeaseId ??
     input.durableEnvironmentLeaseId ??
     (remoteTarget?.transport === "sandbox" && remoteTarget.leaseId
@@ -16313,6 +16481,11 @@ async function createRunnerdBackendWithinSessionClaim(
       runnerInstanceId: input.runnerInstanceId,
     });
     if (!backup) throw new Error("runner_harness_backup_unavailable");
+    // A cold lease handoff restores exactly the backup it verified (CONF15 A2).
+    if (coldLeaseHandoff?.backup && (backup.root !== coldLeaseHandoff.backup.root ||
+      `sha256:${createHash("sha256").update(readFileSync(resolve(backup.root, "manifest.json"))).digest("hex")}` !==
+        coldLeaseHandoff.backup.manifestSha256))
+      throw new Error("native_cold_lease_handoff_backup_stale");
     await measureNativeRunnerSpan(
       input.trace,
       "harness_state.failover_restore",
@@ -16461,6 +16634,11 @@ async function createRunnerdBackendWithinSessionClaim(
                       bytesTransferred: 0,
                     },
                   });
+                  // A cold handoff onto another provider lease is accepted
+                  // only through the verified-backup restore below.
+                  if (coldLeaseHandoff?.backup && sandboxLeaseAcquisition?.outcome !== "replacement" &&
+                    !restoreIntoCreatedSandbox)
+                    throw new Error("native_cold_lease_handoff_current_lease_mismatch");
                   if (sandboxLeaseAcquisition?.outcome === "resumed") {
                     const reuseStartedAtMs = Date.now();
                     const state = await measureNativeRunnerSpan(
@@ -17027,6 +17205,36 @@ async function createRunnerdBackendWithinSessionClaim(
     }
     remotePrepared = false;
   };
+  // CONF15 A2: archive only the prior Run's controller-side PRP control-plane
+  // and runner identity. Provider data stays: the remote filesystem root and
+  // provider homes in place (or restored from the verified failover backup
+  // on another provider lease), and the prior Run's remote runner state moves
+  // aside only through the transport's external archive after that restore.
+  let coldLeaseHandoffArchive: string | null = null;
+  const archiveColdLeaseHandoffIdentity = (): string => {
+    if (!coldLeaseHandoff) throw new Error("native_runner_cold_lease_handoff_unproven");
+    if (coldLeaseHandoffArchive) return coldLeaseHandoffArchive;
+    if (hasRetainedWarmTransitionEvidence(root)) throw new Error("native_runner_warm_transition_recovery_unproven");
+    const current = readRunnerdDurableIdentity(root);
+    if (!durableIdentityMatchesSession(current, input.execution) ||
+      current.runId !== coldLeaseHandoff.priorIdentity.runId ||
+      current.environmentLeaseId !== coldLeaseHandoff.priorIdentity.environmentLeaseId ||
+      current.runnerInstanceId !== coldLeaseHandoff.priorIdentity.runnerInstanceId)
+      throw new Error("native_runner_cold_lease_handoff_unproven");
+    const archiveRoot = resolve(root, "continuity-breaks", `${Date.now()}-${randomUUID()}`);
+    mkdirSync(archiveRoot, { recursive: true, mode: 0o700 });
+    for (const name of ["control-plane", "runner"]) {
+      const source = resolve(root, name);
+      if (existsSync(source)) renameSync(source, resolve(archiveRoot, name));
+    }
+    coldLeaseHandoffArchive = resolve(archiveRoot, "control-plane");
+    return coldLeaseHandoffArchive;
+  };
+  const coldLeaseHandoffTransport = coldLeaseHandoff ? {
+    archivedControlPlaneDirectory: archiveColdLeaseHandoffIdentity(),
+    priorIdentity: coldLeaseHandoff.priorIdentity,
+    evidenceDigest: coldLeaseHandoff.evidenceDigest,
+  } : undefined;
   const localRecoveryProcess =
     input.restartRecovery?.kind === "reattach_existing_runner"
       ? input.restartRecovery.process
@@ -17254,6 +17462,7 @@ async function createRunnerdBackendWithinSessionClaim(
           input.execution.interactionResponses.length > 0
             ? "allow_replacement_after_governed_wait"
             : undefined),
+        ...(coldLeaseHandoffTransport ? { coldLeaseHandoff: coldLeaseHandoffTransport } : {}),
         prpIdentity: {
           runnerInstanceId: effectiveRunnerInstanceId,
           environmentLeaseId: effectiveEnvironmentLeaseId,
