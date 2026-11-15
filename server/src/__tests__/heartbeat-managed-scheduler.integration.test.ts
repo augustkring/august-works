@@ -404,9 +404,11 @@ function managedLivenessTool(body: Record<string, unknown>, wanted: string): str
 
 function managedLivenessFinish(input: ManagedReplyInput,
   disposition: "done" | "yielded", summary: string,
-  continuation?: { kind: "response_wake"; summary: string; idempotencyKey: string }) {
+  continuation?: { kind: "response_wake"; summary: string; idempotencyKey: string },
+  options: { incompleteClaim?: boolean } = {}) {
   const contract = input.execution.completionContract.contract;
-  const waiting = disposition === "yielded";
+  // An incomplete claim reports unknown criteria and blocking remaining work.
+  const waiting = disposition === "yielded" || options.incompleteClaim === true;
   return { stop_reason: "tool_use" as const, content: [{ type: "tool_use" as const,
     id: `managed-liveness-finish-${input.runId}-${input.callIndex}`,
     name: managedLivenessTool(input.body, "paperclip_finish"), input: {
@@ -582,8 +584,19 @@ it("reconstructs the current source-qualified v2 frame on a same-Task new Run wi
       const currentProfile = current.runnerProfileJson as Record<string, unknown>;
       const currentInput = parseNativeExecutionInput(currentProfile.nativeExecutionInput);
       const currentContinuation = (current.contextSnapshot as Record<string, unknown>).executionContinuation as Record<string, unknown>;
-      const resumeDelta = currentContinuation.resumeDelta as Record<string, unknown>;
-      expect(resumeDelta.baseRunId).toBe(prior.id);
+      // Run 1 delivered an empty Task history (an assignment wake with no
+      // comments), so there is no delta baseline: the producer builds a resume
+      // delta only over delivered messages, and adding a comment before Run 1
+      // changes its admission (it then fails at setup). The resume binding that
+      // does exist is heartbeat's retained-run source: Run 2's admitted
+      // `retained_run` input is Run 1, with no delta and no previous context.
+      const priorContinuation = (prior.contextSnapshot as Record<string, unknown>).executionContinuation as Record<string, unknown>;
+      expect(priorContinuation.messages).toEqual([]);
+      expect(currentContinuation.resumeDelta).toBeUndefined();
+      const retainedInputs = nativeRunInputSourceReceiptSchema.parse(currentProfile.nativeInputSourceReceipt).bootstrap.inputs
+        .filter(source => source.kind === "retained_run");
+      expect(retainedInputs).toEqual([expect.objectContaining({ kind: "retained_run", runId: prior.id })]);
+      expect(retainedSummary!.sourceRunId).toBe(prior.id);
       if (currentInput.schema !== "paperclip.native-execution-input.v4" ||
         !("continuationPrompt" in currentInput) || !currentInput.continuationPrompt)
         throw new Error("same_task_new_run_compact_input_missing");
@@ -623,13 +636,12 @@ it.each([false, true])("actual managed OpenCode plan-only output queues one boun
     providerReply: input => {
       if (!sourceRunId) sourceRunId = input.runId;
       if (input.runId === sourceRunId) {
-        // A yielded result must carry a response_wake continuation (runner
-        // result schema). This case still expects a liveness continuation for
-        // a plan-only yield; that expectation is pending a decision (ledger T3).
-        if (input.callIndex === 1) return managedLivenessFinish(input, "yielded",
-          "I will inspect the repository next and implement the requested fix.",
-          { kind: "response_wake", summary: "Continue with the recorded next action.",
-            idempotencyKey: `managed-liveness-next:${input.runId}` });
+        // Plan-only output: a final report with only a described next action,
+        // no work evidence and no continuation. A yielded result must carry a
+        // continuation (runner result schema), so the schema-valid form is a
+        // `done` report whose claim is honestly incomplete (ledger T3).
+        if (input.callIndex === 1) return managedLivenessFinish(input, "done",
+          "I will inspect the repository next and implement the requested fix.", undefined, { incompleteClaim: true });
         if (input.callIndex === 2) return { stop_reason: "end_turn" as const,
           content: [{ type: "text" as const, text: "I have recorded the next action for the continuation." }] };
       }
