@@ -32,8 +32,8 @@ import { PROCESS_START_REQUESTED } from "./native-local-process-stop.js";
 import { claimNativeExecutionCoordinator, failUnclaimedNativeOpenCodeConformanceRun,
   releaseNativeOpenCodeConformanceCoordinator, recordNativeModelInputDispatchAcknowledgement,
   recordNativeModelInputDispatchIntent } from "./native-runtime/native-session-executor.js";
-import { nativeOpenCodeConformancePrompt, NATIVE_OPENCODE_CONFORMANCE_SYSTEM,
-  nativeOpenCodeConformanceSourceDigest, type NativeOpenCodeConformanceSourceAuthority } from "./orchestration/native-opencode-conformance-source.js";
+import { nativeOpenCodeConformancePrompt,
+  type NativeOpenCodeConformanceSourceAuthority } from "./orchestration/native-opencode-conformance-source.js";
 import { nativeSha256 } from "./native-runtime/canonical.js";
 import { resolvePaperclipInstanceRoot } from "../home-paths.js";
 import { materializeNativeChatTaskRoot, type NativeChatWorkspaceScope } from "./native-runtime/native-chat-workspace.js";
@@ -44,7 +44,39 @@ import type { EnvironmentRuntimeService } from "./environment-runtime.js";
 import { parseEnvironmentDriverConfig } from "./environment-config.js";
 import { contextManifestService } from "./context/context-manifest.js";
 import { createNativeOpenCodeConformanceProbeBackend } from "./native-runtime/native-session-executor.js";
+import { nativeRunnerOperatorSettings, type NativeRunnerOperatorSettings } from "./native-runtime/runner-operator-settings.js";
 import { parseNativeExecutionInput } from "../vendor/paperclip-runner/index.js";
+import { logger } from "../middleware/logger.js";
+
+/** Operator diagnostic for a stopped conformance proof. The shared serializer
+ * keeps only the error type, HTTP status, allow-listed message and numeric
+ * location. The stage, step and code are fixed identifiers: a typed error
+ * code, or a server-authored `managed_opencode_*`/`native_*` error name. They
+ * carry no provider, prompt or company content. */
+function logNativeOpenCodeConformanceFailure(stage: "probe" | "turn" | "evidence_retention", error: unknown,
+  context: { groupId: string; runCount?: number; probeKind?: string; step: string | null }) {
+  const details = error && typeof error === "object" && "details" in error ? (error as { details?: unknown }).details : null;
+  const rawCode = details && typeof details === "object" && "code" in details ? (details as { code?: unknown }).code : null;
+  const message = error instanceof Error ? error.message : null;
+  const errorCode = typeof rawCode === "string" && /^[a-z0-9_]{1,100}$/.test(rawCode) ? rawCode
+    : typeof message === "string" && /^(?:managed_opencode|native)_[a-z0-9_]{1,100}$/.test(message) ? message : null;
+  logger.warn({ err: error, stage, errorCode, groupId: context.groupId, runCount: context.runCount ?? null,
+    probeKind: context.probeKind ?? null, step: context.step }, "native_opencode_conformance_failed");
+}
+
+/** The probe's runnerd backend. The runner transport (direct runner URL and
+ * CA bundle) and artifact settings come from the server's own environment
+ * through the same reader the heartbeat uses, never from the Sandbox runner
+ * environment or a caller. No provider-ingress grant is passed: the hidden
+ * probe Run has no per-run ingress authorization. */
+export function nativeOpenCodeConformanceBackendFactory(
+  input: Omit<Parameters<typeof createNativeOpenCodeConformanceProbeBackend>[0],
+    keyof NativeRunnerOperatorSettings | "runnerIngressAuthorized">,
+  serverEnvironment: Readonly<Record<string, string | undefined>> = process.env,
+): () => Promise<NativeSessionBackend> {
+  return async () => (await createNativeOpenCodeConformanceProbeBackend({ ...input,
+    ...nativeRunnerOperatorSettings(serverEnvironment) })).backend;
+}
 
 export type NativeOpenCodeRemoteProbeContext = Readonly<{
   createBackend(): Promise<NativeSessionBackend>;
@@ -156,58 +188,6 @@ export function nativeOpenCodeConformanceMemoryScopingPassed(input: {
     input.peerUnseen.sessionId !== input.first.sessionId && input.primaryProfileRef !== input.peerProfileRef;
 }
 
-/** Persist the exact source receipt only after the canonical Native dispatch
- * owner wrote the intent and before startTurn can send the provider request. */
-async function persistOpenCodeProbeSource(input: {
-  db: Db; execution: NativeExecutionInput; groupId: string; planId: string; profileId: string;
-  source: NonNullable<ManagedOpenCodeProbe["source"]>; dispatchId: string; turnInput: Parameters<NativeSession["startTurn"]>[0];
-  eventSeq: number; attempt: number; responsibleUserId: string;
-}) {
-  const { db } = input;
-  await db.transaction(async tx => {
-    const [run] = await tx.select().from(heartbeatRuns).where(and(
-      eq(heartbeatRuns.companyId, input.execution.binding.companyId),
-      eq(heartbeatRuns.id, input.execution.binding.runId), eq(heartbeatRuns.agentId, input.execution.binding.agentId),
-    )).for("update").limit(1);
-    if (!run || run.status !== "running" || run.triggerDetail !== "provider_conformance" ||
-        run.responsibleUserId !== input.responsibleUserId || run.nativeIssueId !== input.execution.binding.issueId)
-      throw forbidden("The active Human-owned conformance Native run changed before source sealing");
-    const contextSnapshot = run.contextSnapshot && typeof run.contextSnapshot === "object" ? run.contextSnapshot as Record<string, any> : {};
-    const context = contextSnapshot.nativeOpenCodeConformanceDispatch;
-    if (!context || context.qualificationGroupId !== input.groupId || context.planId !== input.planId ||
-        context.profileId !== input.profileId || context.probeId !== input.source.probeId ||
-        context.dispatchNonce !== input.source.dispatchNonce)
-      throw forbidden("The server-minted one-probe RuntimeControl tuple changed before source sealing");
-    if (Object.keys(context).sort().join(",") !== ["authorityHash", "dispatchNonce", "planId", "probeId", "profileId", "qualificationGroupId"].sort().join(",") ||
-        typeof context.authorityHash !== "string" || !/^[a-f0-9]{64}$/.test(context.authorityHash))
-      throw forbidden("The RuntimeControl issuer tuple has an invalid closed shape");
-    const encodedInput = JSON.stringify(input.turnInput);
-    const runProfile = run.runnerProfileJson && typeof run.runnerProfileJson === "object" ? run.runnerProfileJson as Record<string, any> : {};
-    const [intent] = (Array.isArray(runProfile.nativeModelInputDispatchIntents)
-      ? runProfile.nativeModelInputDispatchIntents : []).filter((row: any) => row?.dispatchId === input.dispatchId);
-    if (!intent || intent.eventSeq !== input.eventSeq || intent.attempt !== input.attempt ||
-        intent.responsibleUserId !== input.responsibleUserId || intent.turnInputDigest !== createHash("sha256").update(encodedInput).digest("hex") ||
-        input.turnInput.message?.role !== "user" || input.turnInput.message.text !== nativeOpenCodeConformancePrompt(input.source.probeKind, input.source.marker) ||
-        Object.keys(input.turnInput).some(key => !["message", "continuation"].includes(key)) ||
-        input.turnInput.continuation !== (input.source.probeKind === "resume" || input.source.probeKind === "isolation_read" || input.source.probeKind === "cancel"))
-      throw forbidden("The exact fixed Native synthetic turn and persisted dispatch intent are required");
-    const authority: NativeOpenCodeConformanceSourceAuthority = {
-      version: 1, scope: "provider_conformance", qualificationGroupId: input.groupId,
-      probeId: input.source.probeId, probeRunId: run.id, dispatchNonce: input.source.dispatchNonce,
-      responsibleUserId: input.responsibleUserId, probeKind: input.source.probeKind, marker: input.source.marker,
-      dispatchId: input.dispatchId, eventSeq: input.eventSeq, attempt: input.attempt,
-      continuation: input.turnInput.continuation === true, turnInputDigest: intent.turnInputDigest,
-      systemHash: nativeSha256(NATIVE_OPENCODE_CONFORMANCE_SYSTEM),
-      promptHash: nativeSha256(nativeOpenCodeConformancePrompt(input.source.probeKind, input.source.marker)),
-      historyPrefixHash: nativeSha256(input.source.historyPrefix), sourceDigest: "",
-    };
-    const sealed = { ...authority, sourceDigest: nativeOpenCodeConformanceSourceDigest(authority) };
-    const profile = runProfile;
-    await tx.update(heartbeatRuns).set({ runnerProfileJson: { ...profile,
-      nativeOpenCodeConformanceSourceAuthority: sealed }, updatedAt: new Date() }).where(eq(heartbeatRuns.id, run.id));
-  });
-}
-
 async function bindOpenCodeProbeTurnId(db: Db, runId: string, turnId: string, dispatchId: string) {
   await db.transaction(async tx => {
     const [run] = await tx.select().from(heartbeatRuns).where(eq(heartbeatRuns.id, runId)).for("update").limit(1);
@@ -254,10 +234,14 @@ export async function runManagedOpenCodeProbe(input: { db: Db; createBackend(): 
     catch { /* close below must still confirm local settlement */ }
   };
   const previous = probe.previous;
+  // Content-free progress marker for the failure log below.
+  let turnStep: "claim" | "backend" | "session" | "dispatch" | "events" | "verify" = "claim";
   try {
     coordinator = await claimNativeExecutionCoordinator({ db: input.db, execution: input.execution,
       runnerInstanceId: input.runnerInstanceId });
+    turnStep = "backend";
     const backend = await input.createBackend();
+    turnStep = "session";
     const launchIntent = await appendHeartbeatRunEvent(input.db, { companyId: probe.identity.companyId,
       runId: probe.identity.runId, agentId: probe.identity.agentId, eventType: PROCESS_START_REQUESTED,
       stream: "system", level: "info", message: "Native conformance session launch requested." });
@@ -276,15 +260,22 @@ export async function runManagedOpenCodeProbe(input: { db: Db; createBackend(): 
     snapshot = await session.snapshot({ signal });
     const source = probe.resolveSource ? await probe.resolveSource() : probe.source;
     if (!source) throw forbidden("The server-owned Native conformance source descriptor is required");
+    turnStep = "dispatch";
     const turnInput: Parameters<NativeSession["startTurn"]>[0] = {
       message: { role: "user", text: probe.prompt }, ...(previous ? { continuation: true as const } : {}) };
+    // The recorder binds this typed source to the hidden Run, its issuer
+    // tuple, source authority and fixed template, and seals the conformance
+    // source receipt in the intent's own transaction, before startTurn can
+    // reach the provider (CONF5).
+    if (source.qualificationGroupId !== input.groupId || source.planId !== input.planId || source.profileId !== input.profileId)
+      throw forbidden("The server-minted one-probe RuntimeControl tuple changed before source sealing");
     const dispatchId = await recordNativeModelInputDispatchIntent({ db: input.db, runId: probe.identity.runId,
       companyId: probe.identity.companyId, issueId: probe.identity.issueId, agentId: probe.identity.agentId,
       leaseOwner: coordinator.leaseOwner, attempt: coordinator.attempt, controller: coordinator.controller,
-      eventSeq: launchIntent.row.seq, turnInput });
-    await persistOpenCodeProbeSource({ db: input.db, execution: input.execution, groupId: input.groupId,
-      planId: input.planId, profileId: input.profileId, source, dispatchId, turnInput,
-      eventSeq: launchIntent.row.seq, attempt: coordinator.attempt, responsibleUserId: input.responsibleUserId });
+      eventSeq: launchIntent.row.seq, turnInput, providerConformanceSource: { kind: "provider_conformance",
+        qualificationGroupId: source.qualificationGroupId, planId: source.planId, profileId: source.profileId,
+        probeId: source.probeId, dispatchNonce: source.dispatchNonce, responsibleUserId: input.responsibleUserId,
+        probeKind: source.probeKind, marker: source.marker, historyPrefix: source.historyPrefix } });
     const { turnId } = await session.startTurn(turnInput);
     await recordNativeModelInputDispatchAcknowledgement({ db: input.db, runId: probe.identity.runId,
       companyId: probe.identity.companyId, issueId: probe.identity.issueId, agentId: probe.identity.agentId,
@@ -296,10 +287,19 @@ export async function runManagedOpenCodeProbe(input: { db: Db; createBackend(): 
       idempotencyKey: `opencode-conformance:${probe.identity.runId}:${source.probeId}:${source.dispatchNonce}`,
       signal, streamEnded: () => turnStreamEnded, delayMs: probe.cancelAfterMs, cancel: abort,
     });
+    turnStep = "events";
     for await (const event of session.events()) {
       signal.throwIfAborted();
+      // CONF6. runnerd forwards a harness diagnostic emitted while turn.start
+      // is pending with the transport's provisional requested turn identity
+      // (turn_lab_...), not the provider turn identity startTurn acknowledged.
+      // Only that event type is exempt from turn-id equality; every event still
+      // must carry this Run and session, and a diagnostic is never output,
+      // stream or lifecycle evidence.
+      const diagnostic = event.eventType === "harness.diagnostic";
       if (event.runId !== probe.identity.runId || event.normalizedSessionId !== probe.identity.sessionId ||
-          (event.turnId && event.turnId !== turnId)) throw new Error("managed_opencode_event_identity_changed");
+          (!diagnostic && event.turnId && event.turnId !== turnId)) throw new Error("managed_opencode_event_identity_changed");
+      if (diagnostic) continue;
       if (["item.delta", "item.completed", "turn.completed", "turn.cancelled", "turn.interrupted", "turn.failed"].includes(event.eventType)) streamObserved = true;
       if (event.payload.kind === "agentMessage" && typeof event.payload.text === "string") {
         const candidate = event.eventType === "item.delta" ? output + event.payload.text : event.payload.text;
@@ -311,14 +311,16 @@ export async function runManagedOpenCodeProbe(input: { db: Db; createBackend(): 
       if (["turn.interrupted", "turn.failed"].includes(event.eventType)) { state = "failed"; break; }
     }
     turnStreamEnded = true;
+    turnStep = "verify";
     if (cancelAfterObservedWire) await cancelAfterObservedWire;
     if (probe.cancelAfterMs !== undefined && (!cancellationRequested || !cancellationObserved || state !== "cancelled"))
       throw new Error("managed_opencode_cancel_not_observed");
     if (probe.expectedOutput !== undefined && (state !== "completed" || output.trim() !== probe.expectedOutput))
       throw new Error("managed_opencode_probe_output_mismatch");
     if (state === "completed") snapshot = await session.snapshot({ signal });
-  } catch {
+  } catch (error) {
     state = cancellationObserved ? "cancelled" : signal.aborted || cancellationRequested ? "unknown" : "failed";
+    logNativeOpenCodeConformanceFailure("turn", error, { groupId: input.groupId, step: turnStep });
   } finally {
     turnStreamEnded = true;
     signal.removeEventListener("abort", abort);
@@ -733,7 +735,10 @@ export function nativeOpenCodeConformanceService(db: Db, options: Options) {
           const workspaceSync = await prepareNativeWorkspaceSync({ db, runId, companyId: input.companyId,
             workspaceId: input.harness.workspaceRoot.workspaceId, workspaceLocalDir: input.harness.workspaceRoot.cwd,
             target: acquired.executionTarget, lease: acquired.lease, resourceDisposition: "stop_and_retain",
-            workspaceRepositoryMode: "server_verified_none", nativeWorkspacePreparation: true, requireCleanRemoteAdoption: true });
+            workspaceRepositoryMode: "server_verified_none", nativeWorkspacePreparation: true, requireCleanRemoteAdoption: true,
+            // The hidden probe Run has one model turn and no worker attempt, so
+            // settle restores through this same credentialless conformance owner.
+            nativeWorkspaceRestorePreparation: true });
           if (!workspaceSync?.reference || !await assertNativeWorkspaceSyncServerVerifiedNone({ runId, reference: workspaceSync.reference,
             companyId: input.companyId, workspaceId: input.harness.workspaceRoot.workspaceId,
             leaseId: acquired.lease.id, providerLeaseId: acquired.executionTarget.sandboxLeaseAcquisition?.providerLeaseId ?? acquired.lease.providerLeaseId ?? "",
@@ -766,10 +771,9 @@ export function nativeOpenCodeConformanceService(db: Db, options: Options) {
           return { execution, runnerInstanceId, identity: { runId, sessionId: input.sessionId,
               companyId: input.companyId, issueId: input.taskId, agentId: input.agentId },
             workingDirectory: acquired.executionTarget.remoteCwd, leaseId: acquired.lease.id, workspaceSync, remoteTarget,
-            createBackend: async () => (await createNativeOpenCodeConformanceProbeBackend({ db, execution,
+            createBackend: nativeOpenCodeConformanceBackendFactory({ db, execution,
               runnerInstanceId, runnerExecutionTarget: acquired.executionTarget,
-              durableEnvironmentLeaseId: acquired.lease.id, runnerEnvironment,
-              runnerRemoteProviderPackPath: process.env.PAPERCLIP_RUNNER_REMOTE_PROVIDER_PACK_PATH?.trim() })).backend,
+              durableEnvironmentLeaseId: acquired.lease.id, runnerEnvironment }),
             settle: async (state: ManagedOpenCodeProbeResult["state"] = "unknown") => {
               if (settled) return;
               await workspaceSync.restoreWorkspace();
@@ -794,8 +798,11 @@ export function nativeOpenCodeConformanceService(db: Db, options: Options) {
           throw error;
         }
       }
+      // Content-free progress markers for the failure log below.
+      const probeProgress: { current: { kind: string; step: "open" | "run" | "settle" | "release" | "receipt" } | null } = { current: null };
       async function probe(target: typeof primary, harness: typeof primaryHarness,
         probeKind: NativeOpenCodeConformanceSourceAuthority["probeKind"], probeMarker: string, expectedOutput?: string, cancel = false) {
+        probeProgress.current = { kind: probeKind, step: "open" };
         const targetQuote = quote(target);
         const oldReservations = await db.select({ id: orchestrationModelReservations.id }).from(orchestrationModelReservations)
           .where(eq(orchestrationModelReservations.planId, harness.plan.id));
@@ -845,6 +852,7 @@ export function nativeOpenCodeConformanceService(db: Db, options: Options) {
           companyId: target.agent.companyId, runId: run.id, leaseId: lease!.id,
         });
         if (!preflightAuthority) throw forbidden("Current Sandbox Host and lease authority are required before Native session start");
+        probeProgress.current = { kind: probeKind, step: "run" };
         const result = await runManagedOpenCodeProbe({ db, createBackend: remote.createBackend, execution: remote.execution,
           runnerInstanceId: remote.runnerInstanceId, responsibleUserId: userId, groupId, planId: harness.plan.id, profileId: target.profile.id,
           probe: { identity: remote.identity,
@@ -888,15 +896,18 @@ export function nativeOpenCodeConformanceService(db: Db, options: Options) {
             throw forbidden("The unclaimed conformance Run is owned by another Native finalization path");
           }
         }
+        probeProgress.current = { kind: probeKind, step: "settle" };
         await remote.settle(result.state);
         const terminal = { status: result.state === "completed" ? "succeeded" as const : result.state === "cancelled" ? "cancelled" as const : "failed" as const,
           errorCode: result.state === "completed" ? null : result.state === "cancelled" ? "provider_conformance_cancelled" : "provider_conformance_unsettled",
           error: result.state === "completed" ? null : "The actual Native OpenCode probe did not complete cleanly.",
           resultJson: { nativeOpenCodeConformanceProbe: true, observedState: result.state } };
+        probeProgress.current = { kind: probeKind, step: "release" };
         await releaseCoordinator(terminal);
         await db.update(agents).set({ status: target.agent.status, updatedAt: new Date() })
           .where(and(eq(agents.companyId, target.agent.companyId), eq(agents.id, target.agent.id), eq(agents.status, "running")));
         settled = true;
+        probeProgress.current = { kind: probeKind, step: "receipt" };
         if (result.state === "completed" && result.snapshot) snapshots.set(target.agent.id, result.snapshot);
         probeHistory.set(target.agent.id, [...historyPrefix, { role: "user", text: prompt },
           ...(result.state === "completed" ? [{ role: "assistant" as const, text: result.output }] : [])]);
@@ -986,7 +997,11 @@ export function nativeOpenCodeConformanceService(db: Db, options: Options) {
       return { binding, checks, requiredChecks,
         runIds: runs, groupId, reservationIds: ledgerIds, unknownChargeReservationIds: cancellation.reservation.status === "unknown" ? [cancellation.reservation.id] : [],
         failure: null };
-      } catch {
+      } catch (error) {
+        // Retain failed-retest and spend evidence below, but never hide why the
+        // proof stopped: the operator log carries a content-free projection.
+        logNativeOpenCodeConformanceFailure("probe", error, { groupId, runCount: runs.length,
+          probeKind: probeProgress.current?.kind, step: probeProgress.current?.step ?? null });
         if (!runs.length) throw forbidden("The managed OpenCode probe did not start; no current qualification evidence was changed");
         const reservationRows = await db.select({ id: orchestrationModelReservations.id, status: orchestrationModelReservations.status })
           .from(orchestrationModelReservations).where(inArray(orchestrationModelReservations.planId,
@@ -1028,7 +1043,9 @@ export function nativeOpenCodeConformanceService(db: Db, options: Options) {
           return { binding, checks: failedChecks, requiredChecks, runIds: runs, groupId, reservationIds,
             unknownChargeReservationIds,
             failure: "Actual managed OpenCode lifecycle, wire settlement, isolation, or cancellation proof was incomplete." };
-        } catch {
+        } catch (retentionError) {
+          logNativeOpenCodeConformanceFailure("evidence_retention", retentionError, { groupId, runCount: runs.length,
+            probeKind: probeProgress.current?.kind, step: probeProgress.current?.step ?? null });
           return { binding: null, checks: failedChecks, requiredChecks, runIds: runs, groupId,
             reservationIds, unknownChargeReservationIds,
             failure: "Actual managed OpenCode lifecycle or current-authority proof was incomplete." };

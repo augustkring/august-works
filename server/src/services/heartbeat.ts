@@ -44,6 +44,7 @@ import { getNativeReviewAssignment, readNativeReviewAssignmentContext } from "./
 import { claimQueuedNativeReviewRun } from "./native-runtime/native-review-dispatch.js";
 import { buildNativeReviewRequest } from "./native-runtime/native-review-prompt.js";
 import { captureNativeReviewWakeWitness } from "./native-runtime/native-review-participant.js";
+import { nativeRunnerOperatorSettings } from "./native-runtime/runner-operator-settings.js";
 import {
   legacyExecutionNeedsReconciliation,
   terminalizeLegacyExecution,
@@ -25639,23 +25640,9 @@ export function heartbeatService(
                     runnerIngressAuthorized: isRunnerIngressAuthorized(
                       nativeRuntimeResolution,
                     ),
-                    runnerPublicUrl:
-                      runtimeEnv.PAPERCLIP_RUNNER_PUBLIC_URL?.trim() || null,
-                    runnerCaBundlePath:
-                      runtimeEnv.PAPERCLIP_RUNNER_CA_BUNDLE_PATH?.trim() ||
-                      null,
-                    runnerRemoteBinaryPath:
-                      runtimeEnv.PAPERCLIP_RUNNER_REMOTE_BINARY_PATH?.trim() ||
-                      null,
-                    runnerRemoteCodexPath:
-                      runtimeEnv.PAPERCLIP_RUNNER_REMOTE_CODEX_PATH?.trim() ||
-                      null,
-                    runnerRemoteCodexNpmSpec:
-                      runtimeEnv.PAPERCLIP_RUNNER_REMOTE_CODEX_NPM_SPEC?.trim() ||
-                      null,
-                    runnerRemoteProviderPackPath:
-                      runtimeEnv.PAPERCLIP_RUNNER_REMOTE_PROVIDER_PACK_PATH?.trim() ||
-                      null,
+                    // The same server operator settings the provider-conformance
+                    // probe backend reads (runner-operator-settings.ts).
+                    ...nativeRunnerOperatorSettings(runtimeEnv),
                     stopTaskForReassignment: async (target) => {
                       await settleLiveRunnerGoalBeforeInterrupt(db, target);
                       if (!target.runId) return;

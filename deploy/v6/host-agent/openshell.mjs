@@ -713,6 +713,18 @@ export function openShellHostEngine({
       throw new Error("sandbox_scope_changed");
     return { descriptor: session, binding };
   }
+  const isUuid = value => typeof value === "string" && uuid.test(value);
+  const isHex64 = value => typeof value === "string" && /^[a-f0-9]{64}$/.test(value);
+  function closedRecord(value, keys) {
+    return !!value && typeof value === "object" && !Array.isArray(value) &&
+      Object.keys(value).sort().join(",") === keys.slice().sort().join(",");
+  }
+  // RuntimeTools model claims carry exactly these members plus one binding
+  // named by the scope (`createRuntimeToolsToken`).
+  function closedModelClaims(decoded, family) {
+    return closedRecord(decoded, ["company_id", "exp", "iat", "instance_id", family, "responsible_user_id", "run_id", "scope", "sub"]) &&
+      typeof decoded.instance_id === "string" && decoded.instance_id.length > 0 && decoded.responsible_user_id.length > 0;
+  }
   function modelBrokerSessionCredential(request, scope, descriptor) {
     const broker = request.modelBrokerCredential;
     if (!broker) return null;
@@ -737,6 +749,36 @@ export function openShellHostEngine({
         b.executionManifestId !== request.manifestId || b.executionManifestHash !== request.manifestHash) return null;
       authority = { scope: decoded.scope, sub: decoded.sub, company_id: decoded.company_id, run_id: decoded.run_id,
         responsible_user_id: decoded.responsible_user_id, instance_id: decoded.instance_id, conversation_model: b };
+    } else if (decoded.scope === "provider_conformance") {
+      // RuntimeControl issues one 60-second conformance credential for the
+      // initial provider turn of a hidden probe Run and refuses to refresh it.
+      // The claim is closed: the server parser's seven fields and no others.
+      const b = decoded.provider_conformance;
+      if (descriptor.phase !== "start" || !closedModelClaims(decoded, "provider_conformance") || !closedRecord(b, [
+        "authorityHash", "dispatchNonce", "planId", "probeId", "probeRunId", "profileId", "qualificationGroupId"]) ||
+        ![b.qualificationGroupId, b.probeId, b.probeRunId, b.planId, b.profileId, b.dispatchNonce].every(isUuid) ||
+        !isHex64(b.authorityHash) || !isUuid(decoded.sub) || b.probeRunId !== decoded.run_id || b.probeRunId !== request.runId ||
+        decoded.exp - decoded.iat > 60) return null;
+      authority = { scope: decoded.scope, sub: decoded.sub, company_id: decoded.company_id, run_id: decoded.run_id,
+        responsible_user_id: decoded.responsible_user_id, instance_id: decoded.instance_id, provider_conformance: b };
+    } else if (decoded.scope === "review_model") {
+      // The assigned Reviewer Run's completion-review binding, closed to the
+      // shared `reviewModelBindingSchema`. The reviewer is this Run and its
+      // agent, the manifest is this request's, and the reviewed source Run is
+      // a different (committed) Run.
+      const b = decoded.review_model;
+      if (!closedModelClaims(decoded, "review_model") || !closedRecord(b, ["decisionId", "executionManifestId",
+        "expectedPlanVersion", "interactionId", "issueId", "planId", "reviewerAgentId", "reviewerRunId", "sourceAgentId",
+        "sourceAttemptId", "sourceReceiptDigest", "sourceResultCanonicalSha256", "sourceResultId", "sourceRunId", "sourceWorkerId"]) ||
+        ![b.planId, b.issueId, b.interactionId, b.decisionId, b.sourceRunId, b.sourceWorkerId, b.sourceAgentId, b.sourceAttemptId,
+          b.sourceResultId, b.reviewerAgentId, b.reviewerRunId, b.executionManifestId].every(isUuid) ||
+        !isHex64(b.sourceReceiptDigest) || typeof b.sourceResultCanonicalSha256 !== "string" ||
+        !/^(?:sha256:)?[a-f0-9]{64}$/.test(b.sourceResultCanonicalSha256) ||
+        !Number.isSafeInteger(b.expectedPlanVersion) || b.expectedPlanVersion < 1 ||
+        b.reviewerRunId !== decoded.run_id || b.reviewerRunId !== request.runId || b.reviewerAgentId !== decoded.sub ||
+        b.executionManifestId !== request.manifestId || b.sourceRunId === request.runId) return null;
+      authority = { scope: decoded.scope, sub: decoded.sub, company_id: decoded.company_id, run_id: decoded.run_id,
+        responsible_user_id: decoded.responsible_user_id, instance_id: decoded.instance_id, review_model: b };
     } else return null;
     return { authorityHash: hash(JSON.stringify(canonical(authority))), capabilityHash: hash(broker.capabilityToken),
       profileId: broker.profileId, profileHash: broker.profileHash, expiresAt: broker.expiresAt,

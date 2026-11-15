@@ -606,6 +606,17 @@ it("executes the declared Reviewer comment and terminal result from one actual m
           executionPolicy:{stages:[{type:"review",participants:[{type:"agent",agentId:reviewerId}]}]}});
       expect(created.status).toBe(201);issueId=created.body.id;
       await issueService(db).update(issueId,{assigneeAgentId:executorId,actorUserId:actor.userId!,privacyActor:actor,companyGuard:companyId});
+      // RT-03 (MS1c, option A): task-bound inference is charged to the root
+      // plan's budget owner, so the executor runs as that plan's Worker. A
+      // plan-less executor stays denied (worker-model-gateway.ts managed path).
+      const [plannedTask]=await db.select().from(issues).where(and(eq(issues.companyId,companyId),eq(issues.id,issueId))).limit(1);
+      if(!plannedTask || !actor.userId)throw new Error("managed_stage_comment_plan_input_missing");
+      const plan=await orchestrationService(db).create(actor,companyId,{issueId,expectedIssueUpdatedAt:plannedTask.updatedAt.toISOString(),
+        workload:"semantic",riskClass:"C0",completionContract:{objective:"Complete the declared stage, then record one Reviewer decision comment.",
+          requiredOutputs:[{kind:"task_document",key:"result"}],businessInvariants:["The assigned Reviewer records the stage decision"]},
+        budgets:{maxModelCostMinor:10,maxToolActions:3},workers:[{key:"writer",issueId}]});
+      await orchestrationService(db).decide(actor,companyId,plan.id,{expectedVersion:plan.version,action:"start",
+        rationale:"Authorize this bounded managed Reviewer decision test"});
       const wake=await heartbeat.wakeup(executorId,{source:"assignment",triggerDetail:"system",reason:"issue_assigned",requestedByActorType:"user",
         requestedByActorId:actor.userId!,payload:{issueId},contextSnapshot:{issueId}});
       expect(wake).not.toBeNull();

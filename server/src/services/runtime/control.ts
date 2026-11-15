@@ -2,8 +2,13 @@ import { exactNativeManagedArtifactCommand } from "../native-runtime/native-arti
 import { readNativeReviewAssignmentContext } from "../native-runtime/native-review-participant.js";
 import { NATIVE_ATTACHMENT_CLEANUP_PREPARATION_PURPOSE, NATIVE_ATTACHMENT_STAGE_PREPARATION_PURPOSE, parseNativeRemoteAttachmentStageCommand } from "../native-runtime/native-attachment-remote-stage.js";
 import { captureNativeRemoteAttachmentReadbackOwner, captureNativeRemoteAttachmentStageOwner } from "../native-runtime/native-attachment-remote-stage-owner.js";
+import { buildRemoteRunnerFileStageScript, NATIVE_RUNNER_TRUST_BUNDLE_MAX_BYTES, NATIVE_RUNNER_TRUST_BUNDLE_MODE,
+  NATIVE_RUNNER_TRUST_BUNDLE_PREPARATION_PURPOSE, nativeRemoteRunnerTrustBundlePath,
+  readConfiguredNativeRunnerTrustBundle } from "../native-runtime/native-runner-trust-bundle.js";
 import { NATIVE_GIT_CONTEXT_PROBE_SCRIPT } from "@paperclipai/adapter-utils/execution-target";
-import { buildWorkspaceTarExtractCommand, buildRemoveDeletedPathsCommand } from "@paperclipai/adapter-utils/sandbox-managed-runtime";
+import { buildWorkspaceTarExtractCommand, buildRemoveDeletedPathsCommand, buildWorkspaceRestoreTarCommand,
+  serverVerifiedWorkspaceRestoreExclude } from "@paperclipai/adapter-utils/sandbox-managed-runtime";
+import { buildRemoteFileChunkReadCommand, buildRemoteFileSizeCommand, buildRemoteRemovePathCommand } from "@paperclipai/adapter-utils/command-managed-runtime";
 import { hostVersionMeetsMinimum } from "./catalog.js";
 import { runtimeCommercialReason } from "./commercial.js";
 import type { NotifyCompany } from "../notifications/notifications.js";
@@ -87,7 +92,7 @@ import { createRunSecretRedactionRegistry } from "../run-secret-redaction.js";
 import { REDACTED_EVENT_VALUE } from "../../redaction.js";
 import { resolvePaperclipRunnerProviderProfile } from "../native-runtime/provider-profile.js";
 import type { workerModelGateway } from "../orchestration/worker-model-gateway.js";
-import { verifyRuntimeToolsToken } from "../../runtime-tools-token.js";
+import { verifyRuntimeToolsToken, type RuntimeToolsTokenClaims } from "../../runtime-tools-token.js";
 import { findNativeChatWorkspaceScope, nativeChatWorkspaceCwd } from "../native-runtime/native-chat-workspace.js";
 import { readRuntimeChannelConversationScope, runtimeConversationGeneration, runtimeConversationOwnerExact } from "./runtime-conversation-owner.js";
 import { assertNativePayloadSourceSetCurrent, assertNativeTaskSourceOwnerCurrent, assertNativeWorkspaceMetadataSourcesCurrent } from "../native-direct-input.js";
@@ -510,7 +515,68 @@ export function exactNativeWorkspacePrepareCommand(input: {
   return false;
 }
 
-function exactNativeProviderArtifactChunkCommand(input: {
+/** Highest chunk index of the bounded restore read (3 MiB chunks, 3 GiB archive). */
+const NATIVE_CONFORMANCE_RESTORE_MAX_CHUNK_INDEX = 1023;
+
+/** Outbound restore of the server-owned provider-conformance workspace. The
+ * hidden probe Run has exactly one model turn, so its settle cannot use the
+ * ordinary brokered command lane. Only the commands the shared restore
+ * producer emits for a server-verified projectless root are accepted: archive
+ * the task root (runtime root excluded) into the fixed runtime archive, read
+ * that archive back in bounded chunks, and remove it. No input, environment or
+ * other path is accepted. Callers must also hold the current conformance
+ * workspace owner and require a credentialless request. */
+export function exactNativeConformanceWorkspaceRestoreCommand(input: {
+  request: import("@paperclipai/shared").RuntimeSandboxExecRelayRequest;
+  taskRoot: string;
+  execution: ReturnType<typeof parseNativeExecutionInput>;
+}): boolean {
+  const { argv, stdinBase64, cwd, env } = input.request;
+  if (input.execution.provider.kind !== "opencode" || input.execution.session.driverKind !== "opencode_server" ||
+    !path.posix.isAbsolute(input.taskRoot) || path.posix.normalize(input.taskRoot) !== input.taskRoot ||
+    path.resolve(input.execution.workspace.cwd) !== input.taskRoot || cwd !== input.taskRoot || stdinBase64 !== "" ||
+    Object.keys(env ?? {}).length !== 0 || argv.length !== 3 || argv[0] !== "sh" || argv[1] !== "-c") return false;
+  const script = argv[2]!;
+  const archive = path.posix.join(input.taskRoot, ".paperclip-runtime", "paperclip-runner", "workspace-download.tar");
+  if (script === buildWorkspaceRestoreTarCommand({ workspaceRemoteDir: input.taskRoot, archivePath: archive,
+    exclude: serverVerifiedWorkspaceRestoreExclude() })) return true;
+  if (script === buildRemoteFileSizeCommand(archive) || script === buildRemoteRemovePathCommand(archive)) return true;
+  const chunk = / skip=(0|[1-9][0-9]{0,3}) count=1 /.exec(script);
+  const chunkIndex = chunk ? Number(chunk[1]) : -1;
+  return chunkIndex >= 0 && chunkIndex <= NATIVE_CONFORMANCE_RESTORE_MAX_CHUNK_INDEX &&
+    script === buildRemoteFileChunkReadCommand(archive, chunkIndex);
+}
+
+/** Runner trust-bundle copy of the hidden provider-conformance Run (CONF4b).
+ * The executor copies the server operator's runner CA bundle next to the
+ * staged runnerd before launch; runnerd needs it to verify the runner
+ * endpoint. The probe Run has exactly one model turn, so the copy cannot use
+ * the ordinary brokered command lane. Only the one command the shared file
+ * stager emits for the fixed trust-bundle path under a server-verified root is
+ * accepted: no environment, the task root as cwd, and stdin that is exactly the
+ * configured bundle (the relay carries base64 of the stager's base64 text).
+ * Callers must also hold the current conformance workspace owner and require
+ * a credentialless request. */
+export function exactNativeConformanceRunnerTrustBundleCommand(input: {
+  request: import("@paperclipai/shared").RuntimeSandboxExecRelayRequest;
+  taskRoot: string;
+  execution: ReturnType<typeof parseNativeExecutionInput>;
+  trustBundle: Buffer | null;
+}): boolean {
+  const { argv, stdinBase64, cwd, env } = input.request;
+  const bundle = input.trustBundle;
+  if (!bundle || bundle.length === 0 || bundle.length > NATIVE_RUNNER_TRUST_BUNDLE_MAX_BYTES ||
+    input.execution.provider.kind !== "opencode" || input.execution.session.driverKind !== "opencode_server" ||
+    !path.posix.isAbsolute(input.taskRoot) || path.posix.normalize(input.taskRoot) !== input.taskRoot ||
+    path.resolve(input.execution.workspace.cwd) !== input.taskRoot || cwd !== input.taskRoot ||
+    Object.keys(env ?? {}).length !== 0 || argv.length !== 3 || argv[0] !== "sh" || argv[1] !== "-c" ||
+    argv[2] !== buildRemoteRunnerFileStageScript(nativeRemoteRunnerTrustBundlePath(input.taskRoot), NATIVE_RUNNER_TRUST_BUNDLE_MODE))
+    return false;
+  return stdinBase64 === Buffer.from(bundle.toString("base64"), "utf8").toString("base64");
+}
+
+/** Exported for the conformance runner-transport regression test. */
+export function exactNativeProviderArtifactChunkCommand(input: {
   request: import("@paperclipai/shared").RuntimeSandboxExecRelayRequest;
   taskRoot: string;
 }): boolean {
@@ -564,7 +630,8 @@ function sandboxExecutionCwdAllowed(cwd: string, filesystem: { readPaths?: unkno
 
 type CurrentSandboxTaskSource = NonNullable<Awaited<ReturnType<ReturnType<typeof executionSandboxService>["assertTaskExecutionContext"]>>>;
 const WORKER_NATIVE_PREPARATION_PURPOSES = new Set(["provider_artifact", "native_harness_state", "native_workspace_prepare", "native_runtime_context_prepare", "native_provider_data_erasure_probe", NATIVE_ATTACHMENT_STAGE_PREPARATION_PURPOSE, NATIVE_ATTACHMENT_CLEANUP_PREPARATION_PURPOSE]);
-const CONFORMANCE_NATIVE_PREPARATION_PURPOSES = new Set(["provider_artifact", "native_harness_state", "native_workspace_prepare", "native_session_start", "native_provider_data_erasure_probe"]);
+const CONFORMANCE_NATIVE_PREPARATION_PURPOSES = new Set(["provider_artifact", "native_harness_state", "native_workspace_prepare", "native_session_start", "native_provider_data_erasure_probe",
+  NATIVE_RUNNER_TRUST_BUNDLE_PREPARATION_PURPOSE]);
 
 async function currentWorkerNativePreparationRoot(tx: Db, source: CurrentSandboxTaskSource,
   purpose: string | undefined): Promise<string | null> {
@@ -621,7 +688,82 @@ async function currentWorkerNativePreparationRoot(tx: Db, source: CurrentSandbox
   return root;
 }
 
-async function currentConformanceNativeWorkspaceRoot(source: CurrentSandboxTaskSource, purpose: string | undefined): Promise<string | null> {
+/** The managed model credential carries the Host's OpenShell auth-injection
+ * profile (`capability.modelBrokerProviderProfile`) with its exact hash, and
+ * the request carries the configured broker origin. Every managed OpenCode
+ * lane, conformance included, requires this (exported for regression tests). */
+export function managedModelCredentialProfileExact(input: {
+  modelCredential: { profileId: string; profileHash: string } | undefined;
+  providerProfile: { id: string; hash: string } | null | undefined;
+  env: Readonly<Record<string, string | undefined>>;
+  managedModelBrokerOrigin: string | null | undefined;
+}): boolean {
+  return !!input.modelCredential && !!input.providerProfile &&
+    input.modelCredential.profileId === input.providerProfile.id &&
+    input.modelCredential.profileHash === input.providerProfile.hash &&
+    input.env.PAPERCLIP_MANAGED_MODEL_BROKER_ORIGIN === input.managedModelBrokerOrigin &&
+    !!input.managedModelBrokerOrigin;
+}
+
+/** Conformance lane of the managed OpenCode credential check. The signed
+ * claim's `profileId` names the WorkerModelProfile being qualified: the issuer
+ * signs `admission.profile.id` (a UUID, enforced by the claim parser), the Run
+ * carries it as `nativeOpenCodeConformanceProfileId`, and the issuer-persisted
+ * dispatch tuple repeats it; the model gateway re-checks it against the same
+ * WorkerModelProfile. It is not the Host's auth-injection profile id, which the
+ * caller binds separately with `managedModelCredentialProfileExact`. Comparing
+ * the two namespaces refused every conformance session start (CONF3c). */
+export function managedOpenCodeConformanceCredentialValid(input: {
+  providerConformanceBootstrap: boolean;
+  qualificationGroupId: string | null | undefined;
+  conformancePlanId: string | null | undefined;
+  run: { id: string; agentId: string | null; responsibleUserId: string | null; contextSnapshot: unknown };
+  companyId: string;
+  nativeSessionStartValid: boolean;
+  modelBrokerSessionPhase: string | undefined;
+  modelCredentialExpiresAt: string | undefined;
+  conformanceClaims: RuntimeToolsTokenClaims | null;
+  otherModelClaimsPresent: boolean;
+  inputAndExpiryValid: boolean;
+  nowMs?: number;
+}): boolean {
+  const context = input.run.contextSnapshot && typeof input.run.contextSnapshot === "object" &&
+    !Array.isArray(input.run.contextSnapshot) ? input.run.contextSnapshot as Record<string, unknown> : {};
+  const dispatch = context.nativeOpenCodeConformanceDispatch &&
+    typeof context.nativeOpenCodeConformanceDispatch === "object" &&
+    !Array.isArray(context.nativeOpenCodeConformanceDispatch)
+    ? context.nativeOpenCodeConformanceDispatch as Record<string, unknown> : {};
+  const claims = input.conformanceClaims;
+  const claim = claims?.provider_conformance;
+  const expiresAt = input.modelCredentialExpiresAt;
+  return Boolean(input.providerConformanceBootstrap && input.nativeSessionStartValid &&
+    input.modelBrokerSessionPhase === "start" && expiresAt !== undefined && claims?.scope === "provider_conformance" &&
+    !input.otherModelClaimsPresent && claim && input.qualificationGroupId && input.conformancePlanId &&
+    context.providerConformanceGroupId === input.qualificationGroupId &&
+    context.providerConformancePlanId === input.conformancePlanId &&
+    context.nativeOpenCodeConformanceProbeId === claim.probeId &&
+    context.nativeOpenCodeConformanceProfileId === claim.profileId &&
+    context.nativeOpenCodeConformanceDispatch !== undefined &&
+    claim.qualificationGroupId === input.qualificationGroupId &&
+    claim.probeRunId === input.run.id && claim.planId === input.conformancePlanId &&
+    claim.profileId === dispatch.profileId &&
+    claim.probeId === dispatch.probeId &&
+    claim.dispatchNonce === dispatch.dispatchNonce &&
+    claim.authorityHash === dispatch.authorityHash &&
+    dispatch.qualificationGroupId === input.qualificationGroupId &&
+    dispatch.planId === input.conformancePlanId &&
+    dispatch.profileId === context.nativeOpenCodeConformanceProfileId &&
+    claims.company_id === input.companyId && claims.sub === input.run.agentId &&
+    claims.run_id === input.run.id &&
+    claims.responsible_user_id === input.run.responsibleUserId &&
+    claims.exp * 1000 >= (input.nowMs ?? Date.now()) &&
+    Date.parse(expiresAt) <= claims.exp * 1000 && input.inputAndExpiryValid);
+}
+
+/** The hidden provider-conformance Run's preparation owner. Every purpose
+ * except the initial workspace preparation is bound to the Run's persisted
+ * managed OpenCode source authority (exported for its regression tests). */
+export async function currentConformanceNativeWorkspaceRoot(source: CurrentSandboxTaskSource, purpose: string | undefined): Promise<string | null> {
   if (!purpose || !CONFORMANCE_NATIVE_PREPARATION_PURPOSES.has(purpose) || !source.providerConformanceBootstrap) return null;
   const { run, manifest } = source, task = source.source.task;
   const profile = run.runnerProfileJson && typeof run.runnerProfileJson === "object" && !Array.isArray(run.runnerProfileJson)
@@ -3790,7 +3932,8 @@ export function runtimeControlService(
         nativePreparationPurpose !== "native_runtime_context_prepare" &&
         nativePreparationPurpose !== "native_provider_data_erasure_probe" &&
         nativePreparationPurpose !== NATIVE_ATTACHMENT_STAGE_PREPARATION_PURPOSE &&
-        nativePreparationPurpose !== NATIVE_ATTACHMENT_CLEANUP_PREPARATION_PURPOSE)
+        nativePreparationPurpose !== NATIVE_ATTACHMENT_CLEANUP_PREPARATION_PURPOSE &&
+        nativePreparationPurpose !== NATIVE_RUNNER_TRUST_BUNDLE_PREPARATION_PURPOSE)
         throw forbidden("Sandbox preparation purpose is unsupported");
       const providerArtifactPreparation = nativePreparationPurpose === "provider_artifact";
       const nativeSessionStart = nativePreparationPurpose === "native_session_start";
@@ -3800,6 +3943,7 @@ export function runtimeControlService(
       const nativeRuntimeAssetErasureProbe = nativePreparationPurpose === "native_provider_data_erasure_probe";
       const nativeAttachmentStage = nativePreparationPurpose === NATIVE_ATTACHMENT_STAGE_PREPARATION_PURPOSE;
       const nativeAttachmentCleanup = nativePreparationPurpose === NATIVE_ATTACHMENT_CLEANUP_PREPARATION_PURPOSE;
+      const nativeRunnerTrustBundle = nativePreparationPurpose === NATIVE_RUNNER_TRUST_BUNDLE_PREPARATION_PURPOSE;
       const sessionModelRefresh = nativeHarnessState && request.modelBrokerSession?.phase === "refresh" &&
         request.modelBrokerCredential !== undefined;
       let nativeSessionStartValid = false;
@@ -3812,6 +3956,9 @@ export function runtimeControlService(
       const workerPreparationRoot = source.providerConformanceBootstrap || channelScope ? null :
         await currentWorkerNativePreparationRoot(tx, source, nativePreparationPurpose);
       const conformanceWorkspaceRoot = await currentConformanceNativeWorkspaceRoot(source, nativePreparationPurpose);
+      // The trust-bundle purpose has no Worker or conversation owner.
+      if (nativeRunnerTrustBundle && conformanceWorkspaceRoot === null)
+        throw forbidden("Runner trust-bundle staging is limited to the current hidden conformance Run");
       if (conformanceWorkspaceRoot !== null) {
         const profile = source.run.runnerProfileJson as Record<string, unknown>;
         const execution = parseNativeExecutionInput(profile.nativeExecutionInput);
@@ -3827,10 +3974,13 @@ export function runtimeControlService(
         const onlyExactManagedModelEnvironment = managedModelEnvironmentKeys.every(key => allowedManagedModelEnvironmentKeys.has(key));
         const noWorkloadCredential = credentials.mode === "none" && credentials.bindings.length === 0 &&
           request.brokerCredential === undefined && !Object.keys(request.env ?? {}).some(key => forbiddenEnvironmentKeys.includes(key));
+        // The settle-time restore stays in this credentialless owner; it is
+        // matched only here, never in the Worker or conversation lanes.
         const exactWorkspace = nativeWorkspacePrepare && request.modelBrokerCredential === undefined &&
           request.modelBrokerSession === undefined && noWorkloadCredential && noManagedModelEnvironment &&
-          exactNativeWorkspacePrepareCommand({ request, taskRoot: conformanceWorkspaceRoot, execution,
-            expectedProviderLeaseId: source.lease.providerLeaseId ?? undefined });
+          (exactNativeWorkspacePrepareCommand({ request, taskRoot: conformanceWorkspaceRoot, execution,
+            expectedProviderLeaseId: source.lease.providerLeaseId ?? undefined }) ||
+            exactNativeConformanceWorkspaceRestoreCommand({ request, taskRoot: conformanceWorkspaceRoot, execution }));
         const exactArtifact = providerArtifactPreparation && request.modelBrokerCredential === undefined &&
           request.modelBrokerSession === undefined && noWorkloadCredential && noManagedModelEnvironment &&
           (exactNativeProviderArtifactChunkCommand({ request, taskRoot: conformanceWorkspaceRoot }) ||
@@ -3845,6 +3995,10 @@ export function runtimeControlService(
         const exactHarness = nativeHarnessState && (request.modelBrokerSession === undefined || request.modelBrokerSession.phase === "stop") &&
           noWorkloadCredential && noManagedModelEnvironment && request.modelBrokerCredential === undefined &&
           exactNativeHarnessStateCommand({ request, taskRoot: conformanceWorkspaceRoot, execution, runId: source.run.id });
+        const exactTrustBundle = nativeRunnerTrustBundle && request.modelBrokerCredential === undefined &&
+          request.modelBrokerSession === undefined && noWorkloadCredential && noManagedModelEnvironment &&
+          exactNativeConformanceRunnerTrustBundleCommand({ request, taskRoot: conformanceWorkspaceRoot, execution,
+            trustBundle: readConfiguredNativeRunnerTrustBundle() });
         let exactRemoteStartBinding = false;
         if (nativeSessionStart) {
           const locator = await readRemoteRuntimeAssetLocator(tx, source.run);
@@ -3873,7 +4027,7 @@ export function runtimeControlService(
           request.env.PAPERCLIP_MANAGED_MODEL_INPUT_TOKENS_UPPER_BOUND === String(request.modelBrokerCredential.inputTokensUpperBound) &&
           request.env.PAPERCLIP_MANAGED_MODEL_MAX_OUTPUT_TOKENS === String(request.modelBrokerCredential.maxOutputTokens) &&
           exactRemoteStartBinding && exactNativeSessionLaunchCommand({ request, taskRoot: conformanceWorkspaceRoot, execution });
-        if (!exactWorkspace && !exactArtifact && !exactErasureProbe && !exactHarness && !exactSessionStart)
+        if (!exactWorkspace && !exactArtifact && !exactErasureProbe && !exactHarness && !exactSessionStart && !exactTrustBundle)
           throw forbidden("Conformance preparation requires the exact current group workspace, credential scope, and Native command");
         if (exactSessionStart) nativeSessionStartValid = true;
         if (exactHarness) nativeHarnessStateValid = true;
@@ -4225,7 +4379,7 @@ export function runtimeControlService(
         nativeHarnessStateValid = nativeHarnessState;
       }
       if (!providerArtifactPreparation && !nativeHarnessState && !nativeWorkspacePrepare && !nativeRuntimeContextPrepare &&
-        !nativeRuntimeAssetErasureProbe && credentials.mode === "brokered") {
+        !nativeRuntimeAssetErasureProbe && !nativeRunnerTrustBundle && credentials.mode === "brokered") {
         const brokerClaims = brokerCredential ? verifySandboxBrokerJwt(brokerCredential.capabilityToken) : null;
         const brokerCapability = brokerClaims?.sandbox_broker;
         const endpointOrigin = credentialBrokerOrigin;
@@ -4256,7 +4410,7 @@ export function runtimeControlService(
           credentials.bindings.some(binding => resolved.authorizedConnectionGrantHashes[binding.connectionId] !== binding.grantVersionHash))
           throw forbidden("Current assigned ToolGateway grants changed before sandbox dispatch");
       } else if (!providerArtifactPreparation && !nativeHarnessState && !nativeWorkspacePrepare && !nativeRuntimeContextPrepare &&
-        !nativeRuntimeAssetErasureProbe && (credentials.mode !== "none" || credentials.bindings.length ||
+        !nativeRuntimeAssetErasureProbe && !nativeRunnerTrustBundle && (credentials.mode !== "none" || credentials.bindings.length ||
         brokerCredential !== undefined)) {
         throw forbidden("Sandbox execution contains an unauthorized broker capability");
       }
@@ -4297,7 +4451,7 @@ export function runtimeControlService(
         // a Native artifact command without either credential family.
         if (modelCredential !== undefined) throw forbidden("Provider-artifact preparation cannot receive a model credential");
       } else if ((nativeHarnessState && !nativeHarnessModelRefresh) || nativeWorkspacePrepare || nativeRuntimeContextPrepare ||
-        nativeRuntimeAssetErasureProbe || nativeAttachmentStage || nativeAttachmentCleanup) {
+        nativeRuntimeAssetErasureProbe || nativeAttachmentStage || nativeAttachmentCleanup || nativeRunnerTrustBundle) {
         if (modelCredential !== undefined || credentials.mode !== "none" || credentials.bindings.length !== 0 || brokerCredential !== undefined)
           throw forbidden("Credentialless Native preparation commands cannot receive workload credentials");
       } else if (modelSessionStop) {
@@ -4307,11 +4461,8 @@ export function runtimeControlService(
             "PAPERCLIP_MANAGED_MODEL_MAX_OUTPUT_TOKENS", "PAPERCLIP_SANDBOX_BROKER_TOKEN"].includes(key)))
           throw forbidden("Stopped managed model session cleanup cannot carry credentials");
       } else if (nativeProvider?.provider === "opencode") {
-        const exactProfileAndEnvironment = !!modelCredential && !!source.capability.modelBrokerProviderProfile &&
-          modelCredential.profileId === source.capability.modelBrokerProviderProfile.id &&
-          modelCredential.profileHash === source.capability.modelBrokerProviderProfile.hash &&
-          request.env.PAPERCLIP_MANAGED_MODEL_BROKER_ORIGIN === managedModelBrokerOrigin &&
-          !!managedModelBrokerOrigin;
+        const exactProfileAndEnvironment = managedModelCredentialProfileExact({ modelCredential,
+          providerProfile: source.capability.modelBrokerProviderProfile, env: request.env, managedModelBrokerOrigin });
         const inputAndExpiryValid = !!modelCredential && !!source.capability.modelBrokerProviderProfile &&
           Number.isSafeInteger(modelCredential.inputTokensUpperBound) && modelCredential.inputTokensUpperBound >= 1 &&
           modelCredential.inputTokensUpperBound <= 2_000_000 &&
@@ -4342,35 +4493,13 @@ export function runtimeControlService(
         }
         let conversationCredentialValid = false;
         let conversationCredentialChecks: Record<string, boolean> | null = null;
-        const conformanceContext = source.run.contextSnapshot && typeof source.run.contextSnapshot === "object" &&
-          !Array.isArray(source.run.contextSnapshot) ? source.run.contextSnapshot as Record<string, unknown> : {};
-        const conformanceDispatch = conformanceContext.nativeOpenCodeConformanceDispatch &&
-          typeof conformanceContext.nativeOpenCodeConformanceDispatch === "object" &&
-          !Array.isArray(conformanceContext.nativeOpenCodeConformanceDispatch)
-          ? conformanceContext.nativeOpenCodeConformanceDispatch as Record<string, unknown> : {};
-        const conformanceClaim = conformanceModelClaims?.provider_conformance;
-        const conformanceCredentialValid = Boolean(source.providerConformanceBootstrap && nativeSessionStartValid &&
-          request.modelBrokerSession?.phase === "start" && modelCredential && conformanceModelClaims?.scope === "provider_conformance" &&
-          !modelClaims && !conversationModelClaims && conformanceClaim && source.qualificationGroupId && source.conformancePlan &&
-          conformanceContext.providerConformanceGroupId === source.qualificationGroupId &&
-          conformanceContext.providerConformancePlanId === source.conformancePlan.id &&
-          conformanceContext.nativeOpenCodeConformanceProbeId === conformanceClaim.probeId &&
-          conformanceContext.nativeOpenCodeConformanceProfileId === conformanceClaim.profileId &&
-          conformanceContext.nativeOpenCodeConformanceDispatch !== undefined &&
-          conformanceClaim.qualificationGroupId === source.qualificationGroupId &&
-          conformanceClaim.probeRunId === source.run.id && conformanceClaim.planId === source.conformancePlan.id &&
-          conformanceClaim.profileId === source.capability.modelBrokerProviderProfile?.id &&
-          conformanceClaim.probeId === conformanceDispatch.probeId &&
-          conformanceClaim.dispatchNonce === conformanceDispatch.dispatchNonce &&
-          conformanceClaim.authorityHash === conformanceDispatch.authorityHash &&
-          conformanceDispatch.qualificationGroupId === source.qualificationGroupId &&
-          conformanceDispatch.planId === source.conformancePlan.id &&
-          conformanceDispatch.profileId === source.capability.modelBrokerProviderProfile?.id &&
-          conformanceModelClaims.company_id === claims.company_id && conformanceModelClaims.sub === source.run.agentId &&
-          conformanceModelClaims.run_id === source.run.id &&
-          conformanceModelClaims.responsible_user_id === source.run.responsibleUserId &&
-          conformanceModelClaims.exp * 1000 >= Date.now() &&
-          Date.parse(modelCredential.expiresAt) <= conformanceModelClaims.exp * 1000 && inputAndExpiryValid);
+        const conformanceCredentialValid = managedOpenCodeConformanceCredentialValid({
+          providerConformanceBootstrap: Boolean(source.providerConformanceBootstrap),
+          qualificationGroupId: source.qualificationGroupId, conformancePlanId: source.conformancePlan?.id,
+          run: source.run, companyId: claims.company_id, nativeSessionStartValid,
+          modelBrokerSessionPhase: request.modelBrokerSession?.phase, modelCredentialExpiresAt: modelCredential?.expiresAt,
+          conformanceClaims: conformanceModelClaims, otherModelClaimsPresent: Boolean(modelClaims || conversationModelClaims),
+          inputAndExpiryValid });
         if (conversationModelClaims?.conversation_model && conversationBinding && modelCredential &&
           source.capability.modelBrokerProviderProfile && exactProfileAndEnvironment && inputAndExpiryValid) {
           const task = source.source.task;
@@ -4528,7 +4657,7 @@ export function runtimeControlService(
     env?: Record<string, string>;
     stdin?: string;
     timeoutMs?: number;
-    nativePreparationPurpose?: "provider_artifact" | "native_session_start" | "native_harness_state" | "native_workspace_prepare" | "native_runtime_context_prepare" | "native_provider_data_erasure_probe" | "native_attachment_stage" | "native_attachment_cleanup";
+    nativePreparationPurpose?: "provider_artifact" | "native_session_start" | "native_harness_state" | "native_workspace_prepare" | "native_runtime_context_prepare" | "native_provider_data_erasure_probe" | "native_attachment_stage" | "native_attachment_cleanup" | typeof NATIVE_RUNNER_TRUST_BUNDLE_PREPARATION_PURPOSE;
     modelBrokerSessionPhase?: "start" | "refresh" | "stop";
     signal?: AbortSignal;
     onOutput?: (stream: "stdout" | "stderr", chunk: string) => void | Promise<void>;
@@ -4545,7 +4674,8 @@ export function runtimeControlService(
       requestedNativePreparationPurpose !== "native_runtime_context_prepare" &&
       requestedNativePreparationPurpose !== "native_provider_data_erasure_probe" &&
       requestedNativePreparationPurpose !== NATIVE_ATTACHMENT_STAGE_PREPARATION_PURPOSE &&
-      requestedNativePreparationPurpose !== NATIVE_ATTACHMENT_CLEANUP_PREPARATION_PURPOSE)
+      requestedNativePreparationPurpose !== NATIVE_ATTACHMENT_CLEANUP_PREPARATION_PURPOSE &&
+      requestedNativePreparationPurpose !== NATIVE_RUNNER_TRUST_BUNDLE_PREPARATION_PURPOSE)
       throw conflict("Sandbox preparation purpose is unsupported");
     if (!cwd || !cwd.startsWith("/")) throw conflict("Sandbox execution requires an absolute workspace path");
     const env = { ...(input.env ?? {}) };
@@ -4600,6 +4730,15 @@ export function runtimeControlService(
       throw conflict("Native runtime-context preparation requires an authenticated conversation Task");
     if (requestedNativePreparationPurpose === "native_provider_data_erasure_probe" && !hasConversationIdentity && !workerPreparationRoot && !conformanceWorkspaceRoot)
       throw conflict("Native remote erasure storage probe requires an authenticated conversation Task");
+    // The runner trust-bundle copy has exactly one owner: the hidden
+    // conformance Run's credentialless lane, matched before dispatch and again
+    // when the Host claims the command.
+    if (requestedNativePreparationPurpose === NATIVE_RUNNER_TRUST_BUNDLE_PREPARATION_PURPOSE && (!conformanceWorkspaceRoot ||
+      !conversationExecution || modelBrokerSessionPhase !== undefined ||
+      !exactNativeConformanceRunnerTrustBundleCommand({ request: { argv, cwd, env,
+        stdinBase64: stdinBytes.toString("base64") } as import("@paperclipai/shared").RuntimeSandboxExecRelayRequest,
+      taskRoot: conformanceWorkspaceRoot, execution: conversationExecution, trustBundle: readConfiguredNativeRunnerTrustBundle() })))
+      throw conflict("Runner trust-bundle staging requires the exact current hidden conformance Run, bundle and command");
     const nativePreparationPurpose = requestedNativePreparationPurpose &&
       (hasConversationIdentity || workerPreparationRoot !== null || conformanceWorkspaceRoot !== null || requestedNativePreparationPurpose === "native_session_start")
       ? requestedNativePreparationPurpose : undefined;
@@ -4622,6 +4761,7 @@ export function runtimeControlService(
     const nativeWorkspacePrepare = nativePreparationPurpose === "native_workspace_prepare";
     const nativeRuntimeContextPrepare = nativePreparationPurpose === "native_runtime_context_prepare";
     const nativeRuntimeAssetErasureProbe = nativePreparationPurpose === "native_provider_data_erasure_probe";
+    const nativeRunnerTrustBundle = nativePreparationPurpose === NATIVE_RUNNER_TRUST_BUNDLE_PREPARATION_PURPOSE;
     if (modelBrokerSessionPhase !== undefined && modelBrokerSessionPhase !== "start" &&
       modelBrokerSessionPhase !== "refresh" && modelBrokerSessionPhase !== "stop")
       throw conflict("Managed model session lifecycle phase is unsupported");
@@ -4869,7 +5009,7 @@ export function runtimeControlService(
       env.PAPERCLIP_MANAGED_MODEL_MAX_OUTPUT_TOKENS = String(minted.maxOutputTokens);
     }
     if (managedModelPlaceholder && (!modelBrokerCredential || nativeHarnessState || nativeWorkspacePrepare ||
-      nativeRuntimeContextPrepare || nativeRuntimeAssetErasureProbe))
+      nativeRuntimeContextPrepare || nativeRuntimeAssetErasureProbe || nativeRunnerTrustBundle))
       throw conflict("Managed model sentinel requires its current typed broker credential");
     if (credentials.mode === "brokered" && !nativePreparationPurpose) {
       if (credentials.bindings.length === 0) throw conflict("Brokered sandbox policy has no current credential bindings");

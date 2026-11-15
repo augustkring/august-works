@@ -81,6 +81,160 @@ export function nativeOpenCodeConformanceSourceDigest(a: NativeOpenCodeConforman
     historyPrefixHash: a.historyPrefixHash });
 }
 
+type NativeOpenCodeConformanceProbeKind = NativeOpenCodeConformanceSourceAuthority["probeKind"];
+const NATIVE_OPENCODE_CONFORMANCE_PROBE_KINDS: ReadonlySet<string> =
+  new Set(["start", "resume", "peer_unseen", "peer_write", "isolation_read", "cancel"]);
+
+/** Probe kinds whose turn continues the presence's earlier session
+ * (`continuation: true` and a non-empty history prefix). The probe owner
+ * resumes a presence's session whenever it holds a completed snapshot for it,
+ * so `peer_write` continues the peer session opened by `peer_unseen` (CONF5b).
+ * `start` and `peer_unseen` are the first turns of fresh sessions. */
+export const NATIVE_OPENCODE_CONFORMANCE_CONTINUATION_KINDS: ReadonlySet<NativeOpenCodeConformanceProbeKind> =
+  new Set(["resume", "isolation_read", "cancel", "peer_write"]);
+
+/** The presence's own earlier turns, in order, that a probe's history prefix
+ * must replay: the primary runs start, resume, isolation_read and cancel in
+ * one session; the peer runs peer_unseen and peer_write in another. A history
+ * from the other presence's session never matches. */
+const NATIVE_OPENCODE_CONFORMANCE_PRIOR_TURNS: Readonly<Record<NativeOpenCodeConformanceProbeKind, readonly NativeOpenCodeConformanceProbeKind[]>> = {
+  start: [], resume: ["start"], isolation_read: ["start", "resume"], cancel: ["start", "resume", "isolation_read"],
+  peer_unseen: [], peer_write: ["peer_unseen"],
+};
+
+/** Typed conformance source handed to the Native dispatch-intent recorder in
+ * place of a generic bootstrap source closure. Every member is server-owned:
+ * the issuer tuple RuntimeControl persisted at session start, the fixed probe
+ * template selector, and the server-tracked history of this presence. */
+export type NativeOpenCodeConformanceDispatchSource = Readonly<{
+  kind: "provider_conformance";
+  qualificationGroupId: string;
+  planId: string;
+  profileId: string;
+  probeId: string;
+  dispatchNonce: string;
+  responsibleUserId: string;
+  probeKind: NativeOpenCodeConformanceProbeKind;
+  marker: string;
+  historyPrefix: readonly Readonly<{ role: "user" | "assistant"; text: string }>[];
+}>;
+
+const CONFORMANCE_UUID = /^[0-9a-f]{8}-[0-9a-f]{4}-[1-8][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i;
+const CONFORMANCE_TUPLE_KEYS = ["authorityHash", "dispatchNonce", "planId", "probeId", "profileId", "qualificationGroupId"].join(",");
+
+function conformanceRecord(value: unknown): Record<string, unknown> | null {
+  return value && typeof value === "object" && !Array.isArray(value) ? value as Record<string, unknown> : null;
+}
+
+/** The history prefix is exactly this presence's earlier turns in its own
+ * session: for each prior probe kind its fixed user prompt (the primary's
+ * start prompt carries this marker) followed by that probe's answer. The
+ * owner records an answer only for a completed probe, and an incomplete probe
+ * ends the group, so every prior turn has one. */
+function conformanceHistoryMatchesPresence(kind: NativeOpenCodeConformanceProbeKind, marker: string,
+  history: readonly unknown[]): boolean {
+  const prior = NATIVE_OPENCODE_CONFORMANCE_PRIOR_TURNS[kind];
+  if (!prior || (prior.length !== 0) !== NATIVE_OPENCODE_CONFORMANCE_CONTINUATION_KINDS.has(kind) ||
+    history.length !== prior.length * 2) return false;
+  return history.every((entry, index) => {
+    const row = conformanceRecord(entry);
+    if (!row || Object.keys(row).sort().join(",") !== "role,text" || typeof row.text !== "string") return false;
+    return index % 2 === 0
+      ? row.role === "user" && row.text === nativeOpenCodeConformancePrompt(prior[index / 2]!, marker)
+      : row.role === "assistant";
+  });
+}
+
+/** Bind the typed conformance source to the dispatch intent being recorded
+ * and return the sealed source receipt (CONF5). Called by the recorder inside
+ * the intent transaction, against the locked Run row: the hidden
+ * provider-conformance Run and its Human, the issuer-persisted dispatch tuple,
+ * the conformance-shaped managed OpenCode source authority (no tools, the
+ * fixed system frame, no generic prompt binding or input receipt), the one
+ * turn of this Run, and the fixed template (prompt text, continuation flag
+ * and the presence's own earlier turns as history for the probe kind). Anything else is refused; there is
+ * no generic exemption. */
+export function sealNativeOpenCodeConformanceDispatchSource(input: {
+  source: NativeOpenCodeConformanceDispatchSource;
+  run: Readonly<{ id: string; responsibleUserId: string | null; triggerDetail: string | null; contextSnapshot: unknown }>;
+  profile: Readonly<Record<string, unknown>>;
+  turnInput: unknown;
+  intent: Readonly<{ dispatchId: string; eventSeq: number; attempt: number; responsibleUserId: string | null;
+    turnInputDigest: string; continuation: boolean }>;
+  priorIntentCount: number;
+}): NativeOpenCodeConformanceSourceAuthority {
+  const refuse = (): never => {
+    throw forbidden("The exact hidden conformance Run, dispatch tuple, source authority and fixed probe template are required");
+  };
+  const { source, run, profile, intent } = input;
+  const context = conformanceRecord(run.contextSnapshot) ?? {};
+  const tuple = conformanceRecord(context.nativeOpenCodeConformanceDispatch);
+  const authority = conformanceRecord(profile.nativeOpenCodeSourceAuthority);
+  const turn = conformanceRecord(input.turnInput);
+  const message = conformanceRecord(turn?.message);
+  if (!source || source.kind !== "provider_conformance" || !NATIVE_OPENCODE_CONFORMANCE_PROBE_KINDS.has(source.probeKind) ||
+    ![source.qualificationGroupId, source.planId, source.profileId, source.probeId, source.dispatchNonce]
+      .every(id => typeof id === "string" && CONFORMANCE_UUID.test(id)) ||
+    typeof source.responsibleUserId !== "string" || source.responsibleUserId.length === 0 ||
+    typeof source.marker !== "string" || !/^AW_PROBE_[A-Fa-f0-9]{32}$/.test(source.marker))
+    return refuse();
+  const continuationProbe = NATIVE_OPENCODE_CONFORMANCE_CONTINUATION_KINDS.has(source.probeKind);
+  const prompt = nativeOpenCodeConformancePrompt(source.probeKind, source.marker);
+  const history = Array.isArray(source.historyPrefix) ? source.historyPrefix : null;
+  // The hidden Run, its Human and the issuer tuple RuntimeControl persisted.
+  if (run.triggerDetail !== "provider_conformance" || run.responsibleUserId !== source.responsibleUserId ||
+    intent.responsibleUserId !== source.responsibleUserId ||
+    context.providerConformanceGroupId !== source.qualificationGroupId ||
+    context.providerConformancePlanId !== source.planId ||
+    context.nativeOpenCodeConformanceProbeId !== source.probeId ||
+    context.nativeOpenCodeConformanceProfileId !== source.profileId ||
+    context.containsCompanyContext !== false || context.platformToolsGranted !== false ||
+    !tuple || Object.keys(tuple).sort().join(",") !== CONFORMANCE_TUPLE_KEYS ||
+    tuple.qualificationGroupId !== source.qualificationGroupId || tuple.planId !== source.planId ||
+    tuple.profileId !== source.profileId || tuple.probeId !== source.probeId ||
+    tuple.dispatchNonce !== source.dispatchNonce ||
+    typeof tuple.authorityHash !== "string" || !/^[a-f0-9]{64}$/.test(tuple.authorityHash))
+    return refuse();
+  // The conformance-shaped managed OpenCode source authority, still unbound:
+  // no tools, the fixed system frame, the immutable input, no prompt binding.
+  if (!authority || authority.version !== 1 || authority.executionInputHash !== nativeSha256(profile.nativeExecutionInput) ||
+    authority.systemInstructionsHash !== nativeSha256(NATIVE_OPENCODE_CONFORMANCE_SYSTEM) ||
+    !Array.isArray(authority.toolSchemas) || authority.toolSchemas.length !== 0 ||
+    authority.toolSchemasHash !== nativeSha256([]) ||
+    !Array.isArray(authority.authorizedPromptHashes) || authority.authorizedPromptHashes.length !== 0 ||
+    !Array.isArray(authority.promptSourceBindings) || authority.promptSourceBindings.length !== 0 ||
+    Object.hasOwn(authority, "workspaceMetadataSource") || authority.attachmentStageHash !== null)
+    return refuse();
+  // One model turn per hidden Run, with no other Native input or effect.
+  if (input.priorIntentCount !== 0 || profile.nativeInputSourceReceipt !== undefined ||
+    profile.nativeOpenCodeConformanceSourceAuthority !== undefined ||
+    (Array.isArray(profile.nativeToolCallDispatchAssociations) && profile.nativeToolCallDispatchAssociations.length !== 0) ||
+    (Array.isArray(profile.nativeToolResultSourceCaptures) && profile.nativeToolResultSourceCaptures.length !== 0))
+    return refuse();
+  // The fixed template: prompt, continuation flag and history shape.
+  if (!turn || Object.keys(turn).some(key => key !== "message" && key !== "continuation") ||
+    !message || Object.keys(message).sort().join(",") !== "role,text" || message.role !== "user" || message.text !== prompt ||
+    (continuationProbe ? turn.continuation !== true : Object.hasOwn(turn, "continuation")) ||
+    intent.continuation !== continuationProbe ||
+    intent.turnInputDigest !== nativeOpenCodeConformanceTurnInputDigest({ kind: source.probeKind, marker: source.marker,
+      continuation: continuationProbe }) ||
+    !history || !conformanceHistoryMatchesPresence(source.probeKind, source.marker, history))
+    return refuse();
+  if (typeof intent.dispatchId !== "string" || intent.dispatchId.length === 0 ||
+    !Number.isSafeInteger(intent.eventSeq) || !Number.isSafeInteger(intent.attempt))
+    return refuse();
+  const unsealed: NativeOpenCodeConformanceSourceAuthority = {
+    version: 1, scope: "provider_conformance", qualificationGroupId: source.qualificationGroupId,
+    probeId: source.probeId, probeRunId: run.id, dispatchNonce: source.dispatchNonce,
+    responsibleUserId: source.responsibleUserId, probeKind: source.probeKind, marker: source.marker,
+    dispatchId: intent.dispatchId, eventSeq: intent.eventSeq, attempt: intent.attempt,
+    continuation: continuationProbe, turnInputDigest: intent.turnInputDigest,
+    systemHash: nativeSha256(NATIVE_OPENCODE_CONFORMANCE_SYSTEM), promptHash: nativeSha256(prompt),
+    historyPrefixHash: nativeSha256(history.map(entry => ({ role: entry.role, text: entry.text }))), sourceDigest: "",
+  };
+  return Object.freeze({ ...unsealed, sourceDigest: nativeOpenCodeConformanceSourceDigest(unsealed) });
+}
+
 /** Validate raw provider-visible source before any ledger reservation. The
  * authority must be loaded from the canonical run's server-owned profile, and
  * dispatches from that same run's Native input intent array. */

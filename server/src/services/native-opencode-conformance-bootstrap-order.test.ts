@@ -48,22 +48,50 @@ describe("Native OpenCode conformance issuer tuple ordering", () => {
     return { identity, session, backend, db, execution };
   }
 
-  it("reads the issuer tuple only after actual session open and snapshot, before recording an input intent", async () => {
-    const state = setup(async () => { order.push("persistSourceReceipt"); throw new Error("controlled_source_persist_sentinel"); });
-    const result = await runManagedOpenCodeProbe({
-      db: state.db, createBackend: async () => state.backend, execution: state.execution,
-      runnerInstanceId: "runner-1", responsibleUserId: "user-1", groupId: "group-1", planId: "plan-1", profileId: "profile-1",
-      probe: {
-        identity: state.identity, workingDirectory: "/probe", prompt: "fixed synthetic prompt", signal: AbortSignal.timeout(5_000),
-        resolveSource: async () => { order.push("resolveIssuerTuple"); return {
-          qualificationGroupId: "group-1", probeId: "probe-1", dispatchNonce: "runtimecontrol-issued",
-          planId: "plan-1", profileId: "profile-1", probeKind: "start", marker: "AW_PROBE_aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa", historyPrefix: [],
-        }; },
-      },
-    });
+  const marker = "AW_PROBE_aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa";
+  const issuerTuple = (overrides: Record<string, string> = {}) => ({
+    qualificationGroupId: "group-1", probeId: "probe-1", dispatchNonce: "runtimecontrol-issued",
+    planId: "plan-1", profileId: "profile-1", probeKind: "start" as const, marker, historyPrefix: [], ...overrides,
+  });
+  const probeInput = (state: ReturnType<typeof setup>, resolveSource: () => Promise<ReturnType<typeof issuerTuple>>) => ({
+    db: state.db, createBackend: async () => state.backend, execution: state.execution,
+    runnerInstanceId: "runner-1", responsibleUserId: "user-1", groupId: "group-1", planId: "plan-1", profileId: "profile-1",
+    probe: { identity: state.identity, workingDirectory: "/probe", prompt: "fixed synthetic prompt", signal: AbortSignal.timeout(5_000),
+      resolveSource },
+  });
+
+  it("reads the issuer tuple after session open and snapshot and hands it to the intent recorder as its typed source", async () => {
+    // CONF5: the source receipt is sealed by the recorder in the intent's own
+    // transaction; no separate source transaction runs before startTurn.
+    const state = setup(async () => { order.push("separateSourceTransaction"); throw new Error("no_separate_source_transaction"); });
+    mocks.dispatchIntent.mockImplementation(async () => { order.push("dispatchIntent"); throw new Error("controlled_intent_sentinel"); });
+    const result = await runManagedOpenCodeProbe(probeInput(state, async () => { order.push("resolveIssuerTuple"); return issuerTuple(); }));
     expect(result.state).toBe("failed");
-    expect(order).toEqual(["openSession", "snapshot", "resolveIssuerTuple", "dispatchIntent", "persistSourceReceipt", "close"]);
+    expect(order).toEqual(["openSession", "snapshot", "resolveIssuerTuple", "dispatchIntent", "close"]);
+    expect(mocks.dispatchIntent).toHaveBeenCalledTimes(1);
+    const recorded = mocks.dispatchIntent.mock.calls[0]![0] as Record<string, unknown>;
+    expect(recorded).toMatchObject({ runId: "run-1", eventSeq: 7, attempt: 1,
+      turnInput: { message: { role: "user", text: "fixed synthetic prompt" } } });
+    expect(recorded.providerConformanceSource).toEqual({ kind: "provider_conformance", qualificationGroupId: "group-1",
+      planId: "plan-1", profileId: "profile-1", probeId: "probe-1", dispatchNonce: "runtimecontrol-issued",
+      responsibleUserId: "user-1", probeKind: "start", marker, historyPrefix: [] });
+    expect(recorded).not.toHaveProperty("bootstrapSourceClosure");
+    expect(state.db.transaction).not.toHaveBeenCalled();
     expect(state.session.startTurn).not.toHaveBeenCalled();
+  });
+
+  it("refuses an issuer tuple for another group, plan or profile before the input intent", async () => {
+    const tuples: Record<string, string>[] = [{ qualificationGroupId: "group-2" }, { planId: "plan-2" }, { profileId: "profile-2" }];
+    for (const overrides of tuples) {
+      vi.clearAllMocks();
+      mocks.claim.mockResolvedValue({ leaseOwner: "owner", attempt: 1, controller: {} });
+      mocks.appendEvent.mockResolvedValue({ row: { seq: 7 } });
+      const state = setup(async () => { throw new Error("no_separate_source_transaction"); });
+      const result = await runManagedOpenCodeProbe(probeInput(state, async () => issuerTuple(overrides)));
+      expect(result.state).toBe("failed");
+      expect(mocks.dispatchIntent).not.toHaveBeenCalled();
+      expect(state.session.startTurn).not.toHaveBeenCalled();
+    }
   });
 
   it("refuses a missing post-start tuple before input intent, source receipt, or provider turn", async () => {

@@ -1959,6 +1959,10 @@ async function makeFixtureTreeWritable(target: string): Promise<void> {
       const minted = await gateway().issueForRun(input);
       expect(verifyRuntimeToolsToken(minted.token, "worker_model")?.worker_model).toMatchObject(binding);
       expect(verifyRuntimeToolsToken(minted.token, "conversation_model")).toBeNull();
+      // RT-03 (MS1c, option A): a plan-less Task Run has no Worker attempt, so
+      // it has no budget owner and no managed model path.
+      await expect(gateway().issueForRun({ ...input, runId: randomUUID() })).rejects.toMatchObject({ status: 403,
+        message: "One exact active, accountable worker attempt is required for managed model execution" });
       await db.update(orchestrationWorkerAttempts).set({ status: "cancelled", finishedAt: new Date() })
         .where(eq(orchestrationWorkerAttempts.id, binding.workerAttemptId));
       await expect(gateway().issueForRun(input)).rejects.toMatchObject({ status: 403 });

@@ -711,6 +711,7 @@ async function prepareRuntime(input: {
   gitSnapshot?: GitWorkspaceSnapshot | null;
   workspaceRepositoryMode?: "discover" | "server_verified_none";
   nativeWorkspacePreparation?: boolean;
+  nativeWorkspaceRestorePreparation?: boolean;
   durableSeed?: WorkspaceDurableSeedPaths;
 }): Promise<PreparedAdapterExecutionTargetRuntime> {
   return prepareAdapterExecutionTargetRuntime({
@@ -725,6 +726,7 @@ async function prepareRuntime(input: {
     workspaceGitSnapshot: input.gitSnapshot,
     workspaceRepositoryMode: input.workspaceRepositoryMode,
     nativeWorkspacePreparation: input.nativeWorkspacePreparation === true || input.workspaceRepositoryMode === "server_verified_none",
+    ...(input.nativeWorkspaceRestorePreparation === true ? { nativeWorkspaceRestorePreparation: true } : {}),
   });
 }
 
@@ -783,11 +785,23 @@ export async function prepareNativeWorkspaceSync(input: {
   nativeWorkspacePreparation?: boolean;
   /** Refuse replacement staging when a conformance root's retained Host stamp is absent or changed. */
   requireCleanRemoteAdoption?: boolean;
+  /**
+   * Provider-conformance owner only: the outbound restore keeps the
+   * credentialless workspace-preparation purpose, which RuntimeControl matches
+   * against the exact conformance task root.
+   */
+  nativeWorkspaceRestorePreparation?: boolean;
 }): Promise<PreparedNativeWorkspaceSync | null> {
   if (input.target?.kind !== "remote" || input.target.transport !== "sandbox") {
     return null;
   }
   const target = input.target;
+  // Restore-time preparation authority belongs only to the clean-adoption
+  // conformance owner of a server-verified projectless workspace.
+  if (input.nativeWorkspaceRestorePreparation && (input.nativeWorkspacePreparation !== true ||
+      input.requireCleanRemoteAdoption !== true || input.workspaceRepositoryMode !== "server_verified_none" ||
+      input.restartRecovery || input.sameRunRecovery))
+    throw new Error("native_workspace_restore_scope_invalid");
   const providerLeaseId = providerLeaseIdFor({ target, lease: input.lease });
   // Reattachment may never seed a replacement sandbox over a still-live run.
   if (input.restartRecovery?.kind === "reattach_remote_runner" &&
@@ -867,6 +881,7 @@ export async function prepareNativeWorkspaceSync(input: {
       gitSnapshot: existing.descriptor.gitSnapshot,
       workspaceRepositoryMode: input.workspaceRepositoryMode,
       nativeWorkspacePreparation: input.nativeWorkspacePreparation,
+      nativeWorkspaceRestorePreparation: input.nativeWorkspaceRestorePreparation,
       durableSeed,
     });
     descriptor = {
@@ -909,6 +924,7 @@ export async function prepareNativeWorkspaceSync(input: {
       },
       workspaceRepositoryMode: input.workspaceRepositoryMode,
       nativeWorkspacePreparation: input.nativeWorkspacePreparation,
+      nativeWorkspaceRestorePreparation: input.nativeWorkspaceRestorePreparation,
     });
     const currentSnapshot = runtime.workspaceSyncSnapshot;
     if (!currentSnapshot) {
@@ -936,6 +952,7 @@ export async function prepareNativeWorkspaceSync(input: {
           gitSnapshot: currentSnapshot.gitSnapshot,
           workspaceRepositoryMode: input.workspaceRepositoryMode,
           nativeWorkspacePreparation: input.nativeWorkspacePreparation,
+          nativeWorkspaceRestorePreparation: input.nativeWorkspaceRestorePreparation,
           durableSeed: {
             workspaceArchivePath: seedPaths.workspaceArchivePath,
             gitArchivePath: seedPaths.gitArchivePath,
@@ -1137,5 +1154,6 @@ export const nativeWorkspaceSyncInternals = {
   readDescriptor,
   readReference: readNativeWorkspaceSyncReference,
   writeRemoteStamp,
+  prepareRuntime,
   sha256,
 };

@@ -985,6 +985,28 @@ function createRemoteTarballFromDirectoryCommand(input: {
   ].join(" && ");
 }
 
+// Named builder (C3) for the outbound workspace restore archive, as the restore
+// passes it to `client.run` (one nested `sh -c` word). RuntimeControl matches
+// the provider-conformance restore against this exact string.
+export function buildWorkspaceRestoreTarCommand(input: {
+  workspaceRemoteDir: string;
+  archivePath: string;
+  exclude: string[];
+}): string {
+  return `sh -c ${shellQuote(createRemoteTarballFromDirectoryCommand({
+    remoteDir: input.workspaceRemoteDir,
+    archivePath: input.archivePath,
+    exclude: input.exclude,
+  }))}`;
+}
+
+// The restore exclusions of a server-verified projectless workspace (no Git
+// snapshot, no ignore scan, no caller excludes). The runtime root is never
+// exported. `prepareSandboxManagedRuntime` derives the same list below.
+export function serverVerifiedWorkspaceRestoreExclude(): string[] {
+  return mergeExcludes(SANDBOX_WORKSPACE_HEAVY_DIR_EXCLUDES, [...GIT_ARCHIVE_EXCLUDES], [".paperclip-runtime"]);
+}
+
 async function emitRuntimeStatus(
   sink: RuntimeStatusSink | undefined,
   phase: RuntimeStatusPhase,
@@ -1856,11 +1878,11 @@ export async function prepareSandboxManagedRuntime(input: {
                 } else {
                   const remoteWorkspaceTar = path.posix.join(runtimeRootDir, "workspace-download.tar");
                   await input.client.run(
-                    `sh -c ${shellQuote(createRemoteTarballFromDirectoryCommand({
-                      remoteDir: workspaceRemoteDir,
+                    buildWorkspaceRestoreTarCommand({
+                      workspaceRemoteDir,
                       archivePath: remoteWorkspaceTar,
                       exclude: workspaceRestoreExclude,
-                    }))}`,
+                    }),
                     { timeoutMs: input.spec.timeoutMs },
                   );
                   const workspaceRestore = makeTransferProgress(
