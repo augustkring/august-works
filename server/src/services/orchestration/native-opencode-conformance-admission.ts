@@ -20,7 +20,8 @@ import { quoteModelReservation } from "./model-reservations.js";
 import { modelReservationService } from "./model-reservations.js";
 import { anthropicManagedMessagesCall, ReadOnlyModelKnownUsageError, validateAnthropicManagedMessagesRequest } from "./read-only-model-transport.js";
 import type { guardedRemoteHttpFetch } from "../remote-http-fetch.js";
-import { assertNativeOpenCodeConformanceSource, type NativeOpenCodeConformanceSourceAuthority } from "./native-opencode-conformance-source.js";
+import { assertNativeOpenCodeConformanceSource, exactNativeOpenCodeConformanceRequestSystemFrame,
+  type NativeOpenCodeConformanceSourceAuthority } from "./native-opencode-conformance-source.js";
 import { managedOpenCodeConformanceRequestToolsAllowed, managedOpenCodeConformanceResponseToolFree } from "../native-runtime/managed-opencode-terminal-tools.js";
 
 /** Compact signed RuntimeControl claim. Fields identify one canonical probe;
@@ -174,6 +175,10 @@ export async function callNativeOpenCodeConformanceMessages(input: {
   // in the history, and a tool-bearing response is refused after settlement.
   if (!managedOpenCodeConformanceRequestToolsAllowed(qualifiedInput.request))
     throw forbidden("Provider conformance probes cannot grant, exercise, or replay platform tools");
+  // CONF9. The system frame as sent, before cache hints are stripped: the
+  // fixed frame, or one text block with only the pinned ephemeral cache hint.
+  if (!exactNativeOpenCodeConformanceRequestSystemFrame(qualifiedInput.request.system))
+    throw forbidden("The provider-visible OpenCode request differs from the sealed tool-free synthetic probe source");
   const assertCurrentSource = (current: Awaited<ReturnType<typeof validateNativeOpenCodeConformanceHarness>>) => {
     const runProfile = current.run.runnerProfileJson && typeof current.run.runnerProfileJson === "object" &&
       !Array.isArray(current.run.runnerProfileJson) ? current.run.runnerProfileJson as Record<string, unknown> : {};

@@ -25266,7 +25266,7 @@
         },
         {
           "path": "server/src/services/orchestration/native-opencode-conformance-admission.ts",
-          "sha256": "ea01e5a89d92904139c3e5f84b545504cefe360c58c47b63f3b75d129d15f8f8"
+          "sha256": "3e47aec6412c3998a168241e6b24e0b92cd2aa3e2298cb34cd9f27030d95b91d"
         },
         {
           "path": "server/src/services/orchestration/native-opencode-conformance-cancel.test.ts",
@@ -25274,11 +25274,11 @@
         },
         {
           "path": "server/src/services/orchestration/native-opencode-conformance-source.test.ts",
-          "sha256": "14ce411b8973a8bfe2a6f1d75859cf717696bd9921c73ed680e2b5fbc2898998"
+          "sha256": "3c77bb1ba86f4ca9159b5163b1568cc3f014b6e119238e4fc88d722f3089653c"
         },
         {
           "path": "server/src/services/orchestration/native-opencode-conformance-source.ts",
-          "sha256": "577e3ba7549f584c1eb0b2d5e8f3248bf2817da453e63c1027cc64f50226ec14"
+          "sha256": "32e67465aca7c7b4e2805e37c87365fe46abb521bb0d881ddc498acdfc1f26f3"
         },
         {
           "path": "server/src/services/plugin-agent-runtime-state.test.ts",
@@ -64633,7 +64633,7 @@
       "id": "source:server/src/services/orchestration/native-opencode-conformance-admission.ts",
       "kind": "current_source_owner",
       "path": "server/src/services/orchestration/native-opencode-conformance-admission.ts",
-      "sha256": "ea01e5a89d92904139c3e5f84b545504cefe360c58c47b63f3b75d129d15f8f8",
+      "sha256": "3e47aec6412c3998a168241e6b24e0b92cd2aa3e2298cb34cd9f27030d95b91d",
       "changeIds": [
         "SCR-V10-NATIVE-RUNTIME-AND-AUTHORITY"
       ],
@@ -64663,7 +64663,7 @@
       "id": "source:server/src/services/orchestration/native-opencode-conformance-source.test.ts",
       "kind": "current_source_owner",
       "path": "server/src/services/orchestration/native-opencode-conformance-source.test.ts",
-      "sha256": "14ce411b8973a8bfe2a6f1d75859cf717696bd9921c73ed680e2b5fbc2898998",
+      "sha256": "3c77bb1ba86f4ca9159b5163b1568cc3f014b6e119238e4fc88d722f3089653c",
       "changeIds": [
         "SCR-V10-NATIVE-RUNTIME-AND-AUTHORITY"
       ],
@@ -64678,7 +64678,7 @@
       "id": "source:server/src/services/orchestration/native-opencode-conformance-source.ts",
       "kind": "current_source_owner",
       "path": "server/src/services/orchestration/native-opencode-conformance-source.ts",
-      "sha256": "577e3ba7549f584c1eb0b2d5e8f3248bf2817da453e63c1027cc64f50226ec14",
+      "sha256": "32e67465aca7c7b4e2805e37c87365fe46abb521bb0d881ddc498acdfc1f26f3",
       "changeIds": [
         "SCR-V10-NATIVE-RUNTIME-AND-AUTHORITY"
       ],
