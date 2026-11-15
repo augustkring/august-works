@@ -5787,7 +5787,7 @@
         },
         {
           "path": "server/src/__tests__/v7-worker-model-gateway.integration.test.ts",
-          "sha256": "e44da6c5855431626c98aa1cd415c9aff1170813e9dc433487c7d28fbd3aa3ca"
+          "sha256": "477d4def338ad17210f37df24089ab8c9b126e46b7ef8aa053b09ce9f5377504"
         },
         {
           "path": "server/src/__tests__/v9-agent-publication.integration.test.ts",
@@ -9168,7 +9168,7 @@
         },
         {
           "path": "server/src/__tests__/v7-worker-model-gateway.integration.test.ts",
-          "sha256": "e44da6c5855431626c98aa1cd415c9aff1170813e9dc433487c7d28fbd3aa3ca"
+          "sha256": "477d4def338ad17210f37df24089ab8c9b126e46b7ef8aa053b09ce9f5377504"
         },
         {
           "path": "server/src/__tests__/v8-company-purge.integration.test.ts",
@@ -10229,7 +10229,7 @@
         },
         {
           "path": "server/src/__tests__/v7-worker-model-gateway.integration.test.ts",
-          "sha256": "e44da6c5855431626c98aa1cd415c9aff1170813e9dc433487c7d28fbd3aa3ca"
+          "sha256": "477d4def338ad17210f37df24089ab8c9b126e46b7ef8aa053b09ce9f5377504"
         },
         {
           "path": "server/src/__tests__/v9-agent-authored-definition.integration.test.ts",
@@ -13880,7 +13880,7 @@
         },
         {
           "path": "server/src/__tests__/heartbeat-managed-scheduler.integration.test.ts",
-          "sha256": "0c3bd88c8492882c007af90172c84e1c319bdd56e89262fc8b24d5e421517cc7"
+          "sha256": "229f2796f9ce5d6395a98c33593e391dcbc669167e77472bf79708dfa9968f97"
         },
         {
           "path": "server/src/__tests__/heartbeat-managed-serial-scheduler.integration.test.ts",
@@ -48035,7 +48035,7 @@
       "id": "source:server/src/__tests__/v7-worker-model-gateway.integration.test.ts",
       "kind": "current_source_owner",
       "path": "server/src/__tests__/v7-worker-model-gateway.integration.test.ts",
-      "sha256": "e44da6c5855431626c98aa1cd415c9aff1170813e9dc433487c7d28fbd3aa3ca",
+      "sha256": "477d4def338ad17210f37df24089ab8c9b126e46b7ef8aa053b09ce9f5377504",
       "changeIds": [
         "SCR-V10-HOTSPOT-02",
         "SCR-V10-HOTSPOT-06",
@@ -52761,7 +52761,7 @@
       "id": "source:server/src/__tests__/heartbeat-managed-scheduler.integration.test.ts",
       "kind": "current_source_owner",
       "path": "server/src/__tests__/heartbeat-managed-scheduler.integration.test.ts",
-      "sha256": "0c3bd88c8492882c007af90172c84e1c319bdd56e89262fc8b24d5e421517cc7",
+      "sha256": "229f2796f9ce5d6395a98c33593e391dcbc669167e77472bf79708dfa9968f97",
       "changeIds": [
         "SCR-V10-WORKFLOWS-DURABLE-OPERATIONS"
       ],

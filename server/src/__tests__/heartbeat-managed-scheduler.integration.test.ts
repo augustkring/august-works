@@ -402,7 +402,8 @@ function managedLivenessTool(body: Record<string, unknown>, wanted: string): str
 }
 
 function managedLivenessFinish(input: ManagedReplyInput,
-  disposition: "done" | "yielded", summary: string) {
+  disposition: "done" | "yielded", summary: string,
+  continuation?: { kind: "response_wake"; summary: string; idempotencyKey: string }) {
   const contract = input.execution.completionContract.contract;
   const waiting = disposition === "yielded";
   return { stop_reason: "tool_use" as const, content: [{ type: "tool_use" as const,
@@ -414,6 +415,7 @@ function managedLivenessFinish(input: ManagedReplyInput,
           status: waiting ? "unknown" as const : "satisfied" as const, evidenceRefs: [] })),
         remainingWork: waiting ? [{ description: "Inspect the repository and implement the fix.", blocksCompletion: true }] : [] },
       evidence: [], verification: [], attentionRequests: [], artifacts: [],
+      ...(continuation ? { continuation } : {}),
     } }] };
 }
 
@@ -435,8 +437,12 @@ it("reconstructs the current source-qualified v2 frame on a same-Task new Run wi
           id: `retained-notes-${input.runId}`, name: managedLivenessTool(input.body, "write_document"),
           input: { idempotencyKey: `retained-notes-${input.runId}`, key: "notes", title: "Initial work note",
             body: "Verified the current repository state before asking for the next instruction.", baseRevisionId: null } }] };
+        // The run-result schema requires a response_wake continuation for a
+        // yielded result (`protocol/schemas/result.schema.json`).
         if (input.callIndex === 3) return managedLivenessFinish(input, "yielded",
-          "The plan and repository note are saved; continue after the Human's next comment.");
+          "The plan and repository note are saved; continue after the Human's next comment.",
+          { kind: "response_wake", summary: "Continue after the Human's next comment.",
+            idempotencyKey: `retained-next-comment:${input.runId}` });
         if (input.callIndex === 4) return { stop_reason: "end_turn" as const,
           content: [{ type: "text" as const, text: "The plan and repository note are saved for the next request." }] };
       } else {
@@ -473,8 +479,12 @@ it("reconstructs the current source-qualified v2 frame on a same-Task new Run wi
         { manualInputActor: actor, privacyActor: actor, sourceAccessActor: actor });
       const plan = await orchestrationService(db).create(actor, companyId, { issueId: task.id,
         expectedIssueUpdatedAt: task.updatedAt.toISOString(), workload: "semantic", riskClass: "C0",
+        // Native draft writes may target only declared completion outputs
+        // (`native-tool-boundary.ts`), so the plan and note Run 1 saves are
+        // declared alongside the result Run 2 completes.
         completionContract: { objective: "Complete the current Human request after recording the plan",
-          requiredOutputs: [{ kind: "task_document", key: "result" }],
+          requiredOutputs: [{ kind: "task_document", key: "plan" }, { kind: "task_document", key: "notes" },
+            { kind: "task_document", key: "result" }],
           businessInvariants: ["Reuse completed work and do not repeat prior effects"] },
         budgets: { maxModelCostMinor: 20, maxToolActions: 6 }, workers: [{ key: "writer", issueId: task.id }] });
       await orchestrationService(db).decide(actor, companyId, plan.id, { expectedVersion: plan.version,
