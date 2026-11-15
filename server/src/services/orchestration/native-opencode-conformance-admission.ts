@@ -167,6 +167,22 @@ export function nativeOpenCodeConformanceQualifiedTariff(input: {
   return assertWorkerModelProfileCurrent(input.profile, input.sourceSha, input.protectedEvidenceOrigin).tariff;
 }
 
+/** CONF11. The transport re-validates what it is given, so the conformance
+ * lane passes the raw request (as the worker lane does), not the normalized
+ * provider body. These two checks bind that raw request to the one every
+ * conformance check accepted: the raw request's canonical digest must be the
+ * one taken when it was validated, and the body the transport is about to
+ * send must be exactly the validated provider body. */
+export function nativeOpenCodeConformanceTransportRequest(raw: unknown, validatedRawDigest: string): unknown {
+  if (nativeSha256(raw) !== validatedRawDigest)
+    throw forbidden("The provider-visible OpenCode request changed after conformance validation");
+  return raw;
+}
+export function assertNativeOpenCodeConformanceWireBody(wireBodySha256: string, validatedBody: string): void {
+  if (wireBodySha256 !== createHash("sha256").update(validatedBody, "utf8").digest("hex"))
+    throw forbidden("The provider wire body differs from the validated conformance request");
+}
+
 /** One-shot, tool-free Messages dispatch for a real managed OpenCode probe.
  * The reservation ledger is the only spend authority; the provider adapter
  * receives the exact already-validated request and server-selected secret. */
@@ -186,6 +202,8 @@ export async function callNativeOpenCodeConformanceMessages(input: {
     model: admission.profile.tariff.model, maxOutputTokens: admission.profile.maxOutputTokens,
     maximumEnvelopeBytes: admission.profile.maximumEnvelopeBytes,
   });
+  // CONF11. Canonical digest of the raw request every check below accepts.
+  const validatedRawDigest = nativeSha256(input.raw);
   // CONF8. The runner's own two terminal tools (exact shared definitions) with
   // tool_choice absent or auto are the only tool surface; no tool may be used
   // in the history, and a tool-bearing response is refused after settlement.
@@ -239,6 +257,7 @@ export async function callNativeOpenCodeConformanceMessages(input: {
       return nativeSha256({ runtimeAuthorityHash: current.authorityHash, sourceDigest: currentSourceDigest });
     },
   });
+  nativeOpenCodeConformanceTransportRequest(input.raw, validatedRawDigest);
   const reservation = await reservations.reserve(actor, {
     companyId: claims.company_id, planId: admission.planId, expectedPlanVersion: admission.planVersion,
     purpose: "provider_conformance", idempotencyKey, inputHash, authorityHash: reservationAuthorityHash,
@@ -280,13 +299,14 @@ export async function callNativeOpenCodeConformanceMessages(input: {
     const fresh = await assertCurrent();
     if (createHash("sha256").update(credential).digest("hex") !== fresh.credentialSha256)
       throw forbidden("The current credential changed before provider dispatch");
-    const result = await anthropicManagedMessagesCall(qualifiedInput.providerRequest, {
+    const result = await anthropicManagedMessagesCall(nativeOpenCodeConformanceTransportRequest(input.raw, validatedRawDigest), {
       model: admission.profile.tariff.model, maxOutputTokens: admission.profile.maxOutputTokens,
       maximumEnvelopeBytes: admission.profile.maximumEnvelopeBytes,
       maximumInputTokens: admission.profile.inputTokensUpperBound,
     }, credential, controller.signal, {
       fetch: input.options.fetch,
       onWireDispatch: async wire => {
+        assertNativeOpenCodeConformanceWireBody(wire.bodySha256, qualifiedInput.body);
         await assertCurrent();
         // The reservation API persists the exact provider request hash and
         // wire body before the HTTP transport is allowed to send it.
