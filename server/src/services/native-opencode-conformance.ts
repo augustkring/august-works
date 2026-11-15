@@ -99,7 +99,61 @@ type Options = { profiles: readonly WorkerModelProfile[]; sourceSha: string; pro
     manifestHash: string; leaseId: string; workspaceRoot: string; creationReceipt: string;
   }) => Promise<unknown>;
   fetch?: typeof guardedRemoteHttpFetch; runtimeSuspectSeconds?: number;
+  /** Test-only Sandbox environment for the probe runner, the conformance
+   * counterpart of Heartbeat's `testNativeRunnerEnvironment`. A software Host
+   * fixture does not provide what a qualified OpenShell Sandbox does for every
+   * process (its egress proxy and trusted CA), so it supplies them here. Only
+   * the closed proxy and CA keys of `nativeOpenCodeConformanceTestRunnerEnvironment`
+   * are accepted; production never sets this option. */
+  testRunnerEnvironment?: (input: { companyId: string; agentId: string; runId: string; leaseId: string }) =>
+    Promise<Readonly<Record<string, string>>>;
 };
+
+const CONFORMANCE_TEST_RUNNER_CA_KEYS = new Set(["SSL_CERT_FILE", "NODE_EXTRA_CA_CERTS"]);
+const CONFORMANCE_TEST_RUNNER_PROXY_KEYS = new Set(["HTTPS_PROXY", "https_proxy", "HTTP_PROXY", "http_proxy", "ALL_PROXY", "all_proxy"]);
+const CONFORMANCE_TEST_RUNNER_NO_PROXY_KEYS = new Set(["NO_PROXY", "no_proxy"]);
+
+/** Closed validator for `Options.testRunnerEnvironment` (CONF7). Accepts only
+ * a CA bundle path (absolute), a credential-free http(s) proxy origin (or the
+ * empty string that clears one) and a host-only NO_PROXY list. Credentials,
+ * managed-model keys and every other variable are refused, so the seam cannot
+ * widen the probe's model or workload authority. */
+export function nativeOpenCodeConformanceTestRunnerEnvironment(raw: unknown): Record<string, string> {
+  const invalid = () => new Error("managed_opencode_test_runner_environment_invalid");
+  if (!raw || typeof raw !== "object" || Array.isArray(raw) || Object.getPrototypeOf(raw) !== Object.prototype) throw invalid();
+  const result: Record<string, string> = {};
+  for (const [key, value] of Object.entries(raw)) {
+    if (typeof value !== "string" || value.length > 4096 || /[\0\r\n]/.test(value)) throw invalid();
+    if (CONFORMANCE_TEST_RUNNER_CA_KEYS.has(key)) {
+      if (!path.posix.isAbsolute(value) || path.posix.normalize(value) !== value) throw invalid();
+    } else if (CONFORMANCE_TEST_RUNNER_PROXY_KEYS.has(key)) {
+      if (value !== "") {
+        let parsed: URL;
+        try { parsed = new URL(value); } catch { throw invalid(); }
+        if (!["http:", "https:"].includes(parsed.protocol) || parsed.username || parsed.password || parsed.origin !== value)
+          throw invalid();
+      }
+    } else if (CONFORMANCE_TEST_RUNNER_NO_PROXY_KEYS.has(key)) {
+      if (value.length > 1024 || !value.split(",").every(entry => /^[A-Za-z0-9.:\[\]-]{1,253}$/.test(entry))) throw invalid();
+    } else throw invalid();
+    result[key] = value;
+  }
+  return result;
+}
+
+/** The probe runner's Sandbox environment: the server-owned managed-model
+ * keys, plus (tests only) the validated software-Host proxy and CA. The
+ * server-owned keys are applied last. */
+export function nativeOpenCodeConformanceRunnerEnvironment(input: {
+  modelBrokerOrigin: string; profile: Pick<WorkerModelProfile, "inputTokensUpperBound" | "maxOutputTokens">;
+  testEnvironment?: unknown;
+}): Record<string, string> {
+  return { ...(input.testEnvironment === undefined ? {} : nativeOpenCodeConformanceTestRunnerEnvironment(input.testEnvironment)),
+    PAPERCLIP_MANAGED_MODEL_BROKER_ORIGIN: input.modelBrokerOrigin,
+    ANTHROPIC_API_KEY: "paperclip-managed-model-broker",
+    PAPERCLIP_MANAGED_MODEL_INPUT_TOKENS_UPPER_BOUND: String(input.profile.inputTokensUpperBound),
+    PAPERCLIP_MANAGED_MODEL_MAX_OUTPUT_TOKENS: String(input.profile.maxOutputTokens) };
+}
 
 /** Wait for the exact provider ledger row to cross the persisted wire boundary.
  * A turn ID, dispatch claim, or scheduled timer alone cannot authorize cancel. */
@@ -764,10 +818,12 @@ export function nativeOpenCodeConformanceService(db: Db, options: Options) {
           await sealWorkspaceAuthorityHash();
           const remoteTarget = { kind: "remote" as const, transport: "sandbox" as const, leaseId: acquired.lease.id,
             remoteCwd: acquired.executionTarget.remoteCwd };
-          const runnerEnvironment = { PAPERCLIP_MANAGED_MODEL_BROKER_ORIGIN: input.options.modelBrokerOrigin,
-            ANTHROPIC_API_KEY: "paperclip-managed-model-broker",
-            PAPERCLIP_MANAGED_MODEL_INPUT_TOKENS_UPPER_BOUND: String(input.target.profile.inputTokensUpperBound),
-            PAPERCLIP_MANAGED_MODEL_MAX_OUTPUT_TOKENS: String(input.target.profile.maxOutputTokens) };
+          const runnerEnvironment = nativeOpenCodeConformanceRunnerEnvironment({
+            modelBrokerOrigin: input.options.modelBrokerOrigin, profile: input.target.profile,
+            testEnvironment: input.options.testRunnerEnvironment
+              ? await input.options.testRunnerEnvironment({ companyId: input.companyId, agentId: input.agentId,
+                runId, leaseId: acquired.lease.id })
+              : undefined });
           return { execution, runnerInstanceId, identity: { runId, sessionId: input.sessionId,
               companyId: input.companyId, issueId: input.taskId, agentId: input.agentId },
             workingDirectory: acquired.executionTarget.remoteCwd, leaseId: acquired.lease.id, workspaceSync, remoteTarget,

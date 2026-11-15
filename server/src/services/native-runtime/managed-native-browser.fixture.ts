@@ -112,6 +112,11 @@ function attachManagedBrowserEntryDiagnostic(page: Page, origin: string) {
 
 
 const binary = process.env.PAPERCLIP_QUALIFIED_OPENCODE_BINARY;
+/** F9: the repository-URL Project case's agent timeoutSec, which is also its
+ * environment lease length, and a case timeout that covers that lease plus
+ * frame setup and teardown. */
+const MANAGED_PROJECT_REPOSITORY_CASE_LEASE_SECONDS = 420;
+const MANAGED_PROJECT_REPOSITORY_CASE_TIMEOUT_MS = (MANAGED_PROJECT_REPOSITORY_CASE_LEASE_SECONDS + 120) * 1000;
 const executablePath = process.env.PAPERCLIP_PLAYWRIGHT_EXECUTABLE;
 
 function successfulProgressToolResult(messages: Array<Record<string, unknown>>, toolUseId: string, issueId: string): string {
@@ -2271,7 +2276,14 @@ describe.skipIf(!binary || !existsSync(binary) || !executablePath || !existsSync
         { name: "octocat/Spoon-Knife", url: "https://github.com/octocat/Spoon-Knife" },
       ];
       try {
+        // F9. This case's Run takes three model turns and creates a Project;
+        // in CI the case needs about 185-205 s, most of it inside the
+        // environment lease. The frame's default agent timeoutSec
+        // (180) is also the lease length, so the Run regularly outlived its
+        // lease and every later Sandbox capability was refused. Give this case
+        // its own lease budget; the frame default is unchanged.
         const result = await runManagedNativeConversationFrame({ db, root, opencodeBinary: binary!,
+          timeoutSec: MANAGED_PROJECT_REPOSITORY_CASE_LEASE_SECONDS,
           conversationWorkMode: "standard",
           createConversationApp: async ({ heartbeat, resolveSession, resolveSessionFromHeaders }) => {
             const server = createServer();
@@ -2552,7 +2564,7 @@ describe.skipIf(!binary || !existsSync(binary) || !executablePath || !existsSync
         await browserContext?.close();
         await browser.close();
       }
-    }, 240_000);
+    }, MANAGED_PROJECT_REPOSITORY_CASE_TIMEOUT_MS);
     }
   },
 );

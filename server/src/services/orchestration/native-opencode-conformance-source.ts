@@ -1,6 +1,7 @@
 import { createHash } from "node:crypto";
 import { forbidden } from "../../errors.js";
 import { nativeSha256 } from "../native-runtime/canonical.js";
+import { managedOpenCodeConformanceToolSurfaceAllowed } from "../native-runtime/managed-opencode-terminal-tools.js";
 
 /** A compact, server-owned receipt written by the Native conformance session
  * owner after onTurnInput persists the dispatch intent and before startTurn can
@@ -57,6 +58,39 @@ export function nativeOpenCodeConformanceTurnInputDigest(input: {
     message: { role: "user", text: nativeOpenCodeConformancePrompt(input.kind, input.marker) },
     ...(input.continuation ? { continuation: true } : {}),
   })).digest("hex");
+}
+
+/** CONF9. The provider-visible system frame of a probe request: exactly the
+ * fixed conformance system string, or exactly one text block carrying exactly
+ * that string (pinned OpenCode 1.18.32 sends the array form). Two or more
+ * blocks are refused even when their texts join into the frame, and so are a
+ * non-text block, any other block member and an empty array. The shared
+ * Messages validator has already removed `cache_control` from system blocks
+ * before this check, so the block must be exactly `{ type, text }`. */
+export function exactNativeOpenCodeConformanceSystemFrame(value: unknown): boolean {
+  if (value === NATIVE_OPENCODE_CONFORMANCE_SYSTEM) return true;
+  if (!Array.isArray(value) || value.length !== 1) return false;
+  const block = value[0];
+  return !!block && typeof block === "object" && !Array.isArray(block) && Object.getPrototypeOf(block) === Object.prototype &&
+    Object.keys(block).sort().join(",") === "text,type" && (block as Record<string, unknown>).type === "text" &&
+    (block as Record<string, unknown>).text === NATIVE_OPENCODE_CONFORMANCE_SYSTEM;
+}
+
+/** CONF9. The same frame as the probe request arrives, before the shared
+ * Messages validator strips cache hints: pinned OpenCode 1.18.32 sends exactly
+ * one text block with `cache_control: { type: "ephemeral" }` (observed
+ * locally 2026-11-15). That one member, with exactly that value, is the only
+ * addition to `exactNativeOpenCodeConformanceSystemFrame`. */
+export function exactNativeOpenCodeConformanceRequestSystemFrame(value: unknown): boolean {
+  if (!Array.isArray(value) || value.length !== 1) return exactNativeOpenCodeConformanceSystemFrame(value);
+  const block = value[0];
+  if (!block || typeof block !== "object" || Array.isArray(block) || Object.getPrototypeOf(block) !== Object.prototype)
+    return false;
+  const { cache_control: cacheControl, ...rest } = block as Record<string, unknown>;
+  if (Object.hasOwn(block, "cache_control") && (!cacheControl || typeof cacheControl !== "object" || Array.isArray(cacheControl) ||
+      Object.keys(cacheControl).join(",") !== "type" || (cacheControl as Record<string, unknown>).type !== "ephemeral"))
+    return false;
+  return exactNativeOpenCodeConformanceSystemFrame([rest]);
 }
 
 function textContent(value: unknown): string | null {
@@ -272,11 +306,11 @@ export function assertNativeOpenCodeConformanceSource(input: {
   }) : null;
   const last = messages?.at(-1);
   const prompt = nativeOpenCodeConformancePrompt(a.probeKind, a.marker);
-  if (system !== NATIVE_OPENCODE_CONFORMANCE_SYSTEM || request.system !== NATIVE_OPENCODE_CONFORMANCE_SYSTEM ||
+  if (system !== NATIVE_OPENCODE_CONFORMANCE_SYSTEM || !exactNativeOpenCodeConformanceSystemFrame(request.system) ||
       nativeSha256(system) !== a.systemHash || !messages || !last || last.role !== "user" ||
       last.text !== prompt || nativeSha256(last.text) !== a.promptHash ||
       nativeSha256(messages.slice(0, -1)) !== a.historyPrefixHash || messages.length > 32 ||
-      request.tools !== undefined || request.tool_choice !== undefined)
+      !managedOpenCodeConformanceToolSurfaceAllowed(request))
     throw forbidden("The provider-visible OpenCode request differs from the sealed tool-free synthetic probe source");
 
   const inputDigest = nativeOpenCodeConformanceTurnInputDigest({ kind: a.probeKind, marker: a.marker,

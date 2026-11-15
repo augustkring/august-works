@@ -142,6 +142,10 @@ export async function withManagedNativeHeartbeatFixture<T>(input: Omit<FrameInpu
     providerKeyObservations: () => Array<{ runId: string; keyMatchesConfiguredAgent: boolean }>;
     runtimeFacts: () => Record<string, unknown> | null;
     origin: string;
+    /** The software Host's Sandbox proxy and CA for one hidden probe Run of a
+     * configured presence, which a qualified OpenShell Sandbox provides itself
+     * (the same values ordinary Runs get from `beforeNativeExecution`). */
+    sandboxRunnerEnvironment(input: { companyId: string; agentId: string; runId: string; leaseId: string }): Promise<Record<string, string>>;
   }) => Promise<T>;
   /** Existing Native session test seam for API-policy components that must not dispatch a provider request. */
   controlledNativeSessionBackendFactory?: (execution: NativeExecutionInput) => NativeSessionBackend;
@@ -1267,7 +1271,20 @@ export async function withManagedNativeHeartbeatFixture<T>(input: Omit<FrameInpu
         },
         providerKeyObservations: () => providerCalls.map(call => ({ runId: call.runId,
           keyMatchesConfiguredAgent: call.keyMatches })),
-        runtimeFacts: () => sandboxHeartbeat?.facts?.() ?? null, origin });
+        runtimeFacts: () => sandboxHeartbeat?.facts?.() ?? null, origin,
+        sandboxRunnerEnvironment: async scope => {
+          const [run] = await db.select({ agentId: heartbeatRuns.agentId, triggerDetail: heartbeatRuns.triggerDetail })
+            .from(heartbeatRuns).where(and(eq(heartbeatRuns.companyId, scope.companyId), eq(heartbeatRuns.id, scope.runId))).limit(1);
+          const [lease] = await db.select({ id: environmentLeases.id }).from(environmentLeases).where(and(
+            eq(environmentLeases.companyId, scope.companyId), eq(environmentLeases.id, scope.leaseId),
+            eq(environmentLeases.heartbeatRunId, scope.runId), eq(environmentLeases.status, "active"))).limit(1);
+          if (!run || run.agentId !== scope.agentId || run.triggerDetail !== "provider_conformance" || !lease ||
+              !hostsByAgent.has(scope.agentId) || closedAgentHostIds.has(scope.agentId) || !brokerProxyOrigin)
+            throw new Error("opencode_conformance_fixture_runner_environment_owner_missing");
+          return { NODE_EXTRA_CA_CERTS: certBundlePath, SSL_CERT_FILE: certBundlePath,
+            HTTP_PROXY: "", http_proxy: "", HTTPS_PROXY: brokerProxyOrigin, https_proxy: brokerProxyOrigin,
+            ALL_PROXY: "", all_proxy: "", NO_PROXY: "localhost,127.0.0.1,::1", no_proxy: "localhost,127.0.0.1,::1" };
+        } });
     }
     return await input.driveScheduler({ db, actor: human, companyId, agentId, managedAgentIds,
       closeManagedAgentHostForRun, humanApi, managedSignoff, gateway, heartbeat,

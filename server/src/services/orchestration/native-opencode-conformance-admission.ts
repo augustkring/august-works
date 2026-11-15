@@ -20,7 +20,9 @@ import { quoteModelReservation } from "./model-reservations.js";
 import { modelReservationService } from "./model-reservations.js";
 import { anthropicManagedMessagesCall, ReadOnlyModelKnownUsageError, validateAnthropicManagedMessagesRequest } from "./read-only-model-transport.js";
 import type { guardedRemoteHttpFetch } from "../remote-http-fetch.js";
-import { assertNativeOpenCodeConformanceSource, type NativeOpenCodeConformanceSourceAuthority } from "./native-opencode-conformance-source.js";
+import { assertNativeOpenCodeConformanceSource, exactNativeOpenCodeConformanceRequestSystemFrame,
+  type NativeOpenCodeConformanceSourceAuthority } from "./native-opencode-conformance-source.js";
+import { managedOpenCodeConformanceRequestToolsAllowed, managedOpenCodeConformanceResponseToolFree } from "../native-runtime/managed-opencode-terminal-tools.js";
 
 /** Compact signed RuntimeControl claim. Fields identify one canonical probe;
  * they never stand in for current provider, credential, Host, or lease facts. */
@@ -149,6 +151,38 @@ export async function validateNativeOpenCodeConformanceHarness(input: {
       Date.now() + 60_000)) });
 }
 
+/** The conformance lane's reservation tariff (CONF10). Pure, like the worker
+ * lane's: the profile that admission already validated, re-checked with
+ * `assertWorkerModelProfileCurrent`, only for the exact company, plan and
+ * `provider_conformance` purpose; null otherwise. The reservation service
+ * calls it inside its own transactions, so it must not open a connection. */
+export function nativeOpenCodeConformanceQualifiedTariff(input: {
+  request: { companyId: string; planId: string; purpose: string };
+  companyId: string; planId: string; admittedPlanId: string; profile: WorkerModelProfile;
+  sourceSha: string; protectedEvidenceOrigin: string;
+}) {
+  const { request } = input;
+  if (request.purpose !== "provider_conformance" || request.companyId !== input.companyId ||
+      request.planId !== input.planId || request.planId !== input.admittedPlanId) return null;
+  return assertWorkerModelProfileCurrent(input.profile, input.sourceSha, input.protectedEvidenceOrigin).tariff;
+}
+
+/** CONF11. The transport re-validates what it is given, so the conformance
+ * lane passes the raw request (as the worker lane does), not the normalized
+ * provider body. These two checks bind that raw request to the one every
+ * conformance check accepted: the raw request's canonical digest must be the
+ * one taken when it was validated, and the body the transport is about to
+ * send must be exactly the validated provider body. */
+export function nativeOpenCodeConformanceTransportRequest(raw: unknown, validatedRawDigest: string): unknown {
+  if (nativeSha256(raw) !== validatedRawDigest)
+    throw forbidden("The provider-visible OpenCode request changed after conformance validation");
+  return raw;
+}
+export function assertNativeOpenCodeConformanceWireBody(wireBodySha256: string, validatedBody: string): void {
+  if (wireBodySha256 !== createHash("sha256").update(validatedBody, "utf8").digest("hex"))
+    throw forbidden("The provider wire body differs from the validated conformance request");
+}
+
 /** One-shot, tool-free Messages dispatch for a real managed OpenCode probe.
  * The reservation ledger is the only spend authority; the provider adapter
  * receives the exact already-validated request and server-selected secret. */
@@ -168,10 +202,17 @@ export async function callNativeOpenCodeConformanceMessages(input: {
     model: admission.profile.tariff.model, maxOutputTokens: admission.profile.maxOutputTokens,
     maximumEnvelopeBytes: admission.profile.maximumEnvelopeBytes,
   });
-  if (qualifiedInput.toolNames.length !== 0 || qualifiedInput.request.tool_choice !== undefined ||
-      qualifiedInput.request.messages.some(message => Array.isArray(message.content) &&
-        message.content.some(block => block.type === "tool_use" || block.type === "tool_result")))
+  // CONF11. Canonical digest of the raw request every check below accepts.
+  const validatedRawDigest = nativeSha256(input.raw);
+  // CONF8. The runner's own two terminal tools (exact shared definitions) with
+  // tool_choice absent or auto are the only tool surface; no tool may be used
+  // in the history, and a tool-bearing response is refused after settlement.
+  if (!managedOpenCodeConformanceRequestToolsAllowed(qualifiedInput.request))
     throw forbidden("Provider conformance probes cannot grant, exercise, or replay platform tools");
+  // CONF9. The system frame as sent, before cache hints are stripped: the
+  // fixed frame, or one text block with only the pinned ephemeral cache hint.
+  if (!exactNativeOpenCodeConformanceRequestSystemFrame(qualifiedInput.request.system))
+    throw forbidden("The provider-visible OpenCode request differs from the sealed tool-free synthetic probe source");
   const assertCurrentSource = (current: Awaited<ReturnType<typeof validateNativeOpenCodeConformanceHarness>>) => {
     const runProfile = current.run.runnerProfileJson && typeof current.run.runnerProfileJson === "object" &&
       !Array.isArray(current.run.runnerProfileJson) ? current.run.runnerProfileJson as Record<string, unknown> : {};
@@ -202,15 +243,21 @@ export async function callNativeOpenCodeConformanceMessages(input: {
   const idempotencyKey = `opencode-conformance:${admission.runId}:${claim.probeId}:${claim.dispatchNonce}`;
   const reservations = modelReservationService(input.db, {
     sourceSha: input.options.sourceSha,
-    qualifiedTariff: async request => request.purpose === "provider_conformance" &&
-      request.companyId === claims.company_id && request.planId === claim.planId
-      ? (await validateNativeOpenCodeConformanceHarness(admissionInput)).profile.tariff : null,
+    // CONF10. No database call: claimForDispatch and recordWireDispatch call
+    // this inside their transaction, after the company and plan locks, and the
+    // old outer-connection harness re-validation waited on those locks.
+    // currentAuthority(tx) below re-validates the full harness on the same
+    // transaction, and its hash covers the profile (and so its tariff).
+    qualifiedTariff: async request => nativeOpenCodeConformanceQualifiedTariff({ request,
+      companyId: claims.company_id, planId: claim.planId, admittedPlanId: admission.planId, profile: admission.profile,
+      sourceSha: input.options.sourceSha, protectedEvidenceOrigin: input.options.protectedEvidenceOrigin }),
     currentAuthority: async tx => {
       const current = await validateNativeOpenCodeConformanceHarness({ ...admissionInput, db: tx });
       const currentSourceDigest = assertCurrentSource(current);
       return nativeSha256({ runtimeAuthorityHash: current.authorityHash, sourceDigest: currentSourceDigest });
     },
   });
+  nativeOpenCodeConformanceTransportRequest(input.raw, validatedRawDigest);
   const reservation = await reservations.reserve(actor, {
     companyId: claims.company_id, planId: admission.planId, expectedPlanVersion: admission.planVersion,
     purpose: "provider_conformance", idempotencyKey, inputHash, authorityHash: reservationAuthorityHash,
@@ -252,13 +299,14 @@ export async function callNativeOpenCodeConformanceMessages(input: {
     const fresh = await assertCurrent();
     if (createHash("sha256").update(credential).digest("hex") !== fresh.credentialSha256)
       throw forbidden("The current credential changed before provider dispatch");
-    const result = await anthropicManagedMessagesCall(qualifiedInput.providerRequest, {
+    const result = await anthropicManagedMessagesCall(nativeOpenCodeConformanceTransportRequest(input.raw, validatedRawDigest), {
       model: admission.profile.tariff.model, maxOutputTokens: admission.profile.maxOutputTokens,
       maximumEnvelopeBytes: admission.profile.maximumEnvelopeBytes,
       maximumInputTokens: admission.profile.inputTokensUpperBound,
     }, credential, controller.signal, {
       fetch: input.options.fetch,
       onWireDispatch: async wire => {
+        assertNativeOpenCodeConformanceWireBody(wire.bodySha256, qualifiedInput.body);
         await assertCurrent();
         // The reservation API persists the exact provider request hash and
         // wire body before the HTTP transport is allowed to send it.
@@ -273,7 +321,7 @@ export async function callNativeOpenCodeConformanceMessages(input: {
     });
     settled = outcome.status === "completed";
     if (!settled) throw forbidden("The exact provider response could not be financially settled");
-    if (result.responseContent.some(block => block.type === "tool_use"))
+    if (!managedOpenCodeConformanceResponseToolFree(result.responseContent))
       throw forbidden("A tool-bearing provider response is not eligible for a tool-free conformance probe");
     await assertCurrent();
     return { reservationId: reservation.id, sse: result.sse };

@@ -2082,7 +2082,7 @@ async function configureManagedSandboxRun(input: ManagedSandboxHostInput,
     return { ...record, moved: true, replayAliasExact: aliasExact, targetAbsent: false };
   };
   const sessionProviders = new Map<string, { type: string; credential: string | null; expiresAt: string | null;
-    family: "worker_model" | "conversation_model" | null }>();
+    family: "worker_model" | "conversation_model" | "provider_conformance" | null }>();
   const attachedSessionProviders = new Set<string>();
   const hostCredentialProfile = {
     id: "paperclip-runtime-app-broker",
@@ -2207,7 +2207,7 @@ async function configureManagedSandboxRun(input: ManagedSandboxHostInput,
         const entry = currentJournal.modelBrokerSessions?.[descriptor.sessionKey];
         const provider = entry ? sessionProviders.get(entry.providerName) : null;
         const token = provider?.credential;
-        const tokenClaims = token ? verifyRuntimeToolsToken(token, "worker_model") : null;
+        const tokenClaims = token ? verifyRuntimeToolsToken(token, nativeConformanceMode ? "provider_conformance" : "worker_model") : null;
         const [run] = await db.select().from(heartbeatRuns).where(and(eq(heartbeatRuns.companyId, companyId),
           eq(heartbeatRuns.agentId, agentId), eq(heartbeatRuns.id, request.runId))).limit(1);
         const [lease] = await db.select().from(environmentLeases).where(and(eq(environmentLeases.companyId, companyId),
@@ -2593,8 +2593,12 @@ async function configureManagedSandboxRun(input: ManagedSandboxHostInput,
         const name = command[command.indexOf("--name") + 1], type = command[command.indexOf("--type") + 1];
         const env = command[command.indexOf("--credential") + 1];
         const credential = options.env?.[env] ?? null;
-        const family = credential ? (verifyRuntimeToolsToken(credential, "worker_model") ? "worker_model" :
-          verifyRuntimeToolsToken(credential, "conversation_model") ? "conversation_model" : null) : null;
+        // A conformance-mode Host holds only the hidden probe Run's one-turn
+        // provider_conformance credential (CONF7); other Hosts never accept it.
+        const family = credential ? nativeConformanceMode
+          ? verifyRuntimeToolsToken(credential, "provider_conformance") ? "provider_conformance" : null
+          : verifyRuntimeToolsToken(credential, "worker_model") ? "worker_model" :
+            verifyRuntimeToolsToken(credential, "conversation_model") ? "conversation_model" : null : null;
         sessionProviders.set(name, { type, credential, expiresAt: null, family });
         return { stdout: "provider created", stderr: "" };
       }

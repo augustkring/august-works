@@ -4517,7 +4517,7 @@
         },
         {
           "path": "server/src/services/orchestration/worker-model-gateway.ts",
-          "sha256": "ef763c6182b785ae0dbc6fb3ac60803a19c9b6ee1591ec380fd1e92c56e7fbc6"
+          "sha256": "eca915957c7568f54bf5be0890a87c9c76414c914b2660586a380fe70da9131c"
         },
         {
           "path": "server/src/services/tool-gateway.ts",
@@ -7686,7 +7686,7 @@
         },
         {
           "path": "server/src/services/native-runtime/native-session-executor.ts",
-          "sha256": "57125b5da5b058dbeaa3f09777174cbbd4e2660b2b931aafb81671caeaf8c9f3"
+          "sha256": "1b58ce3ef952dd36ab4cbfcc44e88be6178eb7bce2ddf84977b69d0688387756"
         },
         {
           "path": "server/src/services/native-runtime/native-session-resume.test.ts",
@@ -9288,7 +9288,7 @@
         },
         {
           "path": "server/src/services/native-direct-input.ts",
-          "sha256": "d6b0473ee8e94a91d22dcdbd04360559cb641a8bbce3a21bd374c7b523fd8acd"
+          "sha256": "76297ca867d8de990dc075ba5d4af46c2b91c71a9f294f4ab91893df9370a024"
         },
         {
           "path": "server/src/services/native-project-output.ts",
@@ -9364,7 +9364,7 @@
         },
         {
           "path": "server/src/services/native-runtime/native-session-executor.ts",
-          "sha256": "57125b5da5b058dbeaa3f09777174cbbd4e2660b2b931aafb81671caeaf8c9f3"
+          "sha256": "1b58ce3ef952dd36ab4cbfcc44e88be6178eb7bce2ddf84977b69d0688387756"
         },
         {
           "path": "server/src/services/native-runtime/native-tool-task-privacy.integration.test.ts",
@@ -10377,7 +10377,7 @@
         },
         {
           "path": "server/src/services/orchestration/worker-model-gateway.ts",
-          "sha256": "ef763c6182b785ae0dbc6fb3ac60803a19c9b6ee1591ec380fd1e92c56e7fbc6"
+          "sha256": "eca915957c7568f54bf5be0890a87c9c76414c914b2660586a380fe70da9131c"
         },
         {
           "path": "server/src/services/platform-skill-admission.ts",
@@ -13908,7 +13908,7 @@
         },
         {
           "path": "server/src/__tests__/helpers/managed-native-heartbeat-fixture.ts",
-          "sha256": "0a782ea3a36a001db6740353a8d3b8d0fa6a8ab9ac3e34548965a6c39449f85c"
+          "sha256": "f405c02b98381a9f1dd5ccfc56a1091a5bdf62319110114acd4aa66dea909462"
         },
         {
           "path": "server/src/__tests__/helpers/prepare-genuine-native-draft-conformance-fixture.ts",
@@ -24834,7 +24834,7 @@
         },
         {
           "path": "server/src/__tests__/native-opencode-conformance.integration.test.ts",
-          "sha256": "774a6116e4e604a0d19a43b3f908d5858faf2f0fa4ef4b19e10a6b9c88bdf98f"
+          "sha256": "70b69f6b26715781677af430001e64c31fe51b9de2ce444820d716b634e0eb94"
         },
         {
           "path": "server/src/__tests__/openshell-native-conformance-proof-maximum.test.ts",
@@ -25006,7 +25006,7 @@
         },
         {
           "path": "server/src/services/native-opencode-conformance.ts",
-          "sha256": "bd404944c91029addfac63035e748f8ee9b349d3fb234becce77a573f998ed36"
+          "sha256": "a15785bbfc4270a9a296f8d79e9ef2ee19798f98c9a58a10c27a035495868706"
         },
         {
           "path": "server/src/services/native-owner-release.ts",
@@ -25062,7 +25062,7 @@
         },
         {
           "path": "server/src/services/native-runtime/managed-native-browser.fixture.ts",
-          "sha256": "f6ef6349a1e187ba365953ec4d81fc661dd877f571d0dc03c64d6f1b217b74b3"
+          "sha256": "2a6ad6cdb862b776f0935d752ede08b4ce423973364d4de301d67173a790b7a5"
         },
         {
           "path": "server/src/services/native-runtime/managed-signoff-api-policy.integration.test.ts",
@@ -25266,7 +25266,7 @@
         },
         {
           "path": "server/src/services/orchestration/native-opencode-conformance-admission.ts",
-          "sha256": "329dd7002d97f1633fddec7149821046bbf4eb90de1f38b706c146fc6eb1b029"
+          "sha256": "75db4d315533cdc108b59b099283e1fa93ed1776896a89b6dd29767b5e38e27c"
         },
         {
           "path": "server/src/services/orchestration/native-opencode-conformance-cancel.test.ts",
@@ -25274,11 +25274,11 @@
         },
         {
           "path": "server/src/services/orchestration/native-opencode-conformance-source.test.ts",
-          "sha256": "62ac201663a51b34b2e8894296c26fd73d5365d10316f6908809c62dbd1a1273"
+          "sha256": "3c77bb1ba86f4ca9159b5163b1568cc3f014b6e119238e4fc88d722f3089653c"
         },
         {
           "path": "server/src/services/orchestration/native-opencode-conformance-source.ts",
-          "sha256": "23561bf108bc49a8cb5fff7df28a4ebd4ee430eea442bbb7f26f5eecc1e54ae3"
+          "sha256": "32e67465aca7c7b4e2805e37c87365fe46abb521bb0d881ddc498acdfc1f26f3"
         },
         {
           "path": "server/src/services/plugin-agent-runtime-state.test.ts",
@@ -32085,7 +32085,7 @@
         },
         {
           "path": "server/src/__tests__/helpers/managed-native-conversation-sandbox-host.ts",
-          "sha256": "5e70496fbab5da1aba37634a4095e92d6d4480311f166ad9a5a3c3aafb90a45d"
+          "sha256": "b143b6a5822c2bf4021d1cd1a3ff3ba3a064b2f17bdd0ffe9277b4123335d18c"
         },
         {
           "path": "server/src/__tests__/helpers/managed-native-infrastructure-cleanup.test.ts",
@@ -47080,7 +47080,7 @@
       "id": "source:server/src/services/orchestration/worker-model-gateway.ts",
       "kind": "current_source_owner",
       "path": "server/src/services/orchestration/worker-model-gateway.ts",
-      "sha256": "ef763c6182b785ae0dbc6fb3ac60803a19c9b6ee1591ec380fd1e92c56e7fbc6",
+      "sha256": "eca915957c7568f54bf5be0890a87c9c76414c914b2660586a380fe70da9131c",
       "changeIds": [
         "SCR-V10-HOTSPOT-01",
         "SCR-V10-HOTSPOT-07"
@@ -49807,7 +49807,7 @@
       "id": "source:server/src/services/native-runtime/native-session-executor.ts",
       "kind": "current_source_owner",
       "path": "server/src/services/native-runtime/native-session-executor.ts",
-      "sha256": "57125b5da5b058dbeaa3f09777174cbbd4e2660b2b931aafb81671caeaf8c9f3",
+      "sha256": "1b58ce3ef952dd36ab4cbfcc44e88be6178eb7bce2ddf84977b69d0688387756",
       "changeIds": [
         "SCR-V10-HOTSPOT-05",
         "SCR-V10-HOTSPOT-06"
@@ -50770,7 +50770,7 @@
       "id": "source:server/src/services/native-direct-input.ts",
       "kind": "current_source_owner",
       "path": "server/src/services/native-direct-input.ts",
-      "sha256": "d6b0473ee8e94a91d22dcdbd04360559cb641a8bbce3a21bd374c7b523fd8acd",
+      "sha256": "76297ca867d8de990dc075ba5d4af46c2b91c71a9f294f4ab91893df9370a024",
       "changeIds": [
         "SCR-V10-HOTSPOT-06"
       ],
@@ -52866,7 +52866,7 @@
       "id": "source:server/src/__tests__/helpers/managed-native-heartbeat-fixture.ts",
       "kind": "current_source_owner",
       "path": "server/src/__tests__/helpers/managed-native-heartbeat-fixture.ts",
-      "sha256": "0a782ea3a36a001db6740353a8d3b8d0fa6a8ab9ac3e34548965a6c39449f85c",
+      "sha256": "f405c02b98381a9f1dd5ccfc56a1091a5bdf62319110114acd4aa66dea909462",
       "changeIds": [
         "SCR-V10-WORKFLOWS-DURABLE-OPERATIONS"
       ],
@@ -63056,7 +63056,7 @@
       "id": "source:server/src/__tests__/native-opencode-conformance.integration.test.ts",
       "kind": "current_source_owner",
       "path": "server/src/__tests__/native-opencode-conformance.integration.test.ts",
-      "sha256": "774a6116e4e604a0d19a43b3f908d5858faf2f0fa4ef4b19e10a6b9c88bdf98f",
+      "sha256": "70b69f6b26715781677af430001e64c31fe51b9de2ce444820d716b634e0eb94",
       "changeIds": [
         "SCR-V10-NATIVE-RUNTIME-AND-AUTHORITY"
       ],
@@ -63703,7 +63703,7 @@
       "id": "source:server/src/services/native-opencode-conformance.ts",
       "kind": "current_source_owner",
       "path": "server/src/services/native-opencode-conformance.ts",
-      "sha256": "bd404944c91029addfac63035e748f8ee9b349d3fb234becce77a573f998ed36",
+      "sha256": "a15785bbfc4270a9a296f8d79e9ef2ee19798f98c9a58a10c27a035495868706",
       "changeIds": [
         "SCR-V10-NATIVE-RUNTIME-AND-AUTHORITY"
       ],
@@ -63898,7 +63898,7 @@
       "id": "source:server/src/services/native-runtime/managed-native-browser.fixture.ts",
       "kind": "current_source_owner",
       "path": "server/src/services/native-runtime/managed-native-browser.fixture.ts",
-      "sha256": "f6ef6349a1e187ba365953ec4d81fc661dd877f571d0dc03c64d6f1b217b74b3",
+      "sha256": "2a6ad6cdb862b776f0935d752ede08b4ce423973364d4de301d67173a790b7a5",
       "changeIds": [
         "SCR-V10-NATIVE-RUNTIME-AND-AUTHORITY"
       ],
@@ -64633,7 +64633,7 @@
       "id": "source:server/src/services/orchestration/native-opencode-conformance-admission.ts",
       "kind": "current_source_owner",
       "path": "server/src/services/orchestration/native-opencode-conformance-admission.ts",
-      "sha256": "329dd7002d97f1633fddec7149821046bbf4eb90de1f38b706c146fc6eb1b029",
+      "sha256": "75db4d315533cdc108b59b099283e1fa93ed1776896a89b6dd29767b5e38e27c",
       "changeIds": [
         "SCR-V10-NATIVE-RUNTIME-AND-AUTHORITY"
       ],
@@ -64663,7 +64663,7 @@
       "id": "source:server/src/services/orchestration/native-opencode-conformance-source.test.ts",
       "kind": "current_source_owner",
       "path": "server/src/services/orchestration/native-opencode-conformance-source.test.ts",
-      "sha256": "62ac201663a51b34b2e8894296c26fd73d5365d10316f6908809c62dbd1a1273",
+      "sha256": "3c77bb1ba86f4ca9159b5163b1568cc3f014b6e119238e4fc88d722f3089653c",
       "changeIds": [
         "SCR-V10-NATIVE-RUNTIME-AND-AUTHORITY"
       ],
@@ -64678,7 +64678,7 @@
       "id": "source:server/src/services/orchestration/native-opencode-conformance-source.ts",
       "kind": "current_source_owner",
       "path": "server/src/services/orchestration/native-opencode-conformance-source.ts",
-      "sha256": "23561bf108bc49a8cb5fff7df28a4ebd4ee430eea442bbb7f26f5eecc1e54ae3",
+      "sha256": "32e67465aca7c7b4e2805e37c87365fe46abb521bb0d881ddc498acdfc1f26f3",
       "changeIds": [
         "SCR-V10-NATIVE-RUNTIME-AND-AUTHORITY"
       ],
@@ -72375,7 +72375,7 @@
       "id": "source:server/src/__tests__/helpers/managed-native-conversation-sandbox-host.ts",
       "kind": "current_source_owner",
       "path": "server/src/__tests__/helpers/managed-native-conversation-sandbox-host.ts",
-      "sha256": "5e70496fbab5da1aba37634a4095e92d6d4480311f166ad9a5a3c3aafb90a45d",
+      "sha256": "b143b6a5822c2bf4021d1cd1a3ff3ba3a064b2f17bdd0ffe9277b4123335d18c",
       "changeIds": [
         "SCR-V10-PRODUCT-IDENTITY-HELP-LANGUAGE"
       ],

@@ -109,7 +109,6 @@ import {
   nativeSystemInstructions,
   nativeTaskConstraints,
   createCodexTaskEnvelope,
-  codexSemanticToolSpecs,
   applyNativeSessionGoalControl,
   buildNativeModelEnvelope,
   inspectWarmRunTransition,
@@ -126,6 +125,7 @@ import {
   type NativeSessionGoalControl,
   paperclipSemanticAction,
 } from "../../vendor/paperclip-runner/index.js";
+import { managedOpenCodeTerminalToolSchemas } from "./managed-opencode-terminal-tools.js";
 import type { AdapterExecutionTarget } from "@paperclipai/adapter-utils/execution-target";
 import { createNativeSshCommandRunner } from "./native-ssh-command-runner.js";
 import type { CommandManagedRuntimeRunner } from "@paperclipai/adapter-utils/command-managed-runtime";
@@ -15222,18 +15222,8 @@ async function createRunnerdBackendWithinSessionClaim(
       // Runnerd's OpenCode path appends this canonical semantic catalog from the
       // Codex driver values. Hash those exact bridge-owned definitions so the
       // managed broker validates the actual provider-visible list.
-      schemas.push(...codexSemanticToolSpecs().map(tool => {
-        const providerTool = structuredClone(tool) as Record<string, unknown>;
-        const inputSchema = record(providerTool.inputSchema);
-        if (inputSchema.type !== "object" || inputSchema.additionalProperties !== true)
-          throw new Error("managed_opencode_terminal_tool_schema_invalid");
-        // Pinned OpenCode 1.18.32's Anthropic conversion sets this root flag to
-        // false for these two terminal schemas. Model the exact provider-visible
-        // projection; server-side terminal parsing still enforces the complete
-        // canonical completion contract after the tool call returns.
-        providerTool.inputSchema = { ...inputSchema, additionalProperties: false };
-        return providerTool;
-      }));
+      // Shared with the conformance lane (managed-opencode-terminal-tools.ts).
+      schemas.push(...managedOpenCodeTerminalToolSchemas());
       const schemaNames = new Set(schemas.map(tool => typeof tool.name === "string" ? tool.name : ""));
       const directAssignedTools = assignedMcpTools?.directDefinitions(definitions =>
         runnerCodexDynamicToolsFit([...schemas, ...definitions])) ?? [];
