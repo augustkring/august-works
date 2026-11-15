@@ -1625,9 +1625,11 @@ export function workerModelGateway(db: Db, options: Options) {
     return selectWorkerModelProfile(options.profiles, { companyId, agentId, profileId, configurationHash,
       sourceSha: options.sourceSha, protectedEvidenceOrigin: options.protectedEvidenceOrigin, purpose });
   }
-  /** Current completion Reviewer authority, deliberately independent from the source writer attempt. */
+  /** Current completion Reviewer authority, deliberately independent from the source writer attempt.
+   * `preNativeAdmission` is set only by the same-transaction manifest admission
+   * preflight (qualifyReviewInTransaction); see the MS1e note below. */
   async function currentReview(tx: Db, claims: ReviewClaims, requireInputReceipt = true, preNativeIssueId?: string,
-    preNativeReviewerContract?: { id: string; sha256: string }) {
+    preNativeReviewerContract?: { id: string; sha256: string }, preNativeAdmission = false) {
     const b = claims.review_model, now = new Date();
     if (claims.scope !== "review_model" || claims.exp * 1000 <= now.getTime() || b.reviewerAgentId !== claims.sub || b.reviewerRunId !== claims.run_id)
       throw forbidden("Current run-scoped assigned Reviewer model capability required");
@@ -1653,7 +1655,24 @@ export function workerModelGateway(db: Db, options: Options) {
       assignment.interaction.resolvedByRunId === claims.run_id && assignment.interaction.resolvedByAgentId === claims.sub &&
       (assignment.interaction.status === "accepted" ? task?.status === "in_review" || task?.status === "done" : task?.status === "todo") &&
       (task.executionRunId === null || task.executionRunId === claims.run_id);
-    if (!run || run.status !== "running" || run.runtimeMode !== "native" ||
+    // MS1e. Manifest admission (agent-runtime-fabric -> admitOrchestrationHeartbeat
+    // -> qualifyNativeReviewRun -> qualifyReviewInTransaction) runs before the
+    // heartbeat's Native runtime selection, because the Native execution input is
+    // built from the admitted manifest. At that point the exact assigned Reviewer
+    // Run is still its unresolved pre-binding row: runtime mode legacy, never
+    // resolved, no Native issue. Only that admission path accepts the pre-binding
+    // mode, and only for the pending review this Run's persisted wake, the Task
+    // execution lease and this Run's manifest all bind. Token issuance, dispatch
+    // and every later stage keep requiring a Native Run.
+    const wake = managedRecord(run?.contextSnapshot);
+    const preNativeAdmissionRun = preNativeAdmission && preNativeBinding && !!run && !!reviewContext && !!manifest &&
+      run.runtimeMode === "legacy" && run.runtimeModeResolvedAt === null && run.nativeIssueId === null &&
+      reviewStillPending && reviewContext.nativeReviewInteractionId === b.interactionId &&
+      reviewContext.nativeReviewDecisionId === b.decisionId && (wake.issueId ?? wake.nativeIssueId) === b.issueId &&
+      (wake.sourceRunId === undefined || wake.sourceRunId === b.sourceRunId) &&
+      (wake.revisionId === undefined || wake.revisionId === b.decisionId) &&
+      manifest.id === b.executionManifestId && manifest.runId === run.id && manifest.agentId === claims.sub;
+    if (!run || run.status !== "running" || (run.runtimeMode !== "native" && !preNativeAdmissionRun) ||
       (run.nativeIssueId !== b.issueId && !preNativeBinding) || run.responsibleUserId !== claims.responsible_user_id || !manifest || manifest.manifest.responsibleUserId !== claims.responsible_user_id ||
       !task || task.assigneeAgentId !== b.sourceAgentId || !(reviewStillPending || reviewResolvedByThisRun) || !assignment ||
       assignment.interaction.id !== b.interactionId || assignment.sourceDecision.id !== b.decisionId || assignment.sourceRun.id !== b.sourceRunId ||
@@ -1815,7 +1834,7 @@ export function workerModelGateway(db: Db, options: Options) {
     const claims = { scope: "review_model", company_id: input.companyId, sub: input.agentId, run_id: input.runId,
       responsible_user_id: input.responsibleUserId, exp: Math.floor(Date.now() / 1000) + 60, review_model: binding } as ReviewClaims;
     const qualified = await currentReview(tx, claims, false, input.issueId,
-      { id: contract.row.id, sha256: contract.row.canonicalSha256 });
+      { id: contract.row.id, sha256: contract.row.canonicalSha256 }, true);
     if (qualified.plan.modelCostReserved + qualified.qualification.maximumMinor > qualified.plan.budgets.maxModelCostMinor!)
       throw forbidden("The accepted plan has insufficient remaining model budget for the qualified Reviewer call");
     return qualified;
