@@ -32,6 +32,33 @@ export const RUN_LIVENESS_BOOKKEEPING_ACTIVITY_ACTIONS: string[] = [
   "tool_gateway.call_completed",
 ];
 
+/**
+ * Activity rows the platform writes for every managed Native Run, identified by
+ * actor and source rather than by action name alone. They are bookkeeping for
+ * liveness, not task progress: the bootstrap context-assembly audit, the
+ * Native status arbiter's recorded status change and the run presentation
+ * comment. The same actions written by the agent's own Run through a tool keep
+ * counting as concrete evidence.
+ */
+export type RunLivenessActivityRow = {
+  action: string; actorType: string; actorId: string; entityType: string; details: Record<string, unknown> | null;
+};
+
+export function isRunLivenessPlatformActivity(row: RunLivenessActivityRow): boolean {
+  const source = row.details?.source;
+  return (row.action === "context.assembled" && row.entityType === "context_manifest") ||
+    (row.action === "issue.updated" && row.actorType === "system" && row.actorId === "native-status-committer" &&
+      source === "native_status_decision") ||
+    (row.action === "issue.comment_added" && source === "run_presentation_resolver");
+}
+
+/** Count activity evidence for liveness: excludes recovery bookkeeping actions
+ * and the platform-written rows above. */
+export function countRunLivenessActivityEvidence(rows: readonly RunLivenessActivityRow[]): number {
+  return rows.filter(row => !RUN_LIVENESS_BOOKKEEPING_ACTIVITY_ACTIONS.includes(row.action) &&
+    !isRunLivenessPlatformActivity(row)).length;
+}
+
 export type RunLivenessActionability =
   | "runnable"
   | "manager_review"

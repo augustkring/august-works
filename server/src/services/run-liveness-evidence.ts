@@ -1,5 +1,7 @@
-import { and, eq, inArray, isNotNull, notInArray, or, sql } from "drizzle-orm";
-import { toolInvocations, type Db } from "@paperclipai/db";
+import { and, asc, eq, inArray, isNotNull, notInArray, or, sql } from "drizzle-orm";
+import { activityLog, toolInvocations, type Db } from "@paperclipai/db";
+
+import { isRunLivenessPlatformActivity, RUN_LIVENESS_BOOKKEEPING_ACTIVITY_ACTIONS } from "./run-liveness.js";
 
 const TOOL_ACTION_EFFECT_STATUSES = ["executing", "succeeded", "failed", "timed_out"] as const;
 
@@ -31,4 +33,24 @@ export async function readRunLivenessToolActionStats(
     ),
   ));
   return { count: Number(stats?.count ?? 0), latestAt: stats?.latestAt ?? null };
+}
+
+const RUN_LIVENESS_ACTIVITY_ROW_LIMIT = 2_000;
+
+/**
+ * Activity evidence for one Run's liveness: recovery bookkeeping actions and
+ * the platform-written rows (`isRunLivenessPlatformActivity`) are excluded, so
+ * only effects that the Run itself produced count as concrete evidence.
+ */
+export async function readRunLivenessActivityStats(db: Db, companyId: string, runId: string) {
+  const rows = await db.select({ action: activityLog.action, actorType: activityLog.actorType, actorId: activityLog.actorId,
+    entityType: activityLog.entityType, details: activityLog.details, createdAt: activityLog.createdAt })
+    .from(activityLog)
+    .where(and(eq(activityLog.companyId, companyId), eq(activityLog.runId, runId),
+      notInArray(activityLog.action, RUN_LIVENESS_BOOKKEEPING_ACTIVITY_ACTIONS)))
+    .orderBy(asc(activityLog.createdAt))
+    .limit(RUN_LIVENESS_ACTIVITY_ROW_LIMIT);
+  const counted = rows.filter(row => !isRunLivenessPlatformActivity(row));
+  const latestAt = counted.reduce<Date | null>((latest, row) => !latest || row.createdAt > latest ? row.createdAt : latest, null);
+  return { count: counted.length, latestAt };
 }

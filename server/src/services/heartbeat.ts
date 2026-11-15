@@ -406,7 +406,7 @@ import {
   RUN_LIVENESS_BOOKKEEPING_ACTIVITY_ACTIONS,
   type RunLivenessClassificationInput,
 } from "./run-liveness.js";
-import { readRunLivenessToolActionStats } from "./run-liveness-evidence.js";
+import { readRunLivenessActivityStats, readRunLivenessToolActionStats } from "./run-liveness-evidence.js";
 import {
   ISSUE_NEW_INPUT_ACTIVITY_ACTIONS,
   ISSUE_PROGRESS_ACTIVITY_ACTIONS,
@@ -18573,19 +18573,7 @@ export function heartbeatService(
         ),
       );
 
-    const [activityStats] = await db
-      .select({
-        count: sql<number>`count(*)::int`,
-        latestAt: sql<Date | null>`max(${activityLog.createdAt})`,
-      })
-      .from(activityLog)
-      .where(
-        and(
-          eq(activityLog.companyId, run.companyId),
-          eq(activityLog.runId, run.id),
-          notInArray(activityLog.action, RUN_LIVENESS_BOOKKEEPING_ACTIVITY_ACTIONS),
-        ),
-      );
+    const activityStats = await readRunLivenessActivityStats(db, run.companyId, run.id);
 
     const toolActionStats = contextIssueId
       ? await readRunLivenessToolActionStats(db, { companyId: run.companyId, issueId: contextIssueId, runId: run.id, agentId: run.agentId })

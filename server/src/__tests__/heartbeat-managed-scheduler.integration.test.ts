@@ -165,6 +165,7 @@ import { captureNativeBlockedHumanInteraction, assertNativeBlockedInteractionRes
 import { assertV7Authorization } from "../services/v7-authorization.js";
 import { assertAnalyticalContextPayloadAccess } from "../services/analytical-context-authority.js";
 import { nativeSha256 } from "../services/native-runtime/canonical.js";
+import { captureNativeFinalizedContinuationSummary } from "../services/execution-continuation.js";
 import { CAPABILITY_SEMANTIC_TOOL_CATALOG, parseNativeExecutionInput } from "../vendor/paperclip-runner/index.js";
 type ManagedSchedulerContext = Parameters<Parameters<typeof withManagedNativeHeartbeatFixture>[0]["driveScheduler"]>[0];
 type ManagedReplyInput = Parameters<Parameters<typeof withManagedNativeHeartbeatFixture>[0]["providerReply"]>[0];
@@ -403,9 +404,11 @@ function managedLivenessTool(body: Record<string, unknown>, wanted: string): str
 
 function managedLivenessFinish(input: ManagedReplyInput,
   disposition: "done" | "yielded", summary: string,
-  continuation?: { kind: "response_wake"; summary: string; idempotencyKey: string }) {
+  continuation?: { kind: "response_wake"; summary: string; idempotencyKey: string },
+  options: { incompleteClaim?: boolean } = {}) {
   const contract = input.execution.completionContract.contract;
-  const waiting = disposition === "yielded";
+  // An incomplete claim reports unknown criteria and blocking remaining work.
+  const waiting = disposition === "yielded" || options.incompleteClaim === true;
   return { stop_reason: "tool_use" as const, content: [{ type: "tool_use" as const,
     id: `managed-liveness-finish-${input.runId}-${input.callIndex}`,
     name: managedLivenessTool(input.body, "paperclip_finish"), input: {
@@ -525,24 +528,75 @@ it("reconstructs the current source-qualified v2 frame on a same-Task new Run wi
       expect(nextWake!.id).not.toBe(prior.id);
       const secondRemaining = deadlineAt - Date.now();
       if (secondRemaining <= 0) throw new Error("same_task_new_run_second_deadline_exhausted");
+      // Wait for any terminal status, then check the continuation evidence
+      // before the outcome, so a refused Run 2 reports its stop at once.
       await expect.poll(async () => {
         const [run] = await db.select({ status: heartbeatRuns.status }).from(heartbeatRuns)
           .where(and(eq(heartbeatRuns.companyId, companyId), eq(heartbeatRuns.id, nextWake!.id)));
-        return run?.status === "succeeded";
+        return ["succeeded", "failed", "cancelled", "timed_out"].includes(run?.status ?? "");
       }, { timeout: secondRemaining }).toBe(true);
       await heartbeat.drainActiveRunExecutions();
 
       const [current] = await db.select().from(heartbeatRuns).where(and(eq(heartbeatRuns.companyId, companyId),
         eq(heartbeatRuns.id, nextWake!.id)));
       if (!current) throw new Error("same_task_new_run_current_run_missing");
+      // CONF15-W2: the retained resume carries Run 1's accepted finalized
+      // result as completed work, never the heartbeat-written (unsealed)
+      // continuation summary.
+      const retainedSummary = (current.runnerProfileJson as Record<string, unknown>)
+        .nativeBootstrapFinalizedContinuationSummary as Record<string, unknown> | null | undefined;
+      expect(retainedSummary).toMatchObject({ companyId, issueId: task.id, agentId, receiverRunId: current.id, sourceRunId: prior.id });
+      expect(((current.contextSnapshot as Record<string, unknown>).executionContinuation as Record<string, unknown>).completedWork)
+        .toBe(retainedSummary!.body);
+      expect((current.runnerProfileJson as Record<string, unknown>).nativeBootstrapContinuationSummaryDocument ?? null).toBeNull();
+      const retainedReader = { type: "agent" as const, source: "agent_jwt" as const, companyId, agentId, runId: current.id,
+        onBehalfOfUserId: actor.userId! };
+      const retainedCapture = (overrides: Partial<Parameters<typeof captureNativeFinalizedContinuationSummary>[0]> = {}) =>
+        captureNativeFinalizedContinuationSummary({ db, companyId, issueId: task.id, agentId, receiverRunId: current.id,
+          sourceRunId: prior.id, reader: retainedReader, ...overrides });
+      expect(await retainedCapture()).toMatchObject({ sourceRunId: prior.id, body: retainedSummary!.body });
+      // Another Run, Task or company has no finalized result for this resume.
+      expect(await retainedCapture({ sourceRunId: current.id })).toBeNull();
+      expect(await retainedCapture({ sourceRunId: randomUUID() })).toBeNull();
+      expect(await retainedCapture({ issueId: randomUUID() })).toBeNull();
+      expect(await retainedCapture({ companyId: randomUUID() })).toBeNull();
+      // An unaccepted or unfinalized result is never selected (rolled back).
+      const [priorFinalization] = await db.select().from(nativeRunFinalizations).where(and(
+        eq(nativeRunFinalizations.companyId, companyId), eq(nativeRunFinalizations.runId, prior.id)));
+      expect(priorFinalization?.resultId).toBeTruthy();
+      for (const mutate of [
+        (tx: typeof db) => tx.update(nativeRunResults).set({ schemaStatus: "rejected" })
+          .where(and(eq(nativeRunResults.companyId, companyId), eq(nativeRunResults.id, priorFinalization!.resultId!))),
+        (tx: typeof db) => tx.update(nativeRunFinalizations).set({ phase: "prepared" })
+          .where(and(eq(nativeRunFinalizations.companyId, companyId), eq(nativeRunFinalizations.runId, prior.id))),
+      ]) {
+        const rollback = new Error("same_task_new_run_rollback");
+        await expect(db.transaction(async tx => {
+          await mutate(tx as unknown as typeof db);
+          expect(await retainedCapture({ db: tx })).toBeNull();
+          throw rollback;
+        })).rejects.toBe(rollback);
+      }
+      expect(await retainedCapture()).toMatchObject({ sourceRunId: prior.id });
       expect(current).toMatchObject({ companyId, agentId, nativeIssueId: task.id, runtimeMode: "native", status: "succeeded" });
       expect(current.id).not.toBe(prior.id);
       expect(current.nativeSessionId).toBe(prior.nativeSessionId);
       const currentProfile = current.runnerProfileJson as Record<string, unknown>;
       const currentInput = parseNativeExecutionInput(currentProfile.nativeExecutionInput);
       const currentContinuation = (current.contextSnapshot as Record<string, unknown>).executionContinuation as Record<string, unknown>;
-      const resumeDelta = currentContinuation.resumeDelta as Record<string, unknown>;
-      expect(resumeDelta.baseRunId).toBe(prior.id);
+      // Run 1 delivered an empty Task history (an assignment wake with no
+      // comments), so there is no delta baseline: the producer builds a resume
+      // delta only over delivered messages, and adding a comment before Run 1
+      // changes its admission (it then fails at setup). The resume binding that
+      // does exist is heartbeat's retained-run source: Run 2's admitted
+      // `retained_run` input is Run 1, with no delta and no previous context.
+      const priorContinuation = (prior.contextSnapshot as Record<string, unknown>).executionContinuation as Record<string, unknown>;
+      expect(priorContinuation.messages).toEqual([]);
+      expect(currentContinuation.resumeDelta).toBeUndefined();
+      const retainedInputs = nativeRunInputSourceReceiptSchema.parse(currentProfile.nativeInputSourceReceipt).bootstrap.inputs
+        .filter(source => source.kind === "retained_run");
+      expect(retainedInputs).toEqual([expect.objectContaining({ kind: "retained_run", runId: prior.id })]);
+      expect(retainedSummary!.sourceRunId).toBe(prior.id);
       if (currentInput.schema !== "paperclip.native-execution-input.v4" ||
         !("continuationPrompt" in currentInput) || !currentInput.continuationPrompt)
         throw new Error("same_task_new_run_compact_input_missing");
@@ -582,13 +636,12 @@ it.each([false, true])("actual managed OpenCode plan-only output queues one boun
     providerReply: input => {
       if (!sourceRunId) sourceRunId = input.runId;
       if (input.runId === sourceRunId) {
-        // A yielded result must carry a response_wake continuation (runner
-        // result schema). This case still expects a liveness continuation for
-        // a plan-only yield; that expectation is pending a decision (ledger T3).
-        if (input.callIndex === 1) return managedLivenessFinish(input, "yielded",
-          "I will inspect the repository next and implement the requested fix.",
-          { kind: "response_wake", summary: "Continue with the recorded next action.",
-            idempotencyKey: `managed-liveness-next:${input.runId}` });
+        // Plan-only output: a final report with only a described next action,
+        // no work evidence and no continuation. A yielded result must carry a
+        // continuation (runner result schema), so the schema-valid form is a
+        // `done` report whose claim is honestly incomplete (ledger T3).
+        if (input.callIndex === 1) return managedLivenessFinish(input, "done",
+          "I will inspect the repository next and implement the requested fix.", undefined, { incompleteClaim: true });
         if (input.callIndex === 2) return { stop_reason: "end_turn" as const,
           content: [{ type: "text" as const, text: "I have recorded the next action for the continuation." }] };
       }

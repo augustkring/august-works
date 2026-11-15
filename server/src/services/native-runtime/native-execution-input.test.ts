@@ -326,6 +326,104 @@ describe("native bootstrap rendered-source closure", () => {
     expect(check(summaryOnly)).toBeNull();
   });
 
+  it("admits a retained-resume finalized summary only from the exact retained Run (CONF15-W2)", () => {
+    const humanId = "human-auth-user:retained-resume", wakeupRequestId = randomUUID();
+    const retainedRunId = randomUUID(), commentId = randomUUID(), at = "2026-11-15T00:00:00.000Z";
+    const message = nativeContinuationCommentProjection({ id: commentId, authorType: "user", authorUserId: humanId,
+      authorAgentId: null, createdByRunId: null, body: "Continue from the retained session.", createdAt: new Date(at),
+      updatedAt: new Date(at), deletedAt: null, sourceTrust: null });
+    const policy = { issueIds: [issueId], projectIds: [], runIds: [], memoryIds: [], foundationRevisionIds: [] };
+    const parentReceipt = { version: 1 as const, binding: { companyId, runId: retainedRunId, agentId, responsibleUserId: humanId, issueId },
+      bootstrap: { executionInputDigest: "d".repeat(64), policy,
+        inputs: [{ kind: "task" as const, issueId, sourceVersion: "1", contentHash: "e".repeat(64) }] },
+      dispatches: [], additionalInputs: [], digest: "f".repeat(64) };
+    const completedWork = "Wrote the plan and notes for this Task.";
+    const finalizedSummary = { companyId, issueId, agentId, receiverRunId: runId, sourceRunId: retainedRunId, resultId: randomUUID(),
+      assessmentId: randomUUID(), decisionId: randomUUID(), resultCanonicalSha256: "1".repeat(64), decisionDigest: "2".repeat(64),
+      decisionSnapshotHash: "3".repeat(64), resultCreatedAt: at, finalizationVersion: at, body: completedWork,
+      parentReceipt } as unknown as NonNullable<NativeTaskContinuationCapture["finalizedSummary"]>;
+    const capture: NativeTaskContinuationCapture = { companyId, issueId, agentId, runId, responsibleUserId: humanId, wakeupRequestId,
+      envelope: { version: 1, companyId, issueId, trigger: { reason: "issue_commented", interactionId: null, sourceRunId: null },
+        originCommentIds: [commentId], objective: message.body, messages: [message], humanResponses: [], interactionOutcomes: [],
+        completedWork, completedActions: [], recoveryOutcomes: [], unresolvedInteractionIds: [],
+        coverage: { kind: "full_task_history", throughCommentId: commentId, summaryThroughCommentId: null },
+        resumeDelta: { baseRunId: retainedRunId, messages: [message] } },
+      commentSources: [{ input: { kind: "comment", issueId, commentId, sourceVersion: "1", contentHash: nativeContinuationMessageHash(message) }, payloadSourceSnapshot: null }],
+      wake: { requestedByActorType: "user", requestedByActorId: humanId, reason: "issue_commented", originCommentIds: [commentId] },
+      finalizedSummary,
+      previousContext: { runId: retainedRunId, messages: [] },
+      retainedSource: { kind: "retained_run", runId: retainedRunId, inputDigest: "d".repeat(64), dispatchDigest: "e".repeat(64) } };
+    const check = (value: NativeTaskContinuationCapture, overrides: Partial<Parameters<typeof exactNativeTaskContinuation>[0]> = {}) =>
+      exactNativeTaskContinuation({ value: value.envelope, companyId, issueId, runId, agentId, responsibleUserId: humanId,
+        wakeupRequestId, wakeReason: "issue_commented", capture: value, ...overrides });
+    expect(check(capture)).toBe(capture);
+
+    // An unsealed continuation summary is never a Native source next to (or in place of) the finalized owner.
+    const summary = { source: { input: { kind: "document_revision" as const, issueId, documentId: randomUUID(), revisionId: randomUUID(),
+      contentHash: "c".repeat(64) }, payloadSourceSnapshot: null }, rawTrustHash: nativeSha256(null),
+      rendition: { key: "continuation-summary", title: "Continuation Summary", body: completedWork, sourceTrust: null, updatedAt: at } };
+    const withRawSummary = structuredClone(capture); withRawSummary.summary = summary;
+    expect(check(withRawSummary)).toBeNull();
+    // A finalized result of another Run (its owner or its receipt), Task or company is refused.
+    const otherRun = structuredClone(capture); otherRun.finalizedSummary!.sourceRunId = randomUUID();
+    expect(check(otherRun)).toBeNull();
+    const otherReceipt = structuredClone(capture); otherReceipt.finalizedSummary!.parentReceipt.binding.runId = randomUUID();
+    expect(check(otherReceipt)).toBeNull();
+    const otherReceiver = structuredClone(capture); otherReceiver.finalizedSummary!.receiverRunId = randomUUID();
+    expect(check(otherReceiver)).toBeNull();
+    const otherTask = structuredClone(capture); otherTask.finalizedSummary!.issueId = randomUUID();
+    expect(check(otherTask)).toBeNull();
+    const otherTaskReceipt = structuredClone(capture); otherTaskReceipt.finalizedSummary!.parentReceipt.binding.issueId = randomUUID();
+    expect(check(otherTaskReceipt)).toBeNull();
+    const otherCompany = structuredClone(capture); otherCompany.finalizedSummary!.companyId = randomUUID();
+    expect(check(otherCompany)).toBeNull();
+    const otherCompanyReceipt = structuredClone(capture); otherCompanyReceipt.finalizedSummary!.parentReceipt.binding.companyId = randomUUID();
+    expect(check(otherCompanyReceipt)).toBeNull();
+    const otherAgent = structuredClone(capture); otherAgent.finalizedSummary!.agentId = randomUUID();
+    expect(check(otherAgent)).toBeNull();
+    expect(check(capture, { issueId: randomUUID() })).toBeNull();
+    expect(check(capture, { companyId: randomUUID() })).toBeNull();
+    expect(check(capture, { runId: randomUUID() })).toBeNull();
+    // Without an accepted finalization owner there is no finalization identity or exact body.
+    const unfinalized = structuredClone(capture) as unknown as { finalizedSummary: Record<string, unknown> };
+    delete unfinalized.finalizedSummary.finalizationVersion;
+    expect(check(unfinalized as unknown as NativeTaskContinuationCapture)).toBeNull();
+    const unaccepted = structuredClone(capture) as unknown as { finalizedSummary: Record<string, unknown> };
+    delete unaccepted.finalizedSummary.decisionId;
+    expect(check(unaccepted as unknown as NativeTaskContinuationCapture)).toBeNull();
+    const changedBody = structuredClone(capture); changedBody.finalizedSummary!.body = "Different completed work.";
+    expect(check(changedBody)).toBeNull();
+    // The resume delta's base Run and the retained-run source must both be the finalized Run.
+    const otherBase = structuredClone(capture); otherBase.envelope.resumeDelta!.baseRunId = randomUUID();
+    expect(check(otherBase)).toBeNull();
+    const otherRetained = structuredClone(capture); otherRetained.retainedSource!.runId = randomUUID();
+    expect(check(otherRetained)).toBeNull();
+    const otherPrevious = structuredClone(capture); otherPrevious.previousContext!.runId = randomUUID();
+    expect(check(otherPrevious)).toBeNull();
+    const shiftedResume = structuredClone(capture), shiftedRunId = randomUUID();
+    shiftedResume.envelope.resumeDelta!.baseRunId = shiftedRunId; shiftedResume.previousContext!.runId = shiftedRunId;
+    shiftedResume.retainedSource!.runId = shiftedRunId;
+    expect(check(shiftedResume)).toBeNull();
+    // With an empty delivered history there is no delta: the retained-run source alone binds the Run.
+    const retainedOnly = structuredClone(capture); delete retainedOnly.envelope.resumeDelta; delete retainedOnly.previousContext;
+    expect(check(retainedOnly)).toBe(retainedOnly);
+    const retainedOnlyOther = structuredClone(retainedOnly); retainedOnlyOther.retainedSource!.runId = randomUUID();
+    expect(check(retainedOnlyOther)).toBeNull();
+    const retainedOnlyMalformed = structuredClone(retainedOnly) as unknown as { retainedSource: Record<string, unknown> };
+    retainedOnlyMalformed.retainedSource.inputDigest = "not-a-digest";
+    expect(check(retainedOnlyMalformed as unknown as NativeTaskContinuationCapture)).toBeNull();
+    const noResume = structuredClone(retainedOnly); delete noResume.retainedSource;
+    expect(check(noResume)).toBeNull();
+    // The trigger binding of other kinds is not widened: a trigger source Run is not this kind.
+    const triggerSource = structuredClone(capture); triggerSource.envelope.trigger.sourceRunId = retainedRunId;
+    expect(check(triggerSource)).toBeNull();
+    // Without the finalized owner, the same resume carries no completed work.
+    const bare = structuredClone(capture); delete bare.finalizedSummary; bare.envelope.completedWork = null;
+    expect(check(bare)).toBe(bare);
+    const bareWithWork = structuredClone(capture); delete bareWithWork.finalizedSummary;
+    expect(check(bareWithWork)).toBeNull();
+  });
+
   it("keeps later readable Human history distinct from the admitted trigger author", () => {
     const responsibleUserId = "trigger-human";
     const otherUserId = "other-readable-human";

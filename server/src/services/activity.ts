@@ -19,8 +19,8 @@ import {
 import { hasWorkspaceRestoreFailure, safeWorkspaceRestorePath, ISSUE_CONTINUATION_SUMMARY_DOCUMENT_KEY } from "@paperclipai/shared";
 import { logger } from "../middleware/logger.js";
 import { visibleIssueCondition } from "./issue-visibility.js";
-import { classifyRunLiveness, RUN_LIVENESS_BOOKKEEPING_ACTIVITY_ACTIONS } from "./run-liveness.js";
-import { readRunLivenessToolActionStats } from "./run-liveness-evidence.js";
+import { classifyRunLiveness } from "./run-liveness.js";
+import { readRunLivenessActivityStats, readRunLivenessToolActionStats } from "./run-liveness-evidence.js";
 import { activitySourceReadSqlCondition } from "./activity-privacy.js";
 import type { AuthorizationActor } from "./authorization.js";
 
@@ -270,14 +270,7 @@ export function activityService(db: Db) {
         .from(workspaceOperations)
         .where(and(eq(workspaceOperations.companyId, companyId), eq(workspaceOperations.heartbeatRunId, run.id)));
 
-      const [activityStats] = await db
-        .select({
-          count: sql<number>`count(*)::int`,
-          latestAt: sql<Date | null>`max(${activityLog.createdAt})`,
-        })
-        .from(activityLog)
-        .where(and(eq(activityLog.companyId, companyId), eq(activityLog.runId, run.id),
-          notInArray(activityLog.action, RUN_LIVENESS_BOOKKEEPING_ACTIVITY_ACTIONS)));
+      const activityStats = await readRunLivenessActivityStats(db, companyId, run.id);
 
       const toolActionStats = await readRunLivenessToolActionStats(db, { companyId, issueId, runId: run.id, agentId: run.agentId });
 
