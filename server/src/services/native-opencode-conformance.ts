@@ -32,8 +32,8 @@ import { PROCESS_START_REQUESTED } from "./native-local-process-stop.js";
 import { claimNativeExecutionCoordinator, failUnclaimedNativeOpenCodeConformanceRun,
   releaseNativeOpenCodeConformanceCoordinator, recordNativeModelInputDispatchAcknowledgement,
   recordNativeModelInputDispatchIntent } from "./native-runtime/native-session-executor.js";
-import { nativeOpenCodeConformancePrompt, NATIVE_OPENCODE_CONFORMANCE_SYSTEM,
-  nativeOpenCodeConformanceSourceDigest, type NativeOpenCodeConformanceSourceAuthority } from "./orchestration/native-opencode-conformance-source.js";
+import { nativeOpenCodeConformancePrompt,
+  type NativeOpenCodeConformanceSourceAuthority } from "./orchestration/native-opencode-conformance-source.js";
 import { nativeSha256 } from "./native-runtime/canonical.js";
 import { resolvePaperclipInstanceRoot } from "../home-paths.js";
 import { materializeNativeChatTaskRoot, type NativeChatWorkspaceScope } from "./native-runtime/native-chat-workspace.js";
@@ -188,58 +188,6 @@ export function nativeOpenCodeConformanceMemoryScopingPassed(input: {
     input.peerUnseen.sessionId !== input.first.sessionId && input.primaryProfileRef !== input.peerProfileRef;
 }
 
-/** Persist the exact source receipt only after the canonical Native dispatch
- * owner wrote the intent and before startTurn can send the provider request. */
-async function persistOpenCodeProbeSource(input: {
-  db: Db; execution: NativeExecutionInput; groupId: string; planId: string; profileId: string;
-  source: NonNullable<ManagedOpenCodeProbe["source"]>; dispatchId: string; turnInput: Parameters<NativeSession["startTurn"]>[0];
-  eventSeq: number; attempt: number; responsibleUserId: string;
-}) {
-  const { db } = input;
-  await db.transaction(async tx => {
-    const [run] = await tx.select().from(heartbeatRuns).where(and(
-      eq(heartbeatRuns.companyId, input.execution.binding.companyId),
-      eq(heartbeatRuns.id, input.execution.binding.runId), eq(heartbeatRuns.agentId, input.execution.binding.agentId),
-    )).for("update").limit(1);
-    if (!run || run.status !== "running" || run.triggerDetail !== "provider_conformance" ||
-        run.responsibleUserId !== input.responsibleUserId || run.nativeIssueId !== input.execution.binding.issueId)
-      throw forbidden("The active Human-owned conformance Native run changed before source sealing");
-    const contextSnapshot = run.contextSnapshot && typeof run.contextSnapshot === "object" ? run.contextSnapshot as Record<string, any> : {};
-    const context = contextSnapshot.nativeOpenCodeConformanceDispatch;
-    if (!context || context.qualificationGroupId !== input.groupId || context.planId !== input.planId ||
-        context.profileId !== input.profileId || context.probeId !== input.source.probeId ||
-        context.dispatchNonce !== input.source.dispatchNonce)
-      throw forbidden("The server-minted one-probe RuntimeControl tuple changed before source sealing");
-    if (Object.keys(context).sort().join(",") !== ["authorityHash", "dispatchNonce", "planId", "probeId", "profileId", "qualificationGroupId"].sort().join(",") ||
-        typeof context.authorityHash !== "string" || !/^[a-f0-9]{64}$/.test(context.authorityHash))
-      throw forbidden("The RuntimeControl issuer tuple has an invalid closed shape");
-    const encodedInput = JSON.stringify(input.turnInput);
-    const runProfile = run.runnerProfileJson && typeof run.runnerProfileJson === "object" ? run.runnerProfileJson as Record<string, any> : {};
-    const [intent] = (Array.isArray(runProfile.nativeModelInputDispatchIntents)
-      ? runProfile.nativeModelInputDispatchIntents : []).filter((row: any) => row?.dispatchId === input.dispatchId);
-    if (!intent || intent.eventSeq !== input.eventSeq || intent.attempt !== input.attempt ||
-        intent.responsibleUserId !== input.responsibleUserId || intent.turnInputDigest !== createHash("sha256").update(encodedInput).digest("hex") ||
-        input.turnInput.message?.role !== "user" || input.turnInput.message.text !== nativeOpenCodeConformancePrompt(input.source.probeKind, input.source.marker) ||
-        Object.keys(input.turnInput).some(key => !["message", "continuation"].includes(key)) ||
-        input.turnInput.continuation !== (input.source.probeKind === "resume" || input.source.probeKind === "isolation_read" || input.source.probeKind === "cancel"))
-      throw forbidden("The exact fixed Native synthetic turn and persisted dispatch intent are required");
-    const authority: NativeOpenCodeConformanceSourceAuthority = {
-      version: 1, scope: "provider_conformance", qualificationGroupId: input.groupId,
-      probeId: input.source.probeId, probeRunId: run.id, dispatchNonce: input.source.dispatchNonce,
-      responsibleUserId: input.responsibleUserId, probeKind: input.source.probeKind, marker: input.source.marker,
-      dispatchId: input.dispatchId, eventSeq: input.eventSeq, attempt: input.attempt,
-      continuation: input.turnInput.continuation === true, turnInputDigest: intent.turnInputDigest,
-      systemHash: nativeSha256(NATIVE_OPENCODE_CONFORMANCE_SYSTEM),
-      promptHash: nativeSha256(nativeOpenCodeConformancePrompt(input.source.probeKind, input.source.marker)),
-      historyPrefixHash: nativeSha256(input.source.historyPrefix), sourceDigest: "",
-    };
-    const sealed = { ...authority, sourceDigest: nativeOpenCodeConformanceSourceDigest(authority) };
-    const profile = runProfile;
-    await tx.update(heartbeatRuns).set({ runnerProfileJson: { ...profile,
-      nativeOpenCodeConformanceSourceAuthority: sealed }, updatedAt: new Date() }).where(eq(heartbeatRuns.id, run.id));
-  });
-}
-
 async function bindOpenCodeProbeTurnId(db: Db, runId: string, turnId: string, dispatchId: string) {
   await db.transaction(async tx => {
     const [run] = await tx.select().from(heartbeatRuns).where(eq(heartbeatRuns.id, runId)).for("update").limit(1);
@@ -315,13 +263,19 @@ export async function runManagedOpenCodeProbe(input: { db: Db; createBackend(): 
     turnStep = "dispatch";
     const turnInput: Parameters<NativeSession["startTurn"]>[0] = {
       message: { role: "user", text: probe.prompt }, ...(previous ? { continuation: true as const } : {}) };
+    // The recorder binds this typed source to the hidden Run, its issuer
+    // tuple, source authority and fixed template, and seals the conformance
+    // source receipt in the intent's own transaction, before startTurn can
+    // reach the provider (CONF5).
+    if (source.qualificationGroupId !== input.groupId || source.planId !== input.planId || source.profileId !== input.profileId)
+      throw forbidden("The server-minted one-probe RuntimeControl tuple changed before source sealing");
     const dispatchId = await recordNativeModelInputDispatchIntent({ db: input.db, runId: probe.identity.runId,
       companyId: probe.identity.companyId, issueId: probe.identity.issueId, agentId: probe.identity.agentId,
       leaseOwner: coordinator.leaseOwner, attempt: coordinator.attempt, controller: coordinator.controller,
-      eventSeq: launchIntent.row.seq, turnInput });
-    await persistOpenCodeProbeSource({ db: input.db, execution: input.execution, groupId: input.groupId,
-      planId: input.planId, profileId: input.profileId, source, dispatchId, turnInput,
-      eventSeq: launchIntent.row.seq, attempt: coordinator.attempt, responsibleUserId: input.responsibleUserId });
+      eventSeq: launchIntent.row.seq, turnInput, providerConformanceSource: { kind: "provider_conformance",
+        qualificationGroupId: source.qualificationGroupId, planId: source.planId, profileId: source.profileId,
+        probeId: source.probeId, dispatchNonce: source.dispatchNonce, responsibleUserId: input.responsibleUserId,
+        probeKind: source.probeKind, marker: source.marker, historyPrefix: source.historyPrefix } });
     const { turnId } = await session.startTurn(turnInput);
     await recordNativeModelInputDispatchAcknowledgement({ db: input.db, runId: probe.identity.runId,
       companyId: probe.identity.companyId, issueId: probe.identity.issueId, agentId: probe.identity.agentId,

@@ -191,7 +191,8 @@ import { PaperclipRunnerToolAuthority, resolveNativeInputDispatchReceiptIdentity
   type NativeInputToolResultSource, type NativeProjectToolResultSource,
   type NativeManagedProjectCreateCapture } from "./paperclip-runner-tool-authority.js";
 import {nativeManagementToolsAvailable} from "./management-analytical-tools.js";
-import { NATIVE_OPENCODE_CONFORMANCE_SYSTEM } from "../orchestration/native-opencode-conformance-source.js";
+import { NATIVE_OPENCODE_CONFORMANCE_SYSTEM, sealNativeOpenCodeConformanceDispatchSource,
+  type NativeOpenCodeConformanceDispatchSource, type NativeOpenCodeConformanceSourceAuthority } from "../orchestration/native-opencode-conformance-source.js";
 import { createAssignedMcpTools, getAssignedMcpGateway, type AssignedMcpInvocationWitness, type AssignedMcpPendingWitness, type AssignedMcpSearchWitness } from "./assigned-mcp-tools.js";
 import { captureNativeGovernedPendingInteractions } from "./native-interaction-bridge.js";
 import { captureNativeReviewWakeWitness, getNativeReviewAssignment, readNativeReviewAssignmentContext } from "./native-review-participant.js";
@@ -8187,6 +8188,10 @@ export async function recordNativeModelInputDispatchIntent(input: Parameters<typ
   eventSeq: number;
   turnInput: Parameters<NativeSession["startTurn"]>[0];
   bootstrapSourceClosure?: NativeBootstrapSourceClosure | null;
+  /** The hidden provider-conformance Run's typed source (CONF5). Exclusive
+   * with a generic bootstrap source closure; bound exactly and sealed as the
+   * conformance source receipt in this intent's transaction. */
+  providerConformanceSource?: NativeOpenCodeConformanceDispatchSource | null;
 }): Promise<string> {
   if (!Number.isSafeInteger(input.eventSeq) || input.eventSeq < 0)
     throw new Error("native_model_input_launch_binding_invalid");
@@ -8197,6 +8202,7 @@ export async function recordNativeModelInputDispatchIntent(input: Parameters<typ
     | "run_binding"
     | "launch_binding"
     | "source_closure_match"
+    | "conformance_source_binding"
     | "receipt_validation"
     | "prompt_binding"
     | "intent_persist"
@@ -8240,6 +8246,17 @@ export async function recordNativeModelInputDispatchIntent(input: Parameters<typ
       throw new Error("native_model_input_dispatch_budget_exceeded");
     let receipt: NativeRunInputSourceReceipt | null = null;
     const sourceClosure = input.bootstrapSourceClosure;
+    // A conformance probe has no generic source closure, input receipt or
+    // prompt binding: its typed source is bound exactly against the locked
+    // Run and sealed with this intent (CONF5).
+    let conformanceSource: NativeOpenCodeConformanceSourceAuthority | null = null;
+    if (input.providerConformanceSource) {
+      stage = "conformance_source_binding";
+      if (sourceClosure) throw new Error("native_model_input_conformance_source_closure_conflict");
+      conformanceSource = sealNativeOpenCodeConformanceDispatchSource({ source: input.providerConformanceSource,
+        run, profile, turnInput: input.turnInput, intent: intents.at(-1)!, priorIntentCount: previous.length });
+      stage = "source_closure_match";
+    }
     const attachmentStage = nativeAttachmentStageReceipt(profile, run, sourceClosure,
       { eventSeq: input.eventSeq, attempt: input.attempt });
     const noPriorNativeEffects = previous.length === 0 &&
@@ -8271,7 +8288,7 @@ export async function recordNativeModelInputDispatchIntent(input: Parameters<typ
         attachmentStagePresent: attachmentStage !== undefined,
       });
     }
-    if (profile.nativeOpenCodeSourceAuthority && !sourceClosureMatches) {
+    if (profile.nativeOpenCodeSourceAuthority && !sourceClosureMatches && !conformanceSource) {
       const reason = process.env.PAPERCLIP_NATIVE_SOURCE_CLOSURE_DIAGNOSTICS === "1" &&
         sourceClosureMismatchReason && nativeTurnFrameSourceMismatchReasons.has(sourceClosureMismatchReason)
         ? sourceClosureMismatchReason : null;
@@ -8314,7 +8331,8 @@ export async function recordNativeModelInputDispatchIntent(input: Parameters<typ
       } else receipt = existingReceipt.data;
     }
     let nativeOpenCodeSourceAuthority = profile.nativeOpenCodeSourceAuthority;
-    if (nativeOpenCodeSourceAuthority && typeof nativeOpenCodeSourceAuthority === "object" && !Array.isArray(nativeOpenCodeSourceAuthority)) {
+    if (!conformanceSource && nativeOpenCodeSourceAuthority && typeof nativeOpenCodeSourceAuthority === "object" &&
+      !Array.isArray(nativeOpenCodeSourceAuthority)) {
       stage = "prompt_binding";
       const sourceAuthority = record(nativeOpenCodeSourceAuthority);
       const priorPrompts = sourceAuthority.authorizedPromptHashes;
@@ -8353,7 +8371,8 @@ export async function recordNativeModelInputDispatchIntent(input: Parameters<typ
     }
     const nextProfile = { ...profile, nativeModelInputDispatchIntents: intents,
       ...(nativeOpenCodeSourceAuthority ? { nativeOpenCodeSourceAuthority } : {}),
-      ...(receipt ? { nativeInputSourceReceipt: receipt } : {}) };
+      ...(receipt ? { nativeInputSourceReceipt: receipt } : {}),
+      ...(conformanceSource ? { nativeOpenCodeConformanceSourceAuthority: conformanceSource } : {}) };
     stage = "intent_persist";
     const [stored] = await tx.update(heartbeatRuns).set({
       runnerProfileJson: nextProfile,
@@ -8366,6 +8385,8 @@ export async function recordNativeModelInputDispatchIntent(input: Parameters<typ
     const storedIntents = record(stored.profile).nativeModelInputDispatchIntents;
     if (!Array.isArray(storedIntents)) throw new Error("native_model_input_dispatch_intents_not_returned");
     if (nativeSha256(storedIntents) !== nativeSha256(intents))
+      throw new Error("native_model_input_dispatch_profile_digest_mismatch");
+    if (conformanceSource && nativeSha256(record(stored.profile).nativeOpenCodeConformanceSourceAuthority) !== nativeSha256(conformanceSource))
       throw new Error("native_model_input_dispatch_profile_digest_mismatch");
     if (nativeOpenCodeSourceAuthority && sourceClosure && receipt) {
       stage = "source_owner_recheck";
