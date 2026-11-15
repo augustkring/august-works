@@ -151,6 +151,22 @@ export async function validateNativeOpenCodeConformanceHarness(input: {
       Date.now() + 60_000)) });
 }
 
+/** The conformance lane's reservation tariff (CONF10). Pure, like the worker
+ * lane's: the profile that admission already validated, re-checked with
+ * `assertWorkerModelProfileCurrent`, only for the exact company, plan and
+ * `provider_conformance` purpose; null otherwise. The reservation service
+ * calls it inside its own transactions, so it must not open a connection. */
+export function nativeOpenCodeConformanceQualifiedTariff(input: {
+  request: { companyId: string; planId: string; purpose: string };
+  companyId: string; planId: string; admittedPlanId: string; profile: WorkerModelProfile;
+  sourceSha: string; protectedEvidenceOrigin: string;
+}) {
+  const { request } = input;
+  if (request.purpose !== "provider_conformance" || request.companyId !== input.companyId ||
+      request.planId !== input.planId || request.planId !== input.admittedPlanId) return null;
+  return assertWorkerModelProfileCurrent(input.profile, input.sourceSha, input.protectedEvidenceOrigin).tariff;
+}
+
 /** One-shot, tool-free Messages dispatch for a real managed OpenCode probe.
  * The reservation ledger is the only spend authority; the provider adapter
  * receives the exact already-validated request and server-selected secret. */
@@ -209,9 +225,14 @@ export async function callNativeOpenCodeConformanceMessages(input: {
   const idempotencyKey = `opencode-conformance:${admission.runId}:${claim.probeId}:${claim.dispatchNonce}`;
   const reservations = modelReservationService(input.db, {
     sourceSha: input.options.sourceSha,
-    qualifiedTariff: async request => request.purpose === "provider_conformance" &&
-      request.companyId === claims.company_id && request.planId === claim.planId
-      ? (await validateNativeOpenCodeConformanceHarness(admissionInput)).profile.tariff : null,
+    // CONF10. No database call: claimForDispatch and recordWireDispatch call
+    // this inside their transaction, after the company and plan locks, and the
+    // old outer-connection harness re-validation waited on those locks.
+    // currentAuthority(tx) below re-validates the full harness on the same
+    // transaction, and its hash covers the profile (and so its tariff).
+    qualifiedTariff: async request => nativeOpenCodeConformanceQualifiedTariff({ request,
+      companyId: claims.company_id, planId: claim.planId, admittedPlanId: admission.planId, profile: admission.profile,
+      sourceSha: input.options.sourceSha, protectedEvidenceOrigin: input.options.protectedEvidenceOrigin }),
     currentAuthority: async tx => {
       const current = await validateNativeOpenCodeConformanceHarness({ ...admissionInput, db: tx });
       const currentSourceDigest = assertCurrentSource(current);
