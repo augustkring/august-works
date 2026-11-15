@@ -244,6 +244,88 @@ describe("native bootstrap rendered-source closure", () => {
     expect(check(changedOrigin)).toBeNull();
   });
 
+  it("admits an accepted plan without any comment only through the producer Run's finalized summary", () => {
+    const companyId = randomUUID(), issueId = randomUUID(), runId = randomUUID(), agentId = randomUUID();
+    const sourceRunId = randomUUID(), interactionId = randomUUID(), wakeupRequestId = randomUUID();
+    const humanId = "human-auth-user:accepted-plan-a6b", resolvedAt = "2026-11-14T00:00:00.000Z";
+    const taskObjective = "Task description: no Human comment exists on this Task.";
+    const documentId = randomUUID(), revisionId = randomUUID(), bodyHash = "c".repeat(64);
+    const planSourceInput = { kind: "document_revision" as const, issueId, documentId, revisionId, contentHash: bodyHash };
+    const interactionResult = { outcome: "accepted", reason: null, commentId: null };
+    const planReviewContext = { documentKey: "plan" as const, issueId, latestRevisionId: revisionId, latestRevisionNumber: 1,
+      threads: [], interaction: { id: interactionId, kind: "request_confirmation", status: "accepted", continuationPolicy: "wake_assignee_on_accept",
+        sourceCommentId: null, sourceRunId, target: { issueId, documentId, key: "plan", revisionId, revisionNumber: 1 },
+        acceptedTargetRevision: { issueId, documentId, key: "plan", revisionId, revisionNumber: 1 }, result: interactionResult, resolvedAt },
+      totals: { openThreadCount: 0, includedThreadCount: 0, omittedThreadCount: 0, commentCount: 0, includedCommentCount: 0, omittedCommentCount: 0 },
+      limits: { maxThreads: 20, maxComments: 80, maxBodyChars: 1200, maxTotalBodyChars: 12000, maxAnchorTextChars: 500 }, truncated: false };
+    const policy = { issueIds: [issueId], projectIds: [], runIds: [], memoryIds: [], foundationRevisionIds: [] };
+    const parentReceipt = { version: 1 as const, binding: { companyId, runId: sourceRunId, agentId, responsibleUserId: humanId, issueId },
+      bootstrap: { executionInputDigest: "d".repeat(64), policy,
+        inputs: [{ kind: "task" as const, issueId, sourceVersion: "1", contentHash: "e".repeat(64) }] },
+      dispatches: [], additionalInputs: [], digest: "f".repeat(64) };
+    const completedWork = "Waiting for the responsible Human to accept the plan.";
+    const finalizedSummary = { companyId, issueId, agentId, receiverRunId: runId, sourceRunId, resultId: randomUUID(),
+      assessmentId: randomUUID(), decisionId: randomUUID(), resultCanonicalSha256: "1".repeat(64), decisionDigest: "2".repeat(64),
+      decisionSnapshotHash: "3".repeat(64), resultCreatedAt: resolvedAt, finalizationVersion: resolvedAt, body: completedWork,
+      parentReceipt } as unknown as NonNullable<NativeTaskContinuationCapture["finalizedSummary"]>;
+    const capture: NativeTaskContinuationCapture = {
+      companyId, issueId, agentId, runId, responsibleUserId: humanId, wakeupRequestId,
+      envelope: { version: 1, companyId, issueId, trigger: { reason: "issue_commented", interactionId, sourceRunId },
+        originCommentIds: [], objective: taskObjective, messages: [],
+        humanResponses: [{ id: interactionId, kind: "request_confirmation", status: "accepted", resolvedByUserId: humanId, resolvedAt, result: interactionResult }],
+        interactionOutcomes: [{ id: interactionId, kind: "request_confirmation", status: "accepted", result: interactionResult }],
+        completedWork, recoveryOutcomes: [], unresolvedInteractionIds: [], completedActions: [],
+        coverage: { kind: "full_task_history", throughCommentId: null, summaryThroughCommentId: null } },
+      commentSources: [],
+      wake: { requestedByActorType: "user", requestedByActorId: humanId, reason: "issue_commented", originCommentIds: [],
+        interaction: { interactionId, interactionKind: "request_confirmation", interactionStatus: "accepted", sourceRunId } },
+      finalizedSummary,
+      acceptedPlanReview: { version: 1, companyId, issueId, agentId, runId, interactionId, sourceRunId,
+        resolvedByUserId: humanId, resolvedAt, originCommentIds: [], taskObjective,
+        interactionSource: { kind: "interaction", issueId, interactionId, sourceVersion: "2.0", contentHash: "a".repeat(64) },
+        planSource: { input: planSourceInput, payloadSourceSnapshot: null },
+        planRendition: { documentId, revisionId, revisionNumber: 1, bodyHash }, planReviewContext },
+    };
+    const check = (value: NativeTaskContinuationCapture, overrides: Partial<Parameters<typeof exactNativeTaskContinuation>[0]> = {}) =>
+      exactNativeTaskContinuation({ value: value.envelope, companyId, issueId, runId, agentId, responsibleUserId: humanId,
+        wakeupRequestId, wakeReason: "issue_commented", capture: value, ...overrides });
+    expect(check(capture)).toBe(capture);
+
+    // Empty history and no origins are admitted only by the accepted-plan owner.
+    const noPlan = structuredClone(capture); Reflect.deleteProperty(noPlan, "acceptedPlanReview");
+    expect(check(noPlan)).toBeNull();
+    // The finalized summary must come from the exact Run that requested the confirmation.
+    const otherProducer = structuredClone(capture); otherProducer.finalizedSummary!.sourceRunId = randomUUID();
+    expect(check(otherProducer)).toBeNull();
+    const otherProducerReceipt = structuredClone(capture); otherProducerReceipt.finalizedSummary!.parentReceipt.binding.runId = randomUUID();
+    expect(check(otherProducerReceipt)).toBeNull();
+    const otherReceiver = structuredClone(capture); otherReceiver.finalizedSummary!.receiverRunId = randomUUID();
+    expect(check(otherReceiver)).toBeNull();
+    // An unsealed summary document cannot ride alongside the finalized owner.
+    const withRawSummary = structuredClone(capture) as NativeTaskContinuationCapture & { summary?: unknown };
+    withRawSummary.summary = { source: { input: planSourceInput, payloadSourceSnapshot: null }, rawTrustHash: "4".repeat(64),
+      rendition: { key: "continuation-summary", title: null, body: completedWork, sourceTrust: null, updatedAt: resolvedAt } };
+    expect(check(withRawSummary as NativeTaskContinuationCapture)).toBeNull();
+    // Another Human, Run, Task or company never inherits this acceptance.
+    const otherHuman = structuredClone(capture); otherHuman.wake.requestedByActorId = "another-human";
+    expect(check(otherHuman)).toBeNull();
+    expect(check(capture, { responsibleUserId: "another-human" })).toBeNull();
+    const otherRun = structuredClone(capture); otherRun.acceptedPlanReview!.runId = randomUUID();
+    expect(check(otherRun)).toBeNull();
+    expect(check(capture, { runId: randomUUID() })).toBeNull();
+    expect(check(capture, { issueId: randomUUID() })).toBeNull();
+    expect(check(capture, { companyId: randomUUID() })).toBeNull();
+    // A declined or unresolved confirmation is not an accepted plan.
+    const declined = structuredClone(capture); declined.wake.interaction!.interactionStatus = "rejected";
+    expect(check(declined)).toBeNull();
+    // A wake origin outside the owner's recorded (empty) origin set is refused.
+    const extraOrigin = structuredClone(capture); extraOrigin.wake.originCommentIds = [randomUUID()];
+    expect(check(extraOrigin)).toBeNull();
+    // A finalized summary without the accepted-plan owner stays outside this profile.
+    const summaryOnly = structuredClone(noPlan); summaryOnly.envelope.messages = []; Reflect.deleteProperty(summaryOnly.wake, "interaction");
+    expect(check(summaryOnly)).toBeNull();
+  });
+
   it("keeps later readable Human history distinct from the admitted trigger author", () => {
     const responsibleUserId = "trigger-human";
     const otherUserId = "other-readable-human";

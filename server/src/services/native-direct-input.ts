@@ -2329,6 +2329,18 @@ export function nativeManagedProgressCommentSourceSet(capture: NativeModelOutput
   return { policy, inputs };
 }
 
+/** The Run receipt entry for a settled managed progress tool_result. Unlike
+ * the comment snapshot above, it keeps the consumed source policy: the
+ * producing Run's own dispatch is provenance for this result, not a consumed
+ * source, so it never widens the receipt's readable Run IDs. The executor
+ * records exactly this entry; the gateway and the shared consumed-source
+ * validator require it. */
+export function nativeManagedProgressReceiptSourceSet(capture: NativeModelOutputCapture,
+  source: Extract<NativePayloadSourceInput, { kind: "tool_result" }>): NativePayloadSourceSet {
+  return { policy: capture.sourceSet.policy,
+    inputs: unionNativePayloadSourceInputs([[source], [capture.dispatch], capture.sourceSet.inputs]) };
+}
+
 /** Validate the server-only provider/tool output carrier against the settled
  * Messages response, recorded tool-use block, dispatch association, and exact
  * run receipt source set. The caller never supplies this object. */
@@ -4103,12 +4115,78 @@ async function assertNativePayloadSourceSetCurrentInScope(db: Db | Transaction, 
   }, historicalDocumentDepthHint);
 }
 
+/** Markers that a sealed Run-authored comment snapshot carries as provenance
+ * for its producing Run: the Run's own model dispatch (see
+ * nativeManagedProgressCommentSourceSet) and tool results it consumed.
+ * get_task_history returns each comment with its snapshot flattened, so a
+ * history result may hold these only as such nested provenance. */
+type NativeHistoryProvenanceMarker = Extract<NativePayloadSourceInput,
+  { kind: "worker_model_dispatch" | "conversation_model_dispatch" | "tool_result" }>;
+function isNativeHistoryProvenanceMarker(source: NativePayloadSourceInput): source is NativeHistoryProvenanceMarker {
+  return source.kind === "worker_model_dispatch" || source.kind === "conversation_model_dispatch" || source.kind === "tool_result";
+}
+
+/** Prove that each provenance marker in a get_task_history result is nested
+ * in a returned, current, sealed comment snapshot authored by that marker's
+ * own producing Run on this Task. This grants nothing by itself: the caller
+ * still validates every marker with the historical dispatch and tool-result
+ * owners, every comment with the ordinary comment owner, and every policy Run
+ * with the current reader ACL. The result also may not name a Run that no
+ * returned snapshot already owns, so the provenance never widens its Run IDs. */
+async function assertNativeHistoryNestedProvenanceCurrent(db: Db | Transaction, input: {
+  companyId: string; issueId: string; policy: NativePayloadSourcePolicy; inputs: NativePayloadSourceInput[];
+}, scope: NativeSourceReadScope): Promise<void> {
+  const reject = (): never => { throw forbidden("A Native history comment provenance is unavailable"); };
+  const markers = input.inputs.filter(isNativeHistoryProvenanceMarker);
+  if (!markers.length) return;
+  const nestedMarkers = new Set<string>();
+  const ownedRunIds = new Set<string>();
+  for (const source of input.inputs) {
+    if (source.kind !== "comment") continue;
+    nativeSourceReadWork(scope);
+    const [comment] = source.issueId === input.issueId ? await db.select({
+      sourceVersion: sql<string>`extract(epoch from ${issueComments.updatedAt})::text`,
+      payloadSourceProtocolVersion: issueComments.payloadSourceProtocolVersion,
+      payloadSourceSnapshot: issueComments.payloadSourceSnapshot,
+      payloadSourceSnapshotInvalidated: issueComments.payloadSourceSnapshotInvalidated,
+      authorType: issueComments.authorType, authorAgentId: issueComments.authorAgentId,
+      authorUserId: issueComments.authorUserId, createdByRunId: issueComments.createdByRunId,
+      ownerBodyHash: sql<string>`public.aw_native_payload_body_hash('comment', to_jsonb(${issueComments}))`,
+      payloadSourceSnapshotDigestValid: sql<boolean>`(${issueComments.payloadSourceSnapshot}->>'digest') = encode(sha256(convert_to((${issueComments.payloadSourceSnapshot}-'digest')::text,'UTF8')),'hex')`,
+    }).from(issueComments).where(and(eq(issueComments.companyId, input.companyId), eq(issueComments.issueId, input.issueId),
+      eq(issueComments.id, source.commentId), isNull(issueComments.deletedAt))).for("share") : [];
+    if (!comment || comment.sourceVersion !== source.sourceVersion) reject();
+    const snapshot = nativePayloadSourceSnapshotSchema.safeParse(comment!.payloadSourceSnapshot);
+    const sealed = snapshot.success && comment!.payloadSourceProtocolVersion === 1 &&
+      !comment!.payloadSourceSnapshotInvalidated && comment!.payloadSourceSnapshotDigestValid === true &&
+      snapshot.data.digest === comment!.payloadSourceSnapshot?.digest && snapshot.data.owner.kind === "comment" &&
+      snapshot.data.owner.companyId === input.companyId && snapshot.data.owner.id === source.commentId &&
+      snapshot.data.owner.contentHash === comment!.ownerBodyHash;
+    if (!sealed || !snapshot.success) continue;
+    for (const runId of snapshot.data.policy.runIds) ownedRunIds.add(runId);
+    const nested = snapshot.data.inputs.filter(isNativeHistoryProvenanceMarker);
+    if (!nested.length) continue;
+    const producerRunId = comment!.createdByRunId;
+    const producer = producerRunId ? await nativeSourceReadRun(db, input.companyId, producerRunId, scope) : null;
+    if (!producerRunId || comment!.authorType !== "agent" || !comment!.authorAgentId || comment!.authorUserId !== null ||
+      !producer || producer.runtimeMode !== "native" || producer.agentId !== comment!.authorAgentId ||
+      producer.nativeIssueId !== input.issueId || !snapshot.data.policy.runIds.includes(producerRunId) ||
+      nested.some(marker => marker.runId !== producerRunId || (marker.kind === "conversation_model_dispatch" &&
+        (marker.issueId !== input.issueId || marker.agentId !== comment!.authorAgentId)))) reject();
+    for (const marker of nested) nestedMarkers.add(nativeSha256(marker));
+  }
+  if (markers.some(marker => !nestedMarkers.has(nativeSha256(marker))) ||
+    input.policy.runIds.some(runId => !ownedRunIds.has(runId))) reject();
+}
+
 /** Validate a newly returned Native read result against its original owners
  * before the result is appended to the Run receipt. This deliberately skips
  * only receipt membership for the outer source set; it still requires the
  * current Run/receipt binding and runs the same current ACL, retention,
  * version, body-hash, and nested-owner checks as an already-recorded set.
- * Read results cannot bootstrap another tool result or model dispatch. */
+ * Read results cannot bootstrap another tool result or model dispatch; a
+ * history result carries dispatch and tool-result markers only as provenance
+ * nested in a sealed Run-authored comment snapshot. */
 export async function assertNativeReadResultSourceSetOwnersCurrent(db: Db | Transaction, input: {
   companyId: string; issueId: string; runId: string; actor: AuthorizationActor;
   tool: "get_task_context" | "get_task_history" | "read_chat_attachment" | "query_business_metric";
@@ -4144,8 +4222,12 @@ export async function assertNativeReadResultSourceSetOwnersCurrent(db: Db | Tran
     contextSourceInputs.every(source => source.kind === "interaction"
       ? taskSources.some(task => task.issueId === source.issueId)
       : source.issueId !== null && taskSources.some(task => task.issueId === source.issueId));
+  // Only a history result may hold dispatch/tool-result markers, and only as
+  // comment-nested provenance; that nesting is proven in the transaction below.
+  const historyProvenance = input.tool === "get_task_history" && inputs.success
+    ? inputs.data.filter(isNativeHistoryProvenanceMarker) : [];
   if (!policy.success || !inputs.success || !policy.data.issueIds.includes(input.issueId) ||
-    inputs.data.some(source => !ownerKinds.has(source.kind)) ||
+    inputs.data.some(source => !ownerKinds.has(source.kind) && !historyProvenance.includes(source as NativeHistoryProvenanceMarker)) ||
     (input.tool === "get_task_context" && !pureTaskContext) ||
     (input.tool === "query_business_metric" && !exactAnalyticalResult) ||
     (input.tool === "get_task_history" && !exactEmptyHistory &&
@@ -4166,6 +4248,8 @@ export async function assertNativeReadResultSourceSetOwnersCurrent(db: Db | Tran
         eq(contextManifests.agentId,boundRun.agentId),isNull(contextManifests.projectId))).for("share"):[];
       if(!manifest)throw forbidden("The Native analytical read result binding is unavailable");
     }
+    if (historyProvenance.length) await assertNativeHistoryNestedProvenanceCurrent(tx, { companyId: input.companyId,
+      issueId: input.issueId, policy: policy.data, inputs: inputs.data }, scope);
     return assertNativePayloadSourceSetCurrentUncachedInScope(tx, {
       companyId: input.companyId, issueId: input.issueId, runId: input.runId, actor: input.actor,
       policy: policy.data, inputs: inputs.data,
@@ -5783,12 +5867,12 @@ async function assertNativeManagedSemanticToolResultCurrentInScope(db: Db | Tran
     const body = typeof args.body === "string" ? args.body : fail();
     const commentId = typeof progress?.commentId === "string" ? progress.commentId : "";
     const snapshotSourceSet = nativeManagedProgressCommentSourceSet(outputCapture);
-    const progressSourceInputs = unionNativePayloadSourceInputs([[input.source], [outputCapture.dispatch], outputCapture.sourceSet.inputs]);
+    const progressReceiptSet = nativeManagedProgressReceiptSourceSet(outputCapture, input.source);
     if (progress?.callId !== input.source.callId || progress.argumentsHash !== capture.argumentsHash ||
       progress.resultDigest !== input.source.contentHash || result.commentId !== commentId ||
-      !commentId || progressSourceInputs.length > 256 ||
-      !isDeepStrictEqual(additional[0]!.policy, outputCapture.sourceSet.policy) ||
-      !isDeepStrictEqual(additional[0]!.inputs, progressSourceInputs)) fail();
+      !commentId || progressReceiptSet.inputs.length > 256 ||
+      !isDeepStrictEqual(additional[0]!.policy, progressReceiptSet.policy) ||
+      !isDeepStrictEqual(additional[0]!.inputs, progressReceiptSet.inputs)) fail();
     const [comment] = await db.select({ id: issueComments.id, issueId: issueComments.issueId,
       authorType: issueComments.authorType, authorAgentId: issueComments.authorAgentId,
       createdByRunId: issueComments.createdByRunId, body: issueComments.body, sourceVersion: sql<string>`extract(epoch from ${issueComments.updatedAt})::text`,

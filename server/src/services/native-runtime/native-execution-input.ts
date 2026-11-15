@@ -401,8 +401,13 @@ export function exactNativeTaskContinuation(input: { value: unknown; companyId: 
     c.trigger.reason !== (input.wakeReason ?? "task_execution") ||
     (!hasResolutionWake && (c.trigger.interactionId !== null ||
       (c.trigger.sourceRunId !== null && !(hasSummaryAssignment && finalizedSummaryRecord) && !exactExplicitHumanSource))) ||
-    !Array.isArray(c.messages) || (c.messages.length === 0 && !hasStageTrigger && !hasSummaryAssignment) || c.messages.length > 256 ||
-    !Array.isArray(c.originCommentIds) || (!hasReviewWithdrawals && (hasStageTrigger || hasSummaryAssignment ? c.originCommentIds.length !== 0 : c.originCommentIds.length === 0)) || c.originCommentIds.length > 256 ||
+    // An accepted plan is admitted by the responsible Human's recorded
+    // acceptance, not by a comment: a Task with no comments and an acceptance
+    // without one has empty history and no origins. The accepted-plan branch
+    // below still binds the exact interaction, resolver, wake, plan revision
+    // and the owner's recorded origin set (which may legitimately be empty).
+    !Array.isArray(c.messages) || (c.messages.length === 0 && !hasStageTrigger && !hasSummaryAssignment && !hasAcceptedPlanReview) || c.messages.length > 256 ||
+    !Array.isArray(c.originCommentIds) || (!hasReviewWithdrawals && !hasAcceptedPlanReview && (hasStageTrigger || hasSummaryAssignment ? c.originCommentIds.length !== 0 : c.originCommentIds.length === 0)) || c.originCommentIds.length > 256 ||
     new Set(c.originCommentIds).size !== c.originCommentIds.length ||
     (c.humanResponses !== undefined && (!Array.isArray(c.humanResponses) || (!hasGoverned && !hasAcceptedPlanReview && !hasQuestions && !hasAdministrativeExpiries && !hasReviewWithdrawals && c.humanResponses.length !== 0))) ||
     !Array.isArray(c.interactionOutcomes) || (!hasGoverned && !hasAcceptedPlanReview && !hasQuestions && !hasAdministrativeExpiries && !hasReviewWithdrawals && c.interactionOutcomes.length !== 0) ||
@@ -468,9 +473,13 @@ export function exactNativeTaskContinuation(input: { value: unknown; companyId: 
     const stageEntry=value.stageEntryRead;
     const reviewWithdrawalSummary = reviewWithdrawalSummarySourceRunId !== null &&
       value.sourceRunId === reviewWithdrawalSummarySourceRunId;
+    // An accepted plan's completed work is the finalized result of the exact
+    // Run that requested the confirmation (bound again below to the trigger).
+    const acceptedPlanSummary = hasAcceptedPlanReview && !hasStageTrigger && !stageEntry &&
+      typeof acceptedPlanReview!.sourceRunId === "string" && value.sourceRunId === acceptedPlanReview!.sourceRunId;
     const expectedKeys=stageEntry ? "agentId,assessmentId,body,companyId,decisionDigest,decisionId,decisionSnapshotHash,finalizationVersion,issueId,parentReceipt,receiverRunId,resultCanonicalSha256,resultCreatedAt,resultId,sourceRunId,stageEntryRead" :
       "agentId,assessmentId,body,companyId,decisionDigest,decisionId,decisionSnapshotHash,finalizationVersion,issueId,parentReceipt,receiverRunId,resultCanonicalSha256,resultCreatedAt,resultId,sourceRunId";
-    if ((!hasGoverned && !(hasStageTrigger && stageEntry) && !hasSummaryAssignment && !reviewWithdrawalSummary) || capture.summary ||
+    if ((!hasGoverned && !(hasStageTrigger && stageEntry) && !hasSummaryAssignment && !reviewWithdrawalSummary && !acceptedPlanSummary) || capture.summary ||
       Object.keys(value).sort().join(",") !== expectedKeys ||
       value.companyId !== input.companyId || value.issueId !== input.issueId || value.agentId !== input.agentId ||
       value.receiverRunId !== input.runId || value.sourceRunId !== (hasStageTrigger ? stageTrigger!.executorRunId : c.trigger.sourceRunId) ||

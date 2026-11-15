@@ -13886,7 +13886,13 @@ export function issueService(db: Db) {
         }
         const insertOptions = directActor ? { ...options, manualInputActor: undefined,
           onManualInputSourcePublication: undefined } : options;
-        const comment = await addComment(issueId, body, actor, insertOptions, tx, freshInput ? 1 : undefined);
+        // A direct Human input decides its own protocol from whether it is a
+        // fresh input. Any other caller keeps the protocol it requested: a
+        // run-authored owner (managed report_progress) passes 1 and seals that
+        // unsealed row in this same transaction. Dropping the request would
+        // store protocol 0 and leave the caller's seal nothing to bind.
+        const comment = await addComment(issueId, body, actor, insertOptions, tx,
+          directActor ? (freshInput ? 1 : undefined) : sourceProtocolVersion);
         if (directActor && expiresAt !== null && companyId) {
           if (freshInput) {
             const [captured] = await tx.update(issueComments)
