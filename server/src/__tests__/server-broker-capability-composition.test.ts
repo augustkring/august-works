@@ -94,6 +94,20 @@ describe("server/Host broker capability composition",()=>{
   const backend=openShellBackend({...o.options,identity:{companyId:"company",bindingId:"binding",cellId:"cell",cellGeneration:"1",sandboxRef:"sandbox"},boundary:policyFixture(),bridge,evidenceKind:"protected_host_report",prover:{executable:"unused",executableSha256:"0".repeat(64)}});
   expect((await backend.capabilities())?.credentialBindingDimensions).toEqual([...hostDimensions,...serverDimensions]);expect(o.touched).not.toHaveBeenCalled();
  });
+ it("never lets a re-created Host's preflight-only report borrow a retained protected qualification (CONF12)",()=>{
+  const qualified=snapshot();const fixture=qualified.qualificationProbeFixture!;
+  // A Host whose journal holds no qualification sample reports preflight facts:
+  // no target, no earned control, and the fixture hash as its qualification hash.
+  const preflight=sandboxCapabilitySnapshotSchema.parse({ ...Object.fromEntries(SANDBOX_CONTROLS.map(control=>[control,false])),
+   backend:"openshell",backendVersion:"0.1.2",hostKernelVersion:qualified.hostKernelVersion,sandboxImageDigest:qualified.sandboxImageDigest,
+   qualificationProbeFixture:fixture,filesystemEnforcementMode:"unknown",staticPolicyRequiresRecreate:true,dynamicNetworkPolicy:false,
+   policyProverBoundaryCheck:false,policyProverCoverage:[],credentialBindingDimensions:[],testedAt:qualified.testedAt,
+   expiresAt:qualified.expiresAt,qualificationHash:fixture.fixtureHash,evidenceKind:"protected_host_report" });
+  expect(nativeSha256(sandboxCapabilityFacts(preflight))).not.toBe(nativeSha256(sandboxCapabilityFacts(qualified)));
+  // The same Host's own qualified report, refreshed later, still matches.
+  const refreshed={ ...structuredClone(qualified),testedAt:new Date(Date.now()+1000).toISOString() };
+  expect(nativeSha256(sandboxCapabilityFacts(refreshed))).toBe(nativeSha256(sandboxCapabilityFacts(qualified)));
+ });
  it.each(["app_id","app_hash","app_origin","model_id","model_hash","model_origin","model_added","model_removed"])("binds full profile drift in stable qualification facts and policy fingerprint: %s",kind=>{
   const raw=snapshot(),changed=structuredClone(raw);
   if(kind==="model_added")delete raw.modelBrokerProviderProfile;
