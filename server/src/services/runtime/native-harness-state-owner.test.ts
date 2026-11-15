@@ -7,12 +7,14 @@ import { afterEach, describe, expect, it, vi } from "vitest";
 import type { RuntimeSandboxExecRelayRequest } from "@paperclipai/shared";
 import { parseNativeExecutionInput } from "../../vendor/paperclip-runner/index.js";
 import { nativeRuntimeContextFixture } from "../native-runtime/runtime-context.test-fixture.js";
-import { exactNativeHarnessStateCommand, exactNativeRuntimeAssetErasureCommand, exactNativeRunnerMonitorStatusCommand,
-  exactNativeSessionFilesystemFenceCommand, nativeRelayClaimFailureStatus } from "./control.js";
+import { exactNativeConformanceAuthorityArchiveCommand, exactNativeHarnessStateCommand, exactNativeRuntimeAssetErasureCommand,
+  exactNativeRunnerMonitorStatusCommand, exactNativeSessionFilesystemFenceCommand, nativeRelayClaimFailureStatus } from "./control.js";
+import { readNativeConformanceAuthorityArchiveGrant, recordNativeConformanceAuthorityArchiveGrant,
+  revokeNativeConformanceAuthorityArchiveGrant } from "../native-runtime/native-conformance-authority-archive.js";
 import { createRemoteRunnerProcessLauncher, remoteRunnerPathExists, stageRemoteRunnerDirectory, syncRemoteRunnerDirectoryOut } from "../native-runtime/native-session-executor.js";
 import { REMOTE_NATIVE_ERASER_ENV, REMOTE_NATIVE_SESSION_FENCE_ACQUIRE_SCRIPT, REMOTE_NATIVE_SESSION_FENCE_RELEASE_SCRIPT,
   REMOTE_NATIVE_RUNTIME_ASSET_ERASURE_SCRIPT, REMOTE_RUNNER_FAILED_IDENTITY_CLEANUP_SCRIPT,
-  REMOTE_RUNNER_IDENTITY_CHECK_SCRIPT } from "../native-runtime/remote-runner-identity.js";
+  REMOTE_RUNNER_IDENTITY_CHECK_SCRIPT, REMOTE_RUNNER_AUTHORITY_ARCHIVE_SCRIPT } from "../native-runtime/remote-runner-identity.js";
 import { createRemoteRuntimeAssetLocator } from "../native-runtime/runtime-asset-retention.js";
 
 describe("Native harness-state relay command owner", () => {
@@ -493,5 +495,101 @@ describe("Native harness-state relay command owner", () => {
     expect(exactNativeRuntimeAssetErasureCommand({ request: { ...request,
       modelBrokerCredential: { capabilityToken: "test-only" } as any }, locator, remoteCwd,
       expectedProcessPid, expectedProcessStartedAt })).toBe(false);
+  });
+
+  it("admits the cold-handoff authority archive only for the resume probe's recorded grant and exact command (CONF15 A2 C)", () => {
+    const companyId = randomUUID();
+    const runId = randomUUID();
+    const sessionId = randomUUID();
+    const leaseId = randomUUID();
+    const taskRoot = "/workspace/conformance-task";
+    const execution = parseNativeExecutionInput({
+      schema: "paperclip.native-execution-input.v4", executionMode: "default", planningContext: null,
+      binding: { companyId, runId, issueId: randomUUID(), agentId: randomUUID(), executionWorkspaceId: runId },
+      task: { identifier: "CONF-1", title: "Probe", description: null, prompt: "Resume the probe session.", workMode: "standard" },
+      workspace: { cwd: taskRoot, repoUrl: null, repoRef: null, branchName: null },
+      session: { normalizedSessionId: sessionId, driverKind: "opencode_server", protocolVersion: 1,
+        lifecyclePolicy: { mode: "per_turn", idleTimeoutMs: null } },
+      provider: { kind: "opencode", model: "openai/gpt-5", permissionMode: "allow" },
+      completionContract: { id: "contract", sha256: "a".repeat(64), schemaVersion: "paperclip.completion-contract.v1",
+        contract: { revision: "1", objective: "Resume.", criteria: [{ id: "objective", requirement: "Resume safely." }] } },
+      interactionResponses: [], credentialBindings: [], runtimeContext: nativeRuntimeContextFixture(),
+    });
+    const archiveKey = "0123456789abcdef01234567";
+    const sessionRoot = posix.join(taskRoot, ".paperclip-runtime", "paperclip-runner", "sessions",
+      createHash("sha256").update(sessionId).digest("hex"));
+    const archiveDirectory = posix.join(sessionRoot, "authority-epochs", `epoch-${archiveKey}`);
+    const argv = ["sh", "-c", REMOTE_RUNNER_AUTHORITY_ARCHIVE_SCRIPT, "paperclip-runner-authority-archive",
+      posix.join(sessionRoot, "runner", "runner-state.json"), archiveDirectory, posix.join(archiveDirectory, "runner-state.json")];
+    const request = { argv, cwd: taskRoot, stdinBase64: "", env: {} } as unknown as RuntimeSandboxExecRelayRequest;
+    const run = { id: runId, companyId, triggerDetail: "provider_conformance" };
+    const priorRunId = randomUUID();
+    const grant = recordNativeConformanceAuthorityArchiveGrant({ companyId, runId, probeKind: "resume",
+      normalizedSessionId: sessionId, taskRoot, environmentLeaseId: leaseId, priorRunId, archiveKey,
+      evidenceDigest: "e".repeat(64) });
+    try {
+      const authority = { request, taskRoot, execution, run, leaseId, grant };
+      expect(readNativeConformanceAuthorityArchiveGrant(companyId, runId)).toEqual(grant);
+      expect(exactNativeConformanceAuthorityArchiveCommand(authority)).toBe(true);
+      // Not part of the shared harness-state list: the Worker and
+      // conversation lanes never admit it.
+      expect(exactNativeHarnessStateCommand({ request, taskRoot, execution, runId })).toBe(false);
+      // No completed handoff: no grant.
+      expect(exactNativeConformanceAuthorityArchiveCommand({ ...authority, grant: null })).toBe(false);
+      // Another Run: the grant, the Run row and the Native input must all name this Run.
+      expect(exactNativeConformanceAuthorityArchiveCommand({ ...authority, grant: { ...grant, runId: randomUUID() } })).toBe(false);
+      expect(exactNativeConformanceAuthorityArchiveCommand({ ...authority, run: { ...run, id: randomUUID() } })).toBe(false);
+      const otherRunId = randomUUID();
+      expect(exactNativeConformanceAuthorityArchiveCommand({ ...authority, run: { ...run, id: otherRunId },
+        grant: { ...grant, runId: otherRunId } })).toBe(false);
+      expect(exactNativeConformanceAuthorityArchiveCommand({ ...authority, grant: { ...grant, priorRunId: runId } })).toBe(false);
+      expect(exactNativeConformanceAuthorityArchiveCommand({ ...authority, grant: { ...grant, companyId: randomUUID() } })).toBe(false);
+      const otherCompanyId = randomUUID();
+      expect(exactNativeConformanceAuthorityArchiveCommand({ ...authority, run: { ...run, companyId: otherCompanyId },
+        grant: { ...grant, companyId: otherCompanyId } })).toBe(false);
+      // Another probe kind or an ordinary Run.
+      expect(exactNativeConformanceAuthorityArchiveCommand({ ...authority,
+        grant: { ...grant, probeKind: "start" as unknown as "resume" } })).toBe(false);
+      expect(exactNativeConformanceAuthorityArchiveCommand({ ...authority, run: { ...run, triggerDetail: "assignment" } })).toBe(false);
+      expect(() => recordNativeConformanceAuthorityArchiveGrant({ ...grant, probeKind: "peer_write" as unknown as "resume" }))
+        .toThrow("native_runner_cold_lease_handoff_unproven");
+      // Another lease, session or task root.
+      expect(exactNativeConformanceAuthorityArchiveCommand({ ...authority, leaseId: randomUUID() })).toBe(false);
+      expect(exactNativeConformanceAuthorityArchiveCommand({ ...authority, grant: { ...grant, normalizedSessionId: randomUUID() } })).toBe(false);
+      expect(exactNativeConformanceAuthorityArchiveCommand({ ...authority, grant: { ...grant, taskRoot: "/workspace/other" } })).toBe(false);
+      expect(exactNativeConformanceAuthorityArchiveCommand({ ...authority, request: { ...request, cwd: "/workspace/other" } })).toBe(false);
+      // Changed path or argv.
+      const otherKeyDirectory = posix.join(sessionRoot, "authority-epochs", `epoch-${"f".repeat(24)}`);
+      expect(exactNativeConformanceAuthorityArchiveCommand({ ...authority, request: { ...request,
+        argv: [...argv.slice(0, 5), otherKeyDirectory, posix.join(otherKeyDirectory, "runner-state.json")] } })).toBe(false);
+      expect(exactNativeConformanceAuthorityArchiveCommand({ ...authority, request: { ...request,
+        argv: [...argv.slice(0, 4), posix.join(sessionRoot, "filesystem", "runner-state.json"), ...argv.slice(5)] } })).toBe(false);
+      expect(exactNativeConformanceAuthorityArchiveCommand({ ...authority, request: { ...request,
+        argv: [...argv.slice(0, 6), posix.join(sessionRoot, "runner", "runner-state.json")] } })).toBe(false);
+      expect(exactNativeConformanceAuthorityArchiveCommand({ ...authority, request: { ...request,
+        argv: [...argv.slice(0, 2), `${REMOTE_RUNNER_AUTHORITY_ARCHIVE_SCRIPT}; true`, ...argv.slice(3)] } })).toBe(false);
+      expect(exactNativeConformanceAuthorityArchiveCommand({ ...authority, request: { ...request,
+        argv: [...argv.slice(0, 3), "paperclip-runner-other", ...argv.slice(4)] } })).toBe(false);
+      expect(exactNativeConformanceAuthorityArchiveCommand({ ...authority, request: { ...request, argv: [...argv, "extra"] } })).toBe(false);
+      const escapeDirectory = posix.join(sessionRoot, "authority-epochs", "epoch-../../escape");
+      expect(exactNativeConformanceAuthorityArchiveCommand({ ...authority, grant: { ...grant, archiveKey: "../../escape" },
+        request: { ...request, argv: [...argv.slice(0, 5), escapeDirectory, posix.join(escapeDirectory, "runner-state.json")] } })).toBe(false);
+      expect(exactNativeConformanceAuthorityArchiveCommand({ ...authority, grant: { ...grant, evidenceDigest: "not-a-digest" } })).toBe(false);
+      // stdin, env, credentials and a model session are refused.
+      expect(exactNativeConformanceAuthorityArchiveCommand({ ...authority, request: { ...request, stdinBase64: "eA==" } })).toBe(false);
+      expect(exactNativeConformanceAuthorityArchiveCommand({ ...authority, request: { ...request, env: { PATH: "/tmp" } } })).toBe(false);
+      expect(exactNativeConformanceAuthorityArchiveCommand({ ...authority, request: { ...request,
+        brokerCredential: { capabilityToken: "test-only" } as any } })).toBe(false);
+      expect(exactNativeConformanceAuthorityArchiveCommand({ ...authority, request: { ...request,
+        modelBrokerCredential: { capabilityToken: "test-only" } as any } })).toBe(false);
+      expect(exactNativeConformanceAuthorityArchiveCommand({ ...authority, request: { ...request,
+        modelBrokerSession: { phase: "stop" } as any } })).toBe(false);
+      // The grant expires and is revocable; neither leaves an admission behind.
+      expect(readNativeConformanceAuthorityArchiveGrant(companyId, runId, grant.expiresAtMs)).toBeNull();
+      expect(readNativeConformanceAuthorityArchiveGrant(companyId, runId)).toBeNull();
+    } finally {
+      revokeNativeConformanceAuthorityArchiveGrant(companyId, runId);
+    }
+    expect(readNativeConformanceAuthorityArchiveGrant(companyId, runId)).toBeNull();
   });
 });

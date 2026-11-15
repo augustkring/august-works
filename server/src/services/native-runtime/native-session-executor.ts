@@ -33,7 +33,10 @@ import { awTextDraftBackendCloseSettled } from "./aw-text-draft-backend.js";
 import { REMOTE_NATIVE_ERASER_ENV, REMOTE_NATIVE_RUNTIME_ASSET_ERASURE_PROBE_SCRIPT, REMOTE_RUNNER_CHILD_LAUNCH_SCRIPT,
   REMOTE_RUNNER_FAILED_IDENTITY_CLEANUP_SCRIPT, REMOTE_RUNNER_IDENTITY_CHECK_SCRIPT,
   REMOTE_RUNNER_PROCESS_FINGERPRINT_SCRIPT, REMOTE_NATIVE_SESSION_FENCE_ACQUIRE_SCRIPT,
-  REMOTE_NATIVE_SESSION_FENCE_RELEASE_SCRIPT } from "./remote-runner-identity.js";
+  REMOTE_NATIVE_SESSION_FENCE_RELEASE_SCRIPT, REMOTE_RUNNER_AUTHORITY_ARCHIVE_SCRIPT,
+  REMOTE_RUNTIME_CONTEXT_READBACK_SCRIPT, REMOTE_RUNTIME_CONTEXT_SWAP_SCRIPT } from "./remote-runner-identity.js";
+import { readNativeConformanceAuthorityArchiveGrant, recordNativeConformanceAuthorityArchiveGrant,
+  revokeNativeConformanceAuthorityArchiveGrant } from "./native-conformance-authority-archive.js";
 export { REMOTE_RUNNER_CHILD_LAUNCH_SCRIPT };
 import { hasRemoteTerminationReceipt, remoteLeaseCleanupScope } from "../remote-execution-termination.js";
 import {
@@ -13622,6 +13625,140 @@ export async function stageRemoteRunnerDirectory(input: {
   }
 }
 
+/** Closed refusals of the Worker runtime-context swap (CONF15 W). Each fails
+ * closed as `native_runtime_context_replace_<code>`. */
+export const NATIVE_RUNTIME_CONTEXT_REPLACE_REFUSALS = [
+  "prior_run_unverified", "prior_content_unknown", "prior_content_modified", "unsafe_content", "swap_failed",
+] as const;
+export type NativeRuntimeContextReplaceRefusal = (typeof NATIVE_RUNTIME_CONTEXT_REPLACE_REFUSALS)[number];
+const runtimeContextReplaceRefusal = (code: NativeRuntimeContextReplaceRefusal) =>
+  new Error(`native_runtime_context_replace_${code}`);
+
+/** The per-Run staging sibling of a runtime-context folder. A same-directory
+ * rename needs no write permission on the read-only folder itself. */
+export function nativeRuntimeContextStagingPath(targetPath: string, runId: string): string {
+  return posix.join(posix.dirname(targetPath), `.${posix.basename(targetPath)}.staging-${runId}`);
+}
+
+/** True only when `copyRoot` holds exactly the files of the recorded runtime
+ * asset bundle `digest` (path, content digest, size and mode; the canonical
+ * `paperclip.runtime-asset-manifest.v1` file list) and no other entry. Staging
+ * under `umask 077` keeps only owner permission bits, so a copy whose owner
+ * bits match the recorded group/other-symmetric modes is the same content. */
+export function nativeRuntimeAssetCopyMatchesDigest(copyRoot: string, digest: string): boolean {
+  if (!/^[a-f0-9]{64}$/.test(digest)) return false;
+  const files: Array<{ path: string; sha256: string; size: number; mode: number }> = [];
+  const directories: string[] = [];
+  const visit = (relative: string): boolean => {
+    const absolute = relative ? join(copyRoot, relative) : copyRoot;
+    const entries = readdirSync(absolute, { withFileTypes: true });
+    for (const entry of entries) {
+      if (!/^[^/\0]+$/.test(entry.name) || entry.name === "." || entry.name === "..") return false;
+      const child = relative ? `${relative}/${entry.name}` : entry.name;
+      const metadata = lstatSync(join(copyRoot, child));
+      if (metadata.isSymbolicLink()) return false;
+      if (metadata.isDirectory()) {
+        directories.push(child);
+        if (!visit(child)) return false;
+      } else if (metadata.isFile()) {
+        const content = readFileSync(join(copyRoot, child));
+        files.push({ path: child, sha256: createHash("sha256").update(content).digest("hex"),
+          size: content.byteLength, mode: metadata.mode });
+      } else return false;
+    }
+    return true;
+  };
+  try {
+    const root = lstatSync(copyRoot);
+    if (!root.isDirectory() || root.isSymbolicLink() || !visit("")) return false;
+  } catch { return false; }
+  if (files.length === 0 || directories.some(directory => !files.some(file => file.path.startsWith(`${directory}/`))))
+    return false;
+  files.sort((a, b) => a.path.localeCompare(b.path));
+  const manifestDigest = (mode: (value: number) => number) => createHash("sha256").update(JSON.stringify(files.map(file =>
+    ({ path: file.path, sha256: file.sha256, mode: mode(file.mode), size: file.size })))).digest("hex");
+  const ownerBits = (value: number) => { const owner = value & 0o500; return (owner | (owner >> 3) | (owner >> 6)) & 0o555; };
+  return manifestDigest(value => value & 0o555) === digest || manifestDigest(ownerBits) === digest;
+}
+
+/**
+ * Worker runtime context (CONF15 W): read back the current folder, stage into
+ * a fresh per-Run sibling, then swap it into place. An existing folder is replaced only when its read-back
+ * content is exactly the bundle the prior Run of this session recorded in its
+ * persisted Native input; unknown, modified, foreign or unsafe content fails
+ * closed with a closed code. The caller holds the session filesystem fence.
+ */
+export async function stageRemoteRuntimeContextDirectoryBySwap(input: {
+  target: Extract<AdapterExecutionTarget, { kind: "remote" }>;
+  runner: CommandManagedRuntimeRunner;
+  filesystemRoot: string;
+  sourcePath: string;
+  targetPath: string;
+  runId: string;
+  /** The bundle digest the prior Run of this session recorded for this exact
+   * target, or null when it recorded none. Throws when the prior Run cannot
+   * be verified. */
+  priorBundleDigest: () => Promise<string | null>;
+}): Promise<void> {
+  if (!input.targetPath.startsWith(`${input.filesystemRoot}/`) || !/^[0-9a-f-]{36}$/i.test(input.runId))
+    throw runtimeContextReplaceRefusal("unsafe_content");
+  const staging = nativeRuntimeContextStagingPath(input.targetPath, input.runId);
+  // Read back and verify first: the read-back also refuses a symlink on the
+  // shared parent path, so staging never writes through one.
+  const readback = await input.runner.execute({
+    command: "sh",
+    args: ["-c", REMOTE_RUNTIME_CONTEXT_READBACK_SCRIPT, "paperclip-runtime-context-readback",
+      input.filesystemRoot, input.targetPath],
+    cwd: input.target.remoteCwd,
+    bypassSession: true,
+    timeoutMs: 60_000,
+    nativePreparationPurpose: "native_runtime_context_prepare",
+  });
+  let mode: "absent" | "replace";
+  if (!readback.timedOut && readback.exitCode === 3) {
+    mode = "absent";
+  } else if (!readback.timedOut && readback.exitCode === 0) {
+    const digest = await input.priorBundleDigest();
+    if (!digest) throw runtimeContextReplaceRefusal("prior_content_unknown");
+    const extractRoot = mkdtempSync(join(tmpdir(), "paperclip-runtime-context-readback-"));
+    try {
+      try {
+        const archive = Buffer.from(readback.stdout.replace(/\s+/g, ""), "base64");
+        assertSafeRemoteCheckpointArchive(archive);
+        execFileSync("tar", ["-xzf", "-", "--no-same-owner", "-C", extractRoot], {
+          input: archive, maxBuffer: MAX_REMOTE_CHECKPOINT_EXPANDED_BYTES, timeout: 60_000,
+        });
+        assertSafeExtractedCheckpoint(extractRoot);
+      } catch {
+        throw runtimeContextReplaceRefusal("unsafe_content");
+      }
+      if (!nativeRuntimeAssetCopyMatchesDigest(extractRoot, digest))
+        throw runtimeContextReplaceRefusal("prior_content_modified");
+    } finally {
+      try { execFileSync("chmod", ["-R", "u+w", extractRoot], { stdio: "ignore" }); } catch { /* removed below */ }
+      rmSync(extractRoot, { recursive: true, force: true });
+    }
+    mode = "replace";
+  } else if (!readback.timedOut && readback.exitCode === 4) {
+    throw runtimeContextReplaceRefusal("unsafe_content");
+  } else {
+    throw new Error("runner_remote_directory_staging_failed");
+  }
+  await stageRemoteRunnerDirectory({ target: input.target, runner: input.runner, sourcePath: input.sourcePath,
+    targetPath: staging, mode: 0o555, nativePreparationPurpose: "native_runtime_context_prepare" });
+  const swap = await input.runner.execute({
+    command: "sh",
+    args: ["-c", REMOTE_RUNTIME_CONTEXT_SWAP_SCRIPT, "paperclip-runtime-context-swap",
+      input.filesystemRoot, input.targetPath, staging, mode],
+    cwd: input.target.remoteCwd,
+    bypassSession: true,
+    timeoutMs: 60_000,
+    nativePreparationPurpose: "native_runtime_context_prepare",
+  });
+  if (swap.timedOut || swap.exitCode !== 0)
+    throw runtimeContextReplaceRefusal(swap.exitCode === 4 ? "unsafe_content" : "swap_failed");
+}
+
 /**
  * Transfer trusted, build-owned artifacts through the existing bounded signed
  * exec relay. Each stdin is small enough for the relay's nested base64 request
@@ -14727,6 +14864,8 @@ export async function createRunnerdBackend(input: {
   conversationMode?: boolean;
   /** Internal mode accepted only for the canonical hidden conformance Run and its server-created probe selector. */
   providerConformanceProbe?: true;
+  /** The server-created probe kind of that hidden Run (only read with `providerConformanceProbe`). */
+  providerConformanceProbeKind?: "start" | "resume" | "peer_unseen" | "peer_write" | "isolation_read" | "cancel";
   nativeBootstrapExecutionInputHash?: string;
   testBeforeRunnerProcessSpawn?: () => Promise<void>;
   bootstrapSourceClosure?: NativeBootstrapSourceClosure | null;
@@ -15535,6 +15674,33 @@ async function createRunnerdBackendWithinSessionClaim(
   }
   const root = runnerdStateRoot(input.execution);
   const durableIdentity = readRunnerdDurableIdentity(root);
+  // CONF15 W: the Worker lane stages runtime context into a fresh per-Run
+  // folder and swaps it into place. It may replace an existing folder only
+  // with the prior Run of this session's recorded bundle digest, read here
+  // from that Run's persisted Native input after verifying it is the same
+  // company, Agent, Task, session scope and runner instance, and terminal.
+  const workerRuntimeContextSwap = input.prepareManagedWorkspace !== undefined && input.conversationMode !== true &&
+    input.providerConformanceProbe !== true && remoteTarget?.transport === "sandbox";
+  const priorSessionIdentity = durableIdentityMatchesSession(durableIdentity, input.execution) &&
+    durableIdentity.runId !== input.execution.binding.runId ? { ...durableIdentity } : null;
+  let priorRuntimeContextLoad: Promise<NativeRuntimeContextSnapshot | null> | null = null;
+  const loadPriorRuntimeContext = () => priorRuntimeContextLoad ??= (async () => {
+    if (!priorSessionIdentity) throw runtimeContextReplaceRefusal("prior_run_unverified");
+    const [prior] = await input.db.select().from(heartbeatRuns).where(and(
+      eq(heartbeatRuns.companyId, input.execution.binding.companyId), eq(heartbeatRuns.id, priorSessionIdentity.runId),
+      eq(heartbeatRuns.agentId, input.execution.binding.agentId))).limit(1);
+    let priorExecution: NativeExecutionInput | null = null;
+    try { priorExecution = prior ? parseNativeExecutionInput(record(prior.runnerProfileJson).nativeExecutionInput) : null; }
+    catch { priorExecution = null; }
+    if (!prior || !priorExecution || !TERMINAL_HEARTBEAT_RUN_STATUSES.has(prior.status) ||
+      prior.runnerInstanceId !== priorSessionIdentity.runnerInstanceId ||
+      priorExecution.binding.runId !== prior.id || priorExecution.binding.companyId !== input.execution.binding.companyId ||
+      priorExecution.binding.agentId !== input.execution.binding.agentId ||
+      priorExecution.binding.issueId !== input.execution.binding.issueId ||
+      nativeSessionScopeKey(priorExecution) !== nativeSessionScopeKey(input.execution))
+      throw runtimeContextReplaceRefusal("prior_run_unverified");
+    return "runtimeContext" in priorExecution ? priorExecution.runtimeContext ?? null : null;
+  })();
   // CONF15 A2: a cold lease handoff is accepted only with the complete
   // durable evidence above. A refused handoff fails closed with its closed
   // code; when none is asked for, the durable binding is kept unchanged.
@@ -16789,29 +16955,56 @@ async function createRunnerdBackendWithinSessionClaim(
             input.trace,
             "stage.asset.runtime_context",
             async () => {
-              await stageRemoteRunnerDirectory({
-                target: remoteTarget,
-                runner: remoteCommandRunner,
-                sourcePath: sourceRuntimeContext.instructions.bundle.rootPath,
-                targetPath: remoteRuntimeContext.instructions.bundle.rootPath,
-                mode: 0o555,
-                nativePreparationPurpose: "native_runtime_context_prepare",
-              });
-              for (
-                let index = 0;
-                index < sourceRuntimeContext.skills.length;
-                index += 1
-              ) {
+              if (workerRuntimeContextSwap) {
+                // CONF15 W: fresh per-Run folder, then a verified swap. The
+                // prior Run's folder for the same target is matched by path:
+                // instructions, or the skill at the same index and digest.
+                const priorTargets = async () => {
+                  const prior = await loadPriorRuntimeContext();
+                  const targets = new Map<string, string>();
+                  if (prior) {
+                    targets.set(posix.join(remoteRunnerFilesystemRoot, "context", "instructions"), prior.instructions.bundle.digest);
+                    prior.skills.forEach((skill, index) => targets.set(posix.join(remoteRunnerFilesystemRoot, "context", "skills",
+                      `${index}-${skill.bundle.digest.slice(0, 12)}`), skill.bundle.digest));
+                  }
+                  return targets;
+                };
+                const bundles = [
+                  { source: sourceRuntimeContext.instructions.bundle.rootPath, target: remoteRuntimeContext.instructions.bundle.rootPath },
+                  ...sourceRuntimeContext.skills.map((skill, index) => ({ source: skill.bundle.rootPath,
+                    target: remoteRuntimeContext.skills[index]!.bundle.rootPath })),
+                ];
+                for (const bundle of bundles) {
+                  await stageRemoteRuntimeContextDirectoryBySwap({ target: remoteTarget, runner: remoteCommandRunner,
+                    filesystemRoot: remoteRunnerFilesystemRoot, sourcePath: bundle.source, targetPath: bundle.target,
+                    runId: input.execution.binding.runId,
+                    priorBundleDigest: async () => (await priorTargets()).get(bundle.target) ?? null });
+                }
+              } else {
                 await stageRemoteRunnerDirectory({
                   target: remoteTarget,
                   runner: remoteCommandRunner,
-                  sourcePath:
-                    sourceRuntimeContext.skills[index]!.bundle.rootPath,
-                  targetPath:
-                    remoteRuntimeContext.skills[index]!.bundle.rootPath,
+                  sourcePath: sourceRuntimeContext.instructions.bundle.rootPath,
+                  targetPath: remoteRuntimeContext.instructions.bundle.rootPath,
                   mode: 0o555,
                   nativePreparationPurpose: "native_runtime_context_prepare",
                 });
+                for (
+                  let index = 0;
+                  index < sourceRuntimeContext.skills.length;
+                  index += 1
+                ) {
+                  await stageRemoteRunnerDirectory({
+                    target: remoteTarget,
+                    runner: remoteCommandRunner,
+                    sourcePath:
+                      sourceRuntimeContext.skills[index]!.bundle.rootPath,
+                    targetPath:
+                      remoteRuntimeContext.skills[index]!.bundle.rootPath,
+                    mode: 0o555,
+                    nativePreparationPurpose: "native_runtime_context_prepare",
+                  });
+                }
               }
               await stageRemoteRunnerFile({
                 target: remoteTarget,
@@ -17063,19 +17256,36 @@ async function createRunnerdBackendWithinSessionClaim(
             archiveDirectory,
             "runner-state.json",
           );
-          const result = await remoteCommandRunner.execute({
-            command: "sh",
-            args: [
-              "-c",
-              'set -eu; if test -L "$2" || { test -e "$2" && test ! -d "$2"; }; then exit 1; fi; if test -f "$1" && test ! -L "$1" && test ! -e "$3" && test ! -L "$3"; then umask 077; install -d -m 0700 "$2"; mv -- "$1" "$3"; elif test ! -e "$1" && test ! -L "$1" && test -f "$3" && test ! -L "$3"; then :; else exit 1; fi; base64 < "$3"',
-              "paperclip-runner-authority-archive",
-              sourcePath,
-              archiveDirectory,
-              archivedStatePath,
-            ],
-            bypassSession: true,
-            timeoutMs: 10_000,
-          });
+          // CONF15 A2 decision C: the hidden conformance Run sends this one
+          // archive as a credentialless harness-state command, and only with
+          // the server-recorded grant of its verified cold handoff for exactly
+          // this archive key. Every other lane keeps its existing route.
+          const conformanceGrant = input.providerConformanceProbe === true
+            ? readNativeConformanceAuthorityArchiveGrant(input.execution.binding.companyId, input.execution.binding.runId)
+            : null;
+          if (conformanceGrant && (conformanceGrant.archiveKey !== archive.archiveKey ||
+            conformanceGrant.taskRoot !== remoteTarget?.remoteCwd))
+            throw new Error("native_runner_cold_lease_handoff_unproven");
+          let result: Awaited<ReturnType<typeof remoteCommandRunner.execute>>;
+          try {
+            result = await remoteCommandRunner.execute({
+              command: "sh",
+              args: [
+                "-c",
+                REMOTE_RUNNER_AUTHORITY_ARCHIVE_SCRIPT,
+                "paperclip-runner-authority-archive",
+                sourcePath,
+                archiveDirectory,
+                archivedStatePath,
+              ],
+              bypassSession: true,
+              timeoutMs: 10_000,
+              ...(conformanceGrant ? { cwd: conformanceGrant.taskRoot,
+                nativePreparationPurpose: "native_harness_state" as const } : {}),
+            });
+          } finally {
+            if (conformanceGrant) revokeNativeConformanceAuthorityArchiveGrant(conformanceGrant.companyId, conformanceGrant.runId);
+          }
           if (result.exitCode !== 0 || result.timedOut) {
             throw new Error("runner_remote_authority_archive_failed");
           }
@@ -17228,6 +17438,32 @@ async function createRunnerdBackendWithinSessionClaim(
       if (existsSync(source)) renameSync(source, resolve(archiveRoot, name));
     }
     coldLeaseHandoffArchive = resolve(archiveRoot, "control-plane");
+    // CONF15 A2 decision C: the resume probe's remote runner state can move
+    // aside only through RuntimeControl's exact conformance harness-state
+    // matcher, which needs this server-recorded grant. The archive key is
+    // derived here from the identity the controller itself archived, the same
+    // way the transport derives its authority-epoch directory.
+    if (input.providerConformanceProbe === true && input.providerConformanceProbeKind === "resume" &&
+      remoteTarget?.transport === "sandbox" && remoteTarget.leaseId === coldLeaseHandoff.currentEnvironmentLeaseId) {
+      let archivedIdentity: Record<string, unknown> = {};
+      try {
+        const statePath = resolve(coldLeaseHandoffArchive, "control-plane-state.json");
+        const metadata = lstatSync(statePath);
+        if (metadata.isFile() && !metadata.isSymbolicLink() && metadata.size <= 64 * 1024 * 1024)
+          archivedIdentity = record(record(JSON.parse(readFileSync(statePath, "utf8"))).identity);
+      } catch { archivedIdentity = {}; }
+      if (archivedIdentity.runId !== coldLeaseHandoff.priorIdentity.runId ||
+        archivedIdentity.environmentLeaseId !== coldLeaseHandoff.priorIdentity.environmentLeaseId ||
+        archivedIdentity.runnerInstanceId !== coldLeaseHandoff.priorIdentity.runnerInstanceId ||
+        archivedIdentity.normalizedSessionId !== coldLeaseHandoff.priorIdentity.normalizedSessionId)
+        throw new Error("native_runner_cold_lease_handoff_unproven");
+      recordNativeConformanceAuthorityArchiveGrant({ companyId: input.execution.binding.companyId,
+        runId: input.execution.binding.runId, probeKind: "resume", normalizedSessionId: nativeSessionKey(input.execution),
+        taskRoot: remoteTarget.remoteCwd, environmentLeaseId: coldLeaseHandoff.currentEnvironmentLeaseId,
+        priorRunId: coldLeaseHandoff.priorIdentity.runId,
+        archiveKey: createHash("sha256").update(JSON.stringify(archivedIdentity)).digest("hex").slice(0, 24),
+        evidenceDigest: coldLeaseHandoff.evidenceDigest });
+    }
     return coldLeaseHandoffArchive;
   };
   const coldLeaseHandoffTransport = coldLeaseHandoff ? {

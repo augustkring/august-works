@@ -854,6 +854,7 @@ export function nativeOpenCodeConformanceService(db: Db, options: Options) {
             workingDirectory: acquired.executionTarget.remoteCwd, leaseId: acquired.lease.id, workspaceSync, remoteTarget,
             createBackend: nativeOpenCodeConformanceBackendFactory({ db, execution,
               runnerInstanceId, runnerExecutionTarget: acquired.executionTarget,
+              providerConformanceProbeKind: input.probeKind,
               durableEnvironmentLeaseId: acquired.lease.id, runnerEnvironment }),
             settle: async (state: ManagedOpenCodeProbeResult["state"] = "unknown") => {
               if (settled) return;
