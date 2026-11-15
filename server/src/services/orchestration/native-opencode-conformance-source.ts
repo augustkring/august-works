@@ -1,6 +1,7 @@
 import { createHash } from "node:crypto";
 import { forbidden } from "../../errors.js";
 import { nativeSha256 } from "../native-runtime/canonical.js";
+import { managedOpenCodeConformanceToolSurfaceAllowed } from "../native-runtime/managed-opencode-terminal-tools.js";
 
 /** A compact, server-owned receipt written by the Native conformance session
  * owner after onTurnInput persists the dispatch intent and before startTurn can
@@ -276,7 +277,7 @@ export function assertNativeOpenCodeConformanceSource(input: {
       nativeSha256(system) !== a.systemHash || !messages || !last || last.role !== "user" ||
       last.text !== prompt || nativeSha256(last.text) !== a.promptHash ||
       nativeSha256(messages.slice(0, -1)) !== a.historyPrefixHash || messages.length > 32 ||
-      request.tools !== undefined || request.tool_choice !== undefined)
+      !managedOpenCodeConformanceToolSurfaceAllowed(request))
     throw forbidden("The provider-visible OpenCode request differs from the sealed tool-free synthetic probe source");
 
   const inputDigest = nativeOpenCodeConformanceTurnInputDigest({ kind: a.probeKind, marker: a.marker,

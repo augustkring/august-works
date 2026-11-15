@@ -21,6 +21,7 @@ import { modelReservationService } from "./model-reservations.js";
 import { anthropicManagedMessagesCall, ReadOnlyModelKnownUsageError, validateAnthropicManagedMessagesRequest } from "./read-only-model-transport.js";
 import type { guardedRemoteHttpFetch } from "../remote-http-fetch.js";
 import { assertNativeOpenCodeConformanceSource, type NativeOpenCodeConformanceSourceAuthority } from "./native-opencode-conformance-source.js";
+import { managedOpenCodeConformanceRequestToolsAllowed, managedOpenCodeConformanceResponseToolFree } from "../native-runtime/managed-opencode-terminal-tools.js";
 
 /** Compact signed RuntimeControl claim. Fields identify one canonical probe;
  * they never stand in for current provider, credential, Host, or lease facts. */
@@ -168,9 +169,10 @@ export async function callNativeOpenCodeConformanceMessages(input: {
     model: admission.profile.tariff.model, maxOutputTokens: admission.profile.maxOutputTokens,
     maximumEnvelopeBytes: admission.profile.maximumEnvelopeBytes,
   });
-  if (qualifiedInput.toolNames.length !== 0 || qualifiedInput.request.tool_choice !== undefined ||
-      qualifiedInput.request.messages.some(message => Array.isArray(message.content) &&
-        message.content.some(block => block.type === "tool_use" || block.type === "tool_result")))
+  // CONF8. The runner's own two terminal tools (exact shared definitions) with
+  // tool_choice absent or auto are the only tool surface; no tool may be used
+  // in the history, and a tool-bearing response is refused after settlement.
+  if (!managedOpenCodeConformanceRequestToolsAllowed(qualifiedInput.request))
     throw forbidden("Provider conformance probes cannot grant, exercise, or replay platform tools");
   const assertCurrentSource = (current: Awaited<ReturnType<typeof validateNativeOpenCodeConformanceHarness>>) => {
     const runProfile = current.run.runnerProfileJson && typeof current.run.runnerProfileJson === "object" &&
@@ -273,7 +275,7 @@ export async function callNativeOpenCodeConformanceMessages(input: {
     });
     settled = outcome.status === "completed";
     if (!settled) throw forbidden("The exact provider response could not be financially settled");
-    if (result.responseContent.some(block => block.type === "tool_use"))
+    if (!managedOpenCodeConformanceResponseToolFree(result.responseContent))
       throw forbidden("A tool-bearing provider response is not eligible for a tool-free conformance probe");
     await assertCurrent();
     return { reservationId: reservation.id, sse: result.sse };

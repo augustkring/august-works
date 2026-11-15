@@ -105,6 +105,7 @@ import { agentRuntimeCandidateConformanceService } from "../agents/authoring-run
 import { callNativeOpenCodeConformanceMessages, issueNativeOpenCodeConformanceRun } from "./native-opencode-conformance-admission.js";
 import { issueRecoveryActionService } from "../issue-recovery-actions.js";
 import { validatePrpEvent, validatePrpStructuredRunResult } from "../../vendor/paperclip-runner/index.js";
+import { managedOpenCodeProviderToolsMatchCatalog, managedOpenCodeToolName } from "../native-runtime/managed-opencode-terminal-tools.js";
 
 type BoundClaims = RuntimeToolsTokenClaims & {
   scope: "worker_model";
@@ -287,15 +288,7 @@ type Options = {
   fetch?: typeof guardedRemoteHttpFetch;
 };
 
-function managedToolName(value: string): string {
-  for (const prefix of ["paperclip__", "paperclip_", "paperclip."]) {
-    if (value.startsWith(prefix)) {
-      const stripped = value.slice(prefix.length);
-      return stripped === "self_read_context" ? "read_context" : stripped;
-    }
-  }
-  return value;
-}
+const managedToolName = managedOpenCodeToolName;
 
 function managedToolSourceName(value: string): string {
   return value === "self_remember" ? "paperclip-self:remember" : value;
@@ -537,21 +530,12 @@ async function assertManagedOpenCodeRequestSources(db: Db, claims: ManagedModelC
   const sourcePolicyHash = nativeSha256(receipt.data.bootstrap);
   const sourceActor: AuthorizationActor = { type: "agent", source: "agent_jwt", companyId: claims.company_id,
     agentId: claims.sub, runId: claims.run_id, onBehalfOfUserId: claims.responsible_user_id };
-  const expectedTools = schemas.map((value) => {
-    const tool = managedRecord(value);
-    return { name: typeof tool.name === "string" ? tool.name : "",
-      ...(typeof tool.description === "string" ? { description: tool.description } : {}),
-      input_schema: tool.inputSchema };
-  }).sort((a, b) => a.name.localeCompare(b.name));
-  const actualTools = (Array.isArray(request.tools) ? request.tools : []).map((value) => {
-    const tool = managedRecord(value);
-    return { name: typeof tool.name === "string" ? managedToolName(tool.name) : "",
-      ...(typeof tool.description === "string" ? { description: tool.description } : {}),
-      input_schema: tool.input_schema };
-  }).sort((a, b) => a.name.localeCompare(b.name));
-  if (!isDeepStrictEqual(actualTools, expectedTools))
+  if (!managedOpenCodeProviderToolsMatchCatalog(request.tools, schemas))
     throw forbidden("Managed OpenCode tool schemas do not match the exact current Native catalog");
-  const exactProviderSchemaNames = new Set(expectedTools.map(tool => tool.name));
+  const exactProviderSchemaNames = new Set(schemas.map(value => {
+    const tool = managedRecord(value);
+    return typeof tool.name === "string" ? tool.name : "";
+  }));
 
   const intents = Array.isArray(profile.nativeAwModelWireIntents) ? profile.nativeAwModelWireIntents.map(managedRecord) : [];
   const captures = Array.isArray(profile.nativeToolResultSourceCaptures) ? profile.nativeToolResultSourceCaptures.map(managedRecord) : [];

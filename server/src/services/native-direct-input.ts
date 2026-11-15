@@ -41,7 +41,8 @@ import { skillResolverService } from "./skill-resolver.js";
 import { readNativeManualQueueAdoption } from "./native-runtime/manual-queue-adoption.js";
 import { nativeContinuationMessageHash, nativeTaskWakeOriginCommentIds, nativeTaskWakeInteraction, nativeContinuationCommentProjection, nativeCommentProjectionHash, nativeSha256 } from "./native-runtime/canonical.js";
 import { nativeRetainedRunResumeWitness, nativeToolContractFingerprintForTarget } from "./native-runtime/native-session-resume.js";
-import { CAPABILITY_SEMANTIC_TOOL_CATALOG, codexSemanticToolSpecs, parseNativeExecutionInput } from "../vendor/paperclip-runner/index.js";
+import { CAPABILITY_SEMANTIC_TOOL_CATALOG, parseNativeExecutionInput } from "../vendor/paperclip-runner/index.js";
+import { managedOpenCodeTerminalToolSchemas } from "./native-runtime/managed-opencode-terminal-tools.js";
 import { createRunSecretRedactionRegistry } from "./run-secret-redaction.js";
 import type { NativeTaskContinuationCapture } from "./execution-continuation.js";
 import type { NativeProjectRepositoriesToolResultCapture } from "./native-project-output.js";
@@ -3904,8 +3905,7 @@ function nativeBlockedHumanInteractionCatalogHash(): string {
   return nativeSha256([
     ...CAPABILITY_SEMANTIC_TOOL_CATALOG.filter(tool => NATIVE_BLOCKED_INTERACTION_READ_TOOLS.has(tool.operationId))
       .map(tool => ({ name: tool.operationId, description: tool.description, inputSchema: tool.inputSchema })),
-    ...codexSemanticToolSpecs().map(tool => ({ ...structuredClone(tool),
-      inputSchema: { ...nativeSourceRecord(tool.inputSchema), additionalProperties: false } })),
+    ...managedOpenCodeTerminalToolSchemas(),
   ]);
 }
 
