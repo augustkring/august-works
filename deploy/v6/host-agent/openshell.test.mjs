@@ -1058,7 +1058,7 @@ function modelBrokerExecRequest() {
   }))).digest("hex");
   return { request, token };
 }
-function modelBrokerSessionExecRequest(family, phase, prior = null, tokenTtlSeconds = 300, startBindingDigest = null) {
+function modelBrokerSessionExecRequest(family, phase, prior = null, tokenTtlSeconds = 300, startBindingDigest = null, mutateClaims = null) {
   const request = execRequest();
   if (prior) for (const key of ["bindingId", "hostEpoch", "runId", "attemptId", "attempt", "manifestId", "manifestHash", "policySnapshotId", "policyHash"])
     request[key] = prior.request[key];
@@ -1069,11 +1069,22 @@ function modelBrokerSessionExecRequest(family, phase, prior = null, tokenTtlSeco
   const baseClaims = { scope: family, company_id: scope.companyId, run_id: request.runId,
     sub: prior?.claims.sub ?? randomUUID(), responsible_user_id: prior?.claims.responsible_user_id ?? randomUUID(),
     instance_id: prior?.claims.instance_id ?? randomUUID(), iat: nowSeconds, exp: Math.floor(Date.parse(tokenExpiresAt) / 1000) };
-  const claims = family === "worker_model"
+  const familyClaims = family === "worker_model"
     ? { ...baseClaims, worker_model: prior?.claims.worker_model ?? { planId: randomUUID(), workerId: randomUUID(),
       workerAttemptId: randomUUID(), executionManifestId: request.manifestId, expectedPlanVersion: 7 } }
-    : { ...baseClaims, conversation_model: prior?.claims.conversation_model ?? { issueId: randomUUID(),
-      conversationSessionGeneration: 4, executionManifestId: request.manifestId, executionManifestHash: request.manifestHash } };
+    : family === "provider_conformance"
+      ? { ...baseClaims, provider_conformance: prior?.claims.provider_conformance ?? { qualificationGroupId: randomUUID(),
+        probeId: randomUUID(), probeRunId: request.runId, planId: randomUUID(), profileId: randomUUID(),
+        dispatchNonce: randomUUID(), authorityHash: "c".repeat(64) } }
+      : family === "review_model"
+        ? { ...baseClaims, review_model: prior?.claims.review_model ?? { planId: randomUUID(), issueId: randomUUID(),
+          interactionId: randomUUID(), decisionId: randomUUID(), sourceRunId: randomUUID(), sourceWorkerId: randomUUID(),
+          sourceAgentId: randomUUID(), sourceAttemptId: randomUUID(), sourceResultId: randomUUID(),
+          sourceReceiptDigest: "d".repeat(64), sourceResultCanonicalSha256: "e".repeat(64), reviewerAgentId: baseClaims.sub,
+          reviewerRunId: request.runId, executionManifestId: request.manifestId, expectedPlanVersion: 3 } }
+        : { ...baseClaims, conversation_model: prior?.claims.conversation_model ?? { issueId: randomUUID(),
+          conversationSessionGeneration: 4, executionManifestId: request.manifestId, executionManifestHash: request.manifestHash } };
+  const claims = mutateClaims ? mutateClaims(structuredClone(familyClaims), request) : familyClaims;
   const token = `fixture.${Buffer.from(JSON.stringify(claims)).toString("base64url")}.signature`;
   request.env.PAPERCLIP_MANAGED_MODEL_BROKER_ORIGIN = "https://paperclip.example.test";
   request.env.PAPERCLIP_MANAGED_MODEL_INPUT_TOKENS_UPPER_BOUND = "100000";
@@ -3308,6 +3319,181 @@ test("managed Native conversation provider survives more than one JWT lifetime a
     const orphanRefresh = modelBrokerSessionExecRequest("conversation_model", "refresh", priorCeiling);
     await assert.rejects(engine.executeStream({ scope: scopeInput, request: orphanRefresh.request, capabilityToken: "fixture-token" }, () => {}), /sandbox_scope_changed/);
     assert.equal(calls.filter(call => call.args.slice(4).join(" ").includes("provider create --name")).length, createCountBeforeResurrection);
+  }, hooks);
+});
+
+function exactModelSessionHooks() {
+  const hooks = {
+    modelBrokerProfile,
+    spawnProcess(_file, _args, options) {
+      if (hooks.forbidSpawn) throw new Error("a refused model credential must not launch a command");
+      assert.equal(options.env.PAPERCLIP_SANDBOX_MODEL_TOKEN, undefined);
+      const child = new EventEmitter(); child.stdin = new PassThrough(); child.stdout = Readable.from([]); child.stderr = Readable.from([]);
+      child.kill = () => true; setImmediate(() => child.emit("close", 0, null)); return child;
+    },
+  };
+  return hooks;
+}
+const modelSessionAuthorityHash = claims => {
+  const { iat: _iat, exp: _exp, ...authority } = claims;
+  return createHash("sha256").update(JSON.stringify(canonical(authority))).digest("hex");
+};
+
+test("managed Native session start admits an exact provider_conformance credential for its initial provider turn only", async () => {
+  const hooks = exactModelSessionHooks();
+  await fixture(async ({ engine, enablePhysical, setPhase, calls, root }) => {
+    enablePhysical(); setPhase("Stopped");
+    await engine.execute(randomUUID(), { ...input("apply"), admission: hostAdmission("conformance-session-policy", policyDocument) }, deadline());
+    await engine.execute(randomUUID(), { ...input("start"), start: { policyHash, expiresAt: new Date(Date.now() + 50000).toISOString(), idempotencyKey: "conformance-session-start" } }, deadline());
+    const scopeInput = { companyId: scope.companyId, bindingId: scope.bindingId, cellId: scope.cellId, cellGeneration: "1", sandboxRef: scope.sandboxRef };
+    const first = modelBrokerSessionExecRequest("provider_conformance", "start", null, 60); hooks.brokerToken = first.token;
+    const started = await engine.executeStream({ scope: scopeInput, request: first.request, capabilityToken: "fixture-token" }, () => {});
+    assert.equal(started.exitCode, 0);
+    assert.equal(started.modelBrokerSessionReceipt.sessionKey, first.session.sessionKey);
+    assert.equal(started.modelBrokerSessionReceipt.capabilityHash, first.expectedCapabilityHash);
+    const providerName = `awms-${first.session.sessionKey.slice(0, 32)}`;
+    assert.ok(calls.some(call => call.args.slice(4).join(" ").includes(`provider attach ${scope.sandboxRef} ${providerName}`)));
+    const saved = JSON.parse(await readFile(path.join(root, "openshell-journal.json"), "utf8"));
+    const entry = saved.modelBrokerSessions[first.session.sessionKey];
+    assert.equal(entry.state, "active");
+    assert.equal(entry.authorityHash, modelSessionAuthorityHash(first.claims),
+      "the journaled authority is the conformance claim's identity and its full seven-field binding");
+    assert.equal(JSON.stringify(entry).includes(first.token), false);
+
+    // RuntimeControl refuses to re-issue a conformance credential; the Host
+    // refuses one too, even the same binding at a later phase.
+    hooks.forbidSpawn = true;
+    const priorStart = { ...first, expectedCapabilityHash: started.modelBrokerSessionReceipt.capabilityHash };
+    const refresh = modelBrokerSessionExecRequest("provider_conformance", "refresh", priorStart, 60); hooks.brokerToken = refresh.token;
+    await assert.rejects(engine.executeStream({ scope: scopeInput, request: refresh.request, capabilityToken: "fixture-token" }, () => {}), /sandbox_scope_changed/);
+    assert.equal(calls.some(call => call.args.slice(4).join(" ").includes(`provider update ${providerName}`) && call.args.includes("--credential")), false);
+    hooks.forbidSpawn = false;
+    const stop = modelBrokerSessionExecRequest("provider_conformance", "stop", priorStart);
+    const stopped = await engine.executeStream({ scope: scopeInput, request: stop.request, capabilityToken: "fixture-token" }, () => {});
+    assert.equal(stopped.modelBrokerSessionReceipt.capabilityHash, started.modelBrokerSessionReceipt.capabilityHash);
+    assert.ok(calls.some(call => call.args.slice(4).join(" ").includes(`provider detach ${scope.sandboxRef} ${providerName}`)));
+  }, hooks);
+});
+
+test("managed Native review_model provider survives a JWT lifetime only under the same Reviewer binding", async t => {
+  t.mock.timers.enable({ apis: ["Date"], now: Date.now() });
+  const hooks = exactModelSessionHooks();
+  await fixture(async ({ engine, enablePhysical, setPhase, calls, root }) => {
+    enablePhysical(); setPhase("Stopped");
+    await engine.execute(randomUUID(), { ...input("apply"), admission: hostAdmission("review-session-policy", policyDocument) }, deadline());
+    await engine.execute(randomUUID(), { ...input("start"), start: { policyHash, expiresAt: new Date(Date.now() + 50000).toISOString(), idempotencyKey: "review-session-start" } }, deadline());
+    const scopeInput = { companyId: scope.companyId, bindingId: scope.bindingId, cellId: scope.cellId, cellGeneration: "1", sandboxRef: scope.sandboxRef };
+    // A ControlPlanePort result digest has the `sha256:` prefix (MS1d); the binding admits both forms.
+    const first = modelBrokerSessionExecRequest("review_model", "start", null, 300, null, claims => ({ ...claims,
+      review_model: { ...claims.review_model, sourceResultCanonicalSha256: `sha256:${"e".repeat(64)}` } }));
+    hooks.brokerToken = first.token;
+    const started = await engine.executeStream({ scope: scopeInput, request: first.request, capabilityToken: "fixture-token" }, () => {});
+    assert.equal(started.exitCode, 0);
+    const providerName = `awms-${first.session.sessionKey.slice(0, 32)}`;
+    const startedJournal = JSON.parse(await readFile(path.join(root, "openshell-journal.json"), "utf8"));
+    assert.equal(startedJournal.modelBrokerSessions[first.session.sessionKey].authorityHash, modelSessionAuthorityHash(first.claims));
+    const priorStart = { ...first, expectedCapabilityHash: started.modelBrokerSessionReceipt.capabilityHash };
+
+    hooks.forbidSpawn = true;
+    const changedDecision = modelBrokerSessionExecRequest("review_model", "refresh", priorStart, 300, null, claims => ({ ...claims,
+      review_model: { ...claims.review_model, decisionId: randomUUID() } }));
+    const crossedConformance = modelBrokerSessionExecRequest("provider_conformance", "refresh", priorStart, 60);
+    const crossedWorker = modelBrokerSessionExecRequest("worker_model", "refresh", priorStart);
+    for (const [name, crossed] of [["changed review decision", changedDecision], ["conformance token", crossedConformance], ["worker token", crossedWorker]]) {
+      hooks.brokerToken = crossed.token;
+      await assert.rejects(engine.executeStream({ scope: scopeInput, request: crossed.request, capabilityToken: "fixture-token" }, () => {}),
+        /sandbox_scope_changed/, name);
+    }
+    assert.equal(calls.some(call => call.args.slice(4).join(" ").includes(`provider update ${providerName}`) && call.args.includes("--credential")), false);
+    hooks.forbidSpawn = false;
+
+    t.mock.timers.setTime(Date.now() + 250_000);
+    const refresh = modelBrokerSessionExecRequest("review_model", "refresh", priorStart); hooks.brokerToken = refresh.token;
+    const refreshed = await engine.executeStream({ scope: scopeInput, request: refresh.request, capabilityToken: "fixture-token" }, () => {});
+    assert.notEqual(refreshed.modelBrokerSessionReceipt.capabilityHash, started.modelBrokerSessionReceipt.capabilityHash);
+    assert.ok(calls.some(call => call.args.slice(4).join(" ").includes(`provider update ${providerName}`) &&
+      call.options.env.PAPERCLIP_SANDBOX_MODEL_TOKEN === refresh.token));
+    assert.equal(calls.filter(call => call.args.slice(4).join(" ").includes("provider create --name")).length, 1);
+    const stop = modelBrokerSessionExecRequest("review_model", "stop", { ...refresh, expectedCapabilityHash: refreshed.modelBrokerSessionReceipt.capabilityHash });
+    const stopped = await engine.executeStream({ scope: scopeInput, request: stop.request, capabilityToken: "fixture-token" }, () => {});
+    assert.equal(stopped.modelBrokerSessionReceipt.capabilityHash, refreshed.modelBrokerSessionReceipt.capabilityHash);
+  }, hooks);
+});
+
+test("managed Native session start refuses provider_conformance and review_model credentials outside their exact binding", async () => {
+  const hooks = exactModelSessionHooks();
+  await fixture(async ({ engine, enablePhysical, setPhase, calls }) => {
+    enablePhysical(); setPhase("Stopped");
+    await engine.execute(randomUUID(), { ...input("apply"), admission: hostAdmission("exact-model-scope-policy", policyDocument) }, deadline());
+    await engine.execute(randomUUID(), { ...input("start"), start: { policyHash, expiresAt: new Date(Date.now() + 50000).toISOString(), idempotencyKey: "exact-model-scope-start" } }, deadline());
+    const scopeInput = { companyId: scope.companyId, bindingId: scope.bindingId, cellId: scope.cellId, cellGeneration: "1", sandboxRef: scope.sandboxRef };
+    const creates = () => calls.filter(call => call.args.slice(4).join(" ").includes("provider create --name awms-")).length;
+    // Positive controls: the same fixture admits each family's unmodified claim.
+    for (const [family, ttl] of [["provider_conformance", 60], ["review_model", 300]]) {
+      const valid = modelBrokerSessionExecRequest(family, "start", null, ttl); hooks.brokerToken = valid.token;
+      const receipt = await engine.executeStream({ scope: scopeInput, request: valid.request, capabilityToken: "fixture-token" }, () => {});
+      assert.equal(receipt.modelBrokerSessionReceipt.sessionKey, valid.session.sessionKey, family);
+    }
+    const nowSeconds = () => Math.floor(Date.now() / 1000);
+    const binding = (family, change) => claims => ({ ...claims, [family]: change({ ...claims[family] }) });
+    const omit = (key) => value => { delete value[key]; return value; };
+    const cases = [
+      ["conformance probe Run is another Run", "provider_conformance", 60, binding("provider_conformance", b => ({ ...b, probeRunId: randomUUID() }))],
+      ["conformance token for another Run", "provider_conformance", 60, claims => { const other = randomUUID();
+        return { ...claims, run_id: other, provider_conformance: { ...claims.provider_conformance, probeRunId: other } }; }],
+      ["expired conformance token", "provider_conformance", 60, claims => ({ ...claims, iat: nowSeconds() - 50, exp: nowSeconds() - 1 })],
+      ["conformance token longer than 60 seconds", "provider_conformance", 120, null],
+      ["extra conformance binding field", "provider_conformance", 60, binding("provider_conformance", b => ({ ...b, executionManifestId: randomUUID() }))],
+      ["missing conformance dispatch nonce", "provider_conformance", 60, binding("provider_conformance", omit("dispatchNonce"))],
+      ["missing conformance authority hash", "provider_conformance", 60, binding("provider_conformance", omit("authorityHash"))],
+      ["uppercase conformance authority hash", "provider_conformance", 60, binding("provider_conformance", b => ({ ...b, authorityHash: "C".repeat(64) }))],
+      ["short conformance authority hash", "provider_conformance", 60, binding("provider_conformance", b => ({ ...b, authorityHash: "c".repeat(63) }))],
+      ["conformance profile is the Host auth-injection profile id", "provider_conformance", 60,
+        binding("provider_conformance", b => ({ ...b, profileId: modelBrokerProfile.id }))],
+      ["conformance id is not a string", "provider_conformance", 60, binding("provider_conformance", b => ({ ...b, probeId: [b.probeId] }))],
+      ["conformance subject is not an agent id", "provider_conformance", 60, claims => ({ ...claims, sub: "fixture-agent" })],
+      ["extra conformance claim member", "provider_conformance", 60, claims => ({ ...claims, jti: randomUUID() })],
+      ["missing conformance instance", "provider_conformance", 60, claims => { delete claims.instance_id; return claims; }],
+      ["empty conformance responsible user", "provider_conformance", 60, claims => ({ ...claims, responsible_user_id: "" })],
+      ["conformance binding is not an object", "provider_conformance", 60, claims => ({ ...claims, provider_conformance: [claims.provider_conformance] })],
+      ["review scope carrying a conformance binding", "provider_conformance", 60, claims => ({ ...claims, scope: "review_model" })],
+      ["conformance scope carrying a review binding", "review_model", 60, claims => ({ ...claims, scope: "provider_conformance" })],
+      ["conformance token with a second review binding", "provider_conformance", 60, claims => ({ ...claims,
+        review_model: modelBrokerSessionExecRequest("review_model", "start").claims.review_model })],
+      ["review token with a second worker binding", "review_model", 300, claims => ({ ...claims,
+        worker_model: { planId: randomUUID(), workerId: randomUUID(), workerAttemptId: randomUUID(), executionManifestId: randomUUID(), expectedPlanVersion: 1 } })],
+      ["non-model RuntimeTools scope", "provider_conformance", 60, claims => { const { provider_conformance: _b, ...rest } = claims;
+        return { ...rest, scope: "connection_intents" }; }],
+      ["unknown model scope", "provider_conformance", 60, claims => { const { provider_conformance: b, ...rest } = claims;
+        return { ...rest, scope: "probe_model", probe_model: b }; }],
+      ["missing scope", "review_model", 300, claims => { delete claims.scope; return claims; }],
+      ["review Run is another Run", "review_model", 300, binding("review_model", b => ({ ...b, reviewerRunId: randomUUID() }))],
+      ["review token for another Run", "review_model", 300, claims => { const other = randomUUID();
+        return { ...claims, run_id: other, review_model: { ...claims.review_model, reviewerRunId: other } }; }],
+      ["reviewer agent is not the subject", "review_model", 300, binding("review_model", b => ({ ...b, reviewerAgentId: randomUUID() }))],
+      ["review manifest is another manifest", "review_model", 300, binding("review_model", b => ({ ...b, executionManifestId: randomUUID() }))],
+      ["reviewed source Run is the Reviewer Run", "review_model", 300, (claims, request) => ({ ...claims,
+        review_model: { ...claims.review_model, sourceRunId: request.runId } })],
+      ["expired review token", "review_model", 300, claims => ({ ...claims, iat: nowSeconds() - 50, exp: nowSeconds() - 1 })],
+      ["review token longer than 300 seconds", "review_model", 301, null],
+      ["extra review binding field", "review_model", 300, binding("review_model", b => ({ ...b, workerAttemptId: randomUUID() }))],
+      ["missing review source result", "review_model", 300, binding("review_model", omit("sourceResultId"))],
+      ["missing review interaction", "review_model", 300, binding("review_model", omit("interactionId"))],
+      ["prefixed review receipt digest", "review_model", 300, binding("review_model", b => ({ ...b, sourceReceiptDigest: `sha256:${"d".repeat(64)}` }))],
+      ["malformed review result digest", "review_model", 300, binding("review_model", b => ({ ...b, sourceResultCanonicalSha256: "sha256:xyz" }))],
+      ["review plan version zero", "review_model", 300, binding("review_model", b => ({ ...b, expectedPlanVersion: 0 }))],
+      ["review id is not a UUID", "review_model", 300, binding("review_model", b => ({ ...b, planId: "plan-1" }))],
+      ["extra review claim member", "review_model", 300, claims => ({ ...claims, aud: "paperclip-model-broker" })],
+    ];
+    hooks.forbidSpawn = true;
+    for (const [name, family, ttl, mutate] of cases) {
+      const before = creates();
+      const { request, token } = modelBrokerSessionExecRequest(family, "start", null, ttl, null, mutate);
+      hooks.brokerToken = token;
+      await assert.rejects(engine.executeStream({ scope: scopeInput, request, capabilityToken: "fixture-token" }, () => {}),
+        /sandbox_scope_changed/, name);
+      assert.equal(creates(), before, `${name}: no provider is created`);
+    }
   }, hooks);
 });
 

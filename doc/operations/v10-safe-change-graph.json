@@ -24462,11 +24462,11 @@
         },
         {
           "path": "deploy/v6/host-agent/openshell.mjs",
-          "sha256": "159dc7b433a476c5f44a858a4cc06461bea18e0bd12b2005cec8a74c4dd43a70"
+          "sha256": "d2f5599c913dabde111fc2ba4fc5e04c1a6a76901ac32fd6c0e8996c71e61fac"
         },
         {
           "path": "deploy/v6/host-agent/openshell.test.mjs",
-          "sha256": "a05c94b82d10da87013b0a400c07a71748debfe8584324ac9b06051528584cff"
+          "sha256": "34a7f5d39ff1e3c85a9969015cea1d3532696912cdcc7c8b25e584cb8848287d"
         },
         {
           "path": "deploy/v6/host-agent/relay.mjs",
@@ -61735,7 +61735,7 @@
       "id": "source:deploy/v6/host-agent/openshell.mjs",
       "kind": "current_source_owner",
       "path": "deploy/v6/host-agent/openshell.mjs",
-      "sha256": "159dc7b433a476c5f44a858a4cc06461bea18e0bd12b2005cec8a74c4dd43a70",
+      "sha256": "d2f5599c913dabde111fc2ba4fc5e04c1a6a76901ac32fd6c0e8996c71e61fac",
       "changeIds": [
         "SCR-V10-NATIVE-RUNTIME-AND-AUTHORITY"
       ],
@@ -61750,7 +61750,7 @@
       "id": "source:deploy/v6/host-agent/openshell.test.mjs",
       "kind": "current_source_owner",
       "path": "deploy/v6/host-agent/openshell.test.mjs",
-      "sha256": "a05c94b82d10da87013b0a400c07a71748debfe8584324ac9b06051528584cff",
+      "sha256": "34a7f5d39ff1e3c85a9969015cea1d3532696912cdcc7c8b25e584cb8848287d",
       "changeIds": [
         "SCR-V10-NATIVE-RUNTIME-AND-AUTHORITY"
       ],
