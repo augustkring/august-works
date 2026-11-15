@@ -208,6 +208,8 @@ import {
 import { executeNativeRemoteAttachmentStage, readNativeAttachmentStageCleanupReceipts,
   NATIVE_ATTACHMENT_STAGE_PREPARATION_PURPOSE, type NativeAttachmentStageIntent } from "./native-attachment-remote-stage.js";
 import { captureNativeRemoteAttachmentStageOwner } from "./native-attachment-remote-stage-owner.js";
+import { buildRemoteRunnerFileStageScript, NATIVE_RUNNER_TRUST_BUNDLE_MODE,
+  NATIVE_RUNNER_TRUST_BUNDLE_PREPARATION_PURPOSE, nativeRemoteRunnerTrustBundlePath } from "./native-runner-trust-bundle.js";
 import { nativeToolContractFingerprintForTarget } from "./native-session-resume.js";
 import { verifyRetainedMaintenanceNoLaunch } from "./native-maintenance-no-launch.js";
 import { registerRunnerPrpAuthority } from "../../realtime/runner-prp-ws.js";
@@ -13431,7 +13433,8 @@ export async function stageRemoteRunnerFile(input: {
   sourcePath: string;
   targetPath: string;
   mode: number;
-  nativePreparationPurpose?: "provider_artifact" | "native_runtime_context_prepare" | "native_provider_data_erasure_probe";
+  nativePreparationPurpose?: "provider_artifact" | "native_runtime_context_prepare" | "native_provider_data_erasure_probe" |
+    typeof NATIVE_RUNNER_TRUST_BUNDLE_PREPARATION_PURPOSE;
   forceRelayChunking?: boolean;
 }): Promise<void> {
   const runner = input.runner;
@@ -13463,11 +13466,7 @@ export async function stageRemoteRunnerFile(input: {
     return;
   }
   const bytes = readFileSync(input.sourcePath);
-  const directory = posix.dirname(input.targetPath);
-  const script =
-    `umask 077; mkdir -p '${directory.replaceAll("'", "'\\''")}' && ` +
-    `base64 -d > '${input.targetPath.replaceAll("'", "'\\''")}' && ` +
-    `chmod ${input.mode.toString(8)} '${input.targetPath.replaceAll("'", "'\\''")}'`;
+  const script = buildRemoteRunnerFileStageScript(input.targetPath, input.mode);
   const result = await runner.execute({
     command: "sh",
     args: ["-c", script],
@@ -13478,6 +13477,31 @@ export async function stageRemoteRunnerFile(input: {
   if (result.exitCode !== 0 || result.timedOut) {
     throw new Error("runner_remote_staging_failed");
   }
+}
+
+/** Copy the server operator's runner CA bundle next to the staged runnerd.
+ * The hidden provider-conformance Run has one model turn, so its copy carries
+ * the credentialless trust-bundle purpose that RuntimeControl matches exactly
+ * in the conformance lane (CONF4b). Worker and conversation Runs keep their
+ * existing command lane. */
+export async function stageRemoteRunnerTrustBundle(input: {
+  target: Extract<AdapterExecutionTarget, { kind: "remote" }>;
+  runner: CommandManagedRuntimeRunner;
+  sourcePath: string;
+  targetPath: string;
+  providerConformanceProbe: boolean;
+}): Promise<void> {
+  if (input.targetPath !== nativeRemoteRunnerTrustBundlePath(input.target.remoteCwd))
+    throw new Error("runner_remote_staging_failed: runner trust bundle target changed");
+  await stageRemoteRunnerFile({
+    target: input.target,
+    runner: input.runner,
+    sourcePath: input.sourcePath,
+    targetPath: input.targetPath,
+    mode: NATIVE_RUNNER_TRUST_BUNDLE_MODE,
+    ...(input.providerConformanceProbe
+      ? { nativePreparationPurpose: NATIVE_RUNNER_TRUST_BUNDLE_PREPARATION_PURPOSE } : {}),
+  });
 }
 
 function archiveExcludeArgs(entries: readonly string[]): string[] {
@@ -16620,12 +16644,12 @@ async function createRunnerdBackendWithinSessionClaim(
             input.trace,
             "stage.asset.ca_bundle",
             () =>
-              stageRemoteRunnerFile({
+              stageRemoteRunnerTrustBundle({
                 target: remoteTarget,
                 runner: remoteCommandRunner,
                 sourcePath: caBundleMapping.sourcePath,
                 targetPath: caBundleMapping.targetPath,
-                mode: 0o600,
+                providerConformanceProbe: input.providerConformanceProbe === true,
               }),
           );
         }
@@ -17414,10 +17438,10 @@ async function createRunnerdBackendWithinSessionClaim(
                   { parentName: "runner.transport.connect" },
                 );
                 let caBundlePath = transport.caBundlePath;
-                if (caBundlePath && remoteBinary) {
-                  const remoteCaBundlePath = posix.join(
-                    posix.dirname(remoteBinary),
-                    "runner-ca-bundle.pem",
+                if (caBundlePath && remoteBinary && remoteTarget) {
+                  // Next to remoteBinary: <remoteCwd>/.paperclip-runtime/paperclip-runner/bin.
+                  const remoteCaBundlePath = nativeRemoteRunnerTrustBundlePath(
+                    remoteTarget.remoteCwd,
                   );
                   remoteCaBundleMapping = {
                     sourcePath: caBundlePath,

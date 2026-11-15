@@ -10,12 +10,14 @@ import type { RuntimeSandboxExecRelayRequest } from "@paperclipai/shared";
 import { parseNativeExecutionInput } from "../../vendor/paperclip-runner/index.js";
 import { setupRunnerPrpWebSocketServer } from "../../realtime/runner-prp-ws.js";
 import { nativeOpenCodeConformanceBackendFactory } from "../native-opencode-conformance.js";
-import { exactNativeProviderArtifactChunkCommand } from "../runtime/control.js";
+import { exactNativeConformanceRunnerTrustBundleCommand, exactNativeProviderArtifactChunkCommand } from "../runtime/control.js";
+import { buildRemoteRunnerFileStageScript, NATIVE_RUNNER_TRUST_BUNDLE_PREPARATION_PURPOSE, nativeRemoteRunnerTrustBundlePath,
+  readConfiguredNativeRunnerTrustBundle } from "./native-runner-trust-bundle.js";
 import { exactNativeManagedArtifactCommand, NATIVE_FIXED_ARTIFACT_CHECKSUM_SCRIPT,
   NATIVE_SELECTED_PROVIDER_PACK_DISCOVERY_SCRIPT, nativeProviderPackLinkCommand,
   nativeProviderPackVerificationArgs, REMOTE_PROVIDER_PACK_ARTIFACT_PATHS, REMOTE_PROVIDER_PACK_PINS,
   REMOTE_PROVIDER_PACK_PROFILE_DIGESTS, REMOTE_PROVIDER_PACK_SCHEMA } from "./native-artifact-preparation.js";
-import { sha256DirectoryTree } from "./native-session-executor.js";
+import { sha256DirectoryTree, stageRemoteRunnerTrustBundle } from "./native-session-executor.js";
 import { REMOTE_NATIVE_ERASER_ENV } from "./remote-runner-identity.js";
 import { nativeRunnerOperatorSettings } from "./runner-operator-settings.js";
 
@@ -224,6 +226,23 @@ describe("provider-conformance runner transport and preinstalled provider pack (
     const absent = () => ({ exitCode: 1, signal: null, timedOut: false, stdout: "", stderr: "" });
     const execute = async (command: SandboxCommand) => {
       commands.push(structuredClone(command));
+      // CONF4b: the runner trust-bundle copy. RuntimeControl's conformance
+      // lane admits it only with its credentialless purpose and the exact
+      // command; a purpose-less copy goes to model-credential issuance, which
+      // the hidden probe Run refuses outside its one initial provider turn.
+      const writesTrustBundle = command.args?.[1]?.includes("runner-ca-bundle.pem") === true;
+      if (command.nativePreparationPurpose === NATIVE_RUNNER_TRUST_BUNDLE_PREPARATION_PURPOSE || writesTrustBundle) {
+        const request = relayRequest({ ...command, cwd: command.cwd ?? taskRoot });
+        const credentialFree = !Object.keys(request.env ?? {}).some(key => key.startsWith("PAPERCLIP_MANAGED_MODEL_") ||
+          ["ANTHROPIC_API_KEY", "OPENAI_API_KEY", "PAPERCLIP_SANDBOX_BROKER_TOKEN"].includes(key));
+        if (command.nativePreparationPurpose !== NATIVE_RUNNER_TRUST_BUNDLE_PREPARATION_PURPOSE || !credentialFree ||
+            !exactNativeConformanceRunnerTrustBundleCommand({ request, taskRoot, execution,
+              trustBundle: readConfiguredNativeRunnerTrustBundle({ PAPERCLIP_RUNNER_CA_BUNDLE_PATH: caBundle }) })) {
+          refusals.push(structuredClone(command));
+          throw new Error("A conformance RuntimeTools capability is limited to one initial provider turn per hidden Run");
+        }
+        return ok();
+      }
       if (command.nativePreparationPurpose === "provider_artifact") {
         const profile = run.runnerProfileJson as Row;
         const authority = (profile.nativeOpenCodeSourceAuthority as Row | undefined)?.artifactAuthority;
@@ -238,6 +257,10 @@ describe("provider-conformance runner transport and preinstalled provider pack (
       }
       const argv = [command.command, ...(command.args ?? [])];
       if (command.nativePreparationPurpose === "native_provider_data_erasure_probe") return ok("qualified\n");
+      // A fresh probe session has no retained harness state.
+      if (command.nativePreparationPurpose === "native_harness_state" && command.args?.[1]?.includes("runner-state.json"))
+        return absent();
+      if (command.nativePreparationPurpose === "native_session_start") return absent();
       if (argv[0] === "/bin/sh" && argv[2] === NATIVE_FIXED_ARTIFACT_CHECKSUM_SCRIPT) {
         if (argv[4] === remoteBinary) return ok(`${runnerSha}  ${argv[4]}\n`);
         if (argv[4] === posix.join(installedPack, REMOTE_PROVIDER_PACK_ARTIFACT_PATHS.nodeCommand)) return ok(`${nodeSha}  ${argv[4]}\n`);
@@ -275,9 +298,100 @@ describe("provider-conformance runner transport and preinstalled provider pack (
       };
       return transport.controlPlaneRegistration({});
     };
-    return { ids, taskRoot, manifest, installedPack, stagedPack, commands, refusals, register, serverEnvironment,
-      runnerEnvironment, caBundle };
+    /** Launch runnerd through the backend's remote launcher after registration,
+     * which stages the launch assets (the runner trust bundle among them). */
+    const launch = () => {
+      const transport = state.createTransport.mock.calls.at(-1)![0] as {
+        runnerProcessLauncher: (spec: { command: string; args: readonly string[]; cwd: string;
+          environment: NodeJS.ProcessEnv }) => { completion: Promise<unknown> };
+      };
+      const handle = transport.runnerProcessLauncher({ command: remoteBinary, args: [], cwd: taskRoot, environment: {} });
+      return handle.completion.then(() => undefined, (error: unknown) => error);
+    };
+    return { ids, taskRoot, execution, manifest, installedPack, stagedPack, commands, refusals, register, launch,
+      serverEnvironment, runnerEnvironment, caBundle };
   }
+
+  it("stages the runner trust bundle through its credentialless conformance purpose (CONF4b)", async () => {
+    const { taskRoot, execution, commands, refusals, register, launch, caBundle } = await fixture();
+    const registration = await register();
+    try {
+      // The fake Sandbox fails the launch command itself; the launch assets
+      // (the trust bundle among them) are staged before it.
+      expect(String(await launch())).not.toContain("one initial provider turn");
+      const target = nativeRemoteRunnerTrustBundlePath(taskRoot);
+      expect(registration.connection.caBundlePath).toBe(target);
+      // Before the fix the copy carried no purpose, so RuntimeControl sent it to
+      // model-credential issuance and the probe Run refused it.
+      expect(refusals).toEqual([]);
+      const copies = commands.filter(command => command.args?.[1]?.includes("runner-ca-bundle.pem"));
+      expect(copies).toHaveLength(1);
+      expect(copies[0]).toMatchObject({ command: "sh", nativePreparationPurpose: NATIVE_RUNNER_TRUST_BUNDLE_PREPARATION_PURPOSE });
+      expect(copies[0]!.args).toEqual(["-c", buildRemoteRunnerFileStageScript(target, 0o600)]);
+      expect(copies[0]!.env).toBeUndefined();
+      expect(Buffer.from(copies[0]!.stdin ?? "", "base64").toString("utf8")).toBe("fixture CA\n");
+      expect(exactNativeConformanceRunnerTrustBundleCommand({ request: relayRequest({ ...copies[0]!, cwd: taskRoot }), taskRoot,
+        execution, trustBundle: readConfiguredNativeRunnerTrustBundle({ PAPERCLIP_RUNNER_CA_BUNDLE_PATH: caBundle }) })).toBe(true);
+    } finally {
+      await registration.release();
+    }
+  });
+
+  it("refuses runner trust-bundle copies outside the exact path, bundle, input and credential scope (CONF4b)", async () => {
+    const { taskRoot, execution, caBundle } = await fixture();
+    const bundle = readConfiguredNativeRunnerTrustBundle({ PAPERCLIP_RUNNER_CA_BUNDLE_PATH: caBundle });
+    expect(bundle?.toString("utf8")).toBe("fixture CA\n");
+    const target = nativeRemoteRunnerTrustBundlePath(taskRoot);
+    const exact = { command: "sh", args: ["-c", buildRemoteRunnerFileStageScript(target, 0o600)], cwd: taskRoot,
+      stdin: bundle!.toString("base64") };
+    const check = (command: SandboxCommand, options: { trustBundle?: Buffer | null; root?: string } = {}) =>
+      exactNativeConformanceRunnerTrustBundleCommand({ request: relayRequest(command), taskRoot: options.root ?? taskRoot,
+        execution, trustBundle: options.trustBundle === undefined ? bundle : options.trustBundle });
+    expect(check(exact)).toBe(true);
+    // Another bundle, an extra byte, raw (single-encoded) or empty stdin.
+    expect(check({ ...exact, stdin: Buffer.from("attacker CA\n").toString("base64") })).toBe(false);
+    expect(check({ ...exact, stdin: Buffer.from("fixture CA\n\n").toString("base64") })).toBe(false);
+    expect(check({ ...exact, stdin: "" })).toBe(false);
+    expect(relayRequest({ ...exact, stdin: undefined }).stdinBase64).toBe("");
+    // No configured bundle, or one over the bound.
+    expect(check(exact, { trustBundle: null })).toBe(false);
+    expect(check(exact, { trustBundle: Buffer.alloc(0) })).toBe(false);
+    expect(check(exact, { trustBundle: Buffer.alloc(2 * 1024 * 1024 + 1) })).toBe(false);
+    // Another target path, mode, shell, extra argument or cwd.
+    const otherTarget = posix.join(taskRoot, ".paperclip-runtime", "paperclip-runner", "bin", "paperclip-runnerd");
+    expect(check({ ...exact, args: ["-c", buildRemoteRunnerFileStageScript(otherTarget, 0o600)] })).toBe(false);
+    expect(check({ ...exact, args: ["-c", buildRemoteRunnerFileStageScript("/etc/ssl/certs/ca-certificates.crt", 0o600)] })).toBe(false);
+    expect(check({ ...exact, args: ["-c", buildRemoteRunnerFileStageScript(target, 0o644)] })).toBe(false);
+    expect(check({ ...exact, args: ["-c", `${buildRemoteRunnerFileStageScript(target, 0o600)}; id`] })).toBe(false);
+    expect(check({ ...exact, command: "bash" })).toBe(false);
+    expect(check({ ...exact, args: [...exact.args, "extra"] })).toBe(false);
+    expect(check({ ...exact, cwd: `${taskRoot}/sub` })).toBe(false);
+    // Any environment, including the managed-model sentinel and broker origin.
+    expect(check({ ...exact, env: { ANTHROPIC_API_KEY: "paperclip-managed-model-broker" } })).toBe(false);
+    expect(check({ ...exact, env: { PAPERCLIP_MANAGED_MODEL_BROKER_ORIGIN: "https://broker.test.invalid" } })).toBe(false);
+    expect(check({ ...exact, env: { SSL_CERT_FILE: target } })).toBe(false);
+    // Another task root than the probe's server-verified workspace.
+    const otherRoot = `${taskRoot}-other`;
+    expect(check({ ...exact, cwd: otherRoot, args: ["-c", buildRemoteRunnerFileStageScript(nativeRemoteRunnerTrustBundlePath(otherRoot), 0o600)] },
+      { root: otherRoot })).toBe(false);
+  });
+
+  it("keeps Worker and conversation trust-bundle copies on their existing lane and binds the copy to its fixed path", async () => {
+    const { taskRoot, caBundle } = await fixture();
+    const recorded: SandboxCommand[] = [];
+    const target = { kind: "remote", transport: "sandbox", providerKey: "fixture-sandbox", leaseId: randomUUID(), remoteCwd: taskRoot,
+      runner: { execute: async (command: SandboxCommand) => { recorded.push(structuredClone(command));
+        return { exitCode: 0, signal: null, timedOut: false, stdout: "", stderr: "" }; } } } as never;
+    const path = nativeRemoteRunnerTrustBundlePath(taskRoot);
+    await stageRemoteRunnerTrustBundle({ target, runner: (target as { runner: never }).runner, sourcePath: caBundle,
+      targetPath: path, providerConformanceProbe: false });
+    expect(recorded).toHaveLength(1);
+    expect(recorded[0]!.nativePreparationPurpose).toBeUndefined();
+    await expect(stageRemoteRunnerTrustBundle({ target, runner: (target as { runner: never }).runner, sourcePath: caBundle,
+      targetPath: posix.join(taskRoot, "runner-ca-bundle.pem"), providerConformanceProbe: true }))
+      .rejects.toThrow(/runner trust bundle target changed/);
+    expect(recorded).toHaveLength(1);
+  });
 
   it("dials the server's runner URL with its CA bundle and adopts the preinstalled pack RuntimeControl admits", async () => {
     const { ids, taskRoot, manifest, installedPack, stagedPack, commands, refusals, register } = await fixture();

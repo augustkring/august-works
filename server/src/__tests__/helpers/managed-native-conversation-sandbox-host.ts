@@ -4064,7 +4064,8 @@ async function configureManagedSandboxRun(input: ManagedSandboxHostInput,
               ? "runner_launch" : requestLabel === "paperclip-runner-failure-check"
                 ? "runner_failure_cleanup" : "other");
     const noBrokerPreparation = ["provider_artifact", "native_harness_state", "native_workspace_prepare", "native_runtime_context_prepare",
-      "native_provider_data_erasure", "native_provider_data_erasure_probe", "native_attachment_stage", "native_attachment_cleanup"]
+      "native_provider_data_erasure", "native_provider_data_erasure_probe", "native_attachment_stage", "native_attachment_cleanup",
+      "native_runner_trust_bundle"]
       .includes(nativePreparationPurpose ?? "");
     const managedModelOriginMatches = requestEnv.PAPERCLIP_MANAGED_MODEL_BROKER_ORIGIN === brokerOrigin &&
       Boolean(request.modelBrokerCredential);
@@ -4089,7 +4090,8 @@ async function configureManagedSandboxRun(input: ManagedSandboxHostInput,
       if (sessionStop?.phase === "refresh") relayPreflightFacts.push({
         phase: "refresh",
         nativePreparationPurpose: ["provider_artifact", "native_harness_state", "native_workspace_prepare", "native_runtime_context_prepare",
-          "native_provider_data_erasure", "native_provider_data_erasure_probe", "native_attachment_stage", "native_attachment_cleanup"]
+          "native_provider_data_erasure", "native_provider_data_erasure_probe", "native_attachment_stage", "native_attachment_cleanup",
+          "native_runner_trust_bundle"]
           .includes(nativePreparationPurpose ?? "")
           ? nativePreparationPurpose : null,
         brokerCredentialPresent: Boolean(request.brokerCredential),

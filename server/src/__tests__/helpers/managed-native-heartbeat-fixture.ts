@@ -796,6 +796,7 @@ export async function withManagedNativeHeartbeatFixture<T>(input: Omit<FrameInpu
   const prevJwt = process.env.PAPERCLIP_AGENT_JWT_SECRET;
   const prevCa = process.env.NODE_EXTRA_CA_CERTS;
   const prevRunnerPublicUrl = process.env.PAPERCLIP_RUNNER_PUBLIC_URL;
+  const prevRunnerCaBundlePath = process.env.PAPERCLIP_RUNNER_CA_BUNDLE_PATH;
   const prevPaperclipApiUrl = process.env.PAPERCLIP_API_URL;
   process.env.PAPERCLIP_MANAGED_MODEL_BROKER_ORIGIN = origin;
   process.env.PAPERCLIP_API_URL = origin;
@@ -856,6 +857,11 @@ export async function withManagedNativeHeartbeatFixture<T>(input: Omit<FrameInpu
     const runnerPublicUrl = new URL(origin);
     runnerPublicUrl.protocol = "wss:";
     process.env.PAPERCLIP_RUNNER_PUBLIC_URL = runnerPublicUrl.origin;
+    // Ordinary Runs trust the fixture CA through their adapter environment
+    // (SSL_CERT_FILE below). The provider-conformance probe reads its runner
+    // transport only from the server operator settings (CONF3a), so it gets
+    // the same fixture CA as the runner CA bundle (CONF4b).
+    if (input.managedOpenCodeConformance) process.env.PAPERCLIP_RUNNER_CA_BUNDLE_PATH = certBundlePath;
   }
   type ConfiguredHost = Awaited<ReturnType<NonNullable<typeof input.configureHeartbeat>>> & {
     factsForRun?: (runId: string) => Record<string, unknown>;
@@ -1405,6 +1411,8 @@ export async function withManagedNativeHeartbeatFixture<T>(input: Omit<FrameInpu
     if (prevJwt === undefined) delete process.env.PAPERCLIP_AGENT_JWT_SECRET; else process.env.PAPERCLIP_AGENT_JWT_SECRET = prevJwt;
     if (prevCa === undefined) delete process.env.NODE_EXTRA_CA_CERTS; else process.env.NODE_EXTRA_CA_CERTS = prevCa;
     if (prevRunnerPublicUrl === undefined) delete process.env.PAPERCLIP_RUNNER_PUBLIC_URL; else process.env.PAPERCLIP_RUNNER_PUBLIC_URL = prevRunnerPublicUrl;
+    if (prevRunnerCaBundlePath === undefined) delete process.env.PAPERCLIP_RUNNER_CA_BUNDLE_PATH;
+    else process.env.PAPERCLIP_RUNNER_CA_BUNDLE_PATH = prevRunnerCaBundlePath;
     if (prevPaperclipApiUrl === undefined) delete process.env.PAPERCLIP_API_URL; else process.env.PAPERCLIP_API_URL = prevPaperclipApiUrl;
     await makeConversationFixtureTreeWritable(runHome);
     await rm(runHome, { recursive: true, force: true });

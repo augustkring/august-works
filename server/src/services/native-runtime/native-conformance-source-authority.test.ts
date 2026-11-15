@@ -10,6 +10,7 @@ import { parseNativeExecutionInput } from "../../vendor/paperclip-runner/index.j
 import { NATIVE_OPENCODE_CONFORMANCE_SYSTEM } from "../orchestration/native-opencode-conformance-source.js";
 import { currentConformanceNativeWorkspaceRoot, exactNativeRuntimeAssetErasureProbeCommand } from "../runtime/control.js";
 import { nativeSha256 } from "./canonical.js";
+import { NATIVE_RUNNER_TRUST_BUNDLE_PREPARATION_PURPOSE } from "./native-runner-trust-bundle.js";
 import { REMOTE_PROVIDER_PACK_ARTIFACT_PATHS, REMOTE_PROVIDER_PACK_PINS, REMOTE_PROVIDER_PACK_PROFILE_DIGESTS,
   REMOTE_PROVIDER_PACK_SCHEMA } from "./native-artifact-preparation.js";
 import { createNativeOpenCodeConformanceProbeBackend, sha256DirectoryTree } from "./native-session-executor.js";
@@ -223,7 +224,8 @@ describe("provider-conformance source authority before the erasure probe (CONF2)
 
     // RuntimeControl admits the erasure probe and the later preparation
     // purposes against exactly this persisted profile.
-    for (const purpose of ["native_provider_data_erasure_probe", "provider_artifact", "native_harness_state", "native_session_start"])
+    for (const purpose of ["native_provider_data_erasure_probe", "provider_artifact", "native_harness_state", "native_session_start",
+      NATIVE_RUNNER_TRUST_BUNDLE_PREPARATION_PURPOSE])
       await expect(currentConformanceNativeWorkspaceRoot(source(probe!.profileAtCommand), purpose)).resolves.toBe(taskRoot);
   });
 
@@ -253,6 +255,13 @@ describe("provider-conformance source authority before the erasure probe (CONF2)
       "native_provider_data_erasure_probe")).rejects.toThrow(refused);
     await expect(currentConformanceNativeWorkspaceRoot(source(profile, { leaseRoot: peerRoot }),
       "native_provider_data_erasure_probe")).rejects.toThrow(refused);
+    // CONF4b: the runner trust-bundle copy is bound to the same persisted
+    // authority, root and lease, and has no owner outside the conformance Run.
+    await expect(currentConformanceNativeWorkspaceRoot(source(initial), NATIVE_RUNNER_TRUST_BUNDLE_PREPARATION_PURPOSE)).rejects.toThrow(refused);
+    await expect(currentConformanceNativeWorkspaceRoot(source(profile, { taskRoot: peerRoot }),
+      NATIVE_RUNNER_TRUST_BUNDLE_PREPARATION_PURPOSE)).rejects.toThrow(refused);
+    await expect(currentConformanceNativeWorkspaceRoot({ ...(source(profile) as object), providerConformanceBootstrap: false } as never,
+      NATIVE_RUNNER_TRUST_BUNDLE_PREPARATION_PURPOSE)).resolves.toBeNull();
     // A Worker-shaped purpose is not a conformance preparation owner.
     await expect(currentConformanceNativeWorkspaceRoot(source(profile), "native_runtime_context_prepare")).resolves.toBeNull();
   });
