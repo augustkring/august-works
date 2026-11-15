@@ -385,6 +385,50 @@ async function preflightManagedSandboxInput(input: ManagedSandboxHostInput) {
   return fixtureImageNode;
 }
 
+/** One provider image per pack for the Hosts this process has live together. */
+const sharedManagedProviderImages = new Map<string, { home: string; pack: string; users: number; retained: boolean;
+  previousInstalledPackRoot: string | undefined }>();
+
+/** The server's provider-pack install root is one operator setting, so every
+ * Host image installs the pack at that same path. Per-presence Hosts that are
+ * live together (the two-presence conformance proof) share one image home; the
+ * first sets the server setting, the last restores it and retires the image
+ * unless any user retained it as evidence. */
+function acquireSharedManagedProviderImage(providerPackRoot: string) {
+  const image = sharedManagedProviderImages.get(providerPackRoot) ?? (() => {
+    const home = mkdtempSync(join(tmpdir(), "paperclip-managed-provider-image-"));
+    const pack = join(home, ".local", "share", "paperclip-runner", "provider-pack");
+    mkdirSync(join(home, ".local", "share", "paperclip-runner"), { recursive: true, mode: 0o700 });
+    symlinkSync(providerPackRoot, pack, "dir");
+    const created = { home, pack, users: 0, retained: false,
+      previousInstalledPackRoot: process.env.PAPERCLIP_RUNNER_REMOTE_PROVIDER_PACK_INSTALL_ROOT };
+    sharedManagedProviderImages.set(providerPackRoot, created);
+    process.env.PAPERCLIP_RUNNER_REMOTE_PROVIDER_PACK_INSTALL_ROOT = pack;
+    return created;
+  })();
+  image.users++;
+  let released = false;
+  return Object.freeze({ home: image.home, pack: image.pack,
+    restoreEnvironment: () => {
+      if (released) return;
+      released = true;
+      image.users--;
+      if (image.users > 0) return;
+      sharedManagedProviderImages.delete(providerPackRoot);
+      if (process.env.PAPERCLIP_RUNNER_REMOTE_PROVIDER_PACK_INSTALL_ROOT === image.pack) {
+        if (image.previousInstalledPackRoot === undefined) delete process.env.PAPERCLIP_RUNNER_REMOTE_PROVIDER_PACK_INSTALL_ROOT;
+        else process.env.PAPERCLIP_RUNNER_REMOTE_PROVIDER_PACK_INSTALL_ROOT = image.previousInstalledPackRoot;
+      }
+    },
+    retireData: () => {
+      if (released && image.users === 0 && !image.retained) rmSync(image.home, { recursive: true, force: true });
+    },
+    retainData: (reason: string) => {
+      image.retained = true;
+      console.info("managed_software_host_image_retained", JSON.stringify({ path: image.home, reason }));
+    } });
+}
+
 type ManagedFixtureInfrastructureCleanup = {
   restoreEnvironment: () => void; retireData: () => void; retainData: (reason: string) => void;
 };
@@ -663,12 +707,10 @@ async function installManagedSandboxInfrastructure(input: ManagedSandboxHostInpu
       providerPackManifest.payload.artifacts.opencodeExecutable.sha256 !==
         `sha256:${MANAGED_NATIVE_OPENCODE_IMAGE_PIN.sha256}`)
     throw new Error("conversation_software_host_provider_pack_image_pin_mismatch");
-  const providerImageHome = mkdtempSync(join(tmpdir(), "paperclip-managed-provider-image-"));
-  const preinstalledPack = join(providerImageHome, ".local", "share", "paperclip-runner", "provider-pack");
-  mkdirSync(join(providerImageHome, ".local", "share", "paperclip-runner"), { recursive: true, mode: 0o700 });
-  symlinkSync(providerPackRoot, preinstalledPack, "dir");
-  const previousInstalledPackRoot = process.env.PAPERCLIP_RUNNER_REMOTE_PROVIDER_PACK_INSTALL_ROOT;
-  process.env.PAPERCLIP_RUNNER_REMOTE_PROVIDER_PACK_INSTALL_ROOT = preinstalledPack;
+  // The install root is one server operator setting: Hosts of this process
+  // that are live together share one image instead of each overwriting it.
+  const sharedImage = acquireSharedManagedProviderImage(providerPackRoot);
+  const providerImageHome = sharedImage.home;
 
   const createCanary = async () => {
     const canarySecretValue = `qualification-secret-${randomUUID()}`;
@@ -682,16 +724,8 @@ async function installManagedSandboxInfrastructure(input: ManagedSandboxHostInpu
   return Object.freeze({ hostKeys, host, cell, environment, conversationHostCapacity, payerUserId, fixtureImageNode, sandboxQualificationOperator,
     runtimeConnection, runtimePresence, createCanary, providerImageHome, fixtureToolAccess, runtimeSecretValue,
     assertInstalledProfileCurrent: () => registration.assertCurrent(input, input.profile),
-    restoreEnvironment: () => {
-      if (process.env.PAPERCLIP_RUNNER_REMOTE_PROVIDER_PACK_INSTALL_ROOT === preinstalledPack) {
-        if (previousInstalledPackRoot === undefined) delete process.env.PAPERCLIP_RUNNER_REMOTE_PROVIDER_PACK_INSTALL_ROOT;
-        else process.env.PAPERCLIP_RUNNER_REMOTE_PROVIDER_PACK_INSTALL_ROOT = previousInstalledPackRoot;
-      }
-    },
-    retireData: () => { rmSync(providerImageHome, { recursive: true, force: true }); },
-    retainData: (reason: string) => {
-      console.info("managed_software_host_image_retained", JSON.stringify({ path: providerImageHome, reason }));
-    } });
+    restoreEnvironment: sharedImage.restoreEnvironment, retireData: sharedImage.retireData,
+    retainData: sharedImage.retainData });
 }
 
 type SerialHostAdmission<Host> = { leaseId: string; promise: Promise<Host>; closed: boolean; host?: Host };
@@ -737,6 +771,7 @@ function serialModelAdmission<Host>(authorization: string | undefined,
  * authorities are minted. Used by the deterministic unit/HTTP controls. */
 export const managedSerialSchedulerFixtureControls = Object.freeze({
   reserveSerialHostAdmission, authenticateSerialModelRequest, serialModelAdmission, finishManagedFixtureInfrastructure,
+  acquireSharedManagedProviderImage,
 });
 
 /** Explicit serial scheduler scope. Infrastructure/profile is installed once,
