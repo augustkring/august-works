@@ -55,7 +55,7 @@ import {
   type RuntimeToolsTokenClaims,
 } from "../../runtime-tools-token.js";
 import { conflict, forbidden } from "../../errors.js";
-import { assertAgentRunWriteAllowed } from "../../agent-run-cancellation.js";
+import { assertAgentRunPolicyAllowed, assertAgentRunWriteAllowed } from "../../agent-run-cancellation.js";
 import { lockAnalyticalCompany } from "../analytical-privacy.js";
 import { aiConnectionService } from "../ai-connections.js";
 import { agentProviderBindingService } from "../agent-provider-bindings.js";
@@ -1754,7 +1754,15 @@ export function workerModelGateway(db: Db, options: Options) {
     await assertV7Authorization(tx, actor, claims.company_id, "issue:read", { type: "issue", companyId: claims.company_id,
       issueId: task.id, projectId: task.projectId, parentIssueId: task.parentId, assigneeAgentId: task.assigneeAgentId,
       assigneeUserId: task.assigneeUserId, status: task.status });
-    await assertAgentRunWriteAllowed(tx, claims.company_id, { agentId: claims.sub, runId: claims.run_id });
+    // MS1g. The pre-Native admission preflight runs before the Run starts, so
+    // it uses the start-consumer gate, as Worker admission at the same point
+    // does (Worker admission has no commercial check at all): package,
+    // governance, plan-attempt and cancellation policy, without requiring the
+    // not-yet-started runtime cell to be HEALTHY. RuntimeControl's commercial
+    // admission still precedes any start effect, and token issuance, dispatch
+    // and every later stage keep the commercial write gate.
+    if (preNativeAdmissionRun) await assertAgentRunPolicyAllowed(tx, claims.company_id, { agentId: claims.sub, runId: claims.run_id });
+    else await assertAgentRunWriteAllowed(tx, claims.company_id, { agentId: claims.sub, runId: claims.run_id });
     if (requireInputReceipt && (run.nativeInputSourceProtocolVersion !== 1 ||
       !nativeRunInputSourceReceiptSchema.safeParse(managedRecord(run.runnerProfileJson).nativeInputSourceReceipt).success))
       throw forbidden("The Reviewer Native input receipt is unavailable");
