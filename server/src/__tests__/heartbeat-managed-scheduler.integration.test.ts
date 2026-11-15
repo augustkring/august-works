@@ -582,8 +582,13 @@ it.each([false, true])("actual managed OpenCode plan-only output queues one boun
     providerReply: input => {
       if (!sourceRunId) sourceRunId = input.runId;
       if (input.runId === sourceRunId) {
+        // A yielded result must carry a response_wake continuation (runner
+        // result schema). This case still expects a liveness continuation for
+        // a plan-only yield; that expectation is pending a decision (ledger T3).
         if (input.callIndex === 1) return managedLivenessFinish(input, "yielded",
-          "I will inspect the repository next and implement the requested fix.");
+          "I will inspect the repository next and implement the requested fix.",
+          { kind: "response_wake", summary: "Continue with the recorded next action.",
+            idempotencyKey: `managed-liveness-next:${input.runId}` });
         if (input.callIndex === 2) return { stop_reason: "end_turn" as const,
           content: [{ type: "text" as const, text: "I have recorded the next action for the continuation." }] };
       }
@@ -712,7 +717,9 @@ it("actual managed OpenCode plan document progress suppresses a liveness continu
         input: { idempotencyKey: `managed-plan-progress-${input.runId}`, key: "plan", title: "Plan",
           body: "# Plan\n\n- Inspect the repository\n- Implement the fix", baseRevisionId: null } }] };
       if (input.callIndex === 2) return managedLivenessFinish(input, "yielded",
-        "Plan saved. Next action: inspect the repository and implement the fix.");
+        "Plan saved. Next action: inspect the repository and implement the fix.",
+        { kind: "response_wake", summary: "Continue after the Human reviews the saved plan.",
+          idempotencyKey: `managed-plan-progress-next:${input.runId}` });
       if (input.callIndex === 3) return { stop_reason: "end_turn" as const,
         content: [{ type: "text" as const, text: "The plan is saved for the Human." }] };
       throw new Error(`managed_plan_progress_unexpected_turn:${input.runId}:${input.callIndex}`);
