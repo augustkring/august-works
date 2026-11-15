@@ -52,8 +52,18 @@ const support = await getEmbeddedPostgresTestSupport();
   }, 30_000);
 
   const prompt = (kind: ProbeKind, probeMarker = marker) => nativeOpenCodeConformancePrompt(kind, probeMarker);
-  const continuationKinds: ProbeKind[] = ["resume", "isolation_read", "cancel"];
-  const startHistory = () => [{ role: "user" as const, text: prompt("start") }, { role: "assistant" as const, text: marker }];
+  const continuationKinds: ProbeKind[] = ["resume", "isolation_read", "cancel", "peer_write"];
+  // Each presence's own earlier turns in its own session, as the probe owner
+  // records them: the primary runs start, resume, isolation_read and cancel;
+  // the peer runs peer_unseen and then peer_write (CONF5b).
+  const turnPair = (kind: ProbeKind, answer: string) =>
+    [{ role: "user" as const, text: prompt(kind) }, { role: "assistant" as const, text: answer }];
+  const primaryHistory = (turns: number) => [turnPair("start", marker), turnPair("resume", marker),
+    turnPair("isolation_read", marker)].slice(0, turns).flat();
+  const peerHistory = () => turnPair("peer_unseen", "NONE");
+  const historyFor = (kind: ProbeKind) => kind === "resume" ? primaryHistory(1) : kind === "isolation_read" ? primaryHistory(2)
+    : kind === "cancel" ? primaryHistory(3) : kind === "peer_write" ? peerHistory() : [];
+  const startHistory = () => primaryHistory(1);
 
   async function seed(options: { triggerDetail?: string | null; context?: (context: Row) => Row;
     profile?: (profile: Row) => Row } = {}) {
@@ -103,7 +113,7 @@ const support = await getEmbeddedPostgresTestSupport();
   const source = (seeded: Seeded, kind: ProbeKind, overrides: Partial<Record<keyof NativeOpenCodeConformanceDispatchSource, unknown>> = {}) =>
     ({ kind: "provider_conformance", qualificationGroupId: seeded.ids.group, planId: seeded.ids.plan, profileId: seeded.ids.profile,
       probeId: seeded.ids.probe, dispatchNonce: seeded.ids.nonce, responsibleUserId, probeKind: kind, marker,
-      historyPrefix: continuationKinds.includes(kind) ? startHistory() : [], ...overrides }) as NativeOpenCodeConformanceDispatchSource;
+      historyPrefix: historyFor(kind), ...overrides }) as NativeOpenCodeConformanceDispatchSource;
   const turn = (kind: ProbeKind) => ({ message: { role: "user" as const, text: prompt(kind) },
     ...(continuationKinds.includes(kind) ? { continuation: true as const } : {}) });
   const record = (seeded: Seeded, turnInput: unknown, providerConformanceSource: NativeOpenCodeConformanceDispatchSource | undefined,
@@ -170,15 +180,40 @@ const support = await getEmbeddedPostgresTestSupport();
       const profile = await profileOf(seeded);
       const sealed = profile.nativeOpenCodeConformanceSourceAuthority as NativeOpenCodeConformanceSourceAuthority;
       expect(sealed).toMatchObject({ probeKind: kind, dispatchId, continuation: true, promptHash: nativeSha256(prompt(kind)),
-        historyPrefixHash: nativeSha256(startHistory()) });
-      expect(gateway(seeded, profile, providerRequest(kind, startHistory())).sourceDigest).toBe(sealed.sourceDigest);
+        historyPrefixHash: nativeSha256(historyFor(kind)) });
+      expect(gateway(seeded, profile, providerRequest(kind, historyFor(kind))).sourceDigest).toBe(sealed.sourceDigest);
       expect(() => gateway(seeded, profile, providerRequest(kind, []))).toThrow(/differs from the sealed/);
     }
-    for (const kind of ["peer_unseen", "peer_write"] as const) {
-      const seeded = await seed();
-      await record(seeded, turn(kind), source(seeded, kind));
-      expect(((await profileOf(seeded)).nativeOpenCodeConformanceSourceAuthority as Row).continuation).toBe(false);
-    }
+    const peerUnseen = await seed();
+    await record(peerUnseen, turn("peer_unseen"), source(peerUnseen, "peer_unseen"));
+    expect(((await profileOf(peerUnseen)).nativeOpenCodeConformanceSourceAuthority as Row).continuation).toBe(false);
+  });
+
+  it("binds peer_write as a continuation of the peer session, never the primary's (CONF5b)", async () => {
+    // Accepted: continuation of the peer's own peer_unseen turn.
+    const accepted = await seed();
+    await record(accepted, turn("peer_write"), source(accepted, "peer_write"));
+    const profile = await profileOf(accepted);
+    const sealed = profile.nativeOpenCodeConformanceSourceAuthority as NativeOpenCodeConformanceSourceAuthority;
+    expect(sealed).toMatchObject({ probeKind: "peer_write", continuation: true, historyPrefixHash: nativeSha256(peerHistory()) });
+    expect(gateway(accepted, profile, providerRequest("peer_write", peerHistory())).sourceDigest).toBe(sealed.sourceDigest);
+    // The primary session's history fails the gateway as well.
+    expect(() => gateway(accepted, profile, providerRequest("peer_write", primaryHistory(1)))).toThrow(/differs from the sealed/);
+    const refused = await seed();
+    // peer_write as a first turn (the template before CONF5b).
+    await expectRefused(refused, { message: turn("peer_write").message }, source(refused, "peer_write"));
+    await expectRefused(refused, { message: turn("peer_write").message }, source(refused, "peer_write", { historyPrefix: [] }));
+    await expectRefused(refused, turn("peer_write"), source(refused, "peer_write", { historyPrefix: [] }));
+    // The primary's history, at any length, or the peer's own turn without its answer.
+    for (const turns of [1, 2, 3])
+      await expectRefused(refused, turn("peer_write"), source(refused, "peer_write", { historyPrefix: primaryHistory(turns) }));
+    await expectRefused(refused, turn("peer_write"), source(refused, "peer_write", { historyPrefix: [...primaryHistory(1), ...peerHistory()] }));
+    await expectRefused(refused, turn("peer_write"), source(refused, "peer_write", { historyPrefix: peerHistory().slice(0, 1) }));
+    // And the peer's history is never a primary continuation.
+    await expectRefused(refused, turn("resume"), source(refused, "resume", { historyPrefix: peerHistory() }));
+    await expectRefused(refused, turn("isolation_read"), source(refused, "isolation_read", { historyPrefix: primaryHistory(1) }));
+    // The exact peer_write template is still accepted on the untouched Run.
+    await expect(record(refused, turn("peer_write"), source(refused, "peer_write"))).resolves.toMatch(/^[0-9a-f-]{36}$/);
   });
 
   it("keeps refusing a probe turn without its typed source", async () => {

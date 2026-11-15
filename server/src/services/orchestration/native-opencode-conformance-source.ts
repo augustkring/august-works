@@ -85,11 +85,22 @@ type NativeOpenCodeConformanceProbeKind = NativeOpenCodeConformanceSourceAuthori
 const NATIVE_OPENCODE_CONFORMANCE_PROBE_KINDS: ReadonlySet<string> =
   new Set(["start", "resume", "peer_unseen", "peer_write", "isolation_read", "cancel"]);
 
-/** Probe kinds whose fixed plain-text turn continues the presence's earlier
- * session (`continuation: true` and a non-empty history prefix). Every other
- * kind is the first turn of a fresh session. */
+/** Probe kinds whose turn continues the presence's earlier session
+ * (`continuation: true` and a non-empty history prefix). The probe owner
+ * resumes a presence's session whenever it holds a completed snapshot for it,
+ * so `peer_write` continues the peer session opened by `peer_unseen` (CONF5b).
+ * `start` and `peer_unseen` are the first turns of fresh sessions. */
 export const NATIVE_OPENCODE_CONFORMANCE_CONTINUATION_KINDS: ReadonlySet<NativeOpenCodeConformanceProbeKind> =
-  new Set(["resume", "isolation_read", "cancel"]);
+  new Set(["resume", "isolation_read", "cancel", "peer_write"]);
+
+/** The presence's own earlier turns, in order, that a probe's history prefix
+ * must replay: the primary runs start, resume, isolation_read and cancel in
+ * one session; the peer runs peer_unseen and peer_write in another. A history
+ * from the other presence's session never matches. */
+const NATIVE_OPENCODE_CONFORMANCE_PRIOR_TURNS: Readonly<Record<NativeOpenCodeConformanceProbeKind, readonly NativeOpenCodeConformanceProbeKind[]>> = {
+  start: [], resume: ["start"], isolation_read: ["start", "resume"], cancel: ["start", "resume", "isolation_read"],
+  peer_unseen: [], peer_write: ["peer_unseen"],
+};
 
 /** Typed conformance source handed to the Native dispatch-intent recorder in
  * place of a generic bootstrap source closure. Every member is server-owned:
@@ -115,6 +126,25 @@ function conformanceRecord(value: unknown): Record<string, unknown> | null {
   return value && typeof value === "object" && !Array.isArray(value) ? value as Record<string, unknown> : null;
 }
 
+/** The history prefix is exactly this presence's earlier turns in its own
+ * session: for each prior probe kind its fixed user prompt (the primary's
+ * start prompt carries this marker) followed by that probe's answer. The
+ * owner records an answer only for a completed probe, and an incomplete probe
+ * ends the group, so every prior turn has one. */
+function conformanceHistoryMatchesPresence(kind: NativeOpenCodeConformanceProbeKind, marker: string,
+  history: readonly unknown[]): boolean {
+  const prior = NATIVE_OPENCODE_CONFORMANCE_PRIOR_TURNS[kind];
+  if (!prior || (prior.length !== 0) !== NATIVE_OPENCODE_CONFORMANCE_CONTINUATION_KINDS.has(kind) ||
+    history.length !== prior.length * 2) return false;
+  return history.every((entry, index) => {
+    const row = conformanceRecord(entry);
+    if (!row || Object.keys(row).sort().join(",") !== "role,text" || typeof row.text !== "string") return false;
+    return index % 2 === 0
+      ? row.role === "user" && row.text === nativeOpenCodeConformancePrompt(prior[index / 2]!, marker)
+      : row.role === "assistant";
+  });
+}
+
 /** Bind the typed conformance source to the dispatch intent being recorded
  * and return the sealed source receipt (CONF5). Called by the recorder inside
  * the intent transaction, against the locked Run row: the hidden
@@ -122,7 +152,7 @@ function conformanceRecord(value: unknown): Record<string, unknown> | null {
  * the conformance-shaped managed OpenCode source authority (no tools, the
  * fixed system frame, no generic prompt binding or input receipt), the one
  * turn of this Run, and the fixed template (prompt text, continuation flag
- * and history shape for the probe kind). Anything else is refused; there is
+ * and the presence's own earlier turns as history for the probe kind). Anything else is refused; there is
  * no generic exemption. */
 export function sealNativeOpenCodeConformanceDispatchSource(input: {
   source: NativeOpenCodeConformanceDispatchSource;
@@ -188,12 +218,7 @@ export function sealNativeOpenCodeConformanceDispatchSource(input: {
     intent.continuation !== continuationProbe ||
     intent.turnInputDigest !== nativeOpenCodeConformanceTurnInputDigest({ kind: source.probeKind, marker: source.marker,
       continuation: continuationProbe }) ||
-    !history || history.length > 31 || (continuationProbe ? history.length === 0 : history.length !== 0) ||
-    history.some(entry => {
-      const row = conformanceRecord(entry);
-      return !row || Object.keys(row).sort().join(",") !== "role,text" ||
-        (row.role !== "user" && row.role !== "assistant") || typeof row.text !== "string";
-    }))
+    !history || !conformanceHistoryMatchesPresence(source.probeKind, source.marker, history))
     return refuse();
   if (typeof intent.dispatchId !== "string" || intent.dispatchId.length === 0 ||
     !Number.isSafeInteger(intent.eventSeq) || !Number.isSafeInteger(intent.attempt))
