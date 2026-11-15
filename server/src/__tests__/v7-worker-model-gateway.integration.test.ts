@@ -2135,6 +2135,22 @@ async function makeFixtureTreeWritable(target: string): Promise<void> {
         expect(await planState()).toMatchObject({ status: "paused", version: before.version + 1 });
       });
     });
+    it("limits plan draft documents to declared completion outputs before any effect", async () => {
+      // The managed same-Task scheduler fixture wrote undeclared `plan` and
+      // `notes` documents; this boundary refused them and the provider
+      // replayed the failed tool's text with no capture behind it.
+      let effects = 0;
+      const write = (key: string) => ({ tool: "write_document", callId: `declared-output-${key}`,
+        arguments: { idempotencyKey: `declared-output-${key}`, key, title: key, body: "Draft.", baseRevisionId: null } });
+      for (const key of ["notes", "plan", "Result", ""])
+        await expect(withOrchestrationNativeTool(db, nativeBinding(), write(key),
+          async () => { effects++; return {}; })).rejects.toMatchObject({ status: 403 });
+      expect(effects).toBe(0);
+      expect(await db.select().from(toolInvocations).where(eq(toolInvocations.runId, run.id))).toEqual([]);
+      await expect(withOrchestrationNativeTool(db, nativeBinding(), write("result"),
+        async () => { effects++; return { document: { key: "result" } }; })).resolves.toMatchObject({ document: { key: "result" } });
+      expect(effects).toBe(1);
+    });
     it("limits plan-created Tasks to C0 backlog drafts without delegation", async () => {
       let effects = 0;
       const call = {
