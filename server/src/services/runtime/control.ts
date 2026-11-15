@@ -89,7 +89,7 @@ import { createRunSecretRedactionRegistry } from "../run-secret-redaction.js";
 import { REDACTED_EVENT_VALUE } from "../../redaction.js";
 import { resolvePaperclipRunnerProviderProfile } from "../native-runtime/provider-profile.js";
 import type { workerModelGateway } from "../orchestration/worker-model-gateway.js";
-import { verifyRuntimeToolsToken } from "../../runtime-tools-token.js";
+import { verifyRuntimeToolsToken, type RuntimeToolsTokenClaims } from "../../runtime-tools-token.js";
 import { findNativeChatWorkspaceScope, nativeChatWorkspaceCwd } from "../native-runtime/native-chat-workspace.js";
 import { readRuntimeChannelConversationScope, runtimeConversationGeneration, runtimeConversationOwnerExact } from "./runtime-conversation-owner.js";
 import { assertNativePayloadSourceSetCurrent, assertNativeTaskSourceOwnerCurrent, assertNativeWorkspaceMetadataSourcesCurrent } from "../native-direct-input.js";
@@ -654,6 +654,78 @@ async function currentWorkerNativePreparationRoot(tx: Db, source: CurrentSandbox
     actor: { type: "board", source: "session", userId: run.responsibleUserId }, source: taskSource.data });
   await assertNativeWorkspaceMetadataSourcesCurrent(tx, run.companyId, [workspace.data]);
   return root;
+}
+
+/** The managed model credential carries the Host's OpenShell auth-injection
+ * profile (`capability.modelBrokerProviderProfile`) with its exact hash, and
+ * the request carries the configured broker origin. Every managed OpenCode
+ * lane, conformance included, requires this (exported for regression tests). */
+export function managedModelCredentialProfileExact(input: {
+  modelCredential: { profileId: string; profileHash: string } | undefined;
+  providerProfile: { id: string; hash: string } | null | undefined;
+  env: Readonly<Record<string, string | undefined>>;
+  managedModelBrokerOrigin: string | null | undefined;
+}): boolean {
+  return !!input.modelCredential && !!input.providerProfile &&
+    input.modelCredential.profileId === input.providerProfile.id &&
+    input.modelCredential.profileHash === input.providerProfile.hash &&
+    input.env.PAPERCLIP_MANAGED_MODEL_BROKER_ORIGIN === input.managedModelBrokerOrigin &&
+    !!input.managedModelBrokerOrigin;
+}
+
+/** Conformance lane of the managed OpenCode credential check. The signed
+ * claim's `profileId` names the WorkerModelProfile being qualified: the issuer
+ * signs `admission.profile.id` (a UUID, enforced by the claim parser), the Run
+ * carries it as `nativeOpenCodeConformanceProfileId`, and the issuer-persisted
+ * dispatch tuple repeats it; the model gateway re-checks it against the same
+ * WorkerModelProfile. It is not the Host's auth-injection profile id, which the
+ * caller binds separately with `managedModelCredentialProfileExact`. Comparing
+ * the two namespaces refused every conformance session start (CONF3c). */
+export function managedOpenCodeConformanceCredentialValid(input: {
+  providerConformanceBootstrap: boolean;
+  qualificationGroupId: string | null | undefined;
+  conformancePlanId: string | null | undefined;
+  run: { id: string; agentId: string | null; responsibleUserId: string | null; contextSnapshot: unknown };
+  companyId: string;
+  nativeSessionStartValid: boolean;
+  modelBrokerSessionPhase: string | undefined;
+  modelCredentialExpiresAt: string | undefined;
+  conformanceClaims: RuntimeToolsTokenClaims | null;
+  otherModelClaimsPresent: boolean;
+  inputAndExpiryValid: boolean;
+  nowMs?: number;
+}): boolean {
+  const context = input.run.contextSnapshot && typeof input.run.contextSnapshot === "object" &&
+    !Array.isArray(input.run.contextSnapshot) ? input.run.contextSnapshot as Record<string, unknown> : {};
+  const dispatch = context.nativeOpenCodeConformanceDispatch &&
+    typeof context.nativeOpenCodeConformanceDispatch === "object" &&
+    !Array.isArray(context.nativeOpenCodeConformanceDispatch)
+    ? context.nativeOpenCodeConformanceDispatch as Record<string, unknown> : {};
+  const claims = input.conformanceClaims;
+  const claim = claims?.provider_conformance;
+  const expiresAt = input.modelCredentialExpiresAt;
+  return Boolean(input.providerConformanceBootstrap && input.nativeSessionStartValid &&
+    input.modelBrokerSessionPhase === "start" && expiresAt !== undefined && claims?.scope === "provider_conformance" &&
+    !input.otherModelClaimsPresent && claim && input.qualificationGroupId && input.conformancePlanId &&
+    context.providerConformanceGroupId === input.qualificationGroupId &&
+    context.providerConformancePlanId === input.conformancePlanId &&
+    context.nativeOpenCodeConformanceProbeId === claim.probeId &&
+    context.nativeOpenCodeConformanceProfileId === claim.profileId &&
+    context.nativeOpenCodeConformanceDispatch !== undefined &&
+    claim.qualificationGroupId === input.qualificationGroupId &&
+    claim.probeRunId === input.run.id && claim.planId === input.conformancePlanId &&
+    claim.profileId === dispatch.profileId &&
+    claim.probeId === dispatch.probeId &&
+    claim.dispatchNonce === dispatch.dispatchNonce &&
+    claim.authorityHash === dispatch.authorityHash &&
+    dispatch.qualificationGroupId === input.qualificationGroupId &&
+    dispatch.planId === input.conformancePlanId &&
+    dispatch.profileId === context.nativeOpenCodeConformanceProfileId &&
+    claims.company_id === input.companyId && claims.sub === input.run.agentId &&
+    claims.run_id === input.run.id &&
+    claims.responsible_user_id === input.run.responsibleUserId &&
+    claims.exp * 1000 >= (input.nowMs ?? Date.now()) &&
+    Date.parse(expiresAt) <= claims.exp * 1000 && input.inputAndExpiryValid);
 }
 
 /** The hidden provider-conformance Run's preparation owner. Every purpose
@@ -4348,11 +4420,8 @@ export function runtimeControlService(
             "PAPERCLIP_MANAGED_MODEL_MAX_OUTPUT_TOKENS", "PAPERCLIP_SANDBOX_BROKER_TOKEN"].includes(key)))
           throw forbidden("Stopped managed model session cleanup cannot carry credentials");
       } else if (nativeProvider?.provider === "opencode") {
-        const exactProfileAndEnvironment = !!modelCredential && !!source.capability.modelBrokerProviderProfile &&
-          modelCredential.profileId === source.capability.modelBrokerProviderProfile.id &&
-          modelCredential.profileHash === source.capability.modelBrokerProviderProfile.hash &&
-          request.env.PAPERCLIP_MANAGED_MODEL_BROKER_ORIGIN === managedModelBrokerOrigin &&
-          !!managedModelBrokerOrigin;
+        const exactProfileAndEnvironment = managedModelCredentialProfileExact({ modelCredential,
+          providerProfile: source.capability.modelBrokerProviderProfile, env: request.env, managedModelBrokerOrigin });
         const inputAndExpiryValid = !!modelCredential && !!source.capability.modelBrokerProviderProfile &&
           Number.isSafeInteger(modelCredential.inputTokensUpperBound) && modelCredential.inputTokensUpperBound >= 1 &&
           modelCredential.inputTokensUpperBound <= 2_000_000 &&
@@ -4383,35 +4452,13 @@ export function runtimeControlService(
         }
         let conversationCredentialValid = false;
         let conversationCredentialChecks: Record<string, boolean> | null = null;
-        const conformanceContext = source.run.contextSnapshot && typeof source.run.contextSnapshot === "object" &&
-          !Array.isArray(source.run.contextSnapshot) ? source.run.contextSnapshot as Record<string, unknown> : {};
-        const conformanceDispatch = conformanceContext.nativeOpenCodeConformanceDispatch &&
-          typeof conformanceContext.nativeOpenCodeConformanceDispatch === "object" &&
-          !Array.isArray(conformanceContext.nativeOpenCodeConformanceDispatch)
-          ? conformanceContext.nativeOpenCodeConformanceDispatch as Record<string, unknown> : {};
-        const conformanceClaim = conformanceModelClaims?.provider_conformance;
-        const conformanceCredentialValid = Boolean(source.providerConformanceBootstrap && nativeSessionStartValid &&
-          request.modelBrokerSession?.phase === "start" && modelCredential && conformanceModelClaims?.scope === "provider_conformance" &&
-          !modelClaims && !conversationModelClaims && conformanceClaim && source.qualificationGroupId && source.conformancePlan &&
-          conformanceContext.providerConformanceGroupId === source.qualificationGroupId &&
-          conformanceContext.providerConformancePlanId === source.conformancePlan.id &&
-          conformanceContext.nativeOpenCodeConformanceProbeId === conformanceClaim.probeId &&
-          conformanceContext.nativeOpenCodeConformanceProfileId === conformanceClaim.profileId &&
-          conformanceContext.nativeOpenCodeConformanceDispatch !== undefined &&
-          conformanceClaim.qualificationGroupId === source.qualificationGroupId &&
-          conformanceClaim.probeRunId === source.run.id && conformanceClaim.planId === source.conformancePlan.id &&
-          conformanceClaim.profileId === source.capability.modelBrokerProviderProfile?.id &&
-          conformanceClaim.probeId === conformanceDispatch.probeId &&
-          conformanceClaim.dispatchNonce === conformanceDispatch.dispatchNonce &&
-          conformanceClaim.authorityHash === conformanceDispatch.authorityHash &&
-          conformanceDispatch.qualificationGroupId === source.qualificationGroupId &&
-          conformanceDispatch.planId === source.conformancePlan.id &&
-          conformanceDispatch.profileId === source.capability.modelBrokerProviderProfile?.id &&
-          conformanceModelClaims.company_id === claims.company_id && conformanceModelClaims.sub === source.run.agentId &&
-          conformanceModelClaims.run_id === source.run.id &&
-          conformanceModelClaims.responsible_user_id === source.run.responsibleUserId &&
-          conformanceModelClaims.exp * 1000 >= Date.now() &&
-          Date.parse(modelCredential.expiresAt) <= conformanceModelClaims.exp * 1000 && inputAndExpiryValid);
+        const conformanceCredentialValid = managedOpenCodeConformanceCredentialValid({
+          providerConformanceBootstrap: Boolean(source.providerConformanceBootstrap),
+          qualificationGroupId: source.qualificationGroupId, conformancePlanId: source.conformancePlan?.id,
+          run: source.run, companyId: claims.company_id, nativeSessionStartValid,
+          modelBrokerSessionPhase: request.modelBrokerSession?.phase, modelCredentialExpiresAt: modelCredential?.expiresAt,
+          conformanceClaims: conformanceModelClaims, otherModelClaimsPresent: Boolean(modelClaims || conversationModelClaims),
+          inputAndExpiryValid });
         if (conversationModelClaims?.conversation_model && conversationBinding && modelCredential &&
           source.capability.modelBrokerProviderProfile && exactProfileAndEnvironment && inputAndExpiryValid) {
           const task = source.source.task;
