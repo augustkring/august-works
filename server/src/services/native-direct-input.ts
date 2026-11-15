@@ -2804,8 +2804,22 @@ async function assertNativeTaskWakeSourceCurrentInScope(db: Db | Transaction, sc
     }
   }
   let finalizedSummary: NativeTaskContinuationCapture["finalizedSummary"];
+  // A retained-resume finalized summary has no trigger source Run: it is bound
+  // to the one admitted retained-run source (and to the resume delta's base
+  // Run when a delta exists). The bootstrap owner and closure validator bind
+  // the same Run.
+  const continuationTrigger = nativeSourceRecord(nativeSourceRecord(continuation).trigger);
+  const continuationResumeDelta = nativeSourceRecord(continuation).resumeDelta;
+  const resumeBaseRunId = nativeSourceRecord(continuationResumeDelta).baseRunId;
+  const retainedRunInputs = input.inputs.filter((source): source is Extract<NativePayloadSourceInput, { kind: "retained_run" }> =>
+    source.kind === "retained_run");
+  const retainedResumeSource = run && continuationTrigger.sourceRunId === null && continuationTrigger.interactionId === null &&
+    !nativeSourceRecord(run.runnerProfileJson).nativeBootstrapStageTrigger && admittedWake?.reason !== "issue_assigned" &&
+    retainedRunInputs.length === 1 && (continuationResumeDelta === undefined || resumeBaseRunId === retainedRunInputs[0]!.runId)
+    ? retainedRunInputs[0]! : null;
+  const retainedResumeSourceRunId = retainedResumeSource?.runId ?? null;
   if (!summary && run && nativeSourceRecord(continuation).completedWork !== null &&
-    (typeof nativeSourceRecord(nativeSourceRecord(continuation).trigger).sourceRunId === "string" ||
+    (typeof continuationTrigger.sourceRunId === "string" || retainedResumeSourceRunId ||
       nativeSourceRecord(run.runnerProfileJson).nativeBootstrapStageTrigger)) {
     const { captureNativeAssignmentFinalizedContinuationSummary, captureNativeFinalizedContinuationSummary } =
       await import("./execution-continuation.js");
@@ -2836,7 +2850,8 @@ async function assertNativeTaskWakeSourceCurrentInScope(db: Db | Transaction, sc
               ? { expectedSourceRunId: nativeSourceRecord(profile.nativeBootstrapFinalizedContinuationSummary).sourceRunId as string } : {}) })
         : await captureNativeFinalizedContinuationSummary({ db: db as Db, companyId: input.companyId,
             issueId: input.issueId, agentId: run.agentId, receiverRunId: run.id,
-            sourceRunId: String(nativeSourceRecord(nativeSourceRecord(continuation).trigger).sourceRunId), reader: input.actor });
+            sourceRunId: typeof continuationTrigger.sourceRunId === "string" ? continuationTrigger.sourceRunId : String(retainedResumeSourceRunId),
+            reader: input.actor });
     }
     const original = nativeSourceRecord(run.runnerProfileJson).nativeBootstrapFinalizedContinuationSummary;
     if (selected && selected.body === nativeSourceRecord(continuation).completedWork && isDeepStrictEqual(selected, original)) {
@@ -3002,7 +3017,11 @@ async function assertNativeTaskWakeSourceCurrentInScope(db: Db | Transaction, sc
       ...(currentHumanAssignment ? { currentHumanAssignment } : {}),
       ...(finalizedSummary ? { finalizedSummary } : {}),
       ...(explicitHumanSource ? { explicitHumanSource } : {}),
-      ...(previousContext && retainedSource ? { previousContext, retainedSource } : {}),
+      ...(previousContext && retainedSource ? { previousContext, retainedSource } :
+        // Without a resume delta, a retained-resume finalized summary is
+        // bound to the admitted retained-run source alone.
+        retainedResumeSource && continuationResumeDelta === undefined && finalizedSummary &&
+          finalizedSummary.sourceRunId === retainedResumeSource.runId ? { retainedSource: retainedResumeSource } : {}),
       commentSources: capturedContinuationCommentSources,
       wake: { requestedByActorType: admittedWake.requestedByActorType, requestedByActorId: admittedWake.requestedByActorId,
         reason: admittedWake.reason, originCommentIds: nativeTaskWakeOriginCommentIds(admittedWake.payload),

@@ -923,8 +923,27 @@ export async function buildExecutionContinuation(input: {
       ? await captureNativeFinalizedContinuationSummary({ db, companyId, issueId, agentId: input.agentId,
           receiverRunId: receiver.id, sourceRunId: producerRunId, reader: outcomeReader }) : null;
     if (acceptedPlanFinalizedSummary) envelope.completedWork = acceptedPlanFinalizedSummary.body;
+    // A retained-resume finalized summary. An ordinary Human wake that resumes
+    // the task session's last Run would otherwise select the server-written
+    // continuation summary, which has no source snapshot. An unsealed summary
+    // is never a Native source (A6b): completed work comes only from that
+    // Run's accepted finalized result. The base is the resume delta's Run, or
+    // the session's last Run when its delivered history was empty (no delta).
+    // The closure binds it to the retained-run source heartbeat admits; when
+    // that Run has no accepted result, no completed work is carried.
+    const retainedResumeBaseRunId = resumeDelta?.baseRunId ?? input.previousContextRunId ?? null;
+    const retainedResumeUsesFinalizedSummary = Boolean(wake && retainedResumeBaseRunId && !fullHistoryTurn && !stageContinuation &&
+      !assignmentFinalizedSummary && !withdrawalFinalizedSummary && !acceptedPlanFinalizedSummary &&
+      !sourceRunId && !triggerInteraction && !explicitHumanSource && governedInteractions.length === 0 &&
+      answeredQuestions.length === 0 && humanReviewWithdrawals.length === 0 && adminExpiredInteractions.length === 0 &&
+      input.summaryDocument && !input.summaryDocument.source.payloadSourceSnapshot &&
+      effectiveSummary === input.summaryDocument.value.body);
+    const retainedResumeFinalizedSummary = retainedResumeUsesFinalizedSummary && retainedResumeBaseRunId
+      ? await captureNativeFinalizedContinuationSummary({ db, companyId, issueId, agentId: input.agentId,
+          receiverRunId: receiver.id, sourceRunId: retainedResumeBaseRunId, reader: outcomeReader }) : null;
+    if (retainedResumeUsesFinalizedSummary) envelope.completedWork = retainedResumeFinalizedSummary?.body ?? null;
     const finalizedSummary = (wake && stageContinuation?.summary) ?? (wake && assignmentFinalizedSummary) ?? withdrawalFinalizedSummary ??
-      acceptedPlanFinalizedSummary ??
+      acceptedPlanFinalizedSummary ?? retainedResumeFinalizedSummary ??
       (wake && input.summary === null && sourceRunId && envelope.completedWork !== null
         ? await captureNativeFinalizedContinuationSummary({ db, companyId, issueId, agentId: input.agentId,
             receiverRunId: receiver.id, sourceRunId }) : null);
@@ -943,7 +962,7 @@ export async function buildExecutionContinuation(input: {
     const manualQueueAdoption = wake && receiver ? await readNativeManualQueueAdoption(db, {
       run: receiver, issueId, currentWake: wake }) : null;
     const summary = !assignmentFinalizedSummary && !withdrawalFinalizedSummary && !acceptedPlanFinalizedSummary &&
-      input.summaryDocument && effectiveSummary === input.summaryDocument.value.body
+      !retainedResumeUsesFinalizedSummary && input.summaryDocument && effectiveSummary === input.summaryDocument.value.body
       ? { source: input.summaryDocument.source, rawTrustHash: nativeSha256(input.summaryDocument.value.sourceTrust),
           rendition: await createRunSecretRedactionRegistry(db).redactForIssue(companyId, issueId, {
             key: input.summaryDocument.value.key, title: input.summaryDocument.value.title,

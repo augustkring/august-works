@@ -477,12 +477,30 @@ export function exactNativeTaskContinuation(input: { value: unknown; companyId: 
     // Run that requested the confirmation (bound again below to the trigger).
     const acceptedPlanSummary = hasAcceptedPlanReview && !hasStageTrigger && !stageEntry &&
       typeof acceptedPlanReview!.sourceRunId === "string" && value.sourceRunId === acceptedPlanReview!.sourceRunId;
+    // A retained-resume finalized summary: an ordinary Human wake resumes the
+    // retained Run, whose server-written continuation summary is unsealed. Its
+    // completed work is that retained Run's accepted finalized result, bound to
+    // the retained-run source (the trigger has no source Run). A resume delta,
+    // when present, must have the same base Run; the resumeDelta block below
+    // binds it again. Every other kind keeps its own trigger or owner binding.
+    const retainedSource = capture.retainedSource;
+    const retainedResumeDelta = c.resumeDelta;
+    const retainedResumeSummary = !hasGoverned && !hasStageTrigger && !stageEntry && !hasSummaryAssignment &&
+      !reviewWithdrawalSummary && !acceptedPlanSummary && !hasResolutionWake && !hasQuestions && !hasReviewWithdrawals &&
+      !hasAdministrativeExpiries && !hasAcceptedPlanReview && !exactExplicitHumanSource && c.trigger.sourceRunId === null &&
+      !!retainedSource && retainedSource.kind === "retained_run" && typeof retainedSource.runId === "string" &&
+      nativePayloadSourceInputSchema.safeParse(retainedSource).success && value.sourceRunId === retainedSource.runId &&
+      (retainedResumeDelta === undefined ? capture.previousContext === undefined :
+        !!retainedResumeDelta && typeof retainedResumeDelta === "object" && !Array.isArray(retainedResumeDelta) &&
+        retainedResumeDelta.baseRunId === retainedSource.runId && capture.previousContext?.runId === retainedSource.runId);
     const expectedKeys=stageEntry ? "agentId,assessmentId,body,companyId,decisionDigest,decisionId,decisionSnapshotHash,finalizationVersion,issueId,parentReceipt,receiverRunId,resultCanonicalSha256,resultCreatedAt,resultId,sourceRunId,stageEntryRead" :
       "agentId,assessmentId,body,companyId,decisionDigest,decisionId,decisionSnapshotHash,finalizationVersion,issueId,parentReceipt,receiverRunId,resultCanonicalSha256,resultCreatedAt,resultId,sourceRunId";
-    if ((!hasGoverned && !(hasStageTrigger && stageEntry) && !hasSummaryAssignment && !reviewWithdrawalSummary && !acceptedPlanSummary) || capture.summary ||
+    if ((!hasGoverned && !(hasStageTrigger && stageEntry) && !hasSummaryAssignment && !reviewWithdrawalSummary && !acceptedPlanSummary &&
+        !retainedResumeSummary) || capture.summary ||
       Object.keys(value).sort().join(",") !== expectedKeys ||
       value.companyId !== input.companyId || value.issueId !== input.issueId || value.agentId !== input.agentId ||
-      value.receiverRunId !== input.runId || value.sourceRunId !== (hasStageTrigger ? stageTrigger!.executorRunId : c.trigger.sourceRunId) ||
+      value.receiverRunId !== input.runId || value.sourceRunId !== (hasStageTrigger ? stageTrigger!.executorRunId :
+        retainedResumeSummary ? retainedSource!.runId : c.trigger.sourceRunId) ||
       ![value.sourceRunId,value.resultId,value.assessmentId,value.decisionId].every(id => typeof id === "string" && uuid.test(id)) ||
       typeof value.resultCanonicalSha256 !== "string" || !/^(?:sha256:)?[a-f0-9]{64}$/.test(value.resultCanonicalSha256) ||
       typeof value.decisionDigest !== "string" || !/^[a-f0-9]{64}$/.test(value.decisionDigest) ||

@@ -9288,7 +9288,7 @@
         },
         {
           "path": "server/src/services/native-direct-input.ts",
-          "sha256": "76297ca867d8de990dc075ba5d4af46c2b91c71a9f294f4ab91893df9370a024"
+          "sha256": "57bacbbf8dfacddf8c8da42b6165efa46ce66a446403681d7d33cee83762ea22"
         },
         {
           "path": "server/src/services/native-project-output.ts",
@@ -13880,7 +13880,7 @@
         },
         {
           "path": "server/src/__tests__/heartbeat-managed-scheduler.integration.test.ts",
-          "sha256": "ae3093a95aab9a4a9aefb78ef021b8cf9cde302439154f001ab9f496d2f57a73"
+          "sha256": "10edd4d6957b61e21fed2da0d95c2e2f1a22b02b5a89d009fdfee4c418a5edec"
         },
         {
           "path": "server/src/__tests__/heartbeat-managed-serial-scheduler.integration.test.ts",
@@ -24914,7 +24914,7 @@
         },
         {
           "path": "server/src/services/execution-continuation.ts",
-          "sha256": "c5859485324551c1c2fb509b07c242a5336d9894267323c98ea2efa5e295ea03"
+          "sha256": "f168da11c1b3b62f8e2e11c67a218c32920e1c6cc40b48dd94064f2c1b90ba62"
         },
         {
           "path": "server/src/services/execution-control-reconciliation.test.ts",
@@ -25102,11 +25102,11 @@
         },
         {
           "path": "server/src/services/native-runtime/native-execution-input.test.ts",
-          "sha256": "df732c9be71840bc3558d9cc6d4b19b04b410d2b68afac76f2db6758817be3db"
+          "sha256": "9853365da3cdec5bda56fd00fe4ccf4d2fb13598800cfd4da89a12193e67e679"
         },
         {
           "path": "server/src/services/native-runtime/native-execution-input.ts",
-          "sha256": "84c8be643106eca83c6af7193938697bd2a3ddfffd58578f92a8a1d9b1dde319"
+          "sha256": "30e21a3b6c5f0ca97c574cf2728ed206ed40900d0a95ceb3bb47e4d869b9875f"
         },
         {
           "path": "server/src/services/native-runtime/native-finalization-error-diagnostic.ts",
@@ -50770,7 +50770,7 @@
       "id": "source:server/src/services/native-direct-input.ts",
       "kind": "current_source_owner",
       "path": "server/src/services/native-direct-input.ts",
-      "sha256": "76297ca867d8de990dc075ba5d4af46c2b91c71a9f294f4ab91893df9370a024",
+      "sha256": "57bacbbf8dfacddf8c8da42b6165efa46ce66a446403681d7d33cee83762ea22",
       "changeIds": [
         "SCR-V10-HOTSPOT-06"
       ],
@@ -52761,7 +52761,7 @@
       "id": "source:server/src/__tests__/heartbeat-managed-scheduler.integration.test.ts",
       "kind": "current_source_owner",
       "path": "server/src/__tests__/heartbeat-managed-scheduler.integration.test.ts",
-      "sha256": "ae3093a95aab9a4a9aefb78ef021b8cf9cde302439154f001ab9f496d2f57a73",
+      "sha256": "10edd4d6957b61e21fed2da0d95c2e2f1a22b02b5a89d009fdfee4c418a5edec",
       "changeIds": [
         "SCR-V10-WORKFLOWS-DURABLE-OPERATIONS"
       ],
@@ -63358,7 +63358,7 @@
       "id": "source:server/src/services/execution-continuation.ts",
       "kind": "current_source_owner",
       "path": "server/src/services/execution-continuation.ts",
-      "sha256": "c5859485324551c1c2fb509b07c242a5336d9894267323c98ea2efa5e295ea03",
+      "sha256": "f168da11c1b3b62f8e2e11c67a218c32920e1c6cc40b48dd94064f2c1b90ba62",
       "changeIds": [
         "SCR-V10-NATIVE-RUNTIME-AND-AUTHORITY"
       ],
@@ -64033,7 +64033,7 @@
       "id": "source:server/src/services/native-runtime/native-execution-input.test.ts",
       "kind": "current_source_owner",
       "path": "server/src/services/native-runtime/native-execution-input.test.ts",
-      "sha256": "df732c9be71840bc3558d9cc6d4b19b04b410d2b68afac76f2db6758817be3db",
+      "sha256": "9853365da3cdec5bda56fd00fe4ccf4d2fb13598800cfd4da89a12193e67e679",
       "changeIds": [
         "SCR-V10-NATIVE-RUNTIME-AND-AUTHORITY"
       ],
@@ -64048,7 +64048,7 @@
       "id": "source:server/src/services/native-runtime/native-execution-input.ts",
       "kind": "current_source_owner",
       "path": "server/src/services/native-runtime/native-execution-input.ts",
-      "sha256": "84c8be643106eca83c6af7193938697bd2a3ddfffd58578f92a8a1d9b1dde319",
+      "sha256": "30e21a3b6c5f0ca97c574cf2728ed206ed40900d0a95ceb3bb47e4d869b9875f",
       "changeIds": [
         "SCR-V10-NATIVE-RUNTIME-AND-AUTHORITY"
       ],

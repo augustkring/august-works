@@ -165,6 +165,7 @@ import { captureNativeBlockedHumanInteraction, assertNativeBlockedInteractionRes
 import { assertV7Authorization } from "../services/v7-authorization.js";
 import { assertAnalyticalContextPayloadAccess } from "../services/analytical-context-authority.js";
 import { nativeSha256 } from "../services/native-runtime/canonical.js";
+import { captureNativeFinalizedContinuationSummary } from "../services/execution-continuation.js";
 import { CAPABILITY_SEMANTIC_TOOL_CATALOG, parseNativeExecutionInput } from "../vendor/paperclip-runner/index.js";
 type ManagedSchedulerContext = Parameters<Parameters<typeof withManagedNativeHeartbeatFixture>[0]["driveScheduler"]>[0];
 type ManagedReplyInput = Parameters<Parameters<typeof withManagedNativeHeartbeatFixture>[0]["providerReply"]>[0];
@@ -525,16 +526,56 @@ it("reconstructs the current source-qualified v2 frame on a same-Task new Run wi
       expect(nextWake!.id).not.toBe(prior.id);
       const secondRemaining = deadlineAt - Date.now();
       if (secondRemaining <= 0) throw new Error("same_task_new_run_second_deadline_exhausted");
+      // Wait for any terminal status, then check the continuation evidence
+      // before the outcome, so a refused Run 2 reports its stop at once.
       await expect.poll(async () => {
         const [run] = await db.select({ status: heartbeatRuns.status }).from(heartbeatRuns)
           .where(and(eq(heartbeatRuns.companyId, companyId), eq(heartbeatRuns.id, nextWake!.id)));
-        return run?.status === "succeeded";
+        return ["succeeded", "failed", "cancelled", "timed_out"].includes(run?.status ?? "");
       }, { timeout: secondRemaining }).toBe(true);
       await heartbeat.drainActiveRunExecutions();
 
       const [current] = await db.select().from(heartbeatRuns).where(and(eq(heartbeatRuns.companyId, companyId),
         eq(heartbeatRuns.id, nextWake!.id)));
       if (!current) throw new Error("same_task_new_run_current_run_missing");
+      // CONF15-W2: the retained resume carries Run 1's accepted finalized
+      // result as completed work, never the heartbeat-written (unsealed)
+      // continuation summary.
+      const retainedSummary = (current.runnerProfileJson as Record<string, unknown>)
+        .nativeBootstrapFinalizedContinuationSummary as Record<string, unknown> | null | undefined;
+      expect(retainedSummary).toMatchObject({ companyId, issueId: task.id, agentId, receiverRunId: current.id, sourceRunId: prior.id });
+      expect(((current.contextSnapshot as Record<string, unknown>).executionContinuation as Record<string, unknown>).completedWork)
+        .toBe(retainedSummary!.body);
+      expect((current.runnerProfileJson as Record<string, unknown>).nativeBootstrapContinuationSummaryDocument ?? null).toBeNull();
+      const retainedReader = { type: "agent" as const, source: "agent_jwt" as const, companyId, agentId, runId: current.id,
+        onBehalfOfUserId: actor.userId! };
+      const retainedCapture = (overrides: Partial<Parameters<typeof captureNativeFinalizedContinuationSummary>[0]> = {}) =>
+        captureNativeFinalizedContinuationSummary({ db, companyId, issueId: task.id, agentId, receiverRunId: current.id,
+          sourceRunId: prior.id, reader: retainedReader, ...overrides });
+      expect(await retainedCapture()).toMatchObject({ sourceRunId: prior.id, body: retainedSummary!.body });
+      // Another Run, Task or company has no finalized result for this resume.
+      expect(await retainedCapture({ sourceRunId: current.id })).toBeNull();
+      expect(await retainedCapture({ sourceRunId: randomUUID() })).toBeNull();
+      expect(await retainedCapture({ issueId: randomUUID() })).toBeNull();
+      expect(await retainedCapture({ companyId: randomUUID() })).toBeNull();
+      // An unaccepted or unfinalized result is never selected (rolled back).
+      const [priorFinalization] = await db.select().from(nativeRunFinalizations).where(and(
+        eq(nativeRunFinalizations.companyId, companyId), eq(nativeRunFinalizations.runId, prior.id)));
+      expect(priorFinalization?.resultId).toBeTruthy();
+      for (const mutate of [
+        (tx: typeof db) => tx.update(nativeRunResults).set({ schemaStatus: "rejected" })
+          .where(and(eq(nativeRunResults.companyId, companyId), eq(nativeRunResults.id, priorFinalization!.resultId!))),
+        (tx: typeof db) => tx.update(nativeRunFinalizations).set({ phase: "prepared" })
+          .where(and(eq(nativeRunFinalizations.companyId, companyId), eq(nativeRunFinalizations.runId, prior.id))),
+      ]) {
+        const rollback = new Error("same_task_new_run_rollback");
+        await expect(db.transaction(async tx => {
+          await mutate(tx as unknown as typeof db);
+          expect(await retainedCapture({ db: tx })).toBeNull();
+          throw rollback;
+        })).rejects.toBe(rollback);
+      }
+      expect(await retainedCapture()).toMatchObject({ sourceRunId: prior.id });
       expect(current).toMatchObject({ companyId, agentId, nativeIssueId: task.id, runtimeMode: "native", status: "succeeded" });
       expect(current.id).not.toBe(prior.id);
       expect(current.nativeSessionId).toBe(prior.nativeSessionId);
