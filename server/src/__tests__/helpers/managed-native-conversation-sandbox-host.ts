@@ -884,10 +884,44 @@ async function configureManagedRunSandboxHost(
         input.preparedRegistration?.sandboxQualificationOperator?.userId === actor.userId)
       throw new Error("conformance_software_host_prepare_owner_scope_changed");
     let host = preparedHostsByRun.get(bootstrap.runId) ?? prequalifiedConformanceHost;
-    if (!host) host = await configureManagedSandboxRun({ ...input,
-      nativeOpenCodeConformance: true as const,
-      root: join(input.root, "scheduler-hosts", bootstrap.runId, bootstrap.leaseId) }, infrastructure, true);
+    const retiredPredecessors: Array<{ runId: string; leaseId: string }> = [];
+    if (!host) {
+      if (closing) throw new Error("scheduler_software_host_closed");
+      // Same order as ordinary serial admission (CONF14): settle and retire
+      // this presence's predecessor Host before the successor's fresh Host
+      // re-qualifies the shared boundary and production admits the next Run.
+      // Afterwards the predecessor's original start is no longer the binding's
+      // latest, so its cleanup can no longer be verified.
+      await transition;
+      for (const [previousRunId, previous] of hostAdmissionByRun) {
+        if (previousRunId === bootstrap.runId || previous.closed) continue;
+        const prior = await previous.promise;
+        await prior.assertSerialSuccessorReady(previous.leaseId);
+        await prior.close();
+        previous.closed = true;
+        retiredPredecessors.push({ runId: previousRunId, leaseId: previous.leaseId });
+      }
+      host = await configureManagedSandboxRun({ ...input,
+        nativeOpenCodeConformance: true as const,
+        root: join(input.root, "scheduler-hosts", bootstrap.runId, bootstrap.leaseId) }, infrastructure, true);
+    }
     const prepared = await host.prepareNativeOpenCodeConformanceRun(actor, bootstrap);
+    // Negative check: once the successor is admitted on the shared binding,
+    // production cleanup verification refuses the predecessor's lease
+    // (`readRunLeaseCleanup`: its original start was superseded).
+    for (const predecessor of retiredPredecessors) {
+      const [lease] = await input.db.select({ metadata: environmentLeases.metadata }).from(environmentLeases).where(and(
+        eq(environmentLeases.companyId, input.companyId), eq(environmentLeases.id, predecessor.leaseId),
+        eq(environmentLeases.heartbeatRunId, predecessor.runId))).limit(1);
+      let refusal: unknown = null;
+      try {
+        await verifyNativeCleanupRuntimeState(input.db, { companyId: input.companyId, runId: predecessor.runId,
+          leaseId: predecessor.leaseId }, lease?.metadata?.remoteExecutionTermination);
+      } catch (error) { refusal = error; }
+      if (!lease || !(refusal instanceof Error) || (refusal as { status?: unknown }).status !== 409 ||
+          refusal.message !== "Sandbox cleanup original container was superseded or recreated")
+        throw new Error("conformance_software_host_predecessor_cleanup_verified_after_successor_admission");
+    }
     // Failed or mutated bootstrap attempts retain the same prequalified Host
     // owner, so the fixture does not create setup effects before production
     // admission rejects their scope.
