@@ -59,6 +59,22 @@ export async function explicitOperatorRunIdentity(
 export type RunIdentityContext = typeof runIdentityContexts.$inferSelect;
 type Executor = Pick<Db, "select" | "insert" | "update">;
 
+/** The run's bound Task, or null when it has none. A malformed binding fails closed. */
+function identityTaskId(
+  context: Record<string, unknown> | null | undefined,
+  nativeIssueId: string | null | undefined,
+) {
+  const issueId = context?.issueId ?? context?.taskId ?? nativeIssueId;
+  if (
+    issueId !== undefined &&
+    issueId !== null &&
+    (typeof issueId !== "string" || !isUuidLike(issueId))
+  ) {
+    throw forbidden("Run task identity is invalid");
+  }
+  return typeof issueId === "string" ? issueId : null;
+}
+
 /** Match task mutation ordering: lock the task before the run, never the reverse. */
 async function lockIdentityTask(
   executor: Pick<Db, "select">,
@@ -74,15 +90,8 @@ async function lockIdentityTask(
     .where(
       and(eq(heartbeatRuns.id, runId), eq(heartbeatRuns.companyId, companyId)),
     );
-  const issueId = run?.context?.issueId ?? run?.context?.taskId ?? run?.issueId;
-  if (
-    issueId !== undefined &&
-    issueId !== null &&
-    (typeof issueId !== "string" || !isUuidLike(issueId))
-  ) {
-    throw forbidden("Run task identity is invalid");
-  }
-  if (typeof issueId === "string")
+  const issueId = identityTaskId(run?.context, run?.issueId);
+  if (issueId)
     await executor
       .select({ id: issues.id })
       .from(issues)
@@ -424,73 +433,111 @@ export async function acceptSteeredIdentity(
   if (accepted) await activate(executor, accepted);
 }
 
+/** Rolls back the run-only capture (or its savepoint) so acceptance can lock the Task first. */
+class SteeredIdentityAcceptanceRequired extends Error {}
+
+/*
+ * Lock order (D5). captureRunIdentity runs on every agent-JWT request of a run
+ * that has an identity, so it must neither close a deadlock cycle nor wait on
+ * company-wide locks. The transactions that lock both the run row and its Task:
+ *
+ * | Transaction                                             | Order                                                 |
+ * |---------------------------------------------------------|-------------------------------------------------------|
+ * | captureRunIdentity, current identity (every request)    | run FOR UPDATE only, then plain reads                 |
+ * | captureRunIdentity, accepting an acknowledged steering  | company A+M shared > Task FOR UPDATE > run FOR UPDATE |
+ * | initialize/reserve/reconcileSteeredIdentity             | Task FOR UPDATE > run FOR UPDATE                      |
+ * | Steering delivery + durable ack (routes/issues.ts)      | Task > queue wake > run FOR UPDATE (held to accept)   |
+ * | Queue edits, run dispatch, finalizer, restart recovery  | Task > run                                            |
+ * | Native source transactions (dispatch intent and ack,    | company A+M exclusive > lease > run FOR UPDATE >      |
+ * |   tool-result and attachment intents)                   |   Task FOR SHARE (in source-closure checks)           |
+ * | Tool authority mutation context                         | company A+M exclusive > plan > Task > run             |
+ * | Watchdog fold, warm restart, claim release (heartbeat)  | run > Task                                            |
+ *
+ * The run and Task orders differ between families, so the per-request path
+ * takes only the run row and waits only before it holds any lock: it cannot
+ * be part of a cycle with any of them, and it never waits on the Task or on
+ * another run's company locks. Holding the run row still serializes it with
+ * steering delivery, reservation and acceptance, which all hold that row.
+ *
+ * Accepting an acknowledged steering identity writes the Task, so that rare
+ * path rolls back and re-locks in the identity order, Task before run. The
+ * shared company locks keep it out of a cycle with the Native source family
+ * (run before Task). They wait only for exclusive holders and are taken only
+ * when a stored acknowledgement is still pending, after a steering request
+ * lost its own transaction.
+ */
 export async function captureRunIdentity(
   db: Db,
   input: { companyId: string; runId: string; agentId: string },
 ) {
-  // Lock acquisition serializes with steering delivery and its durable acknowledgement.
+  try {
+    return await db.transaction((tx) => captureLockedRunIdentity(tx, input, false));
+  } catch (error) {
+    // Rolling back (to the savepoint, when nested) released the run row.
+    if (!(error instanceof SteeredIdentityAcceptanceRequired)) throw error;
+  }
   return db.transaction(async (tx) => {
-    // Native source transactions (model dispatch intent and acknowledgement,
-    // tool-result capture) hold these company boundaries exclusively, lock the
-    // run row, then read the Task FOR SHARE. Join that order before this
-    // transaction locks the Task and then the run. Otherwise an agent request
-    // (the auth middleware calls this on every request of a run with an
-    // identity) can hold the Task while one of them holds the run, and
-    // PostgreSQL aborts one side as a deadlock. The shared mode waits for those
-    // exclusive holders but never upgrades a boundary that a caller already
-    // holds shared, and leaves concurrent identity captures unserialized here;
-    // they still serialize on the Task and run rows below.
     await lockAnalyticalCompany(tx as unknown as Db, input.companyId, "read");
     await lockMemoryPrivacy(tx as unknown as Db, input.companyId, "read");
     await lockIdentityTask(tx, input.companyId, input.runId);
-    const [run] = await tx
-      .select()
-      .from(heartbeatRuns)
-      .where(
-        and(
-          eq(heartbeatRuns.id, input.runId),
-          eq(heartbeatRuns.companyId, input.companyId),
-          eq(heartbeatRuns.agentId, input.agentId),
-        ),
-      )
-      .for("update");
-    if (!run || run.status !== "running")
-      throw forbidden(
-        "Credential acquisition requires this agent's active run",
-      );
-    const [pending] = await tx
-      .select()
-      .from(runIdentityContexts)
-      .where(
-        and(
-          eq(runIdentityContexts.runId, run.id),
-          eq(runIdentityContexts.status, "pending"),
-        ),
-      )
-      .limit(1);
-    if (pending) {
-      const acknowledgement = await storedSteeringAcknowledgement(tx, pending);
-      if (!acknowledgement)
-        throw conflict(
-          "Message acceptance is being reconciled; retry credential acquisition",
-        );
-      await acceptSteeredIdentity(tx, pending);
-      run.activeIdentityContextId = pending.id;
-      run.responsibleUserId = pending.responsibleUserId;
-    }
-    const [context] = run.activeIdentityContextId
-      ? await tx
-          .select()
-          .from(runIdentityContexts)
-          .where(
-            and(
-              eq(runIdentityContexts.id, run.activeIdentityContextId),
-              eq(runIdentityContexts.runId, run.id),
-            ),
-          )
-      : [];
-    return { run, context: context ?? null };
+    return captureLockedRunIdentity(tx, input, true);
   });
+}
+
+async function captureLockedRunIdentity(
+  tx: Executor,
+  input: { companyId: string; runId: string; agentId: string },
+  acceptPending: boolean,
+) {
+  const [run] = await tx
+    .select()
+    .from(heartbeatRuns)
+    .where(
+      and(
+        eq(heartbeatRuns.id, input.runId),
+        eq(heartbeatRuns.companyId, input.companyId),
+        eq(heartbeatRuns.agentId, input.agentId),
+      ),
+    )
+    .for("update");
+  if (run) identityTaskId(run.contextSnapshot, run.nativeIssueId);
+  if (!run || run.status !== "running")
+    throw forbidden(
+      "Credential acquisition requires this agent's active run",
+    );
+  const [pending] = await tx
+    .select()
+    .from(runIdentityContexts)
+    .where(
+      and(
+        eq(runIdentityContexts.runId, run.id),
+        eq(runIdentityContexts.status, "pending"),
+      ),
+    )
+    .limit(1);
+  if (pending) {
+    const acknowledgement = await storedSteeringAcknowledgement(tx, pending);
+    if (!acknowledgement)
+      throw conflict(
+        "Message acceptance is being reconciled; retry credential acquisition",
+      );
+    if (!acceptPending) throw new SteeredIdentityAcceptanceRequired();
+    await acceptSteeredIdentity(tx, pending);
+    run.activeIdentityContextId = pending.id;
+    run.responsibleUserId = pending.responsibleUserId;
+  }
+  const [context] = run.activeIdentityContextId
+    ? await tx
+        .select()
+        .from(runIdentityContexts)
+        .where(
+          and(
+            eq(runIdentityContexts.id, run.activeIdentityContextId),
+            eq(runIdentityContexts.runId, run.id),
+          ),
+        )
+    : [];
+  return { run, context: context ?? null };
 }
 
 export async function listRunIdentityContexts(
