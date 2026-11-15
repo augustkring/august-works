@@ -290,8 +290,16 @@ export async function runManagedOpenCodeProbe(input: { db: Db; createBackend(): 
     turnStep = "events";
     for await (const event of session.events()) {
       signal.throwIfAborted();
+      // CONF6. runnerd forwards a harness diagnostic emitted while turn.start
+      // is pending with the transport's provisional requested turn identity
+      // (turn_lab_...), not the provider turn identity startTurn acknowledged.
+      // Only that event type is exempt from turn-id equality; every event still
+      // must carry this Run and session, and a diagnostic is never output,
+      // stream or lifecycle evidence.
+      const diagnostic = event.eventType === "harness.diagnostic";
       if (event.runId !== probe.identity.runId || event.normalizedSessionId !== probe.identity.sessionId ||
-          (event.turnId && event.turnId !== turnId)) throw new Error("managed_opencode_event_identity_changed");
+          (!diagnostic && event.turnId && event.turnId !== turnId)) throw new Error("managed_opencode_event_identity_changed");
+      if (diagnostic) continue;
       if (["item.delta", "item.completed", "turn.completed", "turn.cancelled", "turn.interrupted", "turn.failed"].includes(event.eventType)) streamObserved = true;
       if (event.payload.kind === "agentMessage" && typeof event.payload.text === "string") {
         const candidate = event.eventType === "item.delta" ? output + event.payload.text : event.payload.text;
