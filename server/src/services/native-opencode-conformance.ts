@@ -28,6 +28,7 @@ import { validateNativeOpenCodeConformanceHarness } from "./orchestration/native
 import { verifyNativeCleanupRuntimeState } from "./execution-sandbox/run-lease-cleanup.js";
 import type { NativeExecutionInput, NativeSession, NativeSessionBackend, PersistedNativeSession } from "../vendor/paperclip-runner/index.js";
 import { appendHeartbeatRunEvent } from "./heartbeat-run-events.js";
+import { persistHeartbeatRunProcessMetadata } from "./heartbeat.js";
 import { PROCESS_START_REQUESTED } from "./native-local-process-stop.js";
 import { claimNativeExecutionCoordinator, failUnclaimedNativeOpenCodeConformanceRun,
   releaseNativeOpenCodeConformanceCoordinator, recordNativeModelInputDispatchAcknowledgement,
@@ -68,14 +69,38 @@ function logNativeOpenCodeConformanceFailure(stage: "probe" | "turn" | "evidence
  * CA bundle) and artifact settings come from the server's own environment
  * through the same reader the heartbeat uses, never from the Sandbox runner
  * environment or a caller. No provider-ingress grant is passed: the hidden
- * probe Run has no per-run ingress authorization. */
+ * probe Run has no per-run ingress authorization. The runner's process
+ * identity is always recorded by the factory's own recorder; a caller cannot
+ * omit or replace it. */
 export function nativeOpenCodeConformanceBackendFactory(
   input: Omit<Parameters<typeof createNativeOpenCodeConformanceProbeBackend>[0],
-    keyof NativeRunnerOperatorSettings | "runnerIngressAuthorized">,
+    keyof NativeRunnerOperatorSettings | "runnerIngressAuthorized" | "onSpawn">,
   serverEnvironment: Readonly<Record<string, string | undefined>> = process.env,
 ): () => Promise<NativeSessionBackend> {
   return async () => (await createNativeOpenCodeConformanceProbeBackend({ ...input,
-    ...nativeRunnerOperatorSettings(serverEnvironment) })).backend;
+    ...nativeRunnerOperatorSettings(serverEnvironment),
+    onSpawn: nativeOpenCodeConformanceRunnerProcessRecorder(input.db, input.execution.binding.runId,
+      input.runnerInstanceId) })).backend;
+}
+
+type NativeRunnerSpawnMeta = Parameters<NonNullable<Parameters<
+  typeof createNativeOpenCodeConformanceProbeBackend>[0]["onSpawn"]>>[0];
+
+/** The probe runner's process identity owner (CONF13). The Worker dispatch
+ * records its runner through `persistHeartbeatRunProcessMetadata` from the
+ * backend's `onSpawn`; the probe lane uses the same owner. Without it the
+ * hidden Run kept a null `processPid`/`processStartedAt` although its runner
+ * was launched, so recovery could treat it as never spawned (the finalization
+ * reconciler selects runs with no process identity). A probe runner is always
+ * the remote Sandbox runner this backend launched, so only its exact remote
+ * marker is accepted. */
+export function nativeOpenCodeConformanceRunnerProcessRecorder(db: Db, runId: string, runnerInstanceId: string) {
+  return async (meta: NativeRunnerSpawnMeta) => {
+    if (meta.identitySource !== "remote_marker" || meta.remoteRunnerInstanceId !== runnerInstanceId)
+      throw forbidden("The conformance probe runner must report its exact remote process marker");
+    const recorded = await persistHeartbeatRunProcessMetadata(db, runId, meta);
+    if (!recorded) throw forbidden("The conformance probe Run disappeared before its runner identity was recorded");
+  };
 }
 
 export type NativeOpenCodeRemoteProbeContext = Readonly<{

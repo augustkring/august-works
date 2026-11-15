@@ -25006,7 +25006,7 @@
         },
         {
           "path": "server/src/services/native-opencode-conformance.ts",
-          "sha256": "a15785bbfc4270a9a296f8d79e9ef2ee19798f98c9a58a10c27a035495868706"
+          "sha256": "c0417e69fbedbed303bd243815bf8684086697cfe845c538a216edd20ddebceb"
         },
         {
           "path": "server/src/services/native-owner-release.ts",
@@ -27229,7 +27229,7 @@
         },
         {
           "path": "server/src/__tests__/server-broker-capability-composition.test.ts",
-          "sha256": "86d0a2474dea86f5456df0d4bc4e00a7ec4ffc558c426f6532870f6cca4a3c62"
+          "sha256": "53b003a485462697541d4493f7e66b903499a1099031826aaacd68e0d938d56a"
         },
         {
           "path": "server/src/__tests__/sidebar-preferences-routes.test.ts",
@@ -32085,7 +32085,7 @@
         },
         {
           "path": "server/src/__tests__/helpers/managed-native-conversation-sandbox-host.ts",
-          "sha256": "b143b6a5822c2bf4021d1cd1a3ff3ba3a064b2f17bdd0ffe9277b4123335d18c"
+          "sha256": "0b94795eacc20af81ed8ae0c6f4cced5109659ac0b2e75950671b24d6a7ccc99"
         },
         {
           "path": "server/src/__tests__/helpers/managed-native-infrastructure-cleanup.test.ts",
@@ -63703,7 +63703,7 @@
       "id": "source:server/src/services/native-opencode-conformance.ts",
       "kind": "current_source_owner",
       "path": "server/src/services/native-opencode-conformance.ts",
-      "sha256": "a15785bbfc4270a9a296f8d79e9ef2ee19798f98c9a58a10c27a035495868706",
+      "sha256": "c0417e69fbedbed303bd243815bf8684086697cfe845c538a216edd20ddebceb",
       "changeIds": [
         "SCR-V10-NATIVE-RUNTIME-AND-AUTHORITY"
       ],
@@ -65953,7 +65953,7 @@
       "id": "source:server/src/__tests__/server-broker-capability-composition.test.ts",
       "kind": "current_source_owner",
       "path": "server/src/__tests__/server-broker-capability-composition.test.ts",
-      "sha256": "86d0a2474dea86f5456df0d4bc4e00a7ec4ffc558c426f6532870f6cca4a3c62",
+      "sha256": "53b003a485462697541d4493f7e66b903499a1099031826aaacd68e0d938d56a",
       "changeIds": [
         "SCR-V10-UNCLASSIFIED-REGISTERED-OWNER"
       ],
@@ -72375,7 +72375,7 @@
       "id": "source:server/src/__tests__/helpers/managed-native-conversation-sandbox-host.ts",
       "kind": "current_source_owner",
       "path": "server/src/__tests__/helpers/managed-native-conversation-sandbox-host.ts",
-      "sha256": "b143b6a5822c2bf4021d1cd1a3ff3ba3a064b2f17bdd0ffe9277b4123335d18c",
+      "sha256": "0b94795eacc20af81ed8ae0c6f4cced5109659ac0b2e75950671b24d6a7ccc99",
       "changeIds": [
         "SCR-V10-PRODUCT-IDENTITY-HELP-LANGUAGE"
       ],

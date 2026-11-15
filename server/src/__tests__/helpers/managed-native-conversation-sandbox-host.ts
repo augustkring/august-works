@@ -43,7 +43,7 @@ import { isRemoteRuntimeAssetLocator } from "../../services/native-runtime/runti
 import { NATIVE_REMOTE_WORKLOAD_STOPPED } from "../../services/remote-execution-termination.js";
 import { PROCESS_IDENTITY_RECORDED, PROCESS_START_REQUESTED } from "../../services/native-local-process-stop.js";
 import { environmentRuntimeService } from "../../services/environment-runtime.js";
-import { executionSandboxService } from "../../services/execution-sandbox/sandbox-service.js";
+import { executionSandboxService, sandboxCapabilityFacts } from "../../services/execution-sandbox/sandbox-service.js";
 import { openShellBackend } from "../../services/execution-sandbox/openshell-backend.js";
 import { checkOpenShellBoundary } from "../../services/execution-sandbox/openshell-prover.js";
 import { sandboxProbeCases, type SandboxAdmissionCleanup, type SandboxIdentity, type SandboxProbeCase } from "../../services/execution-sandbox/backend.js";
@@ -808,7 +808,8 @@ async function configureManagedRunSandboxHost(
   const preparedHostsByRun = new Map<string, Host>();
   // The conformance cell's real signed Host and base boundary are qualified
   // before the first hidden Run is minted. The first exact Run then adopts
-  // this prepared owner; later Runs receive fresh per-run Host closures.
+  // this prepared owner; later Runs receive fresh per-run Host closures, and
+  // the setup operator re-qualifies the retained boundary on each new Host.
   let prequalifiedConformanceHost: Host | null = input.nativeOpenCodeConformance
     ? await configureManagedSandboxRun({ ...input, root: join(input.root, "scheduler-hosts", "prequalified") }, infrastructure, true)
     : null;
@@ -883,10 +884,44 @@ async function configureManagedRunSandboxHost(
         input.preparedRegistration?.sandboxQualificationOperator?.userId === actor.userId)
       throw new Error("conformance_software_host_prepare_owner_scope_changed");
     let host = preparedHostsByRun.get(bootstrap.runId) ?? prequalifiedConformanceHost;
-    if (!host) host = await configureManagedSandboxRun({ ...input,
-      nativeOpenCodeConformance: true as const,
-      root: join(input.root, "scheduler-hosts", bootstrap.runId, bootstrap.leaseId) }, infrastructure, true);
+    const retiredPredecessors: Array<{ runId: string; leaseId: string }> = [];
+    if (!host) {
+      if (closing) throw new Error("scheduler_software_host_closed");
+      // Same order as ordinary serial admission (CONF14): settle and retire
+      // this presence's predecessor Host before the successor's fresh Host
+      // re-qualifies the shared boundary and production admits the next Run.
+      // Afterwards the predecessor's original start is no longer the binding's
+      // latest, so its cleanup can no longer be verified.
+      await transition;
+      for (const [previousRunId, previous] of hostAdmissionByRun) {
+        if (previousRunId === bootstrap.runId || previous.closed) continue;
+        const prior = await previous.promise;
+        await prior.assertSerialSuccessorReady(previous.leaseId);
+        await prior.close();
+        previous.closed = true;
+        retiredPredecessors.push({ runId: previousRunId, leaseId: previous.leaseId });
+      }
+      host = await configureManagedSandboxRun({ ...input,
+        nativeOpenCodeConformance: true as const,
+        root: join(input.root, "scheduler-hosts", bootstrap.runId, bootstrap.leaseId) }, infrastructure, true);
+    }
     const prepared = await host.prepareNativeOpenCodeConformanceRun(actor, bootstrap);
+    // Negative check: once the successor is admitted on the shared binding,
+    // production cleanup verification refuses the predecessor's lease
+    // (`readRunLeaseCleanup`: its original start was superseded).
+    for (const predecessor of retiredPredecessors) {
+      const [lease] = await input.db.select({ metadata: environmentLeases.metadata }).from(environmentLeases).where(and(
+        eq(environmentLeases.companyId, input.companyId), eq(environmentLeases.id, predecessor.leaseId),
+        eq(environmentLeases.heartbeatRunId, predecessor.runId))).limit(1);
+      let refusal: unknown = null;
+      try {
+        await verifyNativeCleanupRuntimeState(input.db, { companyId: input.companyId, runId: predecessor.runId,
+          leaseId: predecessor.leaseId }, lease?.metadata?.remoteExecutionTermination);
+      } catch (error) { refusal = error; }
+      if (!lease || !(refusal instanceof Error) || (refusal as { status?: unknown }).status !== 409 ||
+          refusal.message !== "Sandbox cleanup original container was superseded or recreated")
+        throw new Error("conformance_software_host_predecessor_cleanup_verified_after_successor_admission");
+    }
     // Failed or mutated bootstrap attempts retain the same prequalified Host
     // owner, so the fixture does not create setup effects before production
     // admission rejects their scope.
@@ -4274,8 +4309,21 @@ async function configureManagedSandboxRun(input: ManagedSandboxHostInput,
             request.modelBrokerSession?.sessionDeadlineAt === witness.sessionDeadlineAt &&
             request.modelBrokerSession?.expectedCapabilityHash === witness.expectedCapabilityHash &&
             (nativePreparationPurpose === "native_harness_state" || launchedWorkerMonitor);
-          if (argsMatch && request.modelBrokerSession?.phase === "refresh" && result.exitCode === 0 && !result.timedOut &&
-              witness.identityMatched) {
+          // The provider-conformance probe holds one single-turn model
+          // credential and never refreshes its broker session (the executor
+          // omits `refresh` for the probe lane). Its liveness monitor is the
+          // same signed identity check without a broker-session phase. Only
+          // that exact credentialless monitor stands in for `refresh` here,
+          // and only for a conformance Host; a conformance refresh is invalid
+          // (CONF13). Worker and conversation Hosts are unchanged.
+          const conformanceLiveness = nativeConformanceMode && witness.phase !== "invalid" && !request.modelBrokerSession &&
+            !request.modelBrokerCredential && !request.brokerCredential && nativePreparationPurpose === "native_harness_state" &&
+            requestArgv[4] === witness.identityPath && requestArgv[5] === witness.nonce &&
+            requestArgv[6] === witness.runnerId && requestArgv[7] === String(witness.pid);
+          if (nativeConformanceMode && request.modelBrokerSession?.phase === "refresh") {
+            witness.phase = "invalid"; witness.identityVerdict = "mismatch";
+          } else if ((argsMatch && request.modelBrokerSession?.phase === "refresh" || conformanceLiveness) &&
+              result.exitCode === 0 && !result.timedOut && witness.identityMatched) {
             const [run] = expectedRunId === witness.runId
               ? await db.select({ processPid: heartbeatRuns.processPid, processStartedAt: heartbeatRuns.processStartedAt })
                 .from(heartbeatRuns).where(and(eq(heartbeatRuns.companyId, companyId), eq(heartbeatRuns.id, witness.runId))).limit(1)
@@ -5188,11 +5236,6 @@ async function configureManagedSandboxRun(input: ManagedSandboxHostInput,
           eq(sandboxQualificationRuns.id, retained.qualificationRunId))).limit(1);
       if (!report || report.status !== "passed" || report.evidenceKind !== "protected_host_report")
         throw new Error("conversation_software_host_conformance_qualification_changed");
-      qualificationEvidence = { bindingStatus: retained.status, reportStatus: report.status, suiteVersion: report.suiteVersion,
-        evidenceKind: report.evidenceKind, results: Array.isArray(report.results) ? report.results : [],
-        exceptions: Array.isArray(report.exceptions) ? report.exceptions : [], hostCapabilityObservations,
-        softwareProbeObservations, credentialProbeResponses: qualificationToolResponses.map(({caseId,status,reasonCode,replayDenied}) =>
-          ({caseId,status,reasonCode,replayDenied:replayDenied ?? null})), hostFailureCodes: [] };
     } else {
       binding = await service.create(baseQualificationActor, companyId, { runtimeCellId: cell.id,
         expectedCellGeneration: cell.generation.toString(), backend: "openshell", profile: "development", boundaryPolicy });
@@ -5201,10 +5244,26 @@ async function configureManagedSandboxRun(input: ManagedSandboxHostInput,
     identity.sandboxRef = binding.sandboxRef ?? `aw-v7-${binding.id}`;
     await db.update(runtimeCells).set({ providerBindingId }).where(eq(runtimeCells.id, cell.id));
     await initializeSessionHostEngine();
-    if (!retained) {
+    if (retained) {
+      // Each later Run gets a fresh per-run Host closure: a new Host journal,
+      // OpenShell gateway and qualification canary on the retained cell. A
+      // re-created Host holds no qualification sample, so it reports only
+      // preflight facts, and production admission refuses to let it borrow
+      // the retained binding's earlier protected qualification (CONF12).
+      // Observe that refusal input, then let the setup operator re-qualify the
+      // same immutable boundary on this Host before the hidden Run is admitted.
+      preparationStage = "observe_recreated_conformance_host";
+      const storedCapabilities = sandboxCapabilitySnapshotSchema.parse(retained.capabilitySnapshot);
+      const recreatedHostCapabilities = sandboxCapabilitySnapshotSchema.parse(
+        await driveHost(transport.bridge(baseQualificationActor).capabilities(identity)));
+      if (recreatedHostCapabilities.qualificationTarget || SANDBOX_CONTROLS.some(control => recreatedHostCapabilities[control]) ||
+          nativeSha256(sandboxCapabilityFacts(recreatedHostCapabilities)) === nativeSha256(sandboxCapabilityFacts(storedCapabilities)))
+        throw new Error("conversation_software_host_recreated_conformance_host_borrowed_qualification");
+      preparationStage = "requalify_conformance_namespace";
+    } else {
       preparationStage = "qualify_conformance_namespace";
-      await qualifyHost(baseQualificationActor);
     }
+    await qualifyHost(baseQualificationActor);
     if (!["ready", "running", "stopped"].includes(binding.status) || binding.boundaryPolicy.credentials.mode !== "brokered" ||
         binding.boundaryPolicy.credentials.bindings.length !== 0)
       throw new Error("conversation_software_host_conformance_namespace_not_qualified");
