@@ -5787,7 +5787,7 @@
         },
         {
           "path": "server/src/__tests__/v7-worker-model-gateway.integration.test.ts",
-          "sha256": "bfe4e248449607eb0f638dffc16ecb496709e46fad3fa60280c3532e47fe7bef"
+          "sha256": "e44da6c5855431626c98aa1cd415c9aff1170813e9dc433487c7d28fbd3aa3ca"
         },
         {
           "path": "server/src/__tests__/v9-agent-publication.integration.test.ts",
@@ -7686,7 +7686,7 @@
         },
         {
           "path": "server/src/services/native-runtime/native-session-executor.ts",
-          "sha256": "9fd50b534ddc90ffd825fe93a2ced02d64899f2b56bc80b6e50da4d9a1e4a898"
+          "sha256": "11fee0fc5592869bb515773b05bb64b3eca1e6948ac09164b1c3e7d6865a5544"
         },
         {
           "path": "server/src/services/native-runtime/native-session-resume.test.ts",
@@ -9168,7 +9168,7 @@
         },
         {
           "path": "server/src/__tests__/v7-worker-model-gateway.integration.test.ts",
-          "sha256": "bfe4e248449607eb0f638dffc16ecb496709e46fad3fa60280c3532e47fe7bef"
+          "sha256": "e44da6c5855431626c98aa1cd415c9aff1170813e9dc433487c7d28fbd3aa3ca"
         },
         {
           "path": "server/src/__tests__/v8-company-purge.integration.test.ts",
@@ -9364,7 +9364,7 @@
         },
         {
           "path": "server/src/services/native-runtime/native-session-executor.ts",
-          "sha256": "9fd50b534ddc90ffd825fe93a2ced02d64899f2b56bc80b6e50da4d9a1e4a898"
+          "sha256": "11fee0fc5592869bb515773b05bb64b3eca1e6948ac09164b1c3e7d6865a5544"
         },
         {
           "path": "server/src/services/native-runtime/native-tool-task-privacy.integration.test.ts",
@@ -10229,7 +10229,7 @@
         },
         {
           "path": "server/src/__tests__/v7-worker-model-gateway.integration.test.ts",
-          "sha256": "bfe4e248449607eb0f638dffc16ecb496709e46fad3fa60280c3532e47fe7bef"
+          "sha256": "e44da6c5855431626c98aa1cd415c9aff1170813e9dc433487c7d28fbd3aa3ca"
         },
         {
           "path": "server/src/__tests__/v9-agent-authored-definition.integration.test.ts",
@@ -25066,7 +25066,7 @@
         },
         {
           "path": "server/src/services/native-runtime/managed-signoff-api-policy.integration.test.ts",
-          "sha256": "2aa83a7a02ec0c0c4dbbdc6995fa03608b58e01e36db14ac0a80dde73cd0c36c"
+          "sha256": "98cf66fbc478e9a740d86c589cebfa12e8e618a4036db0b17de084de0b3d6428"
         },
         {
           "path": "server/src/services/native-runtime/management-analytical-tools.test.ts",
@@ -25310,7 +25310,7 @@
         },
         {
           "path": "server/src/services/runtime/control.ts",
-          "sha256": "cc2236fbcb22f08d785ea1447bf13d034cd08a42813a991109718a29e2df4895"
+          "sha256": "e2df7eb11f8d31d0b87ed29b2269839e58456a57bc3091fbd4456a702b68d7d2"
         },
         {
           "path": "server/src/services/runtime/fleet.ts",
@@ -48035,7 +48035,7 @@
       "id": "source:server/src/__tests__/v7-worker-model-gateway.integration.test.ts",
       "kind": "current_source_owner",
       "path": "server/src/__tests__/v7-worker-model-gateway.integration.test.ts",
-      "sha256": "bfe4e248449607eb0f638dffc16ecb496709e46fad3fa60280c3532e47fe7bef",
+      "sha256": "e44da6c5855431626c98aa1cd415c9aff1170813e9dc433487c7d28fbd3aa3ca",
       "changeIds": [
         "SCR-V10-HOTSPOT-02",
         "SCR-V10-HOTSPOT-06",
@@ -49807,7 +49807,7 @@
       "id": "source:server/src/services/native-runtime/native-session-executor.ts",
       "kind": "current_source_owner",
       "path": "server/src/services/native-runtime/native-session-executor.ts",
-      "sha256": "9fd50b534ddc90ffd825fe93a2ced02d64899f2b56bc80b6e50da4d9a1e4a898",
+      "sha256": "11fee0fc5592869bb515773b05bb64b3eca1e6948ac09164b1c3e7d6865a5544",
       "changeIds": [
         "SCR-V10-HOTSPOT-05",
         "SCR-V10-HOTSPOT-06"
@@ -63913,7 +63913,7 @@
       "id": "source:server/src/services/native-runtime/managed-signoff-api-policy.integration.test.ts",
       "kind": "current_source_owner",
       "path": "server/src/services/native-runtime/managed-signoff-api-policy.integration.test.ts",
-      "sha256": "2aa83a7a02ec0c0c4dbbdc6995fa03608b58e01e36db14ac0a80dde73cd0c36c",
+      "sha256": "98cf66fbc478e9a740d86c589cebfa12e8e618a4036db0b17de084de0b3d6428",
       "changeIds": [
         "SCR-V10-NATIVE-RUNTIME-AND-AUTHORITY"
       ],
@@ -64798,7 +64798,7 @@
       "id": "source:server/src/services/runtime/control.ts",
       "kind": "current_source_owner",
       "path": "server/src/services/runtime/control.ts",
-      "sha256": "cc2236fbcb22f08d785ea1447bf13d034cd08a42813a991109718a29e2df4895",
+      "sha256": "e2df7eb11f8d31d0b87ed29b2269839e58456a57bc3091fbd4456a702b68d7d2",
       "changeIds": [
         "SCR-V10-NATIVE-RUNTIME-AND-AUTHORITY"
       ],
