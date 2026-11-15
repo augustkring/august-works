@@ -58,7 +58,7 @@ const support = await getEmbeddedPostgresTestSupport();
           Object.values(binding.conformance).length > 0 && Object.values(binding.conformance).every(value => value === false))).toBe(true);
         registerNativeOpenCodeConformance(db, nativeOpenCodeConformanceService(db, {
           profiles: [...context.profiles.values()], sourceSha: context.sourceSha, protectedEvidenceOrigin: "https://protected.test.invalid",
-          modelBrokerOrigin: context.origin,
+          modelBrokerOrigin: context.origin, testRunnerEnvironment: context.sandboxRunnerEnvironment,
           environmentRuntime: context.environmentRuntime, runnerInstanceId,
           prepareSandboxRun: async (actor, input) => {
             if (rejectedBootstrapScopes.length === 0) {
