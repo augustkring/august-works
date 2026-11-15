@@ -25062,7 +25062,7 @@
         },
         {
           "path": "server/src/services/native-runtime/managed-native-browser.fixture.ts",
-          "sha256": "f6ef6349a1e187ba365953ec4d81fc661dd877f571d0dc03c64d6f1b217b74b3"
+          "sha256": "2a6ad6cdb862b776f0935d752ede08b4ce423973364d4de301d67173a790b7a5"
         },
         {
           "path": "server/src/services/native-runtime/managed-signoff-api-policy.integration.test.ts",
@@ -63898,7 +63898,7 @@
       "id": "source:server/src/services/native-runtime/managed-native-browser.fixture.ts",
       "kind": "current_source_owner",
       "path": "server/src/services/native-runtime/managed-native-browser.fixture.ts",
-      "sha256": "f6ef6349a1e187ba365953ec4d81fc661dd877f571d0dc03c64d6f1b217b74b3",
+      "sha256": "2a6ad6cdb862b776f0935d752ede08b4ce423973364d4de301d67173a790b7a5",
       "changeIds": [
         "SCR-V10-NATIVE-RUNTIME-AND-AUTHORITY"
       ],
