@@ -35,7 +35,8 @@ import { REMOTE_NATIVE_ERASER_ENV, REMOTE_NATIVE_RUNTIME_ASSET_ERASURE_PROBE_SCR
   REMOTE_RUNNER_PROCESS_FINGERPRINT_SCRIPT, REMOTE_NATIVE_SESSION_FENCE_ACQUIRE_SCRIPT,
   REMOTE_NATIVE_SESSION_FENCE_RELEASE_SCRIPT, REMOTE_RUNNER_AUTHORITY_ARCHIVE_SCRIPT,
   REMOTE_RUNTIME_CONTEXT_READBACK_SCRIPT, REMOTE_RUNTIME_CONTEXT_SWAP_SCRIPT } from "./remote-runner-identity.js";
-import { readNativeConformanceAuthorityArchiveGrant, recordNativeConformanceAuthorityArchiveGrant,
+import { nativeConformanceAuthorityArchiveGrantForUse, nativeConformanceColdHandoffArchiveGrant,
+  readNativeConformanceAuthorityArchiveGrant, recordNativeConformanceAuthorityArchiveGrant,
   revokeNativeConformanceAuthorityArchiveGrant } from "./native-conformance-authority-archive.js";
 export { REMOTE_RUNNER_CHILD_LAUNCH_SCRIPT };
 import { hasRemoteTerminationReceipt, remoteLeaseCleanupScope } from "../remote-execution-termination.js";
@@ -17338,13 +17339,12 @@ async function createRunnerdBackendWithinSessionClaim(
           // CONF15 A2 decision C: the hidden conformance Run sends this one
           // archive as a credentialless harness-state command, and only with
           // the server-recorded grant of its verified cold handoff for exactly
-          // this archive key. Every other lane keeps its existing route.
-          const conformanceGrant = input.providerConformanceProbe === true
+          // this archive key and its own probe kind (CONF15-P6). Every other
+          // lane keeps its existing route.
+          const conformanceGrant = nativeConformanceAuthorityArchiveGrantForUse(input.providerConformanceProbe === true
             ? readNativeConformanceAuthorityArchiveGrant(input.execution.binding.companyId, input.execution.binding.runId)
-            : null;
-          if (conformanceGrant && (conformanceGrant.archiveKey !== archive.archiveKey ||
-            conformanceGrant.taskRoot !== remoteTarget?.remoteCwd))
-            throw new Error("native_runner_cold_lease_handoff_unproven");
+            : null, { probeKind: input.providerConformanceProbeKind, archiveKey: archive.archiveKey,
+            taskRoot: remoteTarget?.remoteCwd });
           let result: Awaited<ReturnType<typeof remoteCommandRunner.execute>>;
           try {
             result = await remoteCommandRunner.execute({
@@ -17517,32 +17517,30 @@ async function createRunnerdBackendWithinSessionClaim(
       if (existsSync(source)) renameSync(source, resolve(archiveRoot, name));
     }
     coldLeaseHandoffArchive = resolve(archiveRoot, "control-plane");
-    // CONF15 A2 decision C: the resume probe's remote runner state can move
-    // aside only through RuntimeControl's exact conformance harness-state
-    // matcher, which needs this server-recorded grant. The archive key is
-    // derived here from the identity the controller itself archived, the same
-    // way the transport derives its authority-epoch directory.
-    if (input.providerConformanceProbe === true && input.providerConformanceProbeKind === "resume" &&
-      remoteTarget?.transport === "sandbox" && remoteTarget.leaseId === coldLeaseHandoff.currentEnvironmentLeaseId) {
-      let archivedIdentity: Record<string, unknown> = {};
-      try {
-        const statePath = resolve(coldLeaseHandoffArchive, "control-plane-state.json");
-        const metadata = lstatSync(statePath);
-        if (metadata.isFile() && !metadata.isSymbolicLink() && metadata.size <= 64 * 1024 * 1024)
-          archivedIdentity = record(record(JSON.parse(readFileSync(statePath, "utf8"))).identity);
-      } catch { archivedIdentity = {}; }
-      if (archivedIdentity.runId !== coldLeaseHandoff.priorIdentity.runId ||
-        archivedIdentity.environmentLeaseId !== coldLeaseHandoff.priorIdentity.environmentLeaseId ||
-        archivedIdentity.runnerInstanceId !== coldLeaseHandoff.priorIdentity.runnerInstanceId ||
-        archivedIdentity.normalizedSessionId !== coldLeaseHandoff.priorIdentity.normalizedSessionId)
-        throw new Error("native_runner_cold_lease_handoff_unproven");
-      recordNativeConformanceAuthorityArchiveGrant({ companyId: input.execution.binding.companyId,
-        runId: input.execution.binding.runId, probeKind: "resume", normalizedSessionId: nativeSessionKey(input.execution),
-        taskRoot: remoteTarget.remoteCwd, environmentLeaseId: coldLeaseHandoff.currentEnvironmentLeaseId,
-        priorRunId: coldLeaseHandoff.priorIdentity.runId,
-        archiveKey: createHash("sha256").update(JSON.stringify(archivedIdentity)).digest("hex").slice(0, 24),
-        evidenceDigest: coldLeaseHandoff.evidenceDigest });
-    }
+    // CONF15 A2 decision C, extended by CONF15-P6 to every probe kind that
+    // resumes a retained provider session: the probe's remote runner state can
+    // move aside only through RuntimeControl's exact conformance harness-state
+    // matcher, which needs this server-recorded grant bound to this Run, its
+    // probe kind, session, lease and archive key. The archive key is derived
+    // from the identity the controller itself archived, the same way the
+    // transport derives its authority-epoch directory.
+    const archivedControlPlane = coldLeaseHandoffArchive;
+    const conformanceGrant = nativeConformanceColdHandoffArchiveGrant({
+      providerConformanceProbe: input.providerConformanceProbe === true,
+      probeKind: input.providerConformanceProbeKind, remoteTarget,
+      companyId: input.execution.binding.companyId, runId: input.execution.binding.runId,
+      normalizedSessionId: nativeSessionKey(input.execution), handoff: coldLeaseHandoff,
+      readArchivedIdentity: () => {
+        try {
+          const statePath = resolve(archivedControlPlane, "control-plane-state.json");
+          const metadata = lstatSync(statePath);
+          if (metadata.isFile() && !metadata.isSymbolicLink() && metadata.size <= 64 * 1024 * 1024)
+            return record(record(JSON.parse(readFileSync(statePath, "utf8"))).identity);
+        } catch { /* an unreadable archive proves no identity */ }
+        return {};
+      },
+    });
+    if (conformanceGrant) recordNativeConformanceAuthorityArchiveGrant(conformanceGrant);
     return coldLeaseHandoffArchive;
   };
   const coldLeaseHandoffTransport = coldLeaseHandoff ? {

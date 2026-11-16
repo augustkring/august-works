@@ -47,6 +47,9 @@ import { createRunSecretRedactionRegistry } from "./run-secret-redaction.js";
 import type { NativeTaskContinuationCapture } from "./execution-continuation.js";
 import type { NativeProjectRepositoriesToolResultCapture } from "./native-project-output.js";
 import { sanitizeQuarantinedCommentForHigherTrust, redactQuarantinedBodyForHigherTrust } from "./source-trust.js";
+import { closeNativeExactCallSourceProofs, createNativeExactCallSourceProofStore, nativeExactCallSourceProofKey,
+  readNativeExactCallSourceProof, recordNativeExactCallSourceProof,
+  type NativeExactCallSourceProofStore } from "./native-runtime/native-exact-call-source-proofs.js";
 import { captureNativeTaskWakeSource, type NativeConsumedSourceComponent, type NativeModelOutputCapture,
   type NativePayloadSourceSet } from "./native-runtime/native-execution-input.js";
 import { captureNativeReviewWakeWitness, getNativeReviewAssignment, getNativeReviewSourceAssignment,
@@ -64,6 +67,8 @@ type NativeDocumentSourceCurrentRow = { revision: typeof documentRevisions.$infe
   documentId: string; issueId: string };
 interface NativeSourceReadAncestry { work: number; pendingTaskOwner: object; preparingTaskEffect: boolean;
   graphProofs: NativeSiblingToolSourceProofs; graphProofsDisabled: boolean;
+  // CONF15-W11: exact validations completed in this one read call (see the module).
+  exactCallProofs: NativeExactCallSourceProofStore<NativeMutableSourceDependencies, NativeProofReaderSets>;
 activeByActor: Map<string, Set<string>>;
   frozenTaskProofStacks: Map<string, NativeSourceProofFrame[]> }
 type NativeProofReaderSets = ReadonlyMap<string, NativeSourceGraphObligations["readerSets"][number]>;
@@ -356,7 +361,7 @@ function disableNativeSourceGraphCheckpoints(scope: NativeSourceReadScope): void
 async function withNativeSourceGraphProof(scope: NativeSourceReadScope, proofs: NativeSiblingToolSourceProofs,
   key: string, input: { companyId: string; runId: string; actor: AuthorizationActor;
     policy: NativePayloadSourcePolicy; inputs: NativePayloadSourceInput[] }, read: () => Promise<void>,
-  historicalDocumentDepthHint = 0, deferSourceSetReader = true): Promise<void> {
+  historicalDocumentDepthHint = 0, deferSourceSetReader = true, exactCallContext?: unknown): Promise<void> {
   if (scope.active.has(key)) throw forbidden("The Native source graph contains a cycle");
   const eligible = nativeGraphProofInputsEligible(input.policy, input.inputs);
   let proof = eligible && !scope.context.ancestry.graphProofsDisabled ? proofs.get(key) : undefined;
@@ -390,6 +395,25 @@ async function withNativeSourceGraphProof(scope: NativeSourceReadScope, proofs: 
   if (!stack) {
     stack = [];
     scope.context.ancestry.frozenTaskProofStacks.set(scope.actorKey, stack);
+  }
+  // CONF15-W11. Graph proofs can be off for the rest of a call (for example
+  // after a wake's ordinary plan read), but an identical validation in this
+  // same call, scope and exact context is still the same proof. Reuse it
+  // without counting it again; the first effect boundary closes this store.
+  const exactCallKey = eligible && exactCallContext !== undefined
+    ? nativeExactCallSourceProofKey(key, historicalDocumentDepthHint, exactCallContext) : undefined;
+  const exactCallProof = !proof && exactCallKey
+    ? readNativeExactCallSourceProof(scope.context.ancestry.exactCallProofs, scope, exactCallKey) : undefined;
+  if (exactCallProof && exactCallProof.mutableSources.compatible &&
+    !nativeFrozenTaskMemoWouldIntersectActiveAncestry(scope.active, exactCallProof.descendants)) {
+    if (nativeSourceMemoDiagnosticsEnabled()) nativeSourceMemoDiagnostics.exactCallProofHits =
+      Math.min(1_000_000, nativeSourceMemoDiagnostics.exactCallProofHits + 1);
+    // The current reader checks are scheduled again, exactly as a graph proof hit does.
+    recordNativeProofReaderSetUse(scope, exactCallProof.readerSets);
+    deferNativeSourceReaderCheck(scope, input);
+    propagateNativeMutableSources(scope, exactCallProof.mutableSources);
+    for (const parent of stack) addNativeFrozenTaskDescendantClosure(parent.descendants, key, exactCallProof.descendants);
+    return;
   }
   if (proof && !nativeFrozenTaskMemoWouldIntersectActiveAncestry(scope.active, proof.descendants)) {
     nativeSourceReadWork(scope);
@@ -428,6 +452,9 @@ async function withNativeSourceGraphProof(scope: NativeSourceReadScope, proofs: 
         if (memoryLedger && !scope.context.ancestry.graphProofsDisabled &&
           activeMemorySourceGraphReadLedger(scope.context.db) === memoryLedger && memoryLedger.size < 512)
           memoryLedger.set(readPassKey, completedProof);
+        if (exactCallKey) recordNativeExactCallSourceProof(scope.context.ancestry.exactCallProofs, scope, exactCallKey,
+          { descendants: frame.descendants, mutableSources: frame.mutableSources,
+            ...(completedProof.readerSets ? { readerSets: completedProof.readerSets } : {}) });
       }
       for (const parent of stack) addNativeFrozenTaskDescendantClosure(parent.descendants, key, frame.descendants);
     }
@@ -544,7 +571,7 @@ const nativeSourceReadScopes = new AsyncLocalStorage<NativeSourceReadContext>();
 const nativeSourceMemoDiagnostics = {
   maxValidationWork: 0,
   pendingTaskCaptures: 0, pendingTaskAdoptions: 0, uncheckedTaskReplays: 0,
-  siblingToolSourceProofHits: 0, documentNodeHits: 0,
+  siblingToolSourceProofHits: 0, documentNodeHits: 0, exactCallProofHits: 0,
   frozenTaskMemoByKind: {} as Record<string,
   { eligibleCalls: number; ineligibleCalls: number; hits: number; misses: number }> };
 function nativeSourceMemoDiagnosticsEnabled() { return process.env.PAPERCLIP_NATIVE_SOURCE_MEMO_DIAGNOSTICS === "1"; }
@@ -565,11 +592,80 @@ export function resetNativeSourceMemoDiagnosticsForTest() {
   nativeSourceMemoDiagnostics.uncheckedTaskReplays = 0;
   nativeSourceMemoDiagnostics.siblingToolSourceProofHits = 0;
   nativeSourceMemoDiagnostics.documentNodeHits = 0;
+  nativeSourceMemoDiagnostics.exactCallProofHits = 0;
 
 }
 export function nativeSourceMemoDiagnosticsForTest() { return structuredClone(nativeSourceMemoDiagnostics); }
+/** Test-only (CONF15-W11). One fresh source read call with no database rows:
+ * `validate` runs the real graph-proof wrapper with the payload-source-set
+ * exact context and charges `units` work units inside the validation. The
+ * handle is not a transaction, so no transaction-wide ledger proof applies. */
+export type NativeSourceGraphProofWorkProbeStep = { key: string; units: number; depthHint?: number; actor?: AuthorizationActor;
+  validatedDispatchSources?: ReadonlySet<string>; consumerCover?: NativePayloadSourceSet;
+  inputs?: NativePayloadSourceInput[]; siblingProofs?: NativeSiblingToolSourceProofs;
+  /** false: validate without an exact context, as the graph's other proof owners do. */
+  exactContext?: false; mutableRunRow?: { id: string; status: string }; nested?: () => Promise<void> };
+export interface NativeSourceGraphProofWorkProbe {
+  validate(step: NativeSourceGraphProofWorkProbeStep): Promise<void>;
+  /** As a wake's ordinary plan read does for the rest of the call. */
+  disableGraphProofs(): void;
+  effectBoundary(): Promise<void>;
+  markProofsIncompatible(): void;
+  /** As the final reader pass does when it takes the pending reader groups. */
+  takePendingReaderGroups(): number;
+  /** The exact call proof recorded for a step, by content only. */
+  exactProof(step: NativeSourceGraphProofWorkProbeStep): { readerSets: number | null; mutableRows: string[];
+    descendants: string[] } | null;
+  work(): number;
+}
+export async function nativeSourceGraphProofWorkProbeForTest(input: { companyId: string; actor: AuthorizationActor;
+  run(probe: NativeSourceGraphProofWorkProbe): Promise<void> }): Promise<{ work: number }> {
+  const db = {} as Db;
+  const ancestry = createNativeSourceReadAncestry();
+  const scopes = new Map<string, NativeSourceReadScope>();
+  const scopeFor = (actor: AuthorizationActor) => {
+    const key = nativeSha256(actor);
+    let scope = scopes.get(key);
+    if (!scope) { scope = nativeSourceReadScope(db, actor, ancestry); scopes.set(key, scope); }
+    return scope;
+  };
+  const primary = scopeFor(input.actor);
+  const policy: NativePayloadSourcePolicy = { issueIds: [], projectIds: [], runIds: [], memoryIds: [], foundationRevisionIds: [] };
+  const context = (step: NativeSourceGraphProofWorkProbeStep) => step.exactContext === false ? undefined
+    : nativePayloadSourceSetExactCallContext({ validatedDispatchSources: step.validatedDispatchSources, consumerCover: step.consumerCover });
+  await input.run({
+    validate: async step => {
+      const actor = step.actor ?? input.actor, scope = scopeFor(actor);
+      const set = { companyId: input.companyId, runId: step.key, actor, policy, inputs: step.inputs ?? [] };
+      await withNativeSourceGraphProof(scope, step.siblingProofs ?? new Map(), step.key, set, async () => {
+        for (let unit = 0; unit < step.units; unit += 1) nativeSourceReadWork(scope);
+        if (step.mutableRunRow) recordNativeMutableSourceRow(scope, "run", input.companyId, step.mutableRunRow);
+        await step.nested?.();
+        deferNativeSourceReaderCheck(scope, set);
+      }, step.depthHint ?? 0, true, context(step));
+    },
+    disableGraphProofs: () => disableNativeSourceGraphCheckpoints(primary),
+    effectBoundary: () => prepareNativeSourceEffectBoundary(primary),
+    markProofsIncompatible: () => markNativeSourceProofsIncompatible(primary),
+    takePendingReaderGroups: () => {
+      const count = primary.context.pendingReaderChecks.size;
+      primary.context.pendingReaderChecks.clear();
+      return count;
+    },
+    exactProof: step => {
+      const exactContext = context(step);
+      const proof = exactContext === undefined ? undefined : readNativeExactCallSourceProof(ancestry.exactCallProofs,
+        scopeFor(step.actor ?? input.actor), nativeExactCallSourceProofKey(step.key, step.depthHint ?? 0, exactContext));
+      return proof ? { readerSets: proof.readerSets ? proof.readerSets.size : null,
+        mutableRows: [...proof.mutableSources.rows.keys()].sort(), descendants: [...proof.descendants].sort() } : null;
+    },
+    work: () => ancestry.work,
+  });
+  return { work: ancestry.work };
+}
 function createNativeSourceReadAncestry(): NativeSourceReadAncestry {
   return { work: 0, pendingTaskOwner: {}, preparingTaskEffect: false, graphProofs: new Map(), graphProofsDisabled: false,
+    exactCallProofs: createNativeExactCallSourceProofStore(),
     activeByActor: new Map(),
     frozenTaskProofStacks: new Map() };
 }
@@ -872,6 +968,8 @@ async function prepareNativeSourceEffectBoundary(scope: NativeSourceReadScope): 
   for (const ancestry of ancestries) {
     ancestry.graphProofsDisabled = true;
     ancestry.graphProofs.clear();
+    // CONF15-W11: no exact call proof is read or recorded after an effect.
+    closeNativeExactCallSourceProofs(ancestry.exactCallProofs);
   }
 }
 async function flushNativeSourceReaderChecks(context: NativeSourceReadContext) {
@@ -3615,9 +3713,30 @@ async function assertNativeModelOutputCaptureCurrentInScope(db: Db | Transaction
           wakeReceipt.data.binding.agentId !== wakeRun.agentId || wakeReceipt.data.binding.issueId !== source.issueId ||
           wakeReceipt.data.binding.responsibleUserId !== (wakeRun.responsibleUserId ?? null))
           throw forbidden("A Native output task wake source is unavailable");
+        // CONF15-W10: a same-Task resume consumes the current wake and the
+        // single retained Run's provenance wake with one Task input each; each
+        // wake is reconstructed against its own Task input only. The retained
+        // Run row and receipt are read only when the set holds two Task inputs.
+        let wakeInputs: NativePayloadSourceInput[] = capture.sourceSet.inputs;
+        if (capture.sourceSet.inputs.filter(value => value.kind === "task" && value.issueId === source.issueId).length > 1) {
+          const retainedSources = capture.sourceSet.inputs.filter((value): value is Extract<NativePayloadSourceInput, { kind: "retained_run" }> =>
+            value.kind === "retained_run");
+          const retainedRun = retainedSources.length === 1 && retainedSources[0]!.runId !== capture.runId
+            ? await nativeSourceReadRun(db, companyId, retainedSources[0]!.runId, scope) : null;
+          const retainedReceipt = retainedRun ? nativeRunInputSourceReceiptSchema.safeParse(
+            nativeSourceRecord(retainedRun.runnerProfileJson).nativeInputSourceReceipt) : null;
+          const reduced = nativeOutputTaskWakeReconstructionInputs({ companyId, run, source,
+            inputs: capture.sourceSet.inputs, policy: capture.sourceSet.policy, bootstrapInputs: bootstrap.inputs,
+            retainedRun: retainedRun?.runtimeMode === "native" ? retainedRun : null,
+            retainedReceipt: retainedRun && retainedReceipt?.success &&
+              retainedReceipt.data.binding.responsibleUserId === (retainedRun.responsibleUserId ?? null)
+              ? retainedReceipt.data : null });
+          if (!reduced) throw forbidden("A Native task wake source changed");
+          wakeInputs = reduced;
+        }
         await assertNativeTaskWakeSourceCurrentInScope(db, scope, {
           companyId, issueId: source.issueId, runId: source.runId, actor, source,
-          inputs: capture.sourceSet.inputs, policy: capture.sourceSet.policy, bootstrapInputs: wakeReceipt.data.bootstrap.inputs, historicalTransition,
+          inputs: wakeInputs, policy: capture.sourceSet.policy, bootstrapInputs: wakeReceipt.data.bootstrap.inputs, historicalTransition,
         });
         continue;
       }
@@ -4171,7 +4290,18 @@ async function assertNativePayloadSourceSetCurrentInScope(db: Db | Transaction, 
     }, scope, true, completedTaskSourceProofs, validatedDispatchSources, siblingToolSourceProofs, consumerCover, historicalDocumentDepthHint, historicalTransition);
     deferNativeSourceReaderCheck(scope, { companyId: input.companyId, runId: input.runId, actor: input.actor,
       policy: policy.data, inputs: inputs.data });
-  }, historicalDocumentDepthHint);
+  }, historicalDocumentDepthHint, true, nativePayloadSourceSetExactCallContext({ validatedDispatchSources, consumerCover }));
+}
+/** CONF15-W11. Every input of a payload source-set validation that can change
+ * its outcome beyond its source key (company, Task, Run, actor, reader scope,
+ * policy, inputs and historical transition) and its depth hint. The two proof
+ * maps passed beside them are memo stores, not inputs. */
+export function nativePayloadSourceSetExactCallContext(input: {
+  validatedDispatchSources?: ReadonlySet<string>; consumerCover?: NativePayloadSourceSet;
+}) {
+  return { kind: "payload-source-set", requireReceiptMembership: true,
+    validatedDispatchSources: input.validatedDispatchSources ? [...input.validatedDispatchSources].sort() : null,
+    consumerCover: input.consumerCover ?? null };
 }
 
 /** Markers that a sealed Run-authored comment snapshot carries as provenance
@@ -4439,6 +4569,62 @@ export function nativeCurrentTaskWakeReconstructionInputs(input: {
   if (isDeepStrictEqual(tasks[0], retainedTask) || !isDeepStrictEqual(tasks[1], retainedTask)) return null;
   const extra = tasks[1]!;
   return input.inputs.filter(value => value !== extra);
+}
+
+/** CONF15-W10: the inputs the recurring model-output reader reconstructs one
+ * consumed task wake against, or null to refuse. With at most one Task input
+ * for the wake's Task the set is unchanged. Otherwise the set must be exactly
+ * a same-Task resume of the single admitted retained Run, under the rule the
+ * canonical compact continuation (CONF15-W9) and the CONF15-W4/W5 pairing use:
+ * exactly one wake of the producing Run and exactly one other wake, which is
+ * the provenance of the single retained-run source's Run, bound to that Run's
+ * own sealed bootstrap wake (`nativeTaskWakeTaskInputForSource`); exactly two
+ * Task inputs for the Task, one of them that Run's sealed Task input. The
+ * provenance wake is reconstructed against that sealed Task input only. The
+ * current wake is reconstructed against the other Task input only, which must
+ * be the current one: at the current wake's own version and the first Task
+ * input for the Task in the producing Run's own sealed bootstrap. The order of
+ * the consumed set is never trusted. Anything else refuses. */
+export function nativeOutputTaskWakeReconstructionInputs(input: {
+  companyId: string;
+  run: NativeWakePairingRun;
+  source: Extract<NativePayloadSourceInput, { kind: "native_task_wake" }>;
+  inputs: readonly NativePayloadSourceInput[];
+  policy: Pick<NativePayloadSourcePolicy, "runIds">;
+  bootstrapInputs: readonly NativePayloadSourceInput[];
+  retainedRun: NativeWakePairingRun | null;
+  retainedReceipt: NativeRunInputSourceReceipt | null;
+}): NativePayloadSourceInput[] | null {
+  const { run, source } = input;
+  const tasks = input.inputs.filter((value): value is NativeWakeTaskInput =>
+    value.kind === "task" && value.issueId === source.issueId);
+  if (tasks.length <= 1) return [...input.inputs];
+  if (tasks.length !== 2) return null;
+  const wakes = input.inputs.filter((value): value is Extract<NativePayloadSourceInput, { kind: "native_task_wake" }> =>
+    value.kind === "native_task_wake");
+  const currentWakes = wakes.filter(value => value.runId === run.id);
+  const provenanceWakes = wakes.filter(value => value.runId !== run.id);
+  const retained = input.inputs.filter((value): value is Extract<NativePayloadSourceInput, { kind: "retained_run" }> =>
+    value.kind === "retained_run");
+  if (currentWakes.length !== 1 || provenanceWakes.length !== 1 || retained.length !== 1) return null;
+  const currentWake = currentWakes[0]!;
+  const provenanceWake = provenanceWakes[0]!;
+  // Only the single retained Run's own wake is provenance; the pairing binds
+  // it to that Run's row and sealed receipt and returns its sealed Task input.
+  if (retained[0]!.runId !== provenanceWake.runId || currentWake.issueId !== source.issueId) return null;
+  const retainedTask = nativeTaskWakeTaskInputForSource({ companyId: input.companyId, run, source: provenanceWake,
+    inputs: input.inputs, policy: input.policy, sourceRun: input.retainedRun, sourceReceipt: input.retainedReceipt });
+  if (!retainedTask) return null;
+  const currentTasks = tasks.filter(value => !isDeepStrictEqual(value, retainedTask));
+  const ownTask = input.bootstrapInputs.find((value): value is NativeWakeTaskInput =>
+    value.kind === "task" && value.issueId === source.issueId);
+  if (currentTasks.length !== 1 || !ownTask || !isDeepStrictEqual(currentTasks[0], ownTask) ||
+    ownTask.sourceVersion !== currentWake.sourceVersion) return null;
+  const keep = isDeepStrictEqual(source, currentWake) ? ownTask
+    : isDeepStrictEqual(source, provenanceWake) ? retainedTask : null;
+  if (!keep) return null;
+  return input.inputs.filter(value => value.kind !== "task" || value.issueId !== source.issueId ||
+    isDeepStrictEqual(value, keep));
 }
 
 async function assertNativePayloadSourceSetCurrentUncachedInScope(db: Db | Transaction, input: {

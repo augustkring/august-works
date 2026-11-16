@@ -201,10 +201,13 @@ export async function waitForNativeOpenCodeConformanceWire(input: {
       eq(orchestrationModelReservations.idempotencyKey, input.idempotencyKey),
     )).limit(1);
     if (reservation) {
-      // Reserve and wire receipt are separate persisted steps. A live reserved
-      // row without a receipt is the expected pre-wire state; keep waiting so
+      // Reserve, dispatch claim and wire receipt are separate persisted steps:
+      // `claimForDispatch` sets `dispatched` before `recordWireDispatch`
+      // retains the receipt (CONF15-P7). A live reserved or claimed row
+      // without a receipt is the expected pre-wire state; keep waiting so
       // cancellation still follows the actual dispatched POST boundary.
-      if (reservation.status === "reserved" && reservation.providerWireReceipt == null) {
+      if ((reservation.status === "reserved" || reservation.status === "dispatched") &&
+        reservation.providerWireReceipt == null) {
         await new Promise<void>(resolveWait => setTimeout(resolveWait, input.pollMs ?? 50));
         continue;
       }

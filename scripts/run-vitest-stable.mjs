@@ -118,6 +118,7 @@ const managedNativeSuites = [
   "server/src/__tests__/helpers/managed-native-model-transport.test.ts",
   "server/src/__tests__/managed-worker-sandbox-lifecycle.integration.test.ts",
   "server/src/__tests__/native-memory-task-transaction-reuse.integration.test.ts",
+  "server/src/__tests__/native-opencode-conformance.integration.test.ts",
   "server/src/__tests__/native-opencode-managed-session-resumption.integration.test.ts",
   "server/src/__tests__/native-payload-temporal-sources.integration.test.ts",
   "server/src/__tests__/v7-model-reservations.integration.test.ts",
