@@ -77,6 +77,7 @@ import { resolveDefaultAgentWorkspaceDir, resolvePaperclipInstanceRoot } from ".
 import { verifyRuntimeToolsToken } from "../../runtime-tools-token.js";
 import { REMOTE_RUNNER_IDENTITY_CHECK_SCRIPT, REMOTE_RUNNER_CHILD_LAUNCH_SCRIPT } from "../../services/native-runtime/remote-runner-identity.js";
 import { assertManagedNativeProjectWorkspace, type ManagedNativeProjectWorkspaceScope } from "./managed-native-project-workspace-fixture.js";
+import { collectRetainedConformanceObservations } from "./managed-native-conformance-observations.js";
 
 /** Creates a synthetic proc namespace link, accepting only an exact prior fixture entry. */
 export function ensureFixtureNamespaceSymlink(path: string, target: string): void {
@@ -806,12 +807,16 @@ async function configureManagedRunSandboxHost(
   type Admission = SerialHostAdmission<Host>;
   const hostAdmissionByRun = new Map<string, Admission>();
   const preparedHostsByRun = new Map<string, Host>();
+  // Every Host this owner creates, including retired predecessors. Closing a
+  // Host ends its relay and session, not the evidence it recorded for its Run.
+  const retainedHosts = new Set<Host>();
+  const retainHost = (host: Host) => { retainedHosts.add(host); return host; };
   // The conformance cell's real signed Host and base boundary are qualified
   // before the first hidden Run is minted. The first exact Run then adopts
   // this prepared owner; later Runs receive fresh per-run Host closures, and
   // the setup operator re-qualifies the retained boundary on each new Host.
   let prequalifiedConformanceHost: Host | null = input.nativeOpenCodeConformance
-    ? await configureManagedSandboxRun({ ...input, root: join(input.root, "scheduler-hosts", "prequalified") }, infrastructure, true)
+    ? retainHost(await configureManagedSandboxRun({ ...input, root: join(input.root, "scheduler-hosts", "prequalified") }, infrastructure, true))
     : null;
   let transition = Promise.resolve();
   let closing = false;
@@ -866,6 +871,7 @@ async function configureManagedRunSandboxHost(
         ...(input.nativeOpenCodeConformance ? { nativeOpenCodeConformance: true as const }
           : chatWorkspace ? {} : { ordinaryWorker: true as const, ordinaryWorkerRunId: runId }),
         root: join(input.root, "scheduler-hosts", runId, leaseId) }, infrastructure, true);
+      retainHost(host);
       prequalifiedConformanceHost = null;
       preparedHostsByRun.delete(runId);
       hostAdmissionByRun.get(runId)!.host = host;
@@ -901,9 +907,9 @@ async function configureManagedRunSandboxHost(
         previous.closed = true;
         retiredPredecessors.push({ runId: previousRunId, leaseId: previous.leaseId });
       }
-      host = await configureManagedSandboxRun({ ...input,
+      host = retainHost(await configureManagedSandboxRun({ ...input,
         nativeOpenCodeConformance: true as const,
-        root: join(input.root, "scheduler-hosts", bootstrap.runId, bootstrap.leaseId) }, infrastructure, true);
+        root: join(input.root, "scheduler-hosts", bootstrap.runId, bootstrap.leaseId) }, infrastructure, true));
     }
     const prepared = await host.prepareNativeOpenCodeConformanceRun(actor, bootstrap);
     // Negative check: once the successor is admitted on the shared binding,
@@ -1013,6 +1019,7 @@ async function configureManagedRunSandboxHost(
       await host.close();
       entry.closed = true;
     },
+    conformanceObservations: () => collectRetainedConformanceObservations(retainedHosts),
     facts: () => ({ mode: `controlled_signed_host_relay_${admissionMode}`, hostId: infrastructure.host.id, cellId: infrastructure.cell.id,
       environmentId: infrastructure.environment.id, runs: [...hostAdmissionByRun].map(([runId, entry]) =>
         ({ runId, leaseId: entry.leaseId, retired: entry.closed })) }),
@@ -5331,6 +5338,9 @@ async function configureManagedSandboxRun(input: ManagedSandboxHostInput,
     sandboxExec: runtime.executeSandboxTask,
     executeManagedSandboxTask: executeSandboxTask,
     stopSandboxRunLease,
+    // Read by the serial owner after this Host is retired; close() leaves
+    // these in-memory records intact.
+    conformanceObservations: () => ({ nativeConformanceStartTupleObservations, softwareOnlyPolicyProofObservations, execFacts }),
     proveImageDataRetirement: async () => {
       if (nativeRunnerClosureWitness) {
         await assertClosedRun(nativeRunnerClosureWitness.leaseId);
