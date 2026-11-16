@@ -1565,10 +1565,10 @@
     {
       "source": "server/src/services/heartbeat.ts",
       "articleId": "recovering-work",
-      "sourceSha256": "6d35929d48c01e3a1493041ea4f99b12730d5328339ba66c86f6e28c3cb283be",
+      "sourceSha256": "c63ae593d6b8a1ed9a2a192fdb61e887a0d7eef2efa7e533ad5d21b4538decda",
       "articleSha256": "0296c2c8ae18c613eef9c17ea9679b146e8afbcd3504451a5511a218d6d8b955",
       "decision": "no_change",
-      "rationale": "2026-11-15 T3 review: liveness classification now ignores platform-written activity rows (bootstrap context assembly, the Native status arbiter's status change, the run presentation comment) when deciding whether a Run made concrete progress; no visible step, label or choice in this article changed."
+      "rationale": "2026-11-16 T3 review: a bounded run-liveness continuation's Native bootstrap closure is now qualified through its persisted source-Run record (internal source qualification and diagnostics only). Task status, retry, stop, continuation and recovery actions shown to people are unchanged; no article change needed."
     },
     {
       "source": "server/src/services/issue-recovery-actions.ts",
@@ -1669,10 +1669,10 @@
     {
       "source": "server/src/services/heartbeat.ts",
       "articleId": "recovering-work-da",
-      "sourceSha256": "6d35929d48c01e3a1493041ea4f99b12730d5328339ba66c86f6e28c3cb283be",
+      "sourceSha256": "c63ae593d6b8a1ed9a2a192fdb61e887a0d7eef2efa7e533ad5d21b4538decda",
       "articleSha256": "ce0a7beaa56a5db23963d81eed8c19687d2efc5405773ec33dfd635a377090bc",
       "decision": "no_change",
-      "rationale": "2026-11-15 T3 review: liveness classification now ignores platform-written activity rows (bootstrap context assembly, the Native status arbiter's status change, the run presentation comment) when deciding whether a Run made concrete progress; no visible step, label or choice in this article changed."
+      "rationale": "2026-11-16 T3 review: a bounded run-liveness continuation's Native bootstrap closure is now qualified through its persisted source-Run record (internal source qualification and diagnostics only). Task status, retry, stop, continuation and recovery actions shown to people are unchanged; no article change needed."
     },
     {
       "source": "server/src/services/issue-recovery-actions.ts",
@@ -2053,18 +2053,18 @@
     {
       "source": "server/src/services/heartbeat.ts",
       "articleId": "export-and-delete",
-      "sourceSha256": "6d35929d48c01e3a1493041ea4f99b12730d5328339ba66c86f6e28c3cb283be",
+      "sourceSha256": "c63ae593d6b8a1ed9a2a192fdb61e887a0d7eef2efa7e533ad5d21b4538decda",
       "articleSha256": "025c1dc0070dac27b8de6bb1b273a5946d3dcfbc48e5c2c22200f6adcfff54f2",
       "decision": "no_change",
-      "rationale": "2026-11-15 T3 review: liveness classification now ignores platform-written activity rows (bootstrap context assembly, the Native status arbiter's status change, the run presentation comment) when deciding whether a Run made concrete progress; no visible step, label or choice in this article changed."
+      "rationale": "2026-11-16 T3 review: a bounded run-liveness continuation's Native bootstrap closure is now qualified through its persisted source-Run record (internal source qualification and diagnostics only). Task status, retry, stop, continuation and recovery actions shown to people are unchanged; no article change needed."
     },
     {
       "source": "server/src/services/heartbeat.ts",
       "articleId": "export-and-delete-da",
-      "sourceSha256": "6d35929d48c01e3a1493041ea4f99b12730d5328339ba66c86f6e28c3cb283be",
+      "sourceSha256": "c63ae593d6b8a1ed9a2a192fdb61e887a0d7eef2efa7e533ad5d21b4538decda",
       "articleSha256": "bcb1f62a22cdbf735058cad2f47d0b0864941fea9f69b6cb9942c49f3c4ac544",
       "decision": "no_change",
-      "rationale": "2026-11-15 T3 review: liveness classification now ignores platform-written activity rows (bootstrap context assembly, the Native status arbiter's status change, the run presentation comment) when deciding whether a Run made concrete progress; no visible step, label or choice in this article changed."
+      "rationale": "2026-11-16 T3 review: a bounded run-liveness continuation's Native bootstrap closure is now qualified through its persisted source-Run record (internal source qualification and diagnostics only). Task status, retry, stop, continuation and recovery actions shown to people are unchanged; no article change needed."
     },
     {
       "source": "ui/src/pages/CompanySettings.tsx",
@@ -2757,18 +2757,18 @@
     {
       "source": "server/src/services/heartbeat.ts",
       "articleId": "create-and-track-work",
-      "sourceSha256": "6d35929d48c01e3a1493041ea4f99b12730d5328339ba66c86f6e28c3cb283be",
+      "sourceSha256": "c63ae593d6b8a1ed9a2a192fdb61e887a0d7eef2efa7e533ad5d21b4538decda",
       "articleSha256": "d689db2dabb61c675518460fb12bfeec898665ce74e9a4b5a920c8301a1d46d9",
       "decision": "no_change",
-      "rationale": "2026-11-15 T3 review: liveness classification now ignores platform-written activity rows (bootstrap context assembly, the Native status arbiter's status change, the run presentation comment) when deciding whether a Run made concrete progress; no visible step, label or choice in this article changed."
+      "rationale": "2026-11-16 T3 review: a bounded run-liveness continuation's Native bootstrap closure is now qualified through its persisted source-Run record (internal source qualification and diagnostics only). Task status, retry, stop, continuation and recovery actions shown to people are unchanged; no article change needed."
     },
     {
       "source": "server/src/services/heartbeat.ts",
       "articleId": "create-and-track-work-da",
-      "sourceSha256": "6d35929d48c01e3a1493041ea4f99b12730d5328339ba66c86f6e28c3cb283be",
+      "sourceSha256": "c63ae593d6b8a1ed9a2a192fdb61e887a0d7eef2efa7e533ad5d21b4538decda",
       "articleSha256": "9b7915956fb5c4a86f119627dea10499795af2e387d3c7e7f3a110723894831f",
       "decision": "no_change",
-      "rationale": "2026-11-15 T3 review: liveness classification now ignores platform-written activity rows (bootstrap context assembly, the Native status arbiter's status change, the run presentation comment) when deciding whether a Run made concrete progress; no visible step, label or choice in this article changed."
+      "rationale": "2026-11-16 T3 review: a bounded run-liveness continuation's Native bootstrap closure is now qualified through its persisted source-Run record (internal source qualification and diagnostics only). Task status, retry, stop, continuation and recovery actions shown to people are unchanged; no article change needed."
     },
     {
       "source": "ui/src/pages/Orchestration.tsx",

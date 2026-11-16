@@ -475,6 +475,7 @@ import {
 } from "./issue-execution-policy.js";
 import { buildExecutionStageWakeup } from "./issue-execution-stage-wakeup.js";
 import { captureNativeExecutionStageTaskWakeSource } from "./native-stage-wake-source.js";
+import { captureNativeRunLivenessContinuationTrigger } from "./native-runtime/native-liveness-continuation-source.js";
 import {
   ISSUE_TREE_CONTROL_INTERACTION_WAKE_REASONS,
   isVerifiedIssueTreeControlInteractionWake,
@@ -1000,7 +1001,9 @@ export function nativeExecutionFailureLogFields(input: {
       "reference_source_mismatch", "source_snapshot_invalid", "additional_inputs_unknown", "source_budget_exceeded", "unknown"]);
     const wakeReasons = new Set(["identity_invalid", "payload_shape", "payload_keys", "task_projection", "wake_fields_invalid",
       "comment_count_invalid", "comment_shape_invalid", "comment_source_invalid", "comment_hash_mismatch",
-      "comment_window_invalid", "ok"]);
+      "comment_window_invalid", "ok", "liveness_receiver_unavailable", "liveness_receiver_context_invalid",
+      "liveness_wake_unavailable", "liveness_wake_invalid", "liveness_source_unavailable", "liveness_source_binding_invalid",
+      "liveness_source_state_invalid", "liveness_session_binding_invalid"]);
     if (match) {
       const unsupported = match[1] === "none" ? [] : match[1]!.split(",");
       const [wakeReason, wakeFieldsText] = match[3]!.split(":");
@@ -24582,13 +24585,21 @@ export function heartbeatService(
                 responsibleUserId: continuationCaptureForWake.responsibleUserId, wakeupRequestId: continuationCaptureForWake.wakeupRequestId,
                 source: ordinaryPlanSources[0]!.input, revisionNumber: taskPlan.revisionNumber,
               } : null;
+            // A bounded run-liveness continuation is qualified only by its
+            // persisted continuation record, read here independently of the wake.
+            const nativeLivenessTrigger = issueRef &&
+              readNonEmptyString(parseObject(run.contextSnapshot).wakeReason) === RUN_LIVENESS_CONTINUATION_REASON
+              ? await captureNativeRunLivenessContinuationTrigger(db, { companyId: agent.companyId, issueId: issueRef.id,
+                  runId: run.id, ...(process.env.PAPERCLIP_NATIVE_SOURCE_CLOSURE_DIAGNOSTICS === "1"
+                    ? { onDiagnostic: reason => { nativeBootstrapWakeDiagnostics.push(`liveness_${reason}`); } } : {}) })
+              : null;
             let closedTaskContinuation = issueRef ? exactNativeTaskContinuation({ value: parseObject(context.paperclipWake).executionContinuation,
               companyId: agent.companyId, issueId: issueRef.id, runId: run.id, agentId: agent.id,
               responsibleUserId: run.responsibleUserId, wakeupRequestId: run.wakeupRequestId,
               wakeReason: readNonEmptyString(parseObject(run.contextSnapshot).wakeReason),
               taskObjective: paperclipWakePayload?.issue
                 ? paperclipWakePayload.issue.description ?? paperclipWakePayload.issue.title : undefined,
-              capture: continuationCaptureForWake }) : null;
+              capture: continuationCaptureForWake, ...(nativeLivenessTrigger ? { livenessTrigger: nativeLivenessTrigger } : {}) }) : null;
             nativeBootstrapContinuationCapture = closedTaskContinuation;
             const blockedHumanInteraction = issueRef && parseObject(context.paperclipWake).dependencyBlockedInteraction === true
               ? await captureNativeBlockedHumanInteraction(db, { companyId: agent.companyId, issueId: issueRef.id,
@@ -24626,6 +24637,7 @@ export function heartbeatService(
                   description: issueContext?.description ?? null, status: issueRef.status,
                   priority: issueRef.priority, workMode: issueRef.workMode },
                 commentSources: inlineWakeCommentSourceCaptures.map(capture => capture.input), payload: context.paperclipWake,
+                ...(nativeLivenessTrigger ? { livenessTrigger: nativeLivenessTrigger } : {}),
                 ...(process.env.PAPERCLIP_NATIVE_SOURCE_CLOSURE_DIAGNOSTICS === "1"
                   ? { onDiagnostic: (reason, fields) => {
                     nativeBootstrapWakeDiagnostics.push(fields?.length ? `${reason}:${fields.join("+")}` : reason);

@@ -2887,8 +2887,16 @@ async function assertNativeTaskWakeSourceCurrentInScope(db: Db | Transaction, sc
         responsibleUserId: run.responsibleUserId };
     }
   }
+  // The same persisted bounded run-liveness continuation record the bootstrap
+  // owner read; it is re-read here, never taken from the saved wake.
+  const { captureNativeRunLivenessContinuationTrigger } = await import("./native-runtime/native-liveness-continuation-source.js");
+  const { RUN_LIVENESS_CONTINUATION_REASON } = await import("./recovery/run-liveness-continuations.js");
+  const livenessTrigger = run && admittedWake?.reason === RUN_LIVENESS_CONTINUATION_REASON
+    ? await captureNativeRunLivenessContinuationTrigger(db, { companyId: input.companyId, issueId: input.issueId, runId: input.runId })
+    : null;
   const hasBoundedContinuation = Array.isArray(continuationMessages) && continuationMessages.length <= 256 &&
-    (continuationMessages.length > 0 || Boolean(currentHumanAssignment && (summary || finalizedSummary)));
+    (continuationMessages.length > 0 || Boolean(currentHumanAssignment && (summary || finalizedSummary)) ||
+      Boolean(livenessTrigger && finalizedSummary));
   const stageActions: NonNullable<NativeTaskContinuationCapture["stageActions"]> = [];
   const completedActions=nativeSourceRecord(continuation).completedActions;
   if(run && Array.isArray(completedActions) && completedActions.length > 0 && completedActions.length <= 64){
@@ -3126,7 +3134,8 @@ async function assertNativeTaskWakeSourceCurrentInScope(db: Db | Transaction, sc
       historicalPendingSources: input.historicalTransition ? pendingInteractions : undefined, persistedWakeReason: admittedWake.reason,
       task: wakeTask, checkoutRunId: context?.paperclipHarnessCheckedOut === true ? input.runId : null,
       commentSources: input.inputs.filter((value): value is Extract<NativePayloadSourceInput, { kind: "comment" }> =>
-        value.kind === "comment"), nativeReviewWitness: reviewWitness, payload: wake }) ?? (workspaceCoordinationCapture ? null : await captureNativeExecutionStageTaskWakeSource(db, {
+        value.kind === "comment"), nativeReviewWitness: reviewWitness, payload: wake,
+      ...(livenessTrigger ? { livenessTrigger } : {}) }) ?? (workspaceCoordinationCapture ? null : await captureNativeExecutionStageTaskWakeSource(db, {
           companyId: input.companyId, runId: input.runId, issueId: input.issueId, sourceVersion: taskSource.sourceVersion,
           task: wakeTask, runContext: context, payload: wake, workspaceCapture,
           checkoutRunId: context?.paperclipHarnessCheckedOut === true ? input.runId : null,

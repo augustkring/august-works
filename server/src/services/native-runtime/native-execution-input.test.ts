@@ -424,6 +424,160 @@ describe("native bootstrap rendered-source closure", () => {
     expect(check(bareWithWork)).toBeNull();
   });
 
+  it("admits a bounded run-liveness continuation only through its exact source-Run record (T3)", () => {
+    const humanId = "human-auth-user:liveness", wakeupRequestId = randomUUID(), sourceRunId = randomUUID();
+    const commentId = randomUUID(), at = "2026-11-16T00:00:00.000Z", wakeReason = "run_liveness_continuation";
+    const task = { id: issueId, identifier: "NATIVE-7", title: "Continue a plan", description: "Inspect, then fix.",
+      status: "todo", priority: "medium", workMode: "standard" };
+    // The source Run's own presentation comment is ordinary Task history here.
+    const message = nativeContinuationCommentProjection({ id: commentId, authorType: "agent", authorUserId: null,
+      authorAgentId: agentId, createdByRunId: sourceRunId, body: "I will inspect the repository next.", createdAt: new Date(at),
+      updatedAt: new Date(at), deletedAt: null, sourceTrust: null });
+    const parentReceipt = { version: 1 as const, binding: { companyId, runId: sourceRunId, agentId, responsibleUserId: humanId, issueId },
+      bootstrap: { executionInputDigest: "d".repeat(64), policy: { ...policy, issueIds: [issueId] },
+        inputs: [{ kind: "task" as const, issueId, sourceVersion: "1", contentHash: "e".repeat(64) }] },
+      dispatches: [], additionalInputs: [], digest: "f".repeat(64) };
+    const completedWork = "I will inspect the repository next and implement the requested fix.";
+    const trigger = { version: 1 as const, companyId, issueId, runId, agentId, responsibleUserId: humanId, wakeupRequestId,
+      sourceRunId, sourceSessionId: "session-retained", state: "plan_only" as const, reason: "Run described a plan without acting",
+      instruction: "Inspect the repository and implement the fix.", attempt: 1, maxAttempts: 2,
+      idempotencyKey: `run_liveness_continuation:${issueId}:${sourceRunId}:plan_only:1` };
+    const capture: NativeTaskContinuationCapture = { companyId, issueId, agentId, runId, responsibleUserId: humanId, wakeupRequestId,
+      envelope: { version: 1, companyId, issueId, trigger: { reason: wakeReason, interactionId: null, sourceRunId: null },
+        originCommentIds: [], objective: task.description, messages: [message], humanResponses: [], interactionOutcomes: [],
+        completedWork, completedActions: [], recoveryOutcomes: [], unresolvedInteractionIds: [],
+        coverage: { kind: "full_task_history", throughCommentId: commentId, summaryThroughCommentId: null } },
+      commentSources: [{ input: { kind: "comment", issueId, commentId, sourceVersion: "1", contentHash: nativeContinuationMessageHash(message) }, payloadSourceSnapshot: null }],
+      wake: { requestedByActorType: "system", requestedByActorId: "heartbeat", reason: wakeReason, originCommentIds: [] },
+      finalizedSummary: { companyId, issueId, agentId, receiverRunId: runId, sourceRunId, resultId: randomUUID(),
+        assessmentId: randomUUID(), decisionId: randomUUID(), resultCanonicalSha256: "1".repeat(64), decisionDigest: "2".repeat(64),
+        decisionSnapshotHash: "3".repeat(64), resultCreatedAt: at, finalizationVersion: at, body: completedWork,
+        parentReceipt } as unknown as NonNullable<NativeTaskContinuationCapture["finalizedSummary"]>,
+      retainedSource: { kind: "retained_run", runId: sourceRunId, inputDigest: "d".repeat(64), dispatchDigest: "e".repeat(64) } };
+    const check = (value: NativeTaskContinuationCapture, livenessTrigger: unknown = trigger,
+      overrides: Partial<Parameters<typeof exactNativeTaskContinuation>[0]> = {}) =>
+      exactNativeTaskContinuation({ value: value.envelope, companyId, issueId, runId, agentId, responsibleUserId: humanId,
+        wakeupRequestId, wakeReason, taskObjective: task.description, capture: value,
+        ...(livenessTrigger === null ? {} : { livenessTrigger: livenessTrigger as typeof trigger }), ...overrides });
+    expect(check(capture)).toBe(capture);
+    // A system wake is never an ordinary Human continuation.
+    expect(check(capture, null)).toBeNull();
+    // Each trigger binding is exact. The idempotency key follows each change,
+    // so every field is refused by its own check.
+    const keyed = (value: Record<string, unknown>) => ({ ...value, idempotencyKey:
+      `run_liveness_continuation:${issueId}:${String(value.sourceRunId)}:${String(value.state)}:${String(value.attempt)}` });
+    for (const [key, value] of Object.entries({ version: 2, companyId: randomUUID(), issueId: randomUUID(), runId: randomUUID(),
+      agentId: randomUUID(), responsibleUserId: "another-human", wakeupRequestId: randomUUID(), sourceRunId: randomUUID(),
+      sourceSessionId: "", state: "advanced", reason: "", instruction: " ", attempt: 3, maxAttempts: 3 }))
+      expect(check(capture, keyed({ ...trigger, [key]: value })), key).toBeNull();
+    expect(check(capture, keyed({ ...trigger, attempt: 0 }))).toBeNull();
+    // A record naming this Run as its own source is refused even when every other owner agrees.
+    const selfSource = structuredClone(capture);
+    selfSource.retainedSource!.runId = runId; selfSource.finalizedSummary!.sourceRunId = runId;
+    selfSource.finalizedSummary!.parentReceipt.binding.runId = runId;
+    expect(check(selfSource, keyed({ ...trigger, sourceRunId: runId }))).toBeNull();
+    // The record admits only the run-liveness wake, even when another wake is otherwise consistent.
+    const otherReason = structuredClone(capture);
+    otherReason.envelope.trigger.reason = "issue_commented"; otherReason.wake.reason = "issue_commented";
+    expect(check(otherReason, trigger, { wakeReason: "issue_commented" })).toBeNull();
+    expect(check(capture, { ...trigger, idempotencyKey: `run_liveness_continuation:${issueId}:${sourceRunId}:plan_only:2` })).toBeNull();
+    expect(check(capture, { ...trigger, extra: true })).toBeNull();
+    expect(check(capture, keyed({ ...trigger, state: "empty_response" }))).toBe(capture);
+    expect(check(capture, trigger, { wakeReason: "issue_commented" })).toBeNull();
+    expect(check(capture, trigger, { taskObjective: undefined })).toBeNull();
+    // The admitted wake is the heartbeat's own system wake with no Human origin.
+    const humanWake = structuredClone(capture); humanWake.wake.requestedByActorType = "user"; humanWake.wake.requestedByActorId = humanId;
+    expect(check(humanWake)).toBeNull();
+    const agentWake = structuredClone(capture); agentWake.wake.requestedByActorType = "agent";
+    expect(check(agentWake)).toBeNull();
+    const otherSystem = structuredClone(capture); otherSystem.wake.requestedByActorId = "native-status-wake-dispatch";
+    expect(check(otherSystem)).toBeNull();
+    const withOrigin = structuredClone(capture); withOrigin.wake.originCommentIds = [commentId];
+    expect(check(withOrigin)).toBeNull();
+    const envelopeOrigin = structuredClone(capture); envelopeOrigin.envelope.originCommentIds = [commentId];
+    expect(check(envelopeOrigin)).toBeNull();
+    // Completed work is only the source Run's accepted finalized result, through its retained session.
+    const noFinalized = structuredClone(capture); delete noFinalized.finalizedSummary; noFinalized.envelope.completedWork = null;
+    expect(check(noFinalized)).toBeNull();
+    const otherFinalized = structuredClone(capture); otherFinalized.finalizedSummary!.sourceRunId = randomUUID();
+    expect(check(otherFinalized)).toBeNull();
+    const otherRetained = structuredClone(capture); otherRetained.retainedSource!.runId = randomUUID();
+    expect(check(otherRetained)).toBeNull();
+    const noRetained = structuredClone(capture); delete noRetained.retainedSource;
+    expect(check(noRetained)).toBeNull();
+    // A consistent retained resume of another Run is not this continuation's source Run.
+    const otherResume = structuredClone(capture), otherRunId = randomUUID();
+    otherResume.retainedSource!.runId = otherRunId; otherResume.finalizedSummary!.sourceRunId = otherRunId;
+    otherResume.finalizedSummary!.parentReceipt.binding.runId = otherRunId;
+    expect(check(otherResume, trigger, { wakeReason: "issue_commented" })).toBeNull();
+    expect(check(otherResume)).toBeNull();
+    const sourceTrigger = structuredClone(capture); sourceTrigger.envelope.trigger.sourceRunId = sourceRunId;
+    expect(check(sourceTrigger)).toBeNull();
+    const rawSummary = structuredClone(capture); rawSummary.summary = { source: { input: { kind: "document_revision" as const, issueId,
+      documentId: randomUUID(), revisionId: randomUUID(), contentHash: "c".repeat(64) }, payloadSourceSnapshot: null },
+      rawTrustHash: nativeSha256(null), rendition: { key: "continuation-summary", title: null, body: completedWork, sourceTrust: null, updatedAt: at } };
+    expect(check(rawSummary)).toBeNull();
+    const assignment = structuredClone(capture);
+    assignment.currentHumanAssignment = { companyId, issueId, agentId, responsibleUserId: humanId };
+    expect(check(assignment)).toBeNull();
+    const objective = structuredClone(capture); objective.envelope.objective = "Another objective.";
+    expect(check(objective)).toBeNull();
+    // The source Run's own presentation comment may carry that Run's accepted
+    // finalized owner; another Run's comment may not.
+    const { receiverRunId: _receiver, ...acceptedSummaryOwner } = capture.finalizedSummary!;
+    const presented = structuredClone(capture);
+    presented.commentSources = [{ ...presented.commentSources[0]!, acceptedPresentationOwner: {
+      commentSourceIdentity: presented.commentSources[0]!.input, acceptedSummaryOwner } as unknown as
+      NonNullable<NativeTaskContinuationCapture["commentSources"][number]["acceptedPresentationOwner"]> }];
+    expect(check(presented)).toBe(presented);
+    const otherProducer = structuredClone(presented), otherProducerRunId = randomUUID();
+    otherProducer.envelope.messages[0]!.createdByRunId = otherProducerRunId;
+    otherProducer.commentSources[0]!.input.contentHash = nativeContinuationMessageHash(otherProducer.envelope.messages[0]!);
+    otherProducer.commentSources[0]!.acceptedPresentationOwner!.commentSourceIdentity = otherProducer.commentSources[0]!.input;
+    otherProducer.commentSources[0]!.acceptedPresentationOwner!.acceptedSummaryOwner.sourceRunId = otherProducerRunId;
+    otherProducer.commentSources[0]!.acceptedPresentationOwner!.acceptedSummaryOwner.parentReceipt.binding.runId = otherProducerRunId;
+    expect(check(otherProducer)).toBeNull();
+
+    // The wake source binds the exact rendered liveness projection and the record itself.
+    const payload = { reason: wakeReason, executionContinuation: capture.envelope, attachmentOmissions: [], externalChatProvider: null,
+      recovery: null, issue: { id: issueId, identifier: task.identifier, title: task.title, description: task.description,
+        descriptionTruncated: false, status: task.status, priority: task.priority, workMode: task.workMode },
+      agentMessage: null, childIssueSummaries: [], childIssueSummaryTruncated: false, dispositionRepair: null,
+      livenessContinuation: { attempt: 1, maxAttempts: 2, sourceRunId, state: "plan_only",
+        reason: trigger.reason, instruction: trigger.instruction },
+      interactionKind: null, interactionStatus: null, interactionId: null, sourceRunId: null,
+      externalChatQuestionResponse: null, externalInteractionContinuation: false, checkboxSelection: null,
+      checkedOutByHarness: false, externalChatExecutionBound: false, simplifiedEnglishInteractions: false,
+      dependencyBlockedInteraction: false, treeHoldInteraction: false, activeTreeHold: {}, unresolvedBlockerIssueIds: [],
+      unresolvedBlockerSummaries: [], executionStage: null, taskWatchdog: null, skillTest: null, continuationSummary: null,
+      commentIds: [], latestCommentId: null, comments: [], annotationDeltas: [], planReviewContext: null,
+      documentReviewContext: null, commentWindow: { requestedCount: 0, includedCount: 0, missingCount: 0 },
+      truncated: false, fallbackFetchNeeded: false };
+    const wake = (overrides: Partial<Parameters<typeof captureNativeTaskWakeSource>[0]> = {}) => captureNativeTaskWakeSource({
+      companyId, runId, issueId, agentId, responsibleUserId: humanId, wakeupRequestId, sourceVersion: "1",
+      persistedWakeReason: wakeReason, task, payload, continuationCapture: capture, livenessTrigger: trigger, ...overrides });
+    const source = wake();
+    expect(source).toMatchObject({ kind: "native_task_wake", runId, issueId });
+    expect(wake({ livenessTrigger: undefined })).toBeNull();
+    // Without a record, an otherwise ordinary wake may not carry a liveness projection.
+    const ordinaryPayload = { ...payload, reason: "on_demand", executionContinuation: null };
+    const ordinary = (livenessContinuation: unknown) => captureNativeTaskWakeSource({ companyId, runId, issueId, sourceVersion: "1",
+      persistedWakeReason: "on_demand", task, payload: { ...ordinaryPayload, livenessContinuation } });
+    expect(ordinary(null)).toMatchObject({ kind: "native_task_wake" });
+    expect(ordinary(payload.livenessContinuation)).toBeNull();
+    for (const [key, value] of Object.entries({ attempt: 2, maxAttempts: 3, sourceRunId: randomUUID(), state: "empty_response",
+      reason: "Another reason", instruction: "Another instruction" }))
+      expect(wake({ payload: { ...payload, livenessContinuation: { ...payload.livenessContinuation, [key]: value } } }), key).toBeNull();
+    expect(wake({ payload: { ...payload, livenessContinuation: null } })).toBeNull();
+    expect(wake({ payload: { ...payload, livenessContinuation: { ...payload.livenessContinuation, extra: true } } })).toBeNull();
+    expect(wake({ continuationCapture: humanWake })).toBeNull();
+    // A review witness never shares one wake source with a liveness record.
+    expect(wake({ nativeReviewWitness: { version: 1, companyId, issueId, reviewerRunId: runId, reviewerAgentId: agentId,
+      responsibleUserId: humanId } as unknown as Parameters<typeof captureNativeTaskWakeSource>[0]["nativeReviewWitness"] })).toBeNull();
+    // Any change in the admitted record changes the source identity.
+    expect(wake({ livenessTrigger: { ...trigger, sourceSessionId: "session-other" } })?.contentHash).not.toBe(source?.contentHash);
+  });
+
   it("keeps later readable Human history distinct from the admitted trigger author", () => {
     const responsibleUserId = "trigger-human";
     const otherUserId = "other-readable-human";

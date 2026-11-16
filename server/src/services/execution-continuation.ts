@@ -25,6 +25,7 @@ import { readNativeManualQueueAdoption } from "./native-runtime/manual-queue-ado
 import { hasAcknowledgedNativeStopIntent } from "./acknowledged-native-stop.js";
 import { isExactUnknownNativeTextCharge } from "./native-text-unknown-charge.js";
 import type { NativeCommentSourceCapture } from "./agent-conversations.js";
+import { RUN_LIVENESS_CONTINUATION_REASON } from "./recovery/run-liveness-continuations.js";
 
 /** A snapshot of the actual receiver and final redacted owner rendition; not
  * an authority boolean. Consumers still validate every source owner/current ACL. */
@@ -889,6 +890,17 @@ export async function buildExecutionContinuation(input: {
       const withdrawalProducerRunIds = new Set(humanReviewWithdrawals.flatMap(capture =>
         capture.projection.owner.sourceRunId === capture.projection.interactionSourceRunId
           ? [capture.projection.owner.sourceRunId] : []));
+      // A bounded run-liveness continuation carries its source Run's own
+      // presentation comment only through that Run's accepted finalized result,
+      // exactly as a withdrawal producer's. The source Run is named by the
+      // heartbeat's own wake row and the receiver context together; the
+      // presentation owner is still read from the database and closed later.
+      const livenessSourceRunId = wake?.reason === RUN_LIVENESS_CONTINUATION_REASON &&
+        wake.requestedByActorType === "system" && wake.requestedByActorId === "heartbeat" &&
+        typeof object(wake.payload).sourceRunId === "string" &&
+        object(wake.payload).sourceRunId === input.context.livenessContinuationSourceRunId
+        ? object(wake.payload).sourceRunId as string : null;
+      if (livenessSourceRunId) withdrawalProducerRunIds.add(livenessSourceRunId);
       await captureCommentSources(withdrawalProducerRunIds);
       commentSourcesCaptured = true;
     }
