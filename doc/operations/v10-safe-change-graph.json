@@ -25006,7 +25006,7 @@
         },
         {
           "path": "server/src/services/native-opencode-conformance.ts",
-          "sha256": "80e91efe3aa5e82f85dfca1afa68cc3fcee1a3570a38f2fb7cb06c88062022e8"
+          "sha256": "cdb8bd516f995f6e6e587ee38ea684736961632a013b209fddc4c5004d48a560"
         },
         {
           "path": "server/src/services/native-owner-release.ts",
@@ -25270,7 +25270,7 @@
         },
         {
           "path": "server/src/services/orchestration/native-opencode-conformance-cancel.test.ts",
-          "sha256": "be4d8a5adf95693f16b7ed6441bb71207b36dae81d6f3483dd620ffa734c685b"
+          "sha256": "72c5f561d1fa545978f1af6ad636b014645e62c8c6242f6d5c8afb75fb997df5"
         },
         {
           "path": "server/src/services/orchestration/native-opencode-conformance-source.test.ts",
@@ -63703,7 +63703,7 @@
       "id": "source:server/src/services/native-opencode-conformance.ts",
       "kind": "current_source_owner",
       "path": "server/src/services/native-opencode-conformance.ts",
-      "sha256": "80e91efe3aa5e82f85dfca1afa68cc3fcee1a3570a38f2fb7cb06c88062022e8",
+      "sha256": "cdb8bd516f995f6e6e587ee38ea684736961632a013b209fddc4c5004d48a560",
       "changeIds": [
         "SCR-V10-NATIVE-RUNTIME-AND-AUTHORITY"
       ],
@@ -64648,7 +64648,7 @@
       "id": "source:server/src/services/orchestration/native-opencode-conformance-cancel.test.ts",
       "kind": "current_source_owner",
       "path": "server/src/services/orchestration/native-opencode-conformance-cancel.test.ts",
-      "sha256": "be4d8a5adf95693f16b7ed6441bb71207b36dae81d6f3483dd620ffa734c685b",
+      "sha256": "72c5f561d1fa545978f1af6ad636b014645e62c8c6242f6d5c8afb75fb997df5",
       "changeIds": [
         "SCR-V10-NATIVE-RUNTIME-AND-AUTHORITY"
       ],
