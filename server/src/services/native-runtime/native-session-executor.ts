@@ -7818,10 +7818,21 @@ export function canonicalManagedOpenCodeContinuationTurn(input: {
   if (execution.schema !== "paperclip.native-execution-input.v4" || sourceClosure.turnContext)
     throw new Error("managed_opencode_continuation_source_binding_invalid");
   const executionBinding = execution.binding;
-  const wakes = sourceClosure.sourceSet.inputs.filter((source): source is Extract<NativePayloadSourceInput, { kind: "native_task_wake" }> =>
+  const allWakes = sourceClosure.sourceSet.inputs.filter((source): source is Extract<NativePayloadSourceInput, { kind: "native_task_wake" }> =>
     source.kind === "native_task_wake");
-  const tasks = sourceClosure.sourceSet.inputs.filter((source): source is Extract<NativePayloadSourceInput, { kind: "task" }> =>
+  // CONF15-W9: the current Run's own wake. A wake of another Run is admitted
+  // only as provenance of the closure's single retained Run (a document that
+  // Run wrote carries it); the dispatch frame check binds it to that Run's own
+  // sealed bootstrap wake (`nativeClosureTaskWakeBinding`).
+  const wakes = allWakes.filter(source => source.runId === executionBinding.runId);
+  const historicalWakes = allWakes.filter(source => source.runId !== executionBinding.runId);
+  const retainedWakeRunId = nativeClosureRetainedWakeRunId({ id: executionBinding.runId }, sourceClosure.sourceSet.inputs);
+  const taskInputs = sourceClosure.sourceSet.inputs.filter((source): source is Extract<NativePayloadSourceInput, { kind: "task" }> =>
     source.kind === "task" && source.issueId === executionBinding.issueId);
+  // The current Task version is the current wake's. Another version of this
+  // Task is admitted only beside that same provenance wake, at its version.
+  const tasks = taskInputs.filter(source => wakes.length === 1 && source.sourceVersion === wakes[0]!.sourceVersion);
+  const historicalTasks = taskInputs.filter(source => !tasks.includes(source));
   const workspaces = sourceClosure.sourceSet.inputs.filter((source): source is Extract<NativePayloadSourceInput, { kind: "workspace_metadata" }> =>
     source.kind === "workspace_metadata" && source.runId === executionBinding.runId);
   const expectedFull = buildNativeModelEnvelope(execution);
@@ -7836,7 +7847,11 @@ export function canonicalManagedOpenCodeContinuationTurn(input: {
     !isDeepStrictEqual(turnInput, expectedCompact) || expectedFull.schema !== "paperclip.native-model-envelope.v2" ||
     sourceClosure.taskEnvelopeDigest !== nativeSha256(expectedFull.task) ||
     wakes.length !== 1 || wakes[0]!.runId !== executionBinding.runId || wakes[0]!.issueId !== executionBinding.issueId ||
-    tasks.length !== 1 || wakes[0]!.sourceVersion !== tasks[0]!.sourceVersion || workspaces.length !== 1 ||
+    historicalWakes.length > 1 || historicalWakes.some(source => source.runId !== retainedWakeRunId) ||
+    tasks.length !== 1 || wakes[0]!.sourceVersion !== tasks[0]!.sourceVersion || taskInputs[0] !== tasks[0] ||
+    historicalTasks.length > historicalWakes.length ||
+    historicalTasks.some(source => !historicalWakes.some(wake => wake.sourceVersion === source.sourceVersion)) ||
+    workspaces.length !== 1 ||
     workspaces[0]!.executionWorkspaceId !== executionBinding.executionWorkspaceId)
     throw new Error("managed_opencode_continuation_source_binding_invalid");
   return {

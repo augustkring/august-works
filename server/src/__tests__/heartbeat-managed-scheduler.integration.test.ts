@@ -588,14 +588,15 @@ it("reconstructs the current source-qualified v2 frame on a same-Task new Run wi
       const currentInput = parseNativeExecutionInput(currentProfile.nativeExecutionInput);
       const currentContinuation = (current.contextSnapshot as Record<string, unknown>).executionContinuation as Record<string, unknown>;
       // Run 1 delivered an empty Task history (an assignment wake with no
-      // comments), so there is no delta baseline: the producer builds a resume
-      // delta only over delivered messages, and adding a comment before Run 1
-      // changes its admission (it then fails at setup). The resume binding that
-      // does exist is heartbeat's retained-run source: Run 2's admitted
-      // `retained_run` input is Run 1, with no delta and no previous context.
+      // comments). CONF15-W9: that envelope is still the delta's baseline, so
+      // every current message is new to the retained provider session and the
+      // resume delta, based on Run 1, carries all of them. Heartbeat's
+      // retained-run source binds the same Run: Run 2's admitted `retained_run`
+      // input is Run 1.
       const priorContinuation = (prior.contextSnapshot as Record<string, unknown>).executionContinuation as Record<string, unknown>;
       expect(priorContinuation.messages).toEqual([]);
-      expect(currentContinuation.resumeDelta).toBeUndefined();
+      expect(currentContinuation.resumeDelta).toEqual({ baseRunId: prior.id, messages: currentContinuation.messages });
+      expect(currentContinuation.messages).toContainEqual(expect.objectContaining({ id: comment.id, body: commentBody }));
       const retainedInputs = nativeRunInputSourceReceiptSchema.parse(currentProfile.nativeInputSourceReceipt).bootstrap.inputs
         .filter(source => source.kind === "retained_run");
       expect(retainedInputs).toEqual([expect.objectContaining({ kind: "retained_run", runId: prior.id })]);

@@ -349,6 +349,49 @@ const support = await getEmbeddedPostgresTestSupport();
       expect(freshPrompt).toContain("Read my Notion launch notes.");
       expect(freshPrompt).not.toContain('"resumeDelta"');
     });
+    // CONF15-W9: a retained Run that was delivered an empty Task history (an
+    // assignment wake with no comments) is still the delta's baseline: every
+    // current message is new to that provider session.
+    it("builds a resume delta over an empty delivered history only from that Run's own envelope", async () => {
+      const resumeFrom = async (previousContextRunId: string, extra: Record<string, unknown> = {}) =>
+        buildExecutionContinuation({ db, companyId, issueId, agentId, previousContextRunId,
+          context: { interactionId, ...extra }, summary: null, exposeLowTrustRaw: false });
+      const emptyRunId = randomUUID(), noEnvelopeRunId = randomUUID(), otherTaskRunId = randomUUID(),
+        otherAgentId = randomUUID(), otherAgentRunId = randomUUID(), otherTaskId = randomUUID();
+      const delivered = await build();
+      await db.insert(agents).values({ id: otherAgentId, companyId, name: "Other", role: "engineer", adapterType: "paperclip_runner" });
+      await db.insert(issues).values({ id: otherTaskId, companyId, title: "Other", status: "in_progress", assigneeAgentId: agentId });
+      await db.insert(heartbeatRuns).values([
+        { id: emptyRunId, companyId, agentId, status: "succeeded",
+          contextSnapshot: { issueId, executionContinuation: { ...delivered, messages: [] } } },
+        { id: noEnvelopeRunId, companyId, agentId, status: "succeeded", contextSnapshot: { issueId } },
+        { id: otherTaskRunId, companyId, agentId, status: "succeeded",
+          contextSnapshot: { issueId: otherTaskId, executionContinuation: { ...delivered, messages: [] } } },
+        { id: otherAgentRunId, companyId, agentId: otherAgentId, status: "succeeded",
+          contextSnapshot: { issueId, executionContinuation: { ...delivered, messages: [] } } },
+      ]);
+      try {
+        const resumed = await resumeFrom(emptyRunId);
+        expect(resumed.resumeDelta).toEqual({ baseRunId: emptyRunId, messages: resumed.messages });
+        expect(resumed.resumeDelta!.messages.length).toBeGreaterThan(0);
+        // No delta without that Run's own delivered envelope, for another
+        // Task's or another Agent's Run, or on a full-history turn.
+        expect((await resumeFrom(noEnvelopeRunId)).resumeDelta).toBeUndefined();
+        expect((await resumeFrom(otherTaskRunId)).resumeDelta).toBeUndefined();
+        expect((await resumeFrom(otherAgentRunId)).resumeDelta).toBeUndefined();
+        expect((await resumeFrom(randomUUID())).resumeDelta).toBeUndefined();
+        expect((await resumeFrom(emptyRunId, { forceFreshSession: true })).resumeDelta).toBeUndefined();
+        // A non-array delivered history is not a baseline.
+        await db.update(heartbeatRuns).set({ contextSnapshot: { issueId,
+          executionContinuation: { ...delivered, messages: null } } }).where(eq(heartbeatRuns.id, emptyRunId));
+        expect((await resumeFrom(emptyRunId)).resumeDelta).toBeUndefined();
+      } finally {
+        for (const id of [emptyRunId, noEnvelopeRunId, otherTaskRunId, otherAgentRunId])
+          await db.delete(heartbeatRuns).where(eq(heartbeatRuns.id, id));
+        await db.delete(issues).where(eq(issues.id, otherTaskId));
+        await db.delete(agents).where(eq(agents.id, otherAgentId));
+      }
+    });
     it("fails closed when required originating context is missing", async () => {
       await expectMissingContinuationContext(
         () =>

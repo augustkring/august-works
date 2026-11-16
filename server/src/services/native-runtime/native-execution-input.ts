@@ -910,7 +910,7 @@ export type NativeOrdinaryPlanReadCapture = {
   source: Extract<NativePayloadSourceInput, { kind: "document_revision" }>; revisionNumber: number;
 };
 
-function exactNativeOrdinaryPlanContext(input: {
+export function exactNativeOrdinaryPlanContext(input: {
   companyId: string; issueId: string; runId: string; agentId?: string; responsibleUserId?: string | null; wakeupRequestId?: string | null;
   capture?: NativeOrdinaryPlanReadCapture | null; value: unknown;
 }): boolean {

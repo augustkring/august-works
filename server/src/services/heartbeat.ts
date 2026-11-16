@@ -476,6 +476,7 @@ import {
 import { buildExecutionStageWakeup } from "./issue-execution-stage-wakeup.js";
 import { captureNativeExecutionStageTaskWakeSource } from "./native-stage-wake-source.js";
 import { captureNativeRunLivenessContinuationTrigger } from "./native-runtime/native-liveness-continuation-source.js";
+import { nativeCompactContinuationSourceSetAdmits, qualifyNativeRetainedCompactContinuation } from "./native-runtime/native-compact-continuation-source.js";
 import {
   ISSUE_TREE_CONTROL_INTERACTION_WAKE_REASONS,
   isVerifiedIssueTreeControlInteractionWake,
@@ -24675,6 +24676,17 @@ export function heartbeatService(
             // A mismatch stays unknown rather than carrying full-render sources
             // onto a compact or otherwise substituted prompt.
             const selectedMarkdown = selectedNativeTaskSourceMap ? selectedNativeTaskPrompt : "";
+            // CONF15-W9: a compact OpenCode continuation is a closure input only
+            // for a verified retained resume whose every compact field is
+            // re-derived from this Task's and the one retained Run's records;
+            // the executor then sends the full v2 envelope in its place.
+            const nativeQualifiedCompactContinuation = "continuationPrompt" in nativeExecution && nativeExecution.continuationPrompt &&
+              nativeBootstrapRetainedRunSource && previousNativeRun
+              ? qualifyNativeRetainedCompactContinuation({ execution: nativeExecution,
+                  retainedSource: nativeBootstrapRetainedRunSource.source, retainedRun: previousNativeRun,
+                  capture: closedTaskContinuation, wakeSource: nativeTaskWakeSource, wakePayload: context.paperclipWake,
+                  ordinaryPlanRead })
+              : null;
             const nativeBootstrapUnsupported = {
               review: Boolean(nativeReviewRequest && (!nativeReviewWakeWitness || !nativeTaskWakeSource || !selectedNativeTaskSourceMap)), directPrompt: Boolean(directAgentPrompt),
               previousRun: Boolean(previousNativeRun && nativeResumeCheckpoint && !nativeBootstrapRetainedRunSource),
@@ -24682,7 +24694,8 @@ export function heartbeatService(
               resume: Boolean(nativeResumeCheckpoint && !nativeBootstrapRetainedRunSource),
               initialGuidance: Boolean("initialCommunicationGuidance" in nativeExecution && nativeExecution.initialCommunicationGuidance &&
                 !nativeTaskWakeSource?.initialGuidanceHash),
-              continuation: Boolean("continuationPrompt" in nativeExecution && nativeExecution.continuationPrompt),
+              continuation: Boolean("continuationPrompt" in nativeExecution && nativeExecution.continuationPrompt) &&
+                !nativeQualifiedCompactContinuation,
               planning: Boolean("planningContext" in nativeExecution && nativeExecution.planningContext),
               // Replay is qualified only when each exact rendered JSON line
               // has one current comment source reference. Missing/ambiguous
@@ -24745,8 +24758,8 @@ export function heartbeatService(
               ?.filter((reference): reference is Exclude<NativeRenderedSourceReference, { kind: "task_wake_interaction_state" }> & { kind: "attachment" } =>
                 reference.kind === "attachment") ?? [];
             const buildNativeBootstrapSet = (attachmentCandidates: NativePreparedSourceCandidate[] = [],
-              references = selectedNativeTaskSourceMap?.references ?? null) =>
-              buildNativeBootstrapSourceSet({
+              references = selectedNativeTaskSourceMap?.references ?? null) => {
+              const sourceSet = buildNativeBootstrapSourceSet({
                 companyId: agent.companyId,
                 runId: run.id,
                 agentId: agent.id,
@@ -24813,6 +24826,15 @@ export function heartbeatService(
                 ...(process.env.PAPERCLIP_NATIVE_SOURCE_CLOSURE_DIAGNOSTICS === "1"
                   ? { onDiagnostic: reason => { nativeBootstrapSourceSetDiagnostics.push(reason); } } : {}),
               });
+              // A qualified compact continuation names exactly its one retained Run.
+              if (sourceSet && nativeQualifiedCompactContinuation && nativeBootstrapRetainedRunSource &&
+                !nativeCompactContinuationSourceSetAdmits({ retainedSource: nativeBootstrapRetainedRunSource.source,
+                  inputs: sourceSet.inputs })) {
+                nativeBootstrapSourceSetDiagnostics.push("compact_continuation_retained_runs");
+                return null;
+              }
+              return sourceSet;
+            };
             // Attachment references cannot be qualified until the runner has
             // staged bytes and captured their current DB owners below. Preflight
             // every non-attachment reference now; never use that partial set as

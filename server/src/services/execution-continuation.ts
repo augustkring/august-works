@@ -632,8 +632,11 @@ export async function buildExecutionContinuation(input: {
   const deliveredMessages = Array.isArray(priorEnvelope.messages)
     ? priorEnvelope.messages.map(object)
     : null;
+  // CONF15-W9: the retained Run's own envelope is the baseline even when it
+  // delivered no messages (an assignment wake on a Task without comments);
+  // every current message is then new to that provider session.
   const resumeDelta =
-    !fullHistoryTurn && deliveredMessages?.length && input.previousContextRunId
+    !fullHistoryTurn && deliveredMessages !== null && input.previousContextRunId
       ? {
           baseRunId: input.previousContextRunId,
           messages: messages.filter(
@@ -940,7 +943,7 @@ export async function buildExecutionContinuation(input: {
     // continuation summary, which has no source snapshot. An unsealed summary
     // is never a Native source (A6b): completed work comes only from that
     // Run's accepted finalized result. The base is the resume delta's Run, or
-    // the session's last Run when its delivered history was empty (no delta).
+    // the session's last Run when it has no delivered envelope (no delta).
     // The closure binds it to the retained-run source heartbeat admits; when
     // that Run has no accepted result, no completed work is carried.
     const retainedResumeBaseRunId = resumeDelta?.baseRunId ?? input.previousContextRunId ?? null;
@@ -997,7 +1000,7 @@ export async function buildExecutionContinuation(input: {
       ...(currentHumanAssignment ? { currentHumanAssignment } : {}),
       ...(finalizedSummary ? { finalizedSummary } : {}),
       ...(explicitHumanSource ? { explicitHumanSource } : {}),
-      ...(!fullHistoryTurn && input.previousContextRunId && deliveredMessages?.length ? { previousContext: { runId: input.previousContextRunId,
+      ...(!fullHistoryTurn && input.previousContextRunId && deliveredMessages !== null ? { previousContext: { runId: input.previousContextRunId,
         messages: deliveredMessages as ExecutionContinuationEnvelope["messages"] } } : {}),
       wake: { requestedByActorType: wake.requestedByActorType, requestedByActorId: wake.requestedByActorId, reason: wake.reason,
         originCommentIds: nativeTaskWakeOriginCommentIds(wake.payload),

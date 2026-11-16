@@ -42,6 +42,16 @@ export function buildNativeContinuationPrompt(input: {
         messages[0]!.authorType === comments[0]!.authorType &&
         messages[0]!.authorId === comments[0]!.authorId;
     });
+  // CONF15-W9: heartbeat attaches the Task's plan context to every comment
+  // wake once a `plan` document exists (`plan-review-context.ts`). With no open
+  // annotation thread (included or omitted), annotation comment, plan
+  // interaction or truncation it holds no review input, only the plan
+  // revision, which the compact events below keep. Any review input keeps the
+  // full plan framing. (The builder derives the included and omitted counts
+  // from these totals.)
+  const plan = wake.planReviewContext;
+  const ordinaryPlan = plan && plan.documentKey === "plan" && plan.interaction === null && plan.threads.length === 0 &&
+    plan.totals.openThreadCount === 0 && plan.totals.commentCount === 0 && !plan.truncated ? plan : null;
   // Other provider, attachment, question, approval, and recovery paths keep
   // their specialized framing. A matching prior run still gates every delta.
   if ((wake.externalChatProvider && !externalChat) ||
@@ -51,7 +61,7 @@ export function buildNativeContinuationPrompt(input: {
     (wake.externalChatExecutionBound && !externalChat) || wake.externalChatQuestionResponse ||
     wake.taskWatchdog || wake.livenessContinuation || wake.activeTreeHold ||
     wake.skillTest || wake.executionStage || wake.agentMessage ||
-    wake.documentReviewContext || wake.planReviewContext || wake.annotationDeltas.length > 0
+    wake.documentReviewContext || (wake.planReviewContext && !ordinaryPlan) || wake.annotationDeltas.length > 0
   ) return null;
   const taskChanges = Object.fromEntries(
     (["title", "description"] as const)
@@ -73,6 +83,8 @@ export function buildNativeContinuationPrompt(input: {
     ...(wake.childIssueSummaries.length ? { childResults: wake.childIssueSummaries } : {}),
     ...(wake.childIssueSummaryTruncated ? { childResultsTruncated: true } : {}),
     ...(wake.unresolvedBlockerIssueIds.length ? { unresolvedBlockerIssueIds: wake.unresolvedBlockerIssueIds } : {}),
+    ...(ordinaryPlan ? { planRevision: { documentKey: "plan", latestRevisionId: ordinaryPlan.latestRevisionId,
+      latestRevisionNumber: ordinaryPlan.latestRevisionNumber } } : {}),
   };
   if (!events.messages.length && !humanResponses.length && !wake.childIssueSummaries.length && !Object.keys(taskChanges).length) return null;
   return JSON.stringify(events);
