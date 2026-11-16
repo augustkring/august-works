@@ -1505,7 +1505,7 @@
     },
     {
       "path": "server/src/services/memory/memory-privacy.ts",
-      "sha256": "3dd1e3dc75f0a443d577189ae6d744261a59141584f4289eb6cb9623977e781f"
+      "sha256": "c09dacae33bf32c28aa2df01730e1de72c6bdd926fb1abc6c72f72771cff6673"
     },
     {
       "path": "server/src/services/native-runtime/native-model-input-dispatch.integration.test.ts",
@@ -1513,7 +1513,7 @@
     },
     {
       "path": "server/src/services/native-runtime/native-session-executor.ts",
-      "sha256": "13097124bf0c157531fcd6fe040eb1d04ea8f1d20ba7c4a490aeb44d28ab0fe0"
+      "sha256": "6d7762f14f3bc0c1013ea214365e59b210f9f0cf3917dd6221a098e35e0ad322"
     },
     {
       "path": "server/src/services/native-stage-task-body-source.test.ts",

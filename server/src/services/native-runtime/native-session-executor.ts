@@ -40,6 +40,7 @@ import { readNativeConformanceAuthorityArchiveGrant, recordNativeConformanceAuth
 export { REMOTE_RUNNER_CHILD_LAUNCH_SCRIPT };
 import { hasRemoteTerminationReceipt, remoteLeaseCleanupScope } from "../remote-execution-termination.js";
 import {
+  carryManagedOpenCodeSessionData,
   createRemoteRuntimeAssetLocator,
   isRemoteRuntimeAssetLocator,
   managedOpenCodeRuntimeDirectory,
@@ -15713,6 +15714,18 @@ async function createRunnerdBackendWithinSessionClaim(
     coldLeaseHandoffVerification.refusal !== "not_applicable")
     throw new Error(`native_cold_lease_handoff_${coldLeaseHandoffVerification.refusal}`);
   const coldLeaseHandoff = coldLeaseHandoffVerification?.ok ? coldLeaseHandoffVerification.evidence : null;
+  // CONF15-R (A): the managed OpenCode data home is per Run. Only after the
+  // verified handoff above, carry Run 1's exact session data into this Run's
+  // own folder (digest-checked); Run 1's erasure cascades to this copy.
+  if (coldLeaseHandoff && managedOpenCodeDataHome) {
+    const carried = await carryManagedOpenCodeSessionData(input.db, {
+      companyId: input.execution.binding.companyId, runId: input.execution.binding.runId,
+      handoff: { priorRunId: coldLeaseHandoff.priorIdentity.runId,
+        normalizedSessionId: coldLeaseHandoff.priorIdentity.normalizedSessionId,
+        currentEnvironmentLeaseId: coldLeaseHandoff.currentEnvironmentLeaseId },
+    });
+    if (!carried.ok) throw new Error(`native_session_carry_${carried.refusal}`);
+  }
   const durableBinding = coldLeaseHandoff ? null : retainedTransition
     ? loadRunnerdDurableBinding(input.execution, retainedTransition)
     : durableIdentityMatchesSession(durableIdentity, input.execution)

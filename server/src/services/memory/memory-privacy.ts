@@ -1137,7 +1137,9 @@ export async function purgeDerivedWorkflowMemory(db: Db, companyId: string, reco
       // Provider-local data homes are retained for exact session recovery and
       // share the same run-scoped Native asset outbox as generated context files.
       // The worker waits for the existing Native Stop/lease receipts before it
-      // removes any managed provider bytes.
+      // removes any managed provider bytes. A later Run of the same session may
+      // hold a verified carried copy (CONF15-R); the same job also erases those
+      // copies after each later Run's Stop (`eraseNativeRuntimeAssets`).
       const runtimeAssetJobKey = `runtime-asset-erasure:v1:${child.id}`;
       await db.insert(memoryJobs).values({ companyId, operationType: "retention", jobKey: runtimeAssetJobKey,
         sourceRefJson: { kind: "runtime_asset_erasure", runId: child.id, legacyDigests: [] } }).onConflictDoNothing();
