@@ -104,7 +104,8 @@ import { REMOTE_NATIVE_ERASER_ENV, nativeRuntimeErasureEnvironmentExact, nativeR
   REMOTE_RUNNER_IDENTITY_CHECK_SCRIPT, REMOTE_NATIVE_SESSION_FENCE_ACQUIRE_SCRIPT,
   REMOTE_NATIVE_SESSION_FENCE_RELEASE_SCRIPT, REMOTE_RUNNER_AUTHORITY_ARCHIVE_SCRIPT, REMOTE_RUNTIME_CONTEXT_READBACK_SCRIPT,
   REMOTE_RUNTIME_CONTEXT_SWAP_SCRIPT } from "../native-runtime/remote-runner-identity.js";
-import { readNativeConformanceAuthorityArchiveGrant, type NativeConformanceAuthorityArchiveGrant } from "../native-runtime/native-conformance-authority-archive.js";
+import { nativeConformanceAuthorityArchiveProbeKind, readNativeConformanceAuthorityArchiveGrant,
+  type NativeConformanceAuthorityArchiveGrant } from "../native-runtime/native-conformance-authority-archive.js";
 import { sandboxProbeCases, nativeRuntimeCleanupProbeCases } from "../execution-sandbox/backend.js";
 import { SANDBOX_CONTROLS, NATIVE_RUNTIME_CLEANUP_PURPOSE, NATIVE_RUNTIME_CLEANUP_PROFILE } from "@paperclipai/shared";
 import { nativeSandboxHostTransport, type RemoteRuntimeCleanupAttestation } from "../execution-sandbox/native-host-bridge.js";
@@ -229,8 +230,10 @@ export function exactNativeHarnessStateCommand(input: {
 /** CONF15 A2, decision C: the one authority-archive command of a cold lease
  * handoff, admitted only in the credentialless conformance harness-state lane.
  * It requires the server-recorded handoff grant for this exact hidden
- * `provider_conformance` Run of the `resume` probe, its current lease, session
- * and task root, the fixed argv and paths, no stdin, no env and no credential. */
+ * `provider_conformance` Run of a probe that resumes a retained provider
+ * session (`resume`, `peer_write`, `isolation_read`, `cancel`; CONF15-P6), its
+ * current lease, session and task root, the fixed argv and paths, no stdin, no
+ * env and no credential. */
 export function exactNativeConformanceAuthorityArchiveCommand(input: {
   request: import("@paperclipai/shared").RuntimeSandboxExecRelayRequest;
   taskRoot: string;
@@ -241,7 +244,7 @@ export function exactNativeConformanceAuthorityArchiveCommand(input: {
 }): boolean {
   const { request, execution, run, grant } = input;
   if (!grant || execution.provider.kind !== "opencode" || execution.session.driverKind !== "opencode_server" ||
-    run.triggerDetail !== "provider_conformance" || grant.probeKind !== "resume" ||
+    run.triggerDetail !== "provider_conformance" || !nativeConformanceAuthorityArchiveProbeKind(grant.probeKind) ||
     grant.companyId !== run.companyId || grant.runId !== run.id || execution.binding.runId !== run.id ||
     execution.binding.companyId !== run.companyId || grant.environmentLeaseId !== input.leaseId ||
     grant.taskRoot !== input.taskRoot || !/^[0-9a-f]{24}$/.test(grant.archiveKey) ||

@@ -547,12 +547,14 @@ describe("Native harness-state relay command owner", () => {
       const otherCompanyId = randomUUID();
       expect(exactNativeConformanceAuthorityArchiveCommand({ ...authority, run: { ...run, companyId: otherCompanyId },
         grant: { ...grant, companyId: otherCompanyId } })).toBe(false);
-      // Another probe kind or an ordinary Run.
-      expect(exactNativeConformanceAuthorityArchiveCommand({ ...authority,
-        grant: { ...grant, probeKind: "start" as unknown as "resume" } })).toBe(false);
+      // A probe kind that does not resume a retained session, or an ordinary Run.
+      for (const fresh of ["start", "peer_unseen", "Resume"]) {
+        expect(exactNativeConformanceAuthorityArchiveCommand({ ...authority,
+          grant: { ...grant, probeKind: fresh as unknown as "resume" } })).toBe(false);
+        expect(() => recordNativeConformanceAuthorityArchiveGrant({ ...grant, probeKind: fresh as unknown as "resume" }))
+          .toThrow("native_runner_cold_lease_handoff_unproven");
+      }
       expect(exactNativeConformanceAuthorityArchiveCommand({ ...authority, run: { ...run, triggerDetail: "assignment" } })).toBe(false);
-      expect(() => recordNativeConformanceAuthorityArchiveGrant({ ...grant, probeKind: "peer_write" as unknown as "resume" }))
-        .toThrow("native_runner_cold_lease_handoff_unproven");
       // Another lease, session or task root.
       expect(exactNativeConformanceAuthorityArchiveCommand({ ...authority, leaseId: randomUUID() })).toBe(false);
       expect(exactNativeConformanceAuthorityArchiveCommand({ ...authority, grant: { ...grant, normalizedSessionId: randomUUID() } })).toBe(false);
@@ -591,5 +593,73 @@ describe("Native harness-state relay command owner", () => {
       revokeNativeConformanceAuthorityArchiveGrant(companyId, runId);
     }
     expect(readNativeConformanceAuthorityArchiveGrant(companyId, runId)).toBeNull();
+  });
+
+  it("admits the archive for every probe that resumes a retained session, each only under its own Run's grant (CONF15-P6)", () => {
+    const companyId = randomUUID();
+    const archiveKey = "0123456789abcdef01234567";
+    const probeRun = (probeKind: "resume" | "peer_write" | "isolation_read" | "cancel") => {
+      const runId = randomUUID();
+      const sessionId = randomUUID();
+      const leaseId = randomUUID();
+      const taskRoot = `/workspace/conformance-${probeKind}`;
+      const execution = parseNativeExecutionInput({
+        schema: "paperclip.native-execution-input.v4", executionMode: "default", planningContext: null,
+        binding: { companyId, runId, issueId: randomUUID(), agentId: randomUUID(), executionWorkspaceId: runId },
+        task: { identifier: "CONF-1", title: "Probe", description: null, prompt: "Resume the probe session.", workMode: "standard" },
+        workspace: { cwd: taskRoot, repoUrl: null, repoRef: null, branchName: null },
+        session: { normalizedSessionId: sessionId, driverKind: "opencode_server", protocolVersion: 1,
+          lifecyclePolicy: { mode: "per_turn", idleTimeoutMs: null } },
+        provider: { kind: "opencode", model: "openai/gpt-5", permissionMode: "allow" },
+        completionContract: { id: "contract", sha256: "a".repeat(64), schemaVersion: "paperclip.completion-contract.v1",
+          contract: { revision: "1", objective: "Resume.", criteria: [{ id: "objective", requirement: "Resume safely." }] } },
+        interactionResponses: [], credentialBindings: [], runtimeContext: nativeRuntimeContextFixture(),
+      });
+      const sessionRoot = posix.join(taskRoot, ".paperclip-runtime", "paperclip-runner", "sessions",
+        createHash("sha256").update(sessionId).digest("hex"));
+      const archiveDirectory = posix.join(sessionRoot, "authority-epochs", `epoch-${archiveKey}`);
+      const request = { argv: ["sh", "-c", REMOTE_RUNNER_AUTHORITY_ARCHIVE_SCRIPT, "paperclip-runner-authority-archive",
+        posix.join(sessionRoot, "runner", "runner-state.json"), archiveDirectory, posix.join(archiveDirectory, "runner-state.json")],
+        cwd: taskRoot, stdinBase64: "", env: {} } as unknown as RuntimeSandboxExecRelayRequest;
+      const run = { id: runId, companyId, triggerDetail: "provider_conformance" };
+      const grantInput = { companyId, runId, probeKind, normalizedSessionId: sessionId, taskRoot, environmentLeaseId: leaseId,
+        priorRunId: randomUUID(), archiveKey, evidenceDigest: "e".repeat(64) };
+      return { runId, sessionId, leaseId, taskRoot, execution, request, run, grantInput };
+    };
+    const probes = (["resume", "peer_write", "isolation_read", "cancel"] as const).map(probeRun);
+    try {
+      for (const probe of probes) {
+        // No verified handoff: nothing recorded, nothing admitted.
+        const authority = { request: probe.request, taskRoot: probe.taskRoot, execution: probe.execution, run: probe.run,
+          leaseId: probe.leaseId, grant: readNativeConformanceAuthorityArchiveGrant(companyId, probe.runId) };
+        expect(authority.grant).toBeNull();
+        expect(exactNativeConformanceAuthorityArchiveCommand(authority)).toBe(false);
+        const grant = recordNativeConformanceAuthorityArchiveGrant(probe.grantInput);
+        expect(exactNativeConformanceAuthorityArchiveCommand({ ...authority, grant })).toBe(true);
+        // The wrong session: the grant's or the Native input's.
+        expect(exactNativeConformanceAuthorityArchiveCommand({ ...authority,
+          grant: { ...grant, normalizedSessionId: randomUUID() } })).toBe(false);
+        // Still not part of the shared Worker/conversation harness-state list.
+        expect(exactNativeHarnessStateCommand({ request: probe.request, taskRoot: probe.taskRoot,
+          execution: probe.execution, runId: probe.runId })).toBe(false);
+      }
+      // A grant recorded for one probe's Run never authorizes another probe's
+      // Run, its lease, session, task root or command, in either direction.
+      for (const owner of probes) {
+        const grant = readNativeConformanceAuthorityArchiveGrant(companyId, owner.runId)!;
+        for (const other of probes.filter(probe => probe !== owner)) {
+          expect(exactNativeConformanceAuthorityArchiveCommand({ request: other.request, taskRoot: other.taskRoot,
+            execution: other.execution, run: other.run, leaseId: other.leaseId, grant })).toBe(false);
+          expect(exactNativeConformanceAuthorityArchiveCommand({ request: other.request, taskRoot: owner.taskRoot,
+            execution: owner.execution, run: owner.run, leaseId: owner.leaseId, grant })).toBe(false);
+        }
+        // A kind that does not resume, recorded or forged, never matches.
+        expect(exactNativeConformanceAuthorityArchiveCommand({ request: owner.request, taskRoot: owner.taskRoot,
+          execution: owner.execution, run: owner.run, leaseId: owner.leaseId,
+          grant: { ...grant, probeKind: "peer_unseen" as unknown as "resume" } })).toBe(false);
+      }
+    } finally {
+      for (const probe of probes) revokeNativeConformanceAuthorityArchiveGrant(companyId, probe.runId);
+    }
   });
 });

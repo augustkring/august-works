@@ -7686,7 +7686,7 @@
         },
         {
           "path": "server/src/services/native-runtime/native-session-executor.ts",
-          "sha256": "6430eec064d00867891b4bcc7602f503703cd7549745122d48f61557b51b444c"
+          "sha256": "7fa319596e81303be74d2aa94d2a207a4bbea4d93f689c446e439c6e5f9b759a"
         },
         {
           "path": "server/src/services/native-runtime/native-session-resume.test.ts",
@@ -7710,7 +7710,7 @@
         },
         {
           "path": "server/src/services/runtime/native-harness-state-owner.test.ts",
-          "sha256": "21ed375da3eaefab298ff0bce11b6dac0de0d5198363ce5daad2f0fc21f0f6da"
+          "sha256": "55fb857d6fbb146237247820511387eb566406a7a9f5dad2635ea1374c842714"
         },
         {
           "path": "server/src/services/runtime/native-runtime-context-preparation.test.ts",
@@ -9364,7 +9364,7 @@
         },
         {
           "path": "server/src/services/native-runtime/native-session-executor.ts",
-          "sha256": "6430eec064d00867891b4bcc7602f503703cd7549745122d48f61557b51b444c"
+          "sha256": "7fa319596e81303be74d2aa94d2a207a4bbea4d93f689c446e439c6e5f9b759a"
         },
         {
           "path": "server/src/services/native-runtime/native-tool-task-privacy.integration.test.ts",
@@ -25310,7 +25310,7 @@
         },
         {
           "path": "server/src/services/runtime/control.ts",
-          "sha256": "bd861aaf2dd7154cf41b44c941f6c39a3a7d56e75566de464659c2fab4297cb1"
+          "sha256": "1caf20471b6186819bc48cca2e1c7444c4988350ac042d1564de218604c31e48"
         },
         {
           "path": "server/src/services/runtime/fleet.ts",
@@ -49807,7 +49807,7 @@
       "id": "source:server/src/services/native-runtime/native-session-executor.ts",
       "kind": "current_source_owner",
       "path": "server/src/services/native-runtime/native-session-executor.ts",
-      "sha256": "6430eec064d00867891b4bcc7602f503703cd7549745122d48f61557b51b444c",
+      "sha256": "7fa319596e81303be74d2aa94d2a207a4bbea4d93f689c446e439c6e5f9b759a",
       "changeIds": [
         "SCR-V10-HOTSPOT-05",
         "SCR-V10-HOTSPOT-06"
@@ -49883,7 +49883,7 @@
       "id": "source:server/src/services/runtime/native-harness-state-owner.test.ts",
       "kind": "current_source_owner",
       "path": "server/src/services/runtime/native-harness-state-owner.test.ts",
-      "sha256": "21ed375da3eaefab298ff0bce11b6dac0de0d5198363ce5daad2f0fc21f0f6da",
+      "sha256": "55fb857d6fbb146237247820511387eb566406a7a9f5dad2635ea1374c842714",
       "changeIds": [
         "SCR-V10-HOTSPOT-05"
       ],
@@ -64798,7 +64798,7 @@
       "id": "source:server/src/services/runtime/control.ts",
       "kind": "current_source_owner",
       "path": "server/src/services/runtime/control.ts",
-      "sha256": "bd861aaf2dd7154cf41b44c941f6c39a3a7d56e75566de464659c2fab4297cb1",
+      "sha256": "1caf20471b6186819bc48cca2e1c7444c4988350ac042d1564de218604c31e48",
       "changeIds": [
         "SCR-V10-NATIVE-RUNTIME-AND-AUTHORITY"
       ],
