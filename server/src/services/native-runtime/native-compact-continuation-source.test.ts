@@ -4,7 +4,7 @@ import type { NativePayloadSourceInput } from "@paperclipai/shared";
 import type { NativeTaskContinuationCapture } from "../execution-continuation.js";
 import { parseNativeExecutionInput } from "../../vendor/paperclip-runner/index.js";
 import { buildNativeExecutionInput, type NativeOrdinaryPlanReadCapture } from "./native-execution-input.js";
-import { nativeCompactContinuationSourceSetAdmits, qualifyNativeRetainedCompactContinuation,
+import { nativeCompactContinuationSourceSetAdmits, nativeVerifiedRetainedResumeApplies, qualifyNativeRetainedCompactContinuation,
   type NativeCompactContinuationRetainedRun } from "./native-compact-continuation-source.js";
 import { nativeRuntimeContextFixture } from "./runtime-context.test-fixture.js";
 
@@ -46,12 +46,14 @@ const planRead: NativeOrdinaryPlanReadCapture = { companyId, issueId, runId, age
 const contract = { id: randomUUID(), sha256: `sha256:${"e".repeat(64)}`, schemaVersion: "paperclip.run-result.v1",
   contract: { revision: "1", objective: "Complete the current request", criteria: [{ id: "output", requirement: "Complete it" }] } };
 
+// Heartbeat rebuilds a verified retained resume's input with the W9 forms
+// (`verifiedRetainedResume`); every other execution is built without them.
 function executionFor(input: { id: string; issue?: typeof task; wakePayload?: unknown; previousTurn?: { runId: string;
-  task: { title: string; description: string | null } } | null; provider?: "opencode" | "codex" }) {
+  task: { title: string; description: string | null } } | null; provider?: "opencode" | "codex"; verifiedRetainedResume?: boolean }) {
   const issue = input.issue ?? task;
   return parseNativeExecutionInput(buildNativeExecutionInput({ companyId, runId: input.id, agentId, issue,
     taskPrompt: "Full current task prompt", wakePayload: input.wakePayload, resumedSession: input.previousTurn !== undefined,
-    previousTurn: input.previousTurn ?? null, conversationMode: false,
+    previousTurn: input.previousTurn ?? null, verifiedRetainedResume: input.verifiedRetainedResume ?? true, conversationMode: false,
     workspace: { id: input.id, cwd: "/tmp/w9-task", repoUrl: null, repoRef: null, branchName: null },
     normalizedSessionId: "opencode-retained-session", provider: input.provider ?? "opencode", opencodePermissionMode: "allow",
     model: "openrouter/test/model", completionContract: contract, runtimeContext: nativeRuntimeContextFixture() }));
@@ -213,6 +215,38 @@ describe("CONF15-W9 compact OpenCode continuation in the bootstrap source closur
     // A capture without the retained Run's previous context.
     const { previousContext: _previous, ...withoutPrevious } = input.capture;
     expect(qualify({ ...input, capture: withoutPrevious as NativeTaskContinuationCapture })).toBeNull();
+  });
+
+  // Step 0: outside a verified retained resume the input keeps its pre-W9
+  // prompt, so the inert plan context keeps the full framing (no compact prompt).
+  it("builds no compact prompt for an inert plan context outside a verified retained resume", () => {
+    const input = scenario();
+    const preW9 = executionFor({ id: runId, wakePayload: input.wakePayload, verifiedRetainedResume: false,
+      previousTurn: { runId: retainedRunId, task: { title: task.title, description: task.description } } });
+    expect("continuationPrompt" in preW9 ? preW9.continuationPrompt : undefined).toBeNull();
+    expect(qualify({ ...input, execution: preW9 })).toBeNull();
+    // Without a plan context the delta's compact prompt is the same either way.
+    const noPlan = scenario({ plan: null });
+    const noPlanPreW9 = executionFor({ id: runId, wakePayload: noPlan.wakePayload, verifiedRetainedResume: false,
+      previousTurn: { runId: retainedRunId, task: { title: task.title, description: task.description } } });
+    expect((noPlanPreW9 as { continuationPrompt: string }).continuationPrompt)
+      .toBe((noPlan.execution as { continuationPrompt: string }).continuationPrompt);
+  });
+
+  it("applies the W9 forms only to a verified retained resume of an OpenCode v4 input (Step 0)", () => {
+    const { execution } = scenario();
+    const applies = (overrides: Partial<Parameters<typeof nativeVerifiedRetainedResumeApplies>[0]> = {}) =>
+      nativeVerifiedRetainedResumeApplies({ execution, witnessSource: retainedSource, previousRunId: retainedRunId, ...overrides });
+    expect(applies()).toBe(true);
+    // No verified witness, or one for another Run than the previous Run.
+    expect(applies({ witnessSource: null })).toBe(false);
+    expect(applies({ previousRunId: null })).toBe(false);
+    expect(applies({ previousRunId: otherRunId })).toBe(false);
+    expect(applies({ witnessSource: { ...retainedSource, runId: otherRunId } })).toBe(false);
+    // The current Run named as its own retained Run.
+    expect(applies({ witnessSource: { ...retainedSource, runId }, previousRunId: runId })).toBe(false);
+    // Another provider.
+    expect(applies({ execution: scenario({ provider: "codex" }).execution })).toBe(false);
   });
 
   it("keeps every other continuation unsupported", () => {

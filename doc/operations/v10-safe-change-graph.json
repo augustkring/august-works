@@ -5855,7 +5855,7 @@
         },
         {
           "path": "server/src/services/heartbeat.ts",
-          "sha256": "29c9eed4dd650b0ea9718205d5883586ed6600de6a8a021b08af1f39a041aa17"
+          "sha256": "212f83aebc0bca51e50446cf68ac485b6e8eb2c7a470a6f07ec68247c570517d"
         },
         {
           "path": "server/src/services/issue-assignment-wakeup.ts",
@@ -6363,7 +6363,7 @@
         },
         {
           "path": "server/src/services/heartbeat.ts",
-          "sha256": "29c9eed4dd650b0ea9718205d5883586ed6600de6a8a021b08af1f39a041aa17"
+          "sha256": "212f83aebc0bca51e50446cf68ac485b6e8eb2c7a470a6f07ec68247c570517d"
         },
         {
           "path": "server/src/services/native-runtime/runtime-context.ts",
@@ -9268,7 +9268,7 @@
         },
         {
           "path": "server/src/services/heartbeat.ts",
-          "sha256": "29c9eed4dd650b0ea9718205d5883586ed6600de6a8a021b08af1f39a041aa17"
+          "sha256": "212f83aebc0bca51e50446cf68ac485b6e8eb2c7a470a6f07ec68247c570517d"
         },
         {
           "path": "server/src/services/issue-thread-interactions.ts",
@@ -10333,7 +10333,7 @@
         },
         {
           "path": "server/src/services/heartbeat.ts",
-          "sha256": "29c9eed4dd650b0ea9718205d5883586ed6600de6a8a021b08af1f39a041aa17"
+          "sha256": "212f83aebc0bca51e50446cf68ac485b6e8eb2c7a470a6f07ec68247c570517d"
         },
         {
           "path": "server/src/services/learning/learning-assets.ts",
@@ -10600,7 +10600,7 @@
         },
         {
           "path": "server/src/services/heartbeat.ts",
-          "sha256": "29c9eed4dd650b0ea9718205d5883586ed6600de6a8a021b08af1f39a041aa17"
+          "sha256": "212f83aebc0bca51e50446cf68ac485b6e8eb2c7a470a6f07ec68247c570517d"
         },
         {
           "path": "server/src/services/workspace-runtime.ts",
@@ -11473,7 +11473,7 @@
         },
         {
           "path": "server/src/services/heartbeat.ts",
-          "sha256": "29c9eed4dd650b0ea9718205d5883586ed6600de6a8a021b08af1f39a041aa17"
+          "sha256": "212f83aebc0bca51e50446cf68ac485b6e8eb2c7a470a6f07ec68247c570517d"
         },
         {
           "path": "server/src/services/native-runtime/create-skill.integration.test.ts",
@@ -13876,7 +13876,7 @@
         },
         {
           "path": "server/src/__tests__/heartbeat-dependency-draft-controller.integration.test.ts",
-          "sha256": "5d402eaa978038ddad670b4a3ad734cf69af8e60378108c087d14cbf8dab9fed"
+          "sha256": "72d7a84d174ae0d22a018a59f19d35747df0bdcab9c0c22654d6f6dc72b5f6e2"
         },
         {
           "path": "server/src/__tests__/heartbeat-managed-scheduler.integration.test.ts",
@@ -24914,7 +24914,7 @@
         },
         {
           "path": "server/src/services/execution-continuation.ts",
-          "sha256": "734bf0768df61b6a928f7cad033919a3d102df37b7306d1522f641da901053ef"
+          "sha256": "528bb688ddbd495ca92705ee2dc9ee5d4dc28bf7f9cbfd37cadc8e4f3212a8af"
         },
         {
           "path": "server/src/services/execution-control-reconciliation.test.ts",
@@ -25106,7 +25106,7 @@
         },
         {
           "path": "server/src/services/native-runtime/native-execution-input.ts",
-          "sha256": "2065bbebb0fe2b711daec6e8def95c1bc45a1eb0647e42a7eae333fe291f1756"
+          "sha256": "b08382e670eac008cb61540155304db02bdc9f6338713c50f1ca95734ce711f1"
         },
         {
           "path": "server/src/services/native-runtime/native-finalization-error-diagnostic.ts",
@@ -48289,7 +48289,7 @@
       "id": "source:server/src/services/heartbeat.ts",
       "kind": "current_source_owner",
       "path": "server/src/services/heartbeat.ts",
-      "sha256": "29c9eed4dd650b0ea9718205d5883586ed6600de6a8a021b08af1f39a041aa17",
+      "sha256": "212f83aebc0bca51e50446cf68ac485b6e8eb2c7a470a6f07ec68247c570517d",
       "changeIds": [
         "SCR-V10-HOTSPOT-02",
         "SCR-V10-HOTSPOT-03",
@@ -52746,7 +52746,7 @@
       "id": "source:server/src/__tests__/heartbeat-dependency-draft-controller.integration.test.ts",
       "kind": "current_source_owner",
       "path": "server/src/__tests__/heartbeat-dependency-draft-controller.integration.test.ts",
-      "sha256": "5d402eaa978038ddad670b4a3ad734cf69af8e60378108c087d14cbf8dab9fed",
+      "sha256": "72d7a84d174ae0d22a018a59f19d35747df0bdcab9c0c22654d6f6dc72b5f6e2",
       "changeIds": [
         "SCR-V10-WORKFLOWS-DURABLE-OPERATIONS"
       ],
@@ -63358,7 +63358,7 @@
       "id": "source:server/src/services/execution-continuation.ts",
       "kind": "current_source_owner",
       "path": "server/src/services/execution-continuation.ts",
-      "sha256": "734bf0768df61b6a928f7cad033919a3d102df37b7306d1522f641da901053ef",
+      "sha256": "528bb688ddbd495ca92705ee2dc9ee5d4dc28bf7f9cbfd37cadc8e4f3212a8af",
       "changeIds": [
         "SCR-V10-NATIVE-RUNTIME-AND-AUTHORITY"
       ],
@@ -64048,7 +64048,7 @@
       "id": "source:server/src/services/native-runtime/native-execution-input.ts",
       "kind": "current_source_owner",
       "path": "server/src/services/native-runtime/native-execution-input.ts",
-      "sha256": "2065bbebb0fe2b711daec6e8def95c1bc45a1eb0647e42a7eae333fe291f1756",
+      "sha256": "b08382e670eac008cb61540155304db02bdc9f6338713c50f1ca95734ce711f1",
       "changeIds": [
         "SCR-V10-NATIVE-RUNTIME-AND-AUTHORITY"
       ],

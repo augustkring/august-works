@@ -48,7 +48,8 @@ describe("native continuation event projection", () => {
 // CONF15-W9: heartbeat attaches the Task's plan context to every comment wake
 // once a `plan` document exists (`plan-review-context.ts`). With no open
 // annotation, comment or interaction it carries only the plan revision, which
-// the compact events keep; any actual review input keeps the full framing.
+// a verified retained resume's compact events keep; any actual review input,
+// and every other execution (Step 0), keeps the full framing.
 describe("ordinary plan context on a retained comment wake", () => {
   const plan = {
     documentKey: "plan", issueId: "task", latestRevisionId: "plan-revision-1", latestRevisionNumber: 1,
@@ -63,12 +64,23 @@ describe("ordinary plan context on a retained comment wake", () => {
     comments: [{ id: "plan-comment", threadId: "thread", body: "PLAN_FEEDBACK", bodyTruncated: false, author: { type: "user", id: "board" },
       createdAt: "2026-11-16T00:00:00.000Z", updatedAt: "2026-11-16T00:00:00.000Z" }], commentsTruncated: false,
     createdAt: "2026-11-16T00:00:00.000Z", updatedAt: "2026-11-16T00:00:00.000Z" };
+  // Only a verified retained resume (the condition of
+  // qualifyNativeRetainedCompactContinuation) admits the inert plan context.
+  const buildRetained = (value: unknown) => buildNativeContinuationPrompt({ wakePayload: value, previousRunId: "prior",
+    issue, previousIssue: issue, verifiedRetainedResume: true });
+  it("keeps the full framing (null) for any plan context outside a verified retained resume (Step 0)", () => {
+    expect(build({ ...wake, planReviewContext: plan })).toBeNull();
+    expect(buildNativeContinuationPrompt({ wakePayload: { ...wake, planReviewContext: plan }, previousRunId: "prior",
+      issue, previousIssue: issue, verifiedRetainedResume: false })).toBeNull();
+    // Without a plan context the compact events are unchanged either way.
+    expect(build()).toBe(buildRetained(wake));
+  });
   it("keeps the compact events and the plan revision for a plan context with no review input", () => {
-    const text = build({ ...wake, planReviewContext: plan })!;
+    const text = buildRetained({ ...wake, planReviewContext: plan })!;
     expect(JSON.parse(text)).toEqual({ messages: [message],
       planRevision: { documentKey: "plan", latestRevisionId: "plan-revision-1", latestRevisionNumber: 1 } });
     // The plan revision alone is not new input.
-    expect(build({ ...wake, planReviewContext: plan, executionContinuation: { ...wake.executionContinuation,
+    expect(buildRetained({ ...wake, planReviewContext: plan, executionContinuation: { ...wake.executionContinuation,
       resumeDelta: { baseRunId: "prior", messages: [] } } })).toBeNull();
   });
   // Each row changes exactly one condition of the ordinary plan context.
@@ -82,12 +94,12 @@ describe("ordinary plan context on a retained comment wake", () => {
       acceptedTargetRevision: null, result: { outcome: "rejected", reason: "PLAN_FEEDBACK", commentId: null }, resolvedAt: "2026-11-16T00:00:00.000Z" } }],
     ["a truncated plan context", { truncated: true }],
   ])("retains the full framing for %s", (_label, change) => {
-    expect(build({ ...wake, planReviewContext: { ...plan, ...change } })).toBeNull();
+    expect(buildRetained({ ...wake, planReviewContext: { ...plan, ...change } })).toBeNull();
   });
   it("still declines a plan context without a resume delta or with another base Run", () => {
     const { resumeDelta: _delta, ...withoutDelta } = wake.executionContinuation;
-    expect(build({ ...wake, planReviewContext: plan, executionContinuation: withoutDelta })).toBeNull();
-    expect(build({ ...wake, planReviewContext: plan, executionContinuation: { ...wake.executionContinuation,
+    expect(buildRetained({ ...wake, planReviewContext: plan, executionContinuation: withoutDelta })).toBeNull();
+    expect(buildRetained({ ...wake, planReviewContext: plan, executionContinuation: { ...wake.executionContinuation,
       resumeDelta: { baseRunId: "different", messages: [message] } } })).toBeNull();
   });
 });

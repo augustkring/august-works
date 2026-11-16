@@ -15,7 +15,8 @@ import {
   getEmbeddedPostgresTestSupport,
   startEmbeddedPostgresTestDatabase,
 } from "../__tests__/helpers/embedded-postgres.js";
-import { StaleExecutionContinuationError, buildExecutionContinuation, currentContinuationOrigins, projectHumanInteractionResponse } from "./execution-continuation.js";
+import { StaleExecutionContinuationError, buildExecutionContinuation, currentContinuationOrigins, nativeRetainedResumeEmptyBaseline,
+  projectHumanInteractionResponse } from "./execution-continuation.js";
 
 const expectStaleContinuation = async (
   run: () => Promise<unknown>,
@@ -349,13 +350,20 @@ const support = await getEmbeddedPostgresTestSupport();
       expect(freshPrompt).toContain("Read my Notion launch notes.");
       expect(freshPrompt).not.toContain('"resumeDelta"');
     });
-    // CONF15-W9: a retained Run that was delivered an empty Task history (an
-    // assignment wake with no comments) is still the delta's baseline: every
-    // current message is new to that provider session.
-    it("builds a resume delta over an empty delivered history only from that Run's own envelope", async () => {
-      const resumeFrom = async (previousContextRunId: string, extra: Record<string, unknown> = {}) =>
-        buildExecutionContinuation({ db, companyId, issueId, agentId, previousContextRunId,
-          context: { interactionId, ...extra }, summary: null, exposeLowTrustRaw: false });
+    // CONF15-W9, scoped by Step 0: a retained Run that was delivered an empty
+    // Task history (an assignment wake with no comments) is reported as a
+    // baseline but never becomes a delta here. Only a verified retained resume
+    // applies it (every current message is then new to that provider session);
+    // every other execution keeps the pre-W9 envelope with no delta.
+    it("reports an empty delivered history only from that Run's own envelope and builds no delta over it", async () => {
+      const baselines: Array<{ baseRunId: string }> = [];
+      const resumeFrom = async (previousContextRunId: string, extra: Record<string, unknown> = {}) => {
+        baselines.length = 0;
+        const envelope = await buildExecutionContinuation({ db, companyId, issueId, agentId, previousContextRunId,
+          context: { interactionId, ...extra }, summary: null, exposeLowTrustRaw: false,
+          onEmptyDeliveredBaseline: baseline => { baselines.push(baseline); } });
+        return Object.assign(envelope, { reported: [...baselines] });
+      };
       const emptyRunId = randomUUID(), noEnvelopeRunId = randomUUID(), otherTaskRunId = randomUUID(),
         otherAgentId = randomUUID(), otherAgentRunId = randomUUID(), otherTaskId = randomUUID();
       const delivered = await build();
@@ -372,19 +380,40 @@ const support = await getEmbeddedPostgresTestSupport();
       ]);
       try {
         const resumed = await resumeFrom(emptyRunId);
-        expect(resumed.resumeDelta).toEqual({ baseRunId: emptyRunId, messages: resumed.messages });
-        expect(resumed.resumeDelta!.messages.length).toBeGreaterThan(0);
-        // No delta without that Run's own delivered envelope, for another
-        // Task's or another Agent's Run, or on a full-history turn.
-        expect((await resumeFrom(noEnvelopeRunId)).resumeDelta).toBeUndefined();
-        expect((await resumeFrom(otherTaskRunId)).resumeDelta).toBeUndefined();
-        expect((await resumeFrom(otherAgentRunId)).resumeDelta).toBeUndefined();
-        expect((await resumeFrom(randomUUID())).resumeDelta).toBeUndefined();
-        expect((await resumeFrom(emptyRunId, { forceFreshSession: true })).resumeDelta).toBeUndefined();
+        // Pre-W9 envelope: no delta, the baseline only reported.
+        expect(resumed.resumeDelta).toBeUndefined();
+        expect(resumed.reported).toEqual([{ baseRunId: emptyRunId }]);
+        expect(resumed.messages.length).toBeGreaterThan(0);
+        // What a verified retained resume applies: every current message, based on that Run.
+        const { reported: _reported, ...envelope } = resumed;
+        expect(nativeRetainedResumeEmptyBaseline(envelope, emptyRunId)).toEqual({
+          resumeDelta: { baseRunId: emptyRunId, messages: resumed.messages },
+          previousContext: { runId: emptyRunId, messages: [] } });
+        expect(nativeRetainedResumeEmptyBaseline({ ...envelope, resumeDelta: { baseRunId: emptyRunId, messages: [] } }, emptyRunId))
+          .toBeNull();
+        expect(nativeRetainedResumeEmptyBaseline(envelope, "")).toBeNull();
+        // Nothing reported without that Run's own delivered envelope, for
+        // another Task's or another Agent's Run, or on a full-history turn.
+        for (const runId of [noEnvelopeRunId, otherTaskRunId, otherAgentRunId, randomUUID()]) {
+          const other = await resumeFrom(runId);
+          expect(other.resumeDelta).toBeUndefined();
+          expect(other.reported).toEqual([]);
+        }
+        const fresh = await resumeFrom(emptyRunId, { forceFreshSession: true });
+        expect(fresh.resumeDelta).toBeUndefined();
+        expect(fresh.reported).toEqual([]);
         // A non-array delivered history is not a baseline.
         await db.update(heartbeatRuns).set({ contextSnapshot: { issueId,
           executionContinuation: { ...delivered, messages: null } } }).where(eq(heartbeatRuns.id, emptyRunId));
-        expect((await resumeFrom(emptyRunId)).resumeDelta).toBeUndefined();
+        const nonArray = await resumeFrom(emptyRunId);
+        expect(nonArray.resumeDelta).toBeUndefined();
+        expect(nonArray.reported).toEqual([]);
+        // A non-empty delivered history keeps its pre-W9 delta and reports no baseline.
+        await db.update(heartbeatRuns).set({ contextSnapshot: { issueId,
+          executionContinuation: delivered } }).where(eq(heartbeatRuns.id, emptyRunId));
+        const nonEmpty = await resumeFrom(emptyRunId);
+        expect(nonEmpty.resumeDelta?.baseRunId).toBe(emptyRunId);
+        expect(nonEmpty.reported).toEqual([]);
       } finally {
         for (const id of [emptyRunId, noEnvelopeRunId, otherTaskRunId, otherAgentRunId])
           await db.delete(heartbeatRuns).where(eq(heartbeatRuns.id, id));

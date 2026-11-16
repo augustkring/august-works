@@ -108,7 +108,7 @@ export function qualifyNativeRetainedCompactContinuation(input: {
   const previousIssue = { title: retainedExecution.task.title, description: retainedExecution.task.description };
   const issue = { title: execution.task.title, description: execution.task.description };
   if (buildNativeContinuationPrompt({ wakePayload: input.wakePayload, previousRunId: retainedRun.id,
-    previousIssue, issue, allowExternalChat: true }) !== prompt) return null;
+    previousIssue, issue, allowExternalChat: true, verifiedRetainedResume: true }) !== prompt) return null;
   // Only the delta, a Task change and an inert plan revision.
   const planContext = wake.planReviewContext;
   let planRevision: { documentKey: "plan"; latestRevisionId: string; latestRevisionNumber: number } | null = null;
@@ -126,6 +126,23 @@ export function qualifyNativeRetainedCompactContinuation(input: {
   return isDeepStrictEqual(events, { messages: expectedDelta,
     ...(Object.keys(taskChanges).length ? { taskChanges } : {}),
     ...(planRevision ? { planRevision } : {}) }) ? prompt : null;
+}
+
+/** CONF15-W9 Step 0: whether this execution is a verified retained resume in
+ * the sense `qualifyNativeRetainedCompactContinuation` requires: an OpenCode v4
+ * input with the verified retained-resume witness of exactly the previous Run
+ * (never the current Run). Only then may the compact continuation be built
+ * over that Run's empty delivered history and keep an inert plan context;
+ * every other execution keeps its pre-W9 envelope and prompt. */
+export function nativeVerifiedRetainedResumeApplies(input: {
+  execution: NativeExecutionInput;
+  witnessSource: RetainedRunSource | null;
+  previousRunId: string | null;
+}): boolean {
+  const { execution, witnessSource } = input;
+  return Boolean(witnessSource && witnessSource.kind === "retained_run" && input.previousRunId &&
+    witnessSource.runId === input.previousRunId && witnessSource.runId !== execution.binding.runId &&
+    execution.schema === "paperclip.native-execution-input.v4" && execution.provider.kind === "opencode");
 }
 
 /** A bootstrap set carrying a qualified compact continuation names exactly the

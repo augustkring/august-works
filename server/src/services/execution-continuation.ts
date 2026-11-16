@@ -471,6 +471,11 @@ export async function buildExecutionContinuation(input: {
   onCommentSourceCapture?: (capture: NativeCommentSourceCapture) => void;
   onContinuationSourceCapture?: (capture: NativeTaskContinuationCapture) => void;
   onStageTriggerCapture?: (trigger: NativeStageTaskContinuationTrigger) => void;
+  /** Reports that the previous Run's own envelope delivered an empty Task
+   * history and that a resume delta would otherwise be built over it. No delta
+   * or previous context is built here for it: only a verified retained resume
+   * applies that baseline (`nativeRetainedResumeEmptyBaseline`). */
+  onEmptyDeliveredBaseline?: (baseline: { baseRunId: string }) => void;
 }): Promise<ExecutionContinuationEnvelope> {
   const { db, companyId, issueId } = input;
   const [issue] = await db
@@ -632,11 +637,14 @@ export async function buildExecutionContinuation(input: {
   const deliveredMessages = Array.isArray(priorEnvelope.messages)
     ? priorEnvelope.messages.map(object)
     : null;
-  // CONF15-W9: the retained Run's own envelope is the baseline even when it
-  // delivered no messages (an assignment wake on a Task without comments);
-  // every current message is then new to that provider session.
+  // A delivered history is a delta baseline only when it is non-empty. An
+  // empty one (an assignment wake on a Task without comments) is only
+  // reported: a verified retained resume, and nothing else, applies it later
+  // (CONF15-W9, scoped by the lead's Step 0 decision).
+  if (!fullHistoryTurn && deliveredMessages !== null && deliveredMessages.length === 0 && input.previousContextRunId)
+    input.onEmptyDeliveredBaseline?.({ baseRunId: input.previousContextRunId });
   const resumeDelta =
-    !fullHistoryTurn && deliveredMessages !== null && input.previousContextRunId
+    !fullHistoryTurn && deliveredMessages?.length && input.previousContextRunId
       ? {
           baseRunId: input.previousContextRunId,
           messages: messages.filter(
@@ -943,7 +951,7 @@ export async function buildExecutionContinuation(input: {
     // continuation summary, which has no source snapshot. An unsealed summary
     // is never a Native source (A6b): completed work comes only from that
     // Run's accepted finalized result. The base is the resume delta's Run, or
-    // the session's last Run when it has no delivered envelope (no delta).
+    // the session's last Run when its delivered history was empty (no delta).
     // The closure binds it to the retained-run source heartbeat admits; when
     // that Run has no accepted result, no completed work is carried.
     const retainedResumeBaseRunId = resumeDelta?.baseRunId ?? input.previousContextRunId ?? null;
@@ -1000,7 +1008,7 @@ export async function buildExecutionContinuation(input: {
       ...(currentHumanAssignment ? { currentHumanAssignment } : {}),
       ...(finalizedSummary ? { finalizedSummary } : {}),
       ...(explicitHumanSource ? { explicitHumanSource } : {}),
-      ...(!fullHistoryTurn && input.previousContextRunId && deliveredMessages !== null ? { previousContext: { runId: input.previousContextRunId,
+      ...(!fullHistoryTurn && input.previousContextRunId && deliveredMessages?.length ? { previousContext: { runId: input.previousContextRunId,
         messages: deliveredMessages as ExecutionContinuationEnvelope["messages"] } } : {}),
       wake: { requestedByActorType: wake.requestedByActorType, requestedByActorId: wake.requestedByActorId, reason: wake.reason,
         originCommentIds: nativeTaskWakeOriginCommentIds(wake.payload),
@@ -1008,4 +1016,20 @@ export async function buildExecutionContinuation(input: {
   }
   if (!commentSourcesCaptured) await captureCommentSources();
   return envelope;
+}
+
+/** CONF15-W9, scoped by the lead's Step 0 decision: the resume delta and
+ * previous context a verified retained resume builds over its retained Run's
+ * empty delivered history. Every current message is new to that provider
+ * session, so the delta is the envelope's whole (already redacted) history,
+ * based on that Run. The caller applies it only for a verified retained resume
+ * of exactly `baseRunId`, and only when `buildExecutionContinuation` reported
+ * that empty baseline and built no delta of its own. */
+export function nativeRetainedResumeEmptyBaseline(envelope: ExecutionContinuationEnvelope, baseRunId: string): {
+  resumeDelta: NonNullable<ExecutionContinuationEnvelope["resumeDelta"]>;
+  previousContext: NonNullable<NativeTaskContinuationCapture["previousContext"]>;
+} | null {
+  if (!baseRunId || envelope.resumeDelta !== undefined || !Array.isArray(envelope.messages)) return null;
+  return { resumeDelta: { baseRunId, messages: structuredClone(envelope.messages) },
+    previousContext: { runId: baseRunId, messages: [] } };
 }

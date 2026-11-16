@@ -445,6 +445,17 @@ describe("dependency scheduling through the installed Native text draft controll
       else expect((resolvedInteraction?.result as { outcome?: string } | null)?.outcome).toBe("rejected");
       await heartbeat.drainActiveRunExecutions();
       const [interactionWake] = await db.select().from(agentWakeupRequests).where(eq(agentWakeupRequests.id, interactionWakes[0]!.id));
+      // CONF15-W9 Step 0: this continuation is not a verified retained resume
+      // (the source Run delivered an empty Task history), so it keeps its
+      // pre-W9 form: no resume delta over that empty history and no compact
+      // continuation prompt (a full replay).
+      const [continuationRun] = interactionWake?.runId ? await db.select().from(heartbeatRuns)
+        .where(eq(heartbeatRuns.id, interactionWake.runId)) : [];
+      const continuationContext = (continuationRun?.contextSnapshot ?? {}) as Record<string, any>;
+      expect(continuationContext.executionContinuation).toBeTruthy();
+      expect(continuationContext.executionContinuation.resumeDelta).toBeUndefined();
+      expect((continuationRun?.runnerProfileJson as Record<string, any> | null)?.nativeExecutionInput?.continuationPrompt ?? null)
+        .toBeNull();
       expect(interactionWake?.status).toBe("completed");
       expect(calls).toBe(2);
       const runs = await db.select().from(heartbeatRuns).where(and(eq(heartbeatRuns.companyId, f.home),

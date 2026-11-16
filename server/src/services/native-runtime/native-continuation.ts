@@ -10,6 +10,11 @@ export function buildNativeContinuationPrompt(input: {
   previousIssue: { title: string; description: string | null };
   /** The constructor opts plain-text chat into the existing resume protocol. */
   allowExternalChat?: boolean;
+  /** Only a verified retained resume (the same condition as
+   * `qualifyNativeRetainedCompactContinuation`) admits an inert ordinary plan
+   * context into the compact events. Every other execution keeps the full
+   * framing for any plan context (null). */
+  verifiedRetainedResume?: boolean;
 }): string | null {
   const wake = normalizePaperclipWakePayload(input.wakePayload);
   const continuation = wake?.executionContinuation;
@@ -48,8 +53,8 @@ export function buildNativeContinuationPrompt(input: {
   // interaction or truncation it holds no review input, only the plan
   // revision, which the compact events below keep. Any review input keeps the
   // full plan framing. (The builder derives the included and omitted counts
-  // from these totals.)
-  const plan = wake.planReviewContext;
+  // from these totals.) Only for a verified retained resume (Step 0).
+  const plan = input.verifiedRetainedResume === true ? wake.planReviewContext : null;
   const ordinaryPlan = plan && plan.documentKey === "plan" && plan.interaction === null && plan.threads.length === 0 &&
     plan.totals.openThreadCount === 0 && plan.totals.commentCount === 0 && !plan.truncated ? plan : null;
   // Other provider, attachment, question, approval, and recovery paths keep
