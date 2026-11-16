@@ -36,6 +36,7 @@ import { claimNativeExecutionCoordinator, failUnclaimedNativeOpenCodeConformance
 import { nativeOpenCodeConformancePrompt,
   type NativeOpenCodeConformanceSourceAuthority } from "./orchestration/native-opencode-conformance-source.js";
 import { nativeSha256 } from "./native-runtime/canonical.js";
+import { nativeSessionWithoutRunScopedState } from "./native-runtime/native-session-run-scope.js";
 import { resolvePaperclipInstanceRoot } from "../home-paths.js";
 import { materializeNativeChatTaskRoot, type NativeChatWorkspaceScope } from "./native-runtime/native-chat-workspace.js";
 import { prepareNativeWorkspaceSync, assertNativeWorkspaceSyncServerVerifiedNone, type PreparedNativeWorkspaceSync } from "./native-runtime/native-workspace-sync.js";
@@ -352,7 +353,14 @@ export async function runManagedOpenCodeProbe(input: { db: Db; createBackend(): 
       if (previous.identity.companyId !== probe.identity.companyId || previous.identity.agentId !== probe.identity.agentId ||
           previous.identity.issueId !== probe.identity.issueId || previous.identity.sessionId !== probe.identity.sessionId ||
           !backend.recoverSession) throw new Error("managed_opencode_resume_identity_changed");
-      const recovered = await backend.recoverSession(previous, { signal });
+      // CONF15-P3: the Worker lane's Run-scoped strip. Probe 1's settled
+      // snapshot carries its accepted semantic result and terminal turns, and
+      // a session rebuilt from them is terminal (its event queue closed), so
+      // the resume probe would only replay probe 1. Keep the provider session
+      // and the snapshot's own identity (the binding check below still
+      // compares runner-confirmed facts, never the snapshot); drop probe 1's
+      // Run-scoped state exactly as a Worker cross-Run checkpoint does.
+      const recovered = await backend.recoverSession(nativeSessionWithoutRunScopedState(previous, previous.identity), { signal });
       if (!recovered.recovered || !recovered.session) throw new Error("managed_opencode_resume_not_confirmed");
       session = recovered.session;
       // CONF15-P2 (d): after a cold lease handoff the recovered runner is

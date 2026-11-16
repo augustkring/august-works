@@ -5,6 +5,20 @@ import { codexSemanticToolSpecs } from "../../vendor/paperclip-runner/index.js";
  * exactly these two terminal tools to every managed OpenCode session. */
 export const MANAGED_OPENCODE_TERMINAL_TOOL_NAMES = Object.freeze(["paperclip_finish", "paperclip_block"] as const);
 
+/** CONF15-W7. The tool-result text the pinned OpenCode (opencode-ai 1.18.32)
+ * writes for a tool call that was still running when its turn was
+ * interrupted. Its session processor sets the part to
+ * `{ status: "error", error: "Tool execution aborted", metadata: { interrupted: true } }`,
+ * and its model-message conversion replays an error part with no interrupted
+ * `metadata.output` as an `output-error` with that text, which the Anthropic
+ * conversion sends as `{ type: "tool_result", is_error: true, content: "Tool execution aborted" }`
+ * (both in the pinned `opencode-ai/bin/opencode.exe` of the provider pack;
+ * the same text is in `packages/paperclip-runner/src/provider-events.test.ts`).
+ * A managed terminal tool always ends that way: once the server accepts the
+ * semantic result, runnerd's OpenCode driver interrupts the turn
+ * (`opencode-server-driver.ts`, "Semantic completion accepted."). */
+export const MANAGED_OPENCODE_ABORTED_TOOL_RESULT_TEXT = "Tool execution aborted";
+
 function record(value: unknown): Record<string, unknown> {
   return value && typeof value === "object" && !Array.isArray(value) ? value as Record<string, unknown> : {};
 }

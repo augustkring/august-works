@@ -32,8 +32,17 @@ const identity = { ...previousIdentity, runId: "run-2" };
 const runnerInstanceId = "runner-conformance-1";
 const environmentLeaseId = "lease-run-2";
 const expected = { runId: identity.runId, normalizedSessionId: identity.sessionId, runnerInstanceId, environmentLeaseId };
+// Probe 1's settled snapshot: it carries probe 1's Run-scoped terminal state.
 const previous = { backendKind: "runner", sessionId: "driver-1", identity: previousIdentity,
-  providerSessionId: "provider-session-1" } as unknown as PersistedNativeSession;
+  providerSessionId: "provider-session-1", cursor: "cursor-9", lineage: [{ threadId: "thread-1" }],
+  semanticResult: { reportedWorkDisposition: "done" }, terminal: { turnTerminalState: "completed" },
+  activeTurnId: "turn-probe-1", terminalTurns: [{ turnId: "turn-probe-1", fingerprint: "fp-1" }],
+  pendingRuntimeRequests: [{ id: "request-1" }] } as unknown as PersistedNativeSession;
+// CONF15-P3: what the resume probe must hand to recovery, the Worker lane's
+// Run-scoped strip with the snapshot's own identity and every other field kept.
+const previousWithoutRunScope = { backendKind: "runner", sessionId: "driver-1", identity: previousIdentity,
+  providerSessionId: "provider-session-1", cursor: "cursor-9", lineage: [{ threadId: "thread-1" }],
+  semanticResult: null, terminal: null, activeTurnId: null, terminalTurns: [], pendingRuntimeRequests: [] };
 // What an implementation would produce by copying the server's snapshot.
 const copiedFromSnapshot = { runId: previous.identity.runId, normalizedSessionId: previous.identity.sessionId,
   runnerInstanceId, environmentLeaseId };
@@ -131,7 +140,7 @@ describe("Native OpenCode conformance resume adopts only a runner-confirmed bind
     const outcome = await resume({ ...expected });
     expect(outcome.failureCode).toBeNull();
     expect(outcome.result).toMatchObject({ state: "completed", output: marker, localSessionClosed: true });
-    expect(outcome.recoverSession).toHaveBeenCalledWith(previous, expect.anything());
+    expect(outcome.recoverSession).toHaveBeenCalledWith(previousWithoutRunScope, expect.anything());
     expect(outcome.adoptConfirmedRun).toHaveBeenCalledTimes(1);
     expect(outcome.adoptConfirmedRun).toHaveBeenCalledWith({ identity, binding: expected });
     expect(outcome.attachRun).not.toHaveBeenCalled();
@@ -161,5 +170,38 @@ describe("Native OpenCode conformance resume adopts only a runner-confirmed bind
     expect(outcome.failureCode).toBe("managed_opencode_resume_adopt_unavailable");
     expect(outcome.attachRun).not.toHaveBeenCalled();
     expect(outcome.startTurn).not.toHaveBeenCalled();
+  });
+});
+
+describe("Native OpenCode conformance resume drops probe 1's Run-scoped state (CONF15-P3)", () => {
+  beforeEach(() => {
+    vi.clearAllMocks();
+    mocks.claim.mockResolvedValue({ leaseOwner: "owner", attempt: 1, controller: {} });
+    mocks.appendEvent.mockResolvedValue({ row: { seq: 7 } });
+  });
+
+  it("recovers from probe 1's snapshot with the Worker strip applied, identity kept, and the input unchanged", async () => {
+    const before = structuredClone(previous);
+    const recoverSession = vi.fn(async () => ({ recovered: false }));
+    const backend = { openSession: vi.fn(), recoverSession } as unknown as NativeSessionBackend;
+    await runManagedOpenCodeProbe({
+      db: {} as never, createBackend: async () => backend,
+      execution: { binding: { companyId: identity.companyId, runId: identity.runId, issueId: identity.issueId,
+        agentId: identity.agentId } } as NativeExecutionInput,
+      runnerInstanceId, environmentLeaseId, responsibleUserId: "user-1", groupId: "group-1", planId: "plan-1",
+      profileId: "profile-1",
+      probe: { identity, workingDirectory: "/probe", prompt: "fixed synthetic prompt", signal: AbortSignal.timeout(5_000),
+        expectedOutput: "x", previous },
+    });
+    expect(recoverSession).toHaveBeenCalledTimes(1);
+    const sent = (recoverSession.mock.calls[0] as unknown[])[0] as Record<string, unknown>;
+    // Exact equality, key order included: the shared strip, nothing more.
+    expect(JSON.stringify(sent)).toBe(JSON.stringify(previousWithoutRunScope));
+    // The identity is probe 1's (the runner-confirmed binding is compared
+    // separately), not rewritten to probe 2's.
+    expect(sent.identity).toEqual(previousIdentity);
+    expect(previous).toEqual(before);
+    const failure = mocks.warn.mock.calls.map(call => call[0] as Record<string, unknown>).find(fields => fields.stage === "turn");
+    expect(failure?.errorCode).toBe("managed_opencode_resume_not_confirmed");
   });
 });

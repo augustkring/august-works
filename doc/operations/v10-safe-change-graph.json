@@ -4517,7 +4517,7 @@
         },
         {
           "path": "server/src/services/orchestration/worker-model-gateway.ts",
-          "sha256": "41f233843800c20c63d210cebca899239706ba7e05a6025c71e656a3475717fa"
+          "sha256": "744a4a8488f54bfa44452526d5c51b2a73b7a5a4a94d0a660cb492374f06aa1e"
         },
         {
           "path": "server/src/services/tool-gateway.ts",
@@ -7686,7 +7686,7 @@
         },
         {
           "path": "server/src/services/native-runtime/native-session-executor.ts",
-          "sha256": "c52a9a147d8c2223fa715ec2ce18e60d080220d1a91b24446e251a38c59bebb3"
+          "sha256": "2762ee7c180499ed21edd8ad2caa9378e1848ee596b40e3231d97d3ba1ad787c"
         },
         {
           "path": "server/src/services/native-runtime/native-session-resume.test.ts",
@@ -9364,7 +9364,7 @@
         },
         {
           "path": "server/src/services/native-runtime/native-session-executor.ts",
-          "sha256": "c52a9a147d8c2223fa715ec2ce18e60d080220d1a91b24446e251a38c59bebb3"
+          "sha256": "2762ee7c180499ed21edd8ad2caa9378e1848ee596b40e3231d97d3ba1ad787c"
         },
         {
           "path": "server/src/services/native-runtime/native-tool-task-privacy.integration.test.ts",
@@ -10377,7 +10377,7 @@
         },
         {
           "path": "server/src/services/orchestration/worker-model-gateway.ts",
-          "sha256": "41f233843800c20c63d210cebca899239706ba7e05a6025c71e656a3475717fa"
+          "sha256": "744a4a8488f54bfa44452526d5c51b2a73b7a5a4a94d0a660cb492374f06aa1e"
         },
         {
           "path": "server/src/services/platform-skill-admission.ts",
@@ -25006,7 +25006,7 @@
         },
         {
           "path": "server/src/services/native-opencode-conformance.ts",
-          "sha256": "2b9f3328f0766d3825e42731f5bc2cee5ed02e5af29a1e76718cbdf0e53f826c"
+          "sha256": "c3f7d6319ed670ab1f682f484db81df9f59c6ff04488e01d0b0adb6cb64ce7d8"
         },
         {
           "path": "server/src/services/native-owner-release.ts",
@@ -47080,7 +47080,7 @@
       "id": "source:server/src/services/orchestration/worker-model-gateway.ts",
       "kind": "current_source_owner",
       "path": "server/src/services/orchestration/worker-model-gateway.ts",
-      "sha256": "41f233843800c20c63d210cebca899239706ba7e05a6025c71e656a3475717fa",
+      "sha256": "744a4a8488f54bfa44452526d5c51b2a73b7a5a4a94d0a660cb492374f06aa1e",
       "changeIds": [
         "SCR-V10-HOTSPOT-01",
         "SCR-V10-HOTSPOT-07"
@@ -49807,7 +49807,7 @@
       "id": "source:server/src/services/native-runtime/native-session-executor.ts",
       "kind": "current_source_owner",
       "path": "server/src/services/native-runtime/native-session-executor.ts",
-      "sha256": "c52a9a147d8c2223fa715ec2ce18e60d080220d1a91b24446e251a38c59bebb3",
+      "sha256": "2762ee7c180499ed21edd8ad2caa9378e1848ee596b40e3231d97d3ba1ad787c",
       "changeIds": [
         "SCR-V10-HOTSPOT-05",
         "SCR-V10-HOTSPOT-06"
@@ -63703,7 +63703,7 @@
       "id": "source:server/src/services/native-opencode-conformance.ts",
       "kind": "current_source_owner",
       "path": "server/src/services/native-opencode-conformance.ts",
-      "sha256": "2b9f3328f0766d3825e42731f5bc2cee5ed02e5af29a1e76718cbdf0e53f826c",
+      "sha256": "c3f7d6319ed670ab1f682f484db81df9f59c6ff04488e01d0b0adb6cb64ce7d8",
       "changeIds": [
         "SCR-V10-NATIVE-RUNTIME-AND-AUTHORITY"
       ],
