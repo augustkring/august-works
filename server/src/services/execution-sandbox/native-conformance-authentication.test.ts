@@ -4,6 +4,7 @@ import {
   nativeConformanceGroupAuthenticationAdmits,
   type NativeConformanceGroupAuthenticationFacts,
 } from "./native-conformance-authentication.js";
+import { NATIVE_OPENCODE_CONFORMANCE_GROUP_WALL_CLOCK_SECONDS } from "../orchestration/native-opencode-conformance-window.js";
 
 const groupId = "11111111-1111-4111-8111-111111111111";
 const planId = "22222222-2222-4222-8222-222222222222";
@@ -104,5 +105,19 @@ describe("nativeConformanceGroupAuthenticationAdmits (CONF15-P4)", () => {
       plan: { ...facts().plan!, startedAt: new Date(now.getTime() + 1) } }))).toBe(false);
     expect(nativeConformanceGroupAuthenticationAdmits(facts({ authenticatedAt: new Date(now.getTime() - 10_000),
       plan: { ...facts().plan!, startedAt: new Date(now.getTime()) } }))).toBe(true);
+  });
+
+  // The group's window is its harness plans' group total (probe count times the
+  // per-probe limit), the same window its model reservations use.
+  it("admits a later probe for the whole group total and never beyond it", () => {
+    const group = { ...facts().plan!, maxWallClockSeconds: NATIVE_OPENCODE_CONFORMANCE_GROUP_WALL_CLOCK_SECONDS };
+    const groupEnd = startedAt.getTime() + NATIVE_OPENCODE_CONFORMANCE_GROUP_WALL_CLOCK_SECONDS * 1000;
+    expect(nativeConformanceGroupAuthenticationAdmits(facts({ plan: group, now: new Date(startedAt.getTime() + 331_500) }))).toBe(true);
+    expect(nativeConformanceGroupAuthenticationAdmits(facts({ plan: group, now: new Date(groupEnd - 1) }))).toBe(true);
+    expect(nativeConformanceGroupAuthenticationAdmits(facts({ plan: group, now: new Date(groupEnd) }))).toBe(false);
+    // A plan window longer than the group total is not a qualification group.
+    expect(nativeConformanceGroupAuthenticationAdmits(facts({
+      plan: { ...group, maxWallClockSeconds: NATIVE_OPENCODE_CONFORMANCE_GROUP_WALL_CLOCK_SECONDS + 1 } }))).toBe(false);
+    expect(nativeConformanceGroupAuthenticationAdmits(facts({ plan: { ...group, maxWallClockSeconds: 86_400 } }))).toBe(false);
   });
 });

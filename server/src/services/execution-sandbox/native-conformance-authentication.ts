@@ -3,6 +3,7 @@ import { heartbeatRuns, issues, orchestrationPlans, type Db } from "@paperclipai
 import { assertHumanAuthentication, RECENT_AUTHENTICATION_SECONDS } from "../../auth/authenticator-assurance.js";
 import { forbidden, HttpError } from "../../errors.js";
 import type { AuthorizationActor } from "../authorization.js";
+import { NATIVE_OPENCODE_CONFORMANCE_GROUP_WALL_CLOCK_SECONDS } from "../orchestration/native-opencode-conformance-window.js";
 
 /** The server rows of one hidden provider-conformance qualification group
  * that the group-bound authentication rule reads (CONF15-P4). */
@@ -30,8 +31,10 @@ export type NativeConformanceGroupAuthenticationFacts = Readonly<{
  * Run, plan and plan principal, a group that is not cancelled, failed, finished
  * or erased, a session whose own authentication was recent when the group's
  * plan started, and the group's own deadline (`startedAt + maxWallClockSeconds`)
- * not yet reached. The session must still be valid and unrevoked; the caller
- * proves that with `assertHumanAuthentication` before calling this.
+ * not yet reached. That window is the group total (probe count times the
+ * per-probe limit, `native-opencode-conformance-window.ts`) and never longer.
+ * The session must still be valid and unrevoked; the caller proves that with
+ * `assertHumanAuthentication` before calling this.
  */
 export function nativeConformanceGroupAuthenticationAdmits(facts: NativeConformanceGroupAuthenticationFacts): boolean {
   const { run, plan, task } = facts;
@@ -42,6 +45,7 @@ export function nativeConformanceGroupAuthenticationAdmits(facts: NativeConforma
   // Every time comparison below is false for an invalid (NaN) time, and a
   // non-positive window ends before `now`.
   return Number.isSafeInteger(plan.maxWallClockSeconds) &&
+    plan.maxWallClockSeconds <= NATIVE_OPENCODE_CONFORMANCE_GROUP_WALL_CLOCK_SECONDS &&
     // The same group and its plan.
     run.groupId === facts.groupId && run.planId === facts.planId && plan.id === facts.planId &&
     run.status === "running" && run.triggerDetail === "provider_conformance" &&

@@ -1276,7 +1276,7 @@
     },
     {
       "path": "server/src/__tests__/heartbeat-dependency-draft-controller.integration.test.ts",
-      "sha256": "5d402eaa978038ddad670b4a3ad734cf69af8e60378108c087d14cbf8dab9fed"
+      "sha256": "72d7a84d174ae0d22a018a59f19d35747df0bdcab9c0c22654d6f6dc72b5f6e2"
     },
     {
       "path": "server/src/__tests__/heartbeat-native-cleanup-admission.test.ts",
@@ -1461,7 +1461,7 @@
     },
     {
       "path": "server/src/services/execution-sandbox/sandbox-service.ts",
-      "sha256": "e785cc0d4840db092dbe77a23250616e3d5da3be4d984f737eef6c4cace36bb3"
+      "sha256": "039c6cb6b2cfb081945a8803f21107aa1573ff27cfb6175567c0f39a2114b71d"
     },
     {
       "path": "server/src/services/experience/company-responsibility-attention.ts",
@@ -1513,7 +1513,7 @@
     },
     {
       "path": "server/src/services/native-runtime/native-session-executor.ts",
-      "sha256": "2762ee7c180499ed21edd8ad2caa9378e1848ee596b40e3231d97d3ba1ad787c"
+      "sha256": "6430eec064d00867891b4bcc7602f503703cd7549745122d48f61557b51b444c"
     },
     {
       "path": "server/src/services/native-stage-task-body-source.test.ts",

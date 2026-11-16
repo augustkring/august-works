@@ -49,6 +49,7 @@ import { createNativeOpenCodeConformanceProbeBackend } from "./native-runtime/na
 import { nativeRunnerOperatorSettings, type NativeRunnerOperatorSettings } from "./native-runtime/runner-operator-settings.js";
 import { parseNativeExecutionInput } from "../vendor/paperclip-runner/index.js";
 import { logger } from "../middleware/logger.js";
+import { nativeOpenCodeConformanceHarnessBudgets, NATIVE_OPENCODE_CONFORMANCE_PROBE_WALL_CLOCK_SECONDS } from "./orchestration/native-opencode-conformance-window.js";
 
 /** Operator diagnostic for a stopped conformance proof. The shared serializer
  * keeps only the error type, HTTP status, allow-listed message and numeric
@@ -653,6 +654,10 @@ export function nativeOpenCodeConformanceService(db: Db, options: Options) {
         inputTokensUpperBound: target.profile.inputTokensUpperBound, maxOutputTokens: target.profile.maxOutputTokens });
       const primaryQuote = quote(primary), peerQuote = quote(peer), totalCeiling = primaryQuote.maximumMinor * 4 + peerQuote.maximumMinor * 2;
       if (totalCeiling > input.maximumCostCents) throw forbidden("The requested cost ceiling cannot cover all six bounded OpenCode probes");
+      // CONF15-P5: both harness plans share the group's one start and carry the
+      // group total (probe count times the per-probe limit); each probe's own
+      // window is enforced per probe Run (native-opencode-conformance-window.ts).
+      const groupStartedAt = new Date();
       async function prepare(target: typeof primary, maximumMinor: number) {
         const { cid, aid } = { cid: target.agent.companyId, aid: target.agent.id };
         const harness = await withV7ActivityTransaction(db, async (tx, publications) => {
@@ -670,9 +675,9 @@ export function nativeOpenCodeConformanceService(db: Db, options: Options) {
             businessInvariants: ["Qualification grants no ordinary execution authority"] }), userId);
           const [plan] = await tx.insert(orchestrationPlans).values({ companyId: cid, issueId: task!.id, completionContractId: contract.id,
             mode: "single_worker", actionClass: "internal_draft", riskClass: "C0", supervisionMode: "none",
-            verificationMode: "deterministic", humanOversightMode: "human_review", status: "paused", startedAt: new Date(),
-            createdBy: userId, executionPrincipal: { type: "user", userId }, budgets: orchestrationBudgetSchema.parse({
-              maxModelCostMinor: maximumMinor, maxToolActions: 0, maxWallClockSeconds: 300, maxRetries: 0, maxDelegationDepth: 0 }) }).returning();
+            verificationMode: "deterministic", humanOversightMode: "human_review", status: "paused", startedAt: groupStartedAt,
+            createdBy: userId, executionPrincipal: { type: "user", userId },
+            budgets: orchestrationBudgetSchema.parse(nativeOpenCodeConformanceHarnessBudgets(maximumMinor)) }).returning();
           await logActivity(tx, { companyId: cid, actorType: "user", actorId: userId,
             action: "provider.opencode_conformance_harness_created", entityType: "orchestration_plan", entityId: plan!.id,
             details: { qualificationGroupId: groupId, agentId: aid, maximumMinor, toolsGranted: false } }, publications);
@@ -983,7 +988,7 @@ export function nativeOpenCodeConformanceService(db: Db, options: Options) {
           runnerInstanceId: remote.runnerInstanceId, environmentLeaseId: remote.leaseId, responsibleUserId: userId, groupId, planId: harness.plan.id, profileId: target.profile.id,
           probe: { identity: remote.identity,
           workingDirectory: remote.workingDirectory, prompt, expectedOutput, previous: snapshots.get(target.agent.id),
-          signal: AbortSignal.timeout(Math.max(1, Math.min(harness.plan.budgets.maxWallClockSeconds * 1000,
+          signal: AbortSignal.timeout(Math.max(1, Math.min(NATIVE_OPENCODE_CONFORMANCE_PROBE_WALL_CLOCK_SECONDS * 1000,
             lease!.expiresAt!.getTime() - Date.now(), preflightAuthority.deadlineAt.getTime() - Date.now()))),
           resolveSource: async () => {
             const [startedRun] = await db.select().from(heartbeatRuns).where(and(eq(heartbeatRuns.companyId, target.agent.companyId),

@@ -24,7 +24,7 @@ import express from "express";
 import { WebSocket } from "ws";
 import { and, desc, eq, gte, inArray, isNull, or, sql } from "drizzle-orm";
 import {
-  activityLog, agentPresenceRuntimeBindings, connectionGrants, toolApplications, toolCatalogEntries, toolConnections, toolProfileBindings, toolProfileEntries, toolProfiles,
+  authSessions, activityLog, agentPresenceRuntimeBindings, connectionGrants, toolApplications, toolCatalogEntries, toolConnections, toolProfileBindings, toolProfileEntries, toolProfiles,
   chatConversations, agentProviderBindings, billingAccounts, billingAccountCompanies, billingSubscriptions, companies, createDb,
   agents, agentExecutionManifests, environments, environmentLeases, heartbeatRuns, heartbeatRunEvents, nativeRunFinalizations,
   nativeRunResults, orchestrationModelReservations, issues, runtimeCapacityProfiles, runtimeCells, runtimeHosts, runtimeHostRequestNonces,
@@ -32,7 +32,7 @@ import {
 } from "@paperclipai/db";
 import { SANDBOX_CONTROLS, SANDBOX_HOST_COMMAND, runtimeRequestSigningInput, sandboxCapabilitySnapshotSchema, sandboxHostRequestSchema, sandboxHostReplySchema, type NativePayloadSourceInput, type SandboxHostRequest, type SandboxQualificationProbeFixture, type SandboxCapabilitySnapshot } from "@paperclipai/shared";
 import { canActorReadIssuePrivacy, type AuthorizationActor } from "../../services/authorization.js";
-import { assertHumanAuthentication } from "../../auth/authenticator-assurance.js";
+import { assertNativeConformanceHumanAuthentication } from "../../services/execution-sandbox/native-conformance-authentication.js";
 import { assertNativeWorkspaceMetadataSourcesCurrent } from "../../services/native-direct-input.js";
 import type { NativeBootstrapSourceClosure } from "../../services/native-runtime/native-execution-input.js";
 import { environmentService } from "../../services/environments.js";
@@ -3018,8 +3018,10 @@ async function configureManagedSandboxRun(input: ManagedSandboxHostInput,
           actor.type !== "board" || actor.source !== "session" || actor.userId !== requesterUserId || !actor.sessionId ||
           snapshot.capabilitySnapshotHash !== currentBinding.capabilitySnapshotHash)
         throw new Error("software_only_host_peer_current_authority_changed");
-      const originalHumanAuthentication = await assertHumanAuthentication(db, actor,
-        { requireRecent: true, phishingResistant: false });
+      // CONF15-P4: the same group-bound rule as the production Host bridge
+      // (`native-host-bridge.ts`) and Sandbox bootstrap owner.
+      const originalHumanAuthentication = await assertNativeConformanceHumanAuthentication(db, actor,
+        { companyId, groupId, planId, runId: run.id, taskId });
       const authorityInput = { runId: run.id, taskId, planId, groupId,
         manifestId: manifest.id, manifestHash: manifest.hash, leaseId: lease.id,
         workspaceRoot: taskRootCandidate, creationReceipt, policySnapshotId: snapshot.id, policyHash: snapshot.policyHash };
@@ -5260,6 +5262,15 @@ async function configureManagedSandboxRun(input: ManagedSandboxHostInput,
           nativeSha256(sandboxCapabilityFacts(recreatedHostCapabilities)) === nativeSha256(sandboxCapabilityFacts(storedCapabilities)))
         throw new Error("conversation_software_host_recreated_conformance_host_borrowed_qualification");
       preparationStage = "requalify_conformance_namespace";
+      // CONF15-P5: the setup operator's re-qualification is its own operator action and
+      // production requires a recent operator authentication for it
+      // (`assertConfiguredOperatorAuthentication`). A later presence's Host is
+      // re-qualified minutes after fixture setup, so the operator authenticates
+      // again (a step-up on the same session) instead of the gate being relaxed.
+      if (baseQualificationActor.type !== "board" || !baseQualificationActor.sessionId)
+        throw new Error("conversation_software_host_qualification_operator_session_missing");
+      await db.update(authSessions).set({ authenticatedAt: new Date() })
+        .where(and(eq(authSessions.id, baseQualificationActor.sessionId), eq(authSessions.userId, baseQualificationActor.userId)));
     } else {
       preparationStage = "qualify_conformance_namespace";
     }

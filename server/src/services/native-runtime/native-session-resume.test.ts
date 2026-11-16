@@ -504,11 +504,14 @@ it("wires exact-session recovery and guarded selected identity into heartbeat pe
   );
   expect(source).toContain("nativeSessionId: persistedNativeSessionId,");
   expect(source).toContain("lockedProfile.sessionCheckpoint != null");
-  const build = source.slice(
-    source.indexOf("const nativeExecutionWithCheckpoint ="),
-    source.indexOf("const nativeSandboxLifecycle ="),
-  );
+  // CONF15-W9R: the selection is built by `buildNativeExecutionSelection`
+  // (rebuilt once for a verified retained resume) and assigned to
+  // `nativeExecutionWithCheckpoint`; both must still wire the previous Run.
+  const buildStart = source.indexOf("const buildNativeExecutionSelection = () =>");
+  const build = source.slice(buildStart, source.indexOf("const nativeSandboxLifecycle ="));
+  expect(buildStart).toBeGreaterThan(-1);
   expect(build).toContain("previousRun: previousNativeRun,");
+  expect(build).toContain("let nativeExecutionWithCheckpoint = buildNativeExecutionSelection();");
 });
 
 const embeddedSupport = await getEmbeddedPostgresTestSupport();

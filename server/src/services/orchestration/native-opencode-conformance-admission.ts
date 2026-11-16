@@ -23,6 +23,7 @@ import type { guardedRemoteHttpFetch } from "../remote-http-fetch.js";
 import { assertNativeOpenCodeConformanceSource, exactNativeOpenCodeConformanceRequestSystemFrame,
   type NativeOpenCodeConformanceSourceAuthority } from "./native-opencode-conformance-source.js";
 import { managedOpenCodeConformanceRequestToolsAllowed, managedOpenCodeConformanceResponseToolFree } from "../native-runtime/managed-opencode-terminal-tools.js";
+import { assertNativeOpenCodeConformanceProbeWindow } from "./native-opencode-conformance-window.js";
 
 /** Compact signed RuntimeControl claim. Fields identify one canonical probe;
  * they never stand in for current provider, credential, Host, or lease facts. */
@@ -80,6 +81,11 @@ export async function validateNativeOpenCodeConformanceHarness(input: {
   await assertAgentRunWriteAllowed(db, input.companyId, { agentId: input.agentId, runId: runtime.run.id });
   if (runtime.source.task.executionRunId !== runtime.run.id || input.actor.userId !== runtime.run.responsibleUserId)
     throw forbidden("The exact hidden Task/run and initiating Human bindings are required");
+  // CONF15-P5: every reservation, claim and dispatch check of this probe runs
+  // here, so each is bounded by the probe Run's own window and by its group's.
+  const probeDeadline = assertNativeOpenCodeConformanceProbeWindow({ planStartedAt: runtime.conformancePlan!.startedAt,
+    planWallClockSeconds: runtime.conformancePlan!.budgets.maxWallClockSeconds, probeStartedAt: runtime.run.startedAt,
+    now: new Date() });
   const selected = resolvePaperclipRunnerProviderProfile(runtime.source.agent.adapterConfig);
   const configurationHash = hashContextPolicySnapshot({ adapterType: runtime.source.agent.adapterType,
     adapterConfig: runtime.source.agent.adapterConfig });
@@ -147,7 +153,7 @@ export async function validateNativeOpenCodeConformanceHarness(input: {
     credentialSha256: credential.version.valueSha256,
     environmentLeaseId: runtime.lease.id, leaseExpiresAt: runtime.lease.expiresAt!, dispatchNonce: claim.dispatchNonce,
     selection: connection, runtimeAuthorityHash: runtime.authorityHash, harnessAuthorityHash, authorityHash, quote,
-    expiresAt: new Date(Math.min(runtime.deadlineAt.getTime(), quote.expiresAt ? Date.parse(quote.expiresAt) : Infinity,
+    expiresAt: new Date(Math.min(runtime.deadlineAt.getTime(), probeDeadline, quote.expiresAt ? Date.parse(quote.expiresAt) : Infinity,
       Date.now() + 60_000)) });
 }
 

@@ -67,7 +67,7 @@ import {
 import { executionFailureRetryCount, executionRetryAttemptCount, accountingForScheduledRetry } from "./execution-recovery-attempt.js";
 import { buildHeartbeatRunStatusLiveEventPayload } from "./heartbeat-run-status-payload.js";
 export { buildHeartbeatRunStatusLiveEventPayload } from "./heartbeat-run-status-payload.js";
-import { buildExecutionContinuation, StaleExecutionContinuationError } from "./execution-continuation.js";
+import { applyNativeRetainedResumeEmptyBaseline, buildExecutionContinuation, StaleExecutionContinuationError } from "./execution-continuation.js";
 import { renderPaperclipWakePrompt } from "@paperclipai/adapter-utils/server-utils";
 import { PROJECT_REPOSITORIES_DIR } from "@paperclipai/adapter-utils/git-workspace-sync";
 import { materializeManagedProjectWorkspace } from "./managed-repository-checkout.js";
@@ -476,6 +476,8 @@ import {
 import { buildExecutionStageWakeup } from "./issue-execution-stage-wakeup.js";
 import { captureNativeExecutionStageTaskWakeSource } from "./native-stage-wake-source.js";
 import { captureNativeRunLivenessContinuationTrigger } from "./native-runtime/native-liveness-continuation-source.js";
+import { nativeCompactContinuationSourceSetAdmits, nativeVerifiedRetainedResumeApplies,
+  qualifyNativeRetainedCompactContinuation } from "./native-runtime/native-compact-continuation-source.js";
 import {
   ISSUE_TREE_CONTROL_INTERACTION_WAKE_REASONS,
   isVerifiedIssueTreeControlInteractionWake,
@@ -21194,6 +21196,9 @@ export function heartbeatService(
       const continuationCommentSources: NativeCommentSourceCapture[] = [];
       const nativeTaskContinuationCapture: { value: import("./execution-continuation.js").NativeTaskContinuationCapture | null } = { value: null };
       const nativeStageContinuationTrigger: { value: import("./execution-continuation.js").NativeStageTaskContinuationTrigger | null } = { value: null };
+      // The previous Run's empty delivered history, reported but never applied
+      // here; only a verified retained resume applies it (CONF15-W9 Step 0).
+      let nativeEmptyDeliveredBaseline: { baseRunId: string } | null = null;
       const executionContinuation =
         issueRef && !isConversationExecutionScope(issueContext) && !isFailedChatRunRetry && issueContext?.assigneeAgentId === agent.id
           ? await buildExecutionContinuation({
@@ -21215,6 +21220,8 @@ export function heartbeatService(
                 ? capture => { nativeTaskContinuationCapture.value = capture; } : undefined,
               onStageTriggerCapture: agent.adapterType === "paperclip_runner"
                 ? trigger => { nativeStageContinuationTrigger.value = trigger; } : undefined,
+              onEmptyDeliveredBaseline: agent.adapterType === "paperclip_runner"
+                ? baseline => { nativeEmptyDeliveredBaseline = baseline; } : undefined,
             })
           : null;
       if (nativeTaskContinuationCapture.value?.finalizedSummary) delete context.paperclipContinuationSummary;
@@ -23371,6 +23378,7 @@ export function heartbeatService(
           runtimeSessionParamsForAdapter = null;
           previousSessionDisplayId = null;
           delete executionContinuation?.resumeDelta;
+          nativeEmptyDeliveredBaseline = null;
         }
       }
       const runtimeForAdapter = {
@@ -23380,17 +23388,17 @@ export function heartbeatService(
         taskKey,
       };
       // A delta is safe only when the selected provider session is exactly the
-      // task session whose last dispatch supplied the baseline history.
-      if (
-        executionContinuation?.resumeDelta &&
-        (!taskSessionForRun ||
-          !taskSession?.sessionDisplayId ||
-          runtimeForAdapter.sessionDisplayId !== taskSession.sessionDisplayId ||
-          resetTaskSession ||
-          context.forceFreshSession === true)
-      ) {
+      // task session whose last dispatch supplied the baseline history. The
+      // same holds for a reported empty baseline (CONF15-W9 Step 0).
+      const resumeDeltaSessionUnsafe = !taskSessionForRun ||
+        !taskSession?.sessionDisplayId ||
+        runtimeForAdapter.sessionDisplayId !== taskSession.sessionDisplayId ||
+        resetTaskSession ||
+        context.forceFreshSession === true;
+      if (executionContinuation?.resumeDelta && resumeDeltaSessionUnsafe) {
         delete executionContinuation.resumeDelta;
       }
+      if (resumeDeltaSessionUnsafe) nativeEmptyDeliveredBaseline = null;
       const configFreshnessResultMetadata = {
         version: sessionConfigMetadata.version,
         session: {
@@ -24447,7 +24455,11 @@ export function heartbeatService(
                 ...nativeProjectScopeCandidate.payloadSourceSnapshot.policy,
                 projectIds: [...new Set([...nativeProjectScopeCandidate.payloadSourceSnapshot.policy.projectIds, selectedProjectId!])].sort(),
               } : null;
-            const nativeExecutionWithCheckpoint =
+            // CONF15-W9 Step 0: the compact continuation's W9 forms (an empty
+            // delivered baseline, an inert plan context) apply only to a
+            // verified retained resume, decided below from the built input.
+            let nativeVerifiedRetainedResume = false;
+            const buildNativeExecutionSelection = () =>
               buildNativeExecutionWithCheckpoint({
                 previousRun: previousNativeRun,
                 normalizedSessionId: nativeSessionId,
@@ -24463,6 +24475,7 @@ export function heartbeatService(
                     initialCommunicationGuidance: nativeReviewRequest ? null : readNonEmptyString(context.paperclipTaskCommunicationGuidance),
                     wakePayload: context.paperclipWake,
                     resumedSession,
+                    verifiedRetainedResume: nativeVerifiedRetainedResume,
                     previousTurn: (() => {
                       if (!previousNativeRun || nativeReviewRequest) return null;
                       try {
@@ -24532,19 +24545,56 @@ export function heartbeatService(
                     runtimeContext: nativeRuntimeContext,
                   }),
               });
+            let nativeExecutionWithCheckpoint = buildNativeExecutionSelection();
+            const nativeRetainedResumeWitnessFor = (selection: typeof nativeExecutionWithCheckpoint) =>
+              previousNativeRun && selection.checkpoint && !nativeReviewRequest
+                ? nativeRetainedRunResumeWitness({ previousRun: previousNativeRun,
+                    currentExecution: selection.execution,
+                    currentResponsibleUserId: run.responsibleUserId ?? null,
+                    currentConversationSessionGeneration: (() => {
+                      const value = parseObject(run.contextSnapshot).conversationSessionGeneration;
+                      return Number.isSafeInteger(value) && (value as number) >= 0 ? value as number : null;
+                    })(),
+                    requireConversationGeneration: isConversationExecutionScope(issueContext),
+                    executionTargetKind: executionTarget?.kind === "remote" ? "remote" : "local" })
+                : null;
+            nativeBootstrapRetainedRunSource = nativeRetainedResumeWitnessFor(nativeExecutionWithCheckpoint);
+            // CONF15-W9 Step 0: only a verified retained resume of an OpenCode
+            // v4 input (the condition `qualifyNativeRetainedCompactContinuation`
+            // checks) builds its compact continuation over the retained Run's
+            // empty delivered history and keeps an inert plan context. Its input
+            // is rebuilt with those forms; the rebuilt input must keep exactly
+            // the same verified witness, or every W9 form is withdrawn again and
+            // the first (pre-W9) input stands. Every other execution keeps its
+            // pre-W9 envelope and prompt.
+            if (nativeVerifiedRetainedResumeApplies({ execution: nativeExecutionWithCheckpoint.execution,
+              witnessSource: nativeBootstrapRetainedRunSource?.source ?? null, previousRunId: previousNativeRun?.id ?? null })) {
+              // Assigned by the continuation builder's callback above.
+              const reportedBaseline = nativeEmptyDeliveredBaseline as { baseRunId: string } | null;
+              // The wake payload holds its own redacted copy of the envelope;
+              // every copy (and the capture's) gets the baseline, or none does.
+              const baseline = reportedBaseline &&
+                reportedBaseline.baseRunId === nativeBootstrapRetainedRunSource!.source.runId
+                ? applyNativeRetainedResumeEmptyBaseline({ envelope: executionContinuation,
+                    wakeContinuation: parseObject(context.paperclipWake).executionContinuation,
+                    capture: nativeTaskContinuationCapture.value, baseRunId: reportedBaseline.baseRunId })
+                : null;
+              nativeVerifiedRetainedResume = true;
+              const rebuilt = buildNativeExecutionSelection();
+              const rebuiltWitness = nativeRetainedResumeWitnessFor(rebuilt);
+              if (rebuiltWitness && isDeepStrictEqual(rebuiltWitness.source, nativeBootstrapRetainedRunSource!.source) &&
+                rebuilt.normalizedSessionId === nativeExecutionWithCheckpoint.normalizedSessionId) {
+                nativeExecutionWithCheckpoint = rebuilt;
+                nativeBootstrapRetainedRunSource = rebuiltWitness;
+                if (baseline) await db.update(heartbeatRuns).set({ contextSnapshot: context, updatedAt: new Date() })
+                  .where(eq(heartbeatRuns.id, run.id));
+              } else {
+                nativeVerifiedRetainedResume = false;
+                baseline?.revert();
+              }
+            }
             nativeExecution = nativeExecutionWithCheckpoint.execution;
             nativeResumeCheckpoint = nativeExecutionWithCheckpoint.checkpoint;
-            nativeBootstrapRetainedRunSource = previousNativeRun && nativeResumeCheckpoint && !nativeReviewRequest
-              ? nativeRetainedRunResumeWitness({ previousRun: previousNativeRun,
-                  currentExecution: nativeExecution,
-                  currentResponsibleUserId: run.responsibleUserId ?? null,
-                  currentConversationSessionGeneration: (() => {
-                    const value = parseObject(run.contextSnapshot).conversationSessionGeneration;
-                    return Number.isSafeInteger(value) && (value as number) >= 0 ? value as number : null;
-                  })(),
-                  requireConversationGeneration: isConversationExecutionScope(issueContext),
-                  executionTargetKind: executionTarget?.kind === "remote" ? "remote" : "local" })
-              : null;
             const nativeWorkspaceExecution = nativeExecution;
             if (!nativeWorkspaceExecution) throw new Error("native_bootstrap_execution_input_unavailable");
             const nativeBootstrapWorkspaceSource: Extract<NativePayloadSourceInput, { kind: "workspace_metadata" }> = { kind: "workspace_metadata", runId: run.id,
@@ -24675,6 +24725,17 @@ export function heartbeatService(
             // A mismatch stays unknown rather than carrying full-render sources
             // onto a compact or otherwise substituted prompt.
             const selectedMarkdown = selectedNativeTaskSourceMap ? selectedNativeTaskPrompt : "";
+            // CONF15-W9: a compact OpenCode continuation is a closure input only
+            // for a verified retained resume whose every compact field is
+            // re-derived from this Task's and the one retained Run's records;
+            // the executor then sends the full v2 envelope in its place.
+            const nativeQualifiedCompactContinuation = "continuationPrompt" in nativeExecution && nativeExecution.continuationPrompt &&
+              nativeBootstrapRetainedRunSource && previousNativeRun
+              ? qualifyNativeRetainedCompactContinuation({ execution: nativeExecution,
+                  retainedSource: nativeBootstrapRetainedRunSource.source, retainedRun: previousNativeRun,
+                  capture: closedTaskContinuation, wakeSource: nativeTaskWakeSource, wakePayload: context.paperclipWake,
+                  ordinaryPlanRead })
+              : null;
             const nativeBootstrapUnsupported = {
               review: Boolean(nativeReviewRequest && (!nativeReviewWakeWitness || !nativeTaskWakeSource || !selectedNativeTaskSourceMap)), directPrompt: Boolean(directAgentPrompt),
               previousRun: Boolean(previousNativeRun && nativeResumeCheckpoint && !nativeBootstrapRetainedRunSource),
@@ -24682,7 +24743,8 @@ export function heartbeatService(
               resume: Boolean(nativeResumeCheckpoint && !nativeBootstrapRetainedRunSource),
               initialGuidance: Boolean("initialCommunicationGuidance" in nativeExecution && nativeExecution.initialCommunicationGuidance &&
                 !nativeTaskWakeSource?.initialGuidanceHash),
-              continuation: Boolean("continuationPrompt" in nativeExecution && nativeExecution.continuationPrompt),
+              continuation: Boolean("continuationPrompt" in nativeExecution && nativeExecution.continuationPrompt) &&
+                !nativeQualifiedCompactContinuation,
               planning: Boolean("planningContext" in nativeExecution && nativeExecution.planningContext),
               // Replay is qualified only when each exact rendered JSON line
               // has one current comment source reference. Missing/ambiguous
@@ -24745,8 +24807,8 @@ export function heartbeatService(
               ?.filter((reference): reference is Exclude<NativeRenderedSourceReference, { kind: "task_wake_interaction_state" }> & { kind: "attachment" } =>
                 reference.kind === "attachment") ?? [];
             const buildNativeBootstrapSet = (attachmentCandidates: NativePreparedSourceCandidate[] = [],
-              references = selectedNativeTaskSourceMap?.references ?? null) =>
-              buildNativeBootstrapSourceSet({
+              references = selectedNativeTaskSourceMap?.references ?? null) => {
+              const sourceSet = buildNativeBootstrapSourceSet({
                 companyId: agent.companyId,
                 runId: run.id,
                 agentId: agent.id,
@@ -24813,6 +24875,15 @@ export function heartbeatService(
                 ...(process.env.PAPERCLIP_NATIVE_SOURCE_CLOSURE_DIAGNOSTICS === "1"
                   ? { onDiagnostic: reason => { nativeBootstrapSourceSetDiagnostics.push(reason); } } : {}),
               });
+              // A qualified compact continuation names exactly its one retained Run.
+              if (sourceSet && nativeQualifiedCompactContinuation && nativeBootstrapRetainedRunSource &&
+                !nativeCompactContinuationSourceSetAdmits({ retainedSource: nativeBootstrapRetainedRunSource.source,
+                  inputs: sourceSet.inputs })) {
+                nativeBootstrapSourceSetDiagnostics.push("compact_continuation_retained_runs");
+                return null;
+              }
+              return sourceSet;
+            };
             // Attachment references cannot be qualified until the runner has
             // staged bytes and captured their current DB owners below. Preflight
             // every non-attachment reference now; never use that partial set as

@@ -910,7 +910,7 @@ export type NativeOrdinaryPlanReadCapture = {
   source: Extract<NativePayloadSourceInput, { kind: "document_revision" }>; revisionNumber: number;
 };
 
-function exactNativeOrdinaryPlanContext(input: {
+export function exactNativeOrdinaryPlanContext(input: {
   companyId: string; issueId: string; runId: string; agentId?: string; responsibleUserId?: string | null; wakeupRequestId?: string | null;
   capture?: NativeOrdinaryPlanReadCapture | null; value: unknown;
 }): boolean {
@@ -1532,6 +1532,8 @@ export function buildNativeExecutionInput(input: {
   nativeReviewAssignment?: NativeReviewAssignment | null;
   resumedSession?: boolean;
   previousTurn?: { runId: string; task: { title: string; description: string | null } } | null;
+  /** Set only by heartbeat for a verified retained resume (CONF15-W9 Step 0). */
+  verifiedRetainedResume?: boolean;
   conversationMode?: boolean;
   agentId: string;
   workspace: {
@@ -1666,6 +1668,7 @@ export function buildNativeExecutionInput(input: {
         previousIssue: input.previousTurn.task,
         allowExternalChat: true,
         issue: input.issue,
+        verifiedRetainedResume: input.verifiedRetainedResume === true,
       }),
     } : {}),
     executionMode,

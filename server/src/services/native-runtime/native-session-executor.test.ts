@@ -1,3 +1,4 @@
+import type { NativePayloadSourceInput } from "@paperclipai/shared";
 import { REMOTE_NATIVE_ERASER_ENV } from "./remote-runner-identity.js";
 import { exactNativeManagedArtifactCommand, nativeProviderPackVerificationArgs, nativeProviderPackLinkCommand, NATIVE_SELECTED_PROVIDER_PACK_DISCOVERY_SCRIPT, NATIVE_FIXED_ARTIFACT_CHECKSUM_SCRIPT, configuredNativeProviderPackInstallRoot } from "./native-artifact-preparation.js";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
@@ -12085,5 +12086,75 @@ describe("managed OpenCode continuation source preparation", () => {
       .toEqual(compactInput);
     expect(() => canonicalManagedOpenCodeContinuationTurn({ execution, turnInput: compactInput, sourceClosure,
       authorityScope: { ...authorityScope, runId: randomUUID() } })).toThrow("managed_opencode_continuation_source_binding_invalid");
+  });
+
+  // CONF15-W9: a qualified retained resume's closure also carries the retained
+  // Run's wake and that Run's Task version, as provenance of a document the
+  // retained Run wrote (an ordinary plan read). The current wake and Task stay
+  // exactly one each; the other wake is only the single retained Run's.
+  it("replaces the compact turn under a retained Run's provenance wake and Task version only", () => {
+    const companyId = randomUUID(), runId = randomUUID(), retainedRunId = randomUUID();
+    const issueId = randomUUID(), agentId = randomUUID(), messageId = randomUUID();
+    const issue = { id: issueId, identifier: "NATIVE-2", title: "Current task", description: "Current description", workMode: "standard" };
+    const message = { id: messageId, body: "Compact current delta only", authorType: "user",
+      authorId: "current-human", sourceTrust: "user", createdByRunId: null };
+    const execution = parseNativeExecutionInput(buildNativeExecutionInput({
+      companyId, runId, agentId, issue, taskPrompt: "Full current task prompt",
+      wakePayload: { reason: "issue_commented", issue, commentIds: [messageId], latestCommentId: messageId,
+        comments: [{ ...message, author: { type: "user", id: "current-human" } }],
+        commentWindow: { requestedCount: 1, includedCount: 1, missingCount: 0 },
+        executionContinuation: { version: 1, objective: message.body, messages: [message],
+          resumeDelta: { baseRunId: retainedRunId, messages: [message] } } },
+      resumedSession: true, previousTurn: { runId: retainedRunId, task: { title: issue.title, description: issue.description } },
+      conversationMode: false, workspace: { id: runId, cwd: "/tmp/current-native-task", repoUrl: null, repoRef: null, branchName: null },
+      normalizedSessionId: "opencode-retained-session", provider: "opencode", opencodePermissionMode: "allow", model: "openrouter/test/model",
+      completionContract: { id: randomUUID(), sha256: `sha256:${"a".repeat(64)}`, schemaVersion: "paperclip.run-result.v1",
+        contract: { revision: "1", objective: "Deliver the current task", criteria: [{ id: "output", requirement: "Deliver it" }] } },
+      runtimeContext: nativeRuntimeContextFixture(),
+    }));
+    const workspaceTuple = { cwd: execution.workspace.cwd, repoUrl: execution.workspace.repoUrl,
+      repoRef: execution.workspace.repoRef, branchName: execution.workspace.branchName };
+    const currentTask = { kind: "task" as const, issueId, sourceVersion: "2", contentHash: "a".repeat(64) };
+    const currentWake = { kind: "native_task_wake" as const, runId, issueId, sourceVersion: "2", contentHash: "b".repeat(64) };
+    const retained = { kind: "retained_run" as const, runId: retainedRunId, inputDigest: "c".repeat(64), dispatchDigest: "d".repeat(64) };
+    const retainedWake = { kind: "native_task_wake" as const, runId: retainedRunId, issueId, sourceVersion: "1", contentHash: "e".repeat(64) };
+    const retainedTask = { kind: "task" as const, issueId, sourceVersion: "1", contentHash: "f".repeat(64) };
+    const workspace = { kind: "workspace_metadata" as const, runId, executionWorkspaceId: runId, origin: "task_session" as const,
+      sourceVersion: `task-session:${runId}`, contentHash: nativeSha256(workspaceTuple) };
+    const retainedWorkspace = { ...workspace, runId: retainedRunId, executionWorkspaceId: retainedRunId,
+      sourceVersion: `task-session:${retainedRunId}` };
+    const closure = (inputs: NativePayloadSourceInput[]) => ({
+      sourceSet: { policy: { issueIds: [issueId], projectIds: [], runIds: [retainedRunId], memoryIds: [], foundationRevisionIds: [] }, inputs },
+      taskEnvelopeDigest: nativeSha256(buildNativeModelEnvelope(execution).task),
+    }) as NativeBootstrapSourceClosure;
+    const compactInput = { message: { role: "user" as const,
+      text: JSON.stringify(buildNativeModelEnvelope(execution, { resumedSession: true })) },
+      continuation: true as const, requestedCollaborationMode: "default" as const };
+    const authorityScope = { companyId, runId, agentId, issueId, executionInputHash: nativeSha256(execution) };
+    const replace = (inputs: NativePayloadSourceInput[]) => canonicalManagedOpenCodeContinuationTurn({ execution,
+      turnInput: compactInput, sourceClosure: closure(inputs), authorityScope });
+    const full = { message: { role: "user", text: JSON.stringify(buildNativeModelEnvelope(execution)) }, requestedCollaborationMode: "default" };
+    const admitted = [currentTask, currentWake, retained, retainedWake, retainedTask, workspace, retainedWorkspace];
+    expect(replace(admitted)).toEqual(full);
+    // Without provenance, as before.
+    expect(replace([currentTask, currentWake, retained, workspace])).toEqual(full);
+    const refuses = (inputs: NativePayloadSourceInput[]) =>
+      expect(() => replace(inputs)).toThrow("managed_opencode_continuation_source_binding_invalid");
+    // Another Run's wake without exactly one retained Run, or of another Run.
+    refuses([currentTask, currentWake, retainedWake, retainedTask, workspace]);
+    refuses([currentTask, currentWake, retained, { ...retained, runId: randomUUID() }, retainedWake, retainedTask, workspace]);
+    refuses([currentTask, currentWake, retained, { ...retainedWake, runId: randomUUID() }, retainedTask, workspace]);
+    refuses([currentTask, currentWake, retained, retainedWake, { ...retainedWake, contentHash: "1".repeat(64) }, retainedTask, workspace]);
+    // No current wake, two current wakes, or only the retained wake.
+    refuses([currentTask, retained, retainedWake, retainedTask, workspace]);
+    refuses([currentTask, currentWake, { ...currentWake, contentHash: "2".repeat(64) }, retained, workspace]);
+    // The Task: no current version, two current versions, a version beside no
+    // wake, more old versions than provenance wakes, or the old version first.
+    refuses([currentWake, retained, retainedWake, retainedTask, workspace]);
+    refuses([currentTask, { ...currentTask, contentHash: "3".repeat(64) }, currentWake, retained, workspace]);
+    refuses([currentTask, currentWake, retained, retainedWake, { ...retainedTask, sourceVersion: "0" }, workspace]);
+    refuses([currentTask, currentWake, retained, { ...retainedTask, sourceVersion: "0" }, workspace]);
+    refuses([currentTask, currentWake, retained, retainedWake, retainedTask, { ...retainedTask, contentHash: "4".repeat(64) }, workspace]);
+    refuses([retainedTask, currentTask, currentWake, retained, retainedWake, workspace]);
   });
 });

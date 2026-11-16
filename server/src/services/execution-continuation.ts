@@ -471,6 +471,11 @@ export async function buildExecutionContinuation(input: {
   onCommentSourceCapture?: (capture: NativeCommentSourceCapture) => void;
   onContinuationSourceCapture?: (capture: NativeTaskContinuationCapture) => void;
   onStageTriggerCapture?: (trigger: NativeStageTaskContinuationTrigger) => void;
+  /** Reports that the previous Run's own envelope delivered an empty Task
+   * history and that a resume delta would otherwise be built over it. No delta
+   * or previous context is built here for it: only a verified retained resume
+   * applies that baseline (`nativeRetainedResumeEmptyBaseline`). */
+  onEmptyDeliveredBaseline?: (baseline: { baseRunId: string }) => void;
 }): Promise<ExecutionContinuationEnvelope> {
   const { db, companyId, issueId } = input;
   const [issue] = await db
@@ -632,6 +637,12 @@ export async function buildExecutionContinuation(input: {
   const deliveredMessages = Array.isArray(priorEnvelope.messages)
     ? priorEnvelope.messages.map(object)
     : null;
+  // A delivered history is a delta baseline only when it is non-empty. An
+  // empty one (an assignment wake on a Task without comments) is only
+  // reported: a verified retained resume, and nothing else, applies it later
+  // (CONF15-W9, scoped by the lead's Step 0 decision).
+  if (!fullHistoryTurn && deliveredMessages !== null && deliveredMessages.length === 0 && input.previousContextRunId)
+    input.onEmptyDeliveredBaseline?.({ baseRunId: input.previousContextRunId });
   const resumeDelta =
     !fullHistoryTurn && deliveredMessages?.length && input.previousContextRunId
       ? {
@@ -1005,4 +1016,54 @@ export async function buildExecutionContinuation(input: {
   }
   if (!commentSourcesCaptured) await captureCommentSources();
   return envelope;
+}
+
+/** CONF15-W9, scoped by the lead's Step 0 decision: the resume delta and
+ * previous context a verified retained resume builds over its retained Run's
+ * empty delivered history. Every current message is new to that provider
+ * session, so the delta is the envelope's whole (already redacted) history,
+ * based on that Run. The caller applies it only for a verified retained resume
+ * of exactly `baseRunId`, and only when `buildExecutionContinuation` reported
+ * that empty baseline and built no delta of its own. */
+export function nativeRetainedResumeEmptyBaseline(envelope: ExecutionContinuationEnvelope, baseRunId: string): {
+  resumeDelta: NonNullable<ExecutionContinuationEnvelope["resumeDelta"]>;
+  previousContext: NonNullable<NativeTaskContinuationCapture["previousContext"]>;
+} | null {
+  if (!baseRunId || envelope.resumeDelta !== undefined || !Array.isArray(envelope.messages)) return null;
+  return { resumeDelta: { baseRunId, messages: structuredClone(envelope.messages) },
+    previousContext: { runId: baseRunId, messages: [] } };
+}
+
+/** Apply that baseline to every copy of the one continuation record: the
+ * heartbeat context's envelope, the wake payload's own redacted copy and the
+ * continuation capture's copy. All copies must still be the same record, with
+ * no delta and no previous context; otherwise nothing changes (null). Returns a
+ * revert that withdraws the baseline from every copy again. */
+export function applyNativeRetainedResumeEmptyBaseline(input: {
+  envelope: ExecutionContinuationEnvelope | null | undefined;
+  wakeContinuation: unknown;
+  capture: NativeTaskContinuationCapture | null | undefined;
+  baseRunId: string;
+}): { revert(): void } | null {
+  const { envelope, capture } = input;
+  const wake = input.wakeContinuation && typeof input.wakeContinuation === "object" && !Array.isArray(input.wakeContinuation)
+    ? input.wakeContinuation as ExecutionContinuationEnvelope : null;
+  if (!envelope || !wake || !isDeepStrictEqual(wake, envelope) ||
+    (capture && (!isDeepStrictEqual(capture.envelope, envelope) || capture.previousContext !== undefined))) return null;
+  const forEnvelope = nativeRetainedResumeEmptyBaseline(envelope, input.baseRunId);
+  const forWake = nativeRetainedResumeEmptyBaseline(wake, input.baseRunId);
+  if (!forEnvelope || !forWake) return null;
+  envelope.resumeDelta = forEnvelope.resumeDelta;
+  wake.resumeDelta = forWake.resumeDelta;
+  if (capture) {
+    capture.envelope.resumeDelta = structuredClone(forEnvelope.resumeDelta);
+    capture.previousContext = forEnvelope.previousContext;
+  }
+  return {
+    revert() {
+      delete envelope.resumeDelta;
+      delete wake.resumeDelta;
+      if (capture) { delete capture.envelope.resumeDelta; delete capture.previousContext; }
+    },
+  };
 }

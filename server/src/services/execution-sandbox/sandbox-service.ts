@@ -30,6 +30,7 @@ import { lockAnalyticalCompany } from "../analytical-privacy.js";
 import { lockMemoryPrivacy } from "../memory/memory-privacy.js";
 import { assertNativeOpenCodeConformanceWorkspaceRootReceipt } from "../native-runtime/native-workspace-sync.js";
 import type { NativeOpenCodeConformanceHostAuthority } from "./native-host-bridge.js";
+import { NATIVE_OPENCODE_CONFORMANCE_PROBE_WALL_CLOCK_SECONDS } from "../orchestration/native-opencode-conformance-window.js";
 
 type Binding = typeof runtimeSandboxBindings.$inferSelect;
 type PreparedSandbox = import("./backend.js").PreparedSandbox;
@@ -1661,7 +1662,9 @@ export function executionSandboxService(db: Db, options: {
         network: { defaultDeny: true, destinations: [], denyPrivateAndMetadata: true },
         credentials: { mode: "none", bindings: [] },
         resources: { ...boundary.resources,
-          wallClockSeconds: Math.min(boundary.resources.wallClockSeconds, initial.source.conformancePlan!.budgets.maxWallClockSeconds) },
+          // CONF15-P5: one probe's own window, never the group's total.
+          wallClockSeconds: Math.min(boundary.resources.wallClockSeconds, NATIVE_OPENCODE_CONFORMANCE_PROBE_WALL_CLOCK_SECONDS,
+            initial.source.conformancePlan!.budgets.maxWallClockSeconds) },
       };
       const compiled = await service.compile(actor, input.companyId, initial.binding.id, {
         expectedVersion: initial.binding.version, executionManifestId: input.manifestId, candidatePolicy: candidate,
