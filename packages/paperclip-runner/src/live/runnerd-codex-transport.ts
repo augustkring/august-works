@@ -42,6 +42,7 @@ import type { NativeRunIdentity } from "../contracts/types.js";
 import type { PrpEvent } from "../protocol/replay-contract.js";
 import { NativeSessionCloseUnrecoverableError } from "../contracts/native-session-backend.js";
 import type {
+  HarnessConfirmedRunBinding,
   HarnessRuntimeRequestResolution,
   PersistedHarnessProviderIdentity,
 } from "../contracts/harness-driver.js";
@@ -3876,6 +3877,32 @@ class DurablePrpCodexTransport implements CodexAppServerTransport {
     throw new Error(
       `provider_transport_failed: warm runner did not re-authenticate within ${this.options.runnerReconnectGraceMs ?? 5_000}ms`,
     );
+  }
+
+  /**
+   * CONF15-P2 (d): the binding runnerd authenticated with on this transport's
+   * durable authority, read from that live authenticated connection (equal to
+   * the core's current identity), only after startup completed and with no
+   * warm transition or transport failure pending. It is never read from
+   * `options.persistedSession` or the resume snapshot.
+   */
+  confirmedRunBinding(): HarnessConfirmedRunBinding | null {
+    const core = this.#core;
+    if (
+      core === null ||
+      !this.#startupComplete ||
+      this.#failure !== null ||
+      this.#pendingWarmRecoveryCompletion !== null
+    )
+      return null;
+    const identity = core.authenticatedRunnerIdentity();
+    if (identity === null) return null;
+    return {
+      runId: identity.runId,
+      normalizedSessionId: identity.normalizedSessionId,
+      runnerInstanceId: identity.runnerInstanceId,
+      environmentLeaseId: identity.environmentLeaseId,
+    };
   }
 
   async attachRun(input: {

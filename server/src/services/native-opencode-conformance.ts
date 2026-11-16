@@ -26,7 +26,7 @@ import { environmentService } from "./environments.js";
 import { providerConformanceRequirements } from "./provider-capabilities.js";
 import { validateNativeOpenCodeConformanceHarness } from "./orchestration/native-opencode-conformance-admission.js";
 import { verifyNativeCleanupRuntimeState } from "./execution-sandbox/run-lease-cleanup.js";
-import type { NativeExecutionInput, NativeSession, NativeSessionBackend, PersistedNativeSession } from "../vendor/paperclip-runner/index.js";
+import type { NativeConfirmedRunBinding, NativeExecutionInput, NativeSession, NativeSessionBackend, PersistedNativeSession } from "../vendor/paperclip-runner/index.js";
 import { appendHeartbeatRunEvent } from "./heartbeat-run-events.js";
 import { persistHeartbeatRunProcessMetadata } from "./heartbeat.js";
 import { PROCESS_START_REQUESTED } from "./native-local-process-stop.js";
@@ -281,6 +281,28 @@ async function bindOpenCodeProbeTurnId(db: Db, runId: string, turnId: string, di
 }
 
 /**
+ * CONF15-P2 (d). The recovered runner's binding must equal, field by field,
+ * what the server sent for this probe Run: the probe Run and session, the
+ * conformance runner instance, and this Run's own EnvironmentRun lease. The
+ * binding has exactly these four non-empty string fields. A missing binding,
+ * an extra field, or any other value refuses (never falls back to attach).
+ */
+export function nativeOpenCodeConformanceRecoveredBindingMatches(binding: unknown,
+  expected: NativeConfirmedRunBinding): binding is NativeConfirmedRunBinding {
+  if (!binding || typeof binding !== "object" || Array.isArray(binding)) return false;
+  const candidate = binding as Record<string, unknown>;
+  if (Object.keys(candidate).sort().join(",") !== "environmentLeaseId,normalizedSessionId,runId,runnerInstanceId")
+    return false;
+  if (![expected.runId, expected.normalizedSessionId, expected.runnerInstanceId, expected.environmentLeaseId]
+    .every(value => typeof value === "string" && value !== "")) return false;
+  if (candidate.runId !== expected.runId) return false;
+  if (candidate.normalizedSessionId !== expected.normalizedSessionId) return false;
+  if (candidate.runnerInstanceId !== expected.runnerInstanceId) return false;
+  if (candidate.environmentLeaseId !== expected.environmentLeaseId) return false;
+  return true;
+}
+
+/**
  * Drives a real NativeSessionBackend turn and retains actual event/session
  * evidence. The caller must supply the backend constructed by the normal
  * `native-session-executor` remote target owner; local OpenCode backends are
@@ -288,6 +310,8 @@ async function bindOpenCodeProbeTurnId(db: Db, runId: string, turnId: string, di
  */
 export async function runManagedOpenCodeProbe(input: { db: Db; createBackend(): Promise<NativeSessionBackend>; execution: NativeExecutionInput;
   runnerInstanceId: string; responsibleUserId: string; groupId: string; planId: string; profileId: string;
+  /** This probe Run's own EnvironmentRun lease, the one its backend was built for. */
+  environmentLeaseId: string;
   probe: ManagedOpenCodeProbe }): Promise<ManagedOpenCodeProbeResult> {
   const { probe } = input;
   const signal = probe.signal;
@@ -329,8 +353,20 @@ export async function runManagedOpenCodeProbe(input: { db: Db; createBackend(): 
           previous.identity.issueId !== probe.identity.issueId || previous.identity.sessionId !== probe.identity.sessionId ||
           !backend.recoverSession) throw new Error("managed_opencode_resume_identity_changed");
       const recovered = await backend.recoverSession(previous, { signal });
-      if (!recovered.recovered || !recovered.session?.attachRun) throw new Error("managed_opencode_resume_not_confirmed");
-      session = recovered.session; await recovered.session.attachRun({ identity: probe.identity });
+      if (!recovered.recovered || !recovered.session) throw new Error("managed_opencode_resume_not_confirmed");
+      session = recovered.session;
+      // CONF15-P2 (d): after a cold lease handoff the recovered runner is
+      // already bound to this Run, so `run.attach` would repeat that binding
+      // (and runnerd refuses a same-Run attach). Adopt this Run only when the
+      // runner-confirmed binding equals exactly what the server sent for it;
+      // anything else refuses rather than attaching.
+      const expectedBinding: NativeConfirmedRunBinding = { runId: probe.identity.runId,
+        normalizedSessionId: probe.identity.sessionId, runnerInstanceId: input.runnerInstanceId,
+        environmentLeaseId: input.environmentLeaseId };
+      if (!nativeOpenCodeConformanceRecoveredBindingMatches(recovered.binding, expectedBinding))
+        throw new Error("managed_opencode_resume_binding_unconfirmed");
+      if (!session.adoptConfirmedRun) throw new Error("managed_opencode_resume_adopt_unavailable");
+      session.adoptConfirmedRun({ identity: probe.identity, binding: recovered.binding });
     } else session = await backend.openSession({ identity: probe.identity, workingDirectory: probe.workingDirectory, signal });
     const actualIdentity = session.identity();
     for (const [key, value] of Object.entries(probe.identity))
@@ -936,7 +972,7 @@ export function nativeOpenCodeConformanceService(db: Db, options: Options) {
         if (!preflightAuthority) throw forbidden("Current Sandbox Host and lease authority are required before Native session start");
         probeProgress.current = { kind: probeKind, step: "run" };
         const result = await runManagedOpenCodeProbe({ db, createBackend: remote.createBackend, execution: remote.execution,
-          runnerInstanceId: remote.runnerInstanceId, responsibleUserId: userId, groupId, planId: harness.plan.id, profileId: target.profile.id,
+          runnerInstanceId: remote.runnerInstanceId, environmentLeaseId: remote.leaseId, responsibleUserId: userId, groupId, planId: harness.plan.id, profileId: target.profile.id,
           probe: { identity: remote.identity,
           workingDirectory: remote.workingDirectory, prompt, expectedOutput, previous: snapshots.get(target.agent.id),
           signal: AbortSignal.timeout(Math.max(1, Math.min(harness.plan.budgets.maxWallClockSeconds * 1000,

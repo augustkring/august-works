@@ -55,7 +55,7 @@ describe("Native OpenCode conformance issuer tuple ordering", () => {
   });
   const probeInput = (state: ReturnType<typeof setup>, resolveSource: () => Promise<ReturnType<typeof issuerTuple>>) => ({
     db: state.db, createBackend: async () => state.backend, execution: state.execution,
-    runnerInstanceId: "runner-1", responsibleUserId: "user-1", groupId: "group-1", planId: "plan-1", profileId: "profile-1",
+    runnerInstanceId: "runner-1", environmentLeaseId: "lease-1", responsibleUserId: "user-1", groupId: "group-1", planId: "plan-1", profileId: "profile-1",
     probe: { identity: state.identity, workingDirectory: "/probe", prompt: "fixed synthetic prompt", signal: AbortSignal.timeout(5_000),
       resolveSource },
   });
@@ -98,7 +98,7 @@ describe("Native OpenCode conformance issuer tuple ordering", () => {
     const state = setup(async () => { order.push("unexpectedPersist"); throw new Error("persistence_must_not_run"); });
     const result = await runManagedOpenCodeProbe({
       db: state.db, createBackend: async () => state.backend, execution: state.execution,
-      runnerInstanceId: "runner-1", responsibleUserId: "user-1", groupId: "group-1", planId: "plan-1", profileId: "profile-1",
+      runnerInstanceId: "runner-1", environmentLeaseId: "lease-1", responsibleUserId: "user-1", groupId: "group-1", planId: "plan-1", profileId: "profile-1",
       probe: {
         identity: state.identity, workingDirectory: "/probe", prompt: "fixed synthetic prompt", signal: AbortSignal.timeout(5_000),
         resolveSource: async () => { order.push("resolveIssuerTuple"); throw new Error("issuer_tuple_missing"); },
