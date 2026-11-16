@@ -250,6 +250,7 @@ import { removeNativeHarnessBackup } from "./native-harness-backup-cleanup.js";
 import { registerLiveRunnerGoalController } from "../runner-goal-control-broker.js";
 import { applyRunnerGoalPrpEvent } from "../runner-goals.js";
 import { readProcessStartedAt } from "../hot-restart.js";
+import { nativeSessionWithoutRunScopedState } from "./native-session-run-scope.js";
 import {
   NativeRunnerOwnershipUnverifiedError,
   isNativeRunnerOwnershipHeld,
@@ -6272,24 +6273,16 @@ function loadWarmNativeCheckpoint(
     persistedIdentity.issueId === execution.binding.issueId;
   const resumed = sameRunRecovery
     ? structuredClone(envelope.snapshot)
-    : {
-        ...envelope.snapshot,
-        identity: {
-          runId: execution.binding.runId,
-          sessionId: nativeSessionKey(execution),
-          companyId: execution.binding.companyId,
-          issueId: execution.binding.issueId,
-          agentId: execution.binding.agentId,
-        },
-        // A warm provider can be rebound only after the previous run settled.
-        // Its provider identity survives, but run-scoped turn, result, and
-        // request authority must not cross into the new heartbeat run.
-        semanticResult: null,
-        terminal: null,
-        activeTurnId: null,
-        terminalTurns: [],
-        pendingRuntimeRequests: [],
-      };
+    : // A warm provider can be rebound only after the previous run settled.
+      // Its provider identity survives, but run-scoped turn, result, and
+      // request authority must not cross into the new heartbeat run.
+      nativeSessionWithoutRunScopedState(envelope.snapshot, {
+        runId: execution.binding.runId,
+        sessionId: nativeSessionKey(execution),
+        companyId: execution.binding.companyId,
+        issueId: execution.binding.issueId,
+        agentId: execution.binding.agentId,
+      });
   if (path !== scopedPath || envelope.configDigest !== configDigest) {
     // Upgrade the validated checkpoint atomically. When moving from a legacy
     // path, retain that file so an interrupted migration remains replayable.
