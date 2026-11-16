@@ -37,6 +37,7 @@ export type {
   NativeRunEvent,
   NativeRunResult,
   NativeRuntimeAssetReference,
+  NativeConfirmedRunBinding,
   NativeRuntimeContextSnapshot,
   NativeSession,
   NativeSessionBackend,

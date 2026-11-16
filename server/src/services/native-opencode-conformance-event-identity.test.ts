@@ -73,7 +73,7 @@ describe("Native OpenCode conformance probe event identity (CONF6)", () => {
       db: db as never, createBackend: async () => backend,
       execution: { binding: { companyId: identity.companyId, runId: identity.runId, issueId: identity.issueId,
         agentId: identity.agentId } } as NativeExecutionInput,
-      runnerInstanceId: "runner-1", responsibleUserId: "user-1", groupId: "group-1", planId: "plan-1", profileId: "profile-1",
+      runnerInstanceId: "runner-1", environmentLeaseId: "lease-1", responsibleUserId: "user-1", groupId: "group-1", planId: "plan-1", profileId: "profile-1",
       probe: { identity, workingDirectory: "/probe", prompt: "fixed synthetic prompt", signal: AbortSignal.timeout(5_000),
         ...(expectedOutput !== undefined ? { expectedOutput } : {}),
         source: { qualificationGroupId: "group-1", probeId: "probe-1", dispatchNonce: "nonce-1", planId: "plan-1",

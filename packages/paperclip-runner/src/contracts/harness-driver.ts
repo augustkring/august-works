@@ -488,10 +488,26 @@ export interface PersistedHarnessSession {
     | "allow_replacement_after_resume_failure";
 }
 
+/**
+ * The Run binding a durable runner confirmed after it authenticated to this
+ * controller: the identity runnerd presented on its authenticated connection,
+ * never a value copied from the persisted snapshot the controller supplied.
+ * It is evidence for the control plane to compare with its own records; it
+ * grants no authority by itself.
+ */
+export interface HarnessConfirmedRunBinding {
+  runId: string;
+  normalizedSessionId: string;
+  runnerInstanceId: string;
+  environmentLeaseId: string;
+}
+
 export interface HarnessSessionRecoveryResult {
   recovered: boolean;
   session?: HarnessSession;
   reason?: string;
+  /** Present only when the transport's authenticated runner confirmed it. */
+  binding?: HarnessConfirmedRunBinding;
 }
 
 export interface HarnessSession {
@@ -502,6 +518,12 @@ export interface HarnessSession {
   };
   events(): AsyncIterable<PrpEvent>;
   attachRun?(input: { runId: string }): Promise<void> | void;
+  /**
+   * Adopt the Run the transport's authenticated runner is already bound to,
+   * without a `run.attach` command. Only valid when that live binding names
+   * exactly this Run; it never rotates runner authority.
+   */
+  adoptConfirmedRun?(input: { runId: string }): void;
   startTurn(input: {
     message: NativeUserMessage;
     /** Set by orchestration only after successful provider-session recovery. */

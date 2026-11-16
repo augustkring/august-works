@@ -107,11 +107,46 @@ export class CodexHarnessSession
       this.pendingRuntimeRequestMap.clear();
       this.eventQueue.clear();
     }
-    if (this.codexUsageBaseline && input.runId !== this.runId) {
+    this.#rebindRun(input.runId);
+    this.emit("run.attached", { runId: input.runId, sameSession: true });
+  }
+
+  /**
+   * CONF15-P2 (d): adopt the Run the transport's authenticated runner is
+   * already bound to (a cold lease handoff started it under this Run), with
+   * no `run.attach`. The live transport binding must name exactly this Run;
+   * an idle session is required because no runner proof drains a prior turn.
+   */
+  adoptConfirmedRun(input: { runId: string }): void {
+    this.assertProtocolIntegrity();
+    if (!input.runId) throw new Error("codex_run_adopt_invalid");
+    if (
+      this.turnStartPending ||
+      this.activeTurnId !== null ||
+      this.pendingRuntimeRequestMap.size > 0
+    ) {
+      throw new Error("codex_run_adopt_busy");
+    }
+    const binding = this.transport.confirmedRunBinding?.() ?? null;
+    if (
+      binding === null ||
+      binding.runId !== input.runId ||
+      binding.normalizedSessionId !== this.normalizedSessionId
+    ) {
+      throw new Error("codex_run_adopt_unconfirmed");
+    }
+    // Events buffered at reconstruction carry the snapshot's Run; drop them
+    // exactly as a runner-proven attachment does.
+    this.eventQueue.clear();
+    this.#rebindRun(input.runId);
+  }
+
+  #rebindRun(runId: string): void {
+    if (this.codexUsageBaseline && runId !== this.runId) {
       this.codexUsageBaseline = { baseline: { ...this.codexUsageBaseline.latest }, latest: { ...this.codexUsageBaseline.latest } };
       this.usageSnapshot = codexRunUsage(this.codexUsageBaseline);
     }
-    this.runId = input.runId;
+    this.runId = runId;
     this.result = null;
     this.resultFingerprint = null;
     this.resultCallId = null;
@@ -124,7 +159,6 @@ export class CodexHarnessSession
     this.protocolFailed = false;
     this.protocolFailureCode = null;
     this.protocolFailureMessage = null;
-    this.emit("run.attached", { runId: input.runId, sameSession: true });
   }
 
   contextSnapshot(): CodexModelContextSnapshot {

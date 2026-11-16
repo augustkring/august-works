@@ -621,9 +621,14 @@ export class CodexAppServerDriver implements HarnessDriver {
       ) {
         await cancellation.wait(session.reconcile?.() ?? Promise.resolve({}));
       }
+      // CONF15-P2 (d): the binding comes only from the transport's live
+      // authenticated runner, never from `snapshot`. A transport without it
+      // (or not yet authenticated) adds no binding.
+      const binding = transport.confirmedRunBinding?.() ?? null;
       return {
         recovered: true,
         session,
+        ...(binding === null ? {} : { binding: structuredClone(binding) }),
       };
     } catch (error) {
       await cancellation.close().catch(() => {});

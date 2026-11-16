@@ -3338,3 +3338,30 @@ describe.sequential("DurablePrpControlPlane", () => {
     }
   });
 });
+
+describe("authenticated runner identity (CONF15-P2)", () => {
+  it("reports the identity only of the live authenticated runner that equals the current authority", async () => {
+    const root = mkdtempSync(resolve(tmpdir(), "runner-authenticated-identity-"));
+    const core = new DurablePrpControlPlane({ stateDirectory: root, identity, expectedRunnerVersion, expectedRunnerDigest });
+    try {
+      await core.start();
+      expect(core.authenticatedRunnerIdentity()).toBeNull();
+      const client = (await authenticate(core, core.issueBootstrapTicket()))!;
+      expect(core.authenticatedRunnerIdentity()).toEqual(identity);
+      // A changed durable identity (for example after a rotation) no longer
+      // matches what this runner authenticated with.
+      const original = core.store.state.identity.runId;
+      core.store.state.identity.runId = "00000000-0000-4000-8000-000000000002";
+      expect(core.authenticatedRunnerIdentity()).toBeNull();
+      core.store.state.identity.runId = original;
+      expect(core.authenticatedRunnerIdentity()).toEqual(identity);
+      client.socket.destroy();
+      for (let attempt = 0; attempt < 100 && core.activeRunnerConnectionCount() > 0; attempt += 1)
+        await new Promise((resolveWait) => setTimeout(resolveWait, 10));
+      expect(core.authenticatedRunnerIdentity()).toBeNull();
+    } finally {
+      await core.stop();
+      rmSync(root, { recursive: true, force: true });
+    }
+  }, 30_000);
+});

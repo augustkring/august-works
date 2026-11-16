@@ -1605,6 +1605,39 @@ export class DurablePrpControlPlane {
     ).length;
   }
 
+  /**
+   * The identity the single live authenticated runner presented in its
+   * `auth_hello`, only when it equals this authority's current durable
+   * identity. No, or more than one, authenticated runner yields null.
+   */
+  authenticatedRunnerIdentity(): DurableRecoveryIdentity | null {
+    const authenticated = [...this.#connections].filter(
+      (connection) =>
+        connection.secureChannel !== null && connection.identity !== null,
+    );
+    if (authenticated.length !== 1) return null;
+    const identity = authenticated[0]!.identity!;
+    const current = this.#store.state.identity;
+    const fields = [
+      "runnerInstanceId",
+      "environmentLeaseId",
+      "runId",
+      "normalizedSessionId",
+      "turnId",
+      "itemId",
+    ] as const;
+    for (const field of fields) {
+      if (
+        typeof identity[field] !== "string" ||
+        identity[field] === "" ||
+        identity[field] !== current[field] ||
+        identity[field] !== this.#identity[field]
+      )
+        return null;
+    }
+    return structuredClone(identity);
+  }
+
   /** A reusable close requires every admitted callback's exact durable result. */
   semanticToolResultsSettled(): boolean {
     return (

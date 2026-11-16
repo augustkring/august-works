@@ -1,5 +1,8 @@
 import { spawn, type ChildProcessWithoutNullStreams } from "node:child_process";
-import type { HarnessRuntimeRequestResolution } from "../../contracts/harness-driver.js";
+import type {
+  HarnessConfirmedRunBinding,
+  HarnessRuntimeRequestResolution,
+} from "../../contracts/harness-driver.js";
 import { githubCredentialEnvironment } from "../../github-credential-environment.js";
 
 export interface CodexRpcNotification {
@@ -59,6 +62,13 @@ export interface CodexAppServerTransport {
     turnId: string;
     itemId: string;
   }): Promise<void>;
+  /**
+   * The Run binding of the runner that authenticated to this transport's
+   * durable authority, read from that authenticated connection after startup
+   * completed. Null before authentication, during a warm transition, or after
+   * a transport failure. Never derived from a persisted snapshot.
+   */
+  confirmedRunBinding?(): HarnessConfirmedRunBinding | null;
   /** Records post-rehydration driver mapping without affecting run authority. */
   recordTraceInterpretation?(input: CodexTraceInterpretation): void;
 }
