@@ -106,7 +106,8 @@ import { callNativeOpenCodeConformanceMessages, issueNativeOpenCodeConformanceRu
 import { issueRecoveryActionService } from "../issue-recovery-actions.js";
 import { parseNativeExecutionInput, validatePrpEvent, validatePrpStructuredRunResult } from "../../vendor/paperclip-runner/index.js";
 import { nativeRetainedRunResumeWitness, nativeToolContractFingerprintForTarget } from "../native-runtime/native-session-resume.js";
-import { managedOpenCodeProviderToolsMatchCatalog, managedOpenCodeToolName } from "../native-runtime/managed-opencode-terminal-tools.js";
+import { MANAGED_OPENCODE_ABORTED_TOOL_RESULT_TEXT, MANAGED_OPENCODE_TERMINAL_TOOL_NAMES, managedOpenCodeProviderToolsMatchCatalog,
+  managedOpenCodeToolName } from "../native-runtime/managed-opencode-terminal-tools.js";
 
 type BoundClaims = RuntimeToolsTokenClaims & {
   scope: "worker_model";
@@ -529,6 +530,173 @@ async function loadManagedRetainedHistory(db: Db, claims: ManagedModelClaims, ru
   return { run: retainedRun, profile: retainedProfile, retainedPrompts, retainedResponses };
 }
 
+/**
+ * CONF15-W7. OpenCode replays the retained Run's final terminal call with its
+ * own interrupted-tool placeholder instead of the server acknowledgement the
+ * retained Run recorded (its turn was interrupted at semantic completion,
+ * before OpenCode received the tool result). True only for a terminal tool
+ * (`paperclip_finish` or `paperclip_block`) whose result block is exactly the
+ * pinned placeholder: `type`, `tool_use_id`, `is_error: true` and the pinned
+ * text as its string content, nothing else. Whether the call itself is the
+ * retained Run's accepted terminal call is checked by the caller.
+ */
+export function managedOpenCodeTerminalPlaceholderResult(input: { toolName: string; block: Record<string, unknown> }): boolean {
+  const { block } = input;
+  return (MANAGED_OPENCODE_TERMINAL_TOOL_NAMES as readonly string[]).includes(input.toolName) &&
+    block.type === "tool_result" && block.is_error === true &&
+    block.content === MANAGED_OPENCODE_ABORTED_TOOL_RESULT_TEXT &&
+    Object.keys(block).sort().join(",") === "content,is_error,tool_use_id,type";
+}
+
+/** A terminal placeholder in the current Run's own turns (after its prompt).
+ * The placeholder stands in only for the retained Run's recorded
+ * acknowledgement, so it is never admitted there. */
+function managedOwnTurnsCarryTerminalPlaceholder(messages: readonly unknown[]): boolean {
+  const uses = new Map<string, string>();
+  for (const value of messages) {
+    const message = managedRecord(value);
+    if (!Array.isArray(message.content)) continue;
+    for (const part of message.content) {
+      const block = managedRecord(part);
+      if (message.role === "assistant" && block.type === "tool_use" && typeof block.id === "string" &&
+        typeof block.name === "string") uses.set(block.id, managedToolName(block.name));
+      if (message.role === "user" && block.type === "tool_result" && typeof block.tool_use_id === "string" &&
+        managedOpenCodeTerminalPlaceholderResult({ toolName: uses.get(block.tool_use_id) ?? "", block })) return true;
+    }
+  }
+  return false;
+}
+
+/**
+ * CONF15-W7. The retained Run's own record of a terminal call, for its
+ * OpenCode placeholder. Reads only existing records of the retained Run:
+ * the call is the sole exact tool use of its sealed response receipt (id,
+ * terminal tool name, arguments digest), that response was dispatched from
+ * one acknowledged Native input (its turn), and the retained Run's persisted
+ * runner events hold, in that turn and in order, the provider tool call with
+ * this id, the Run's only accepted semantic result, whose digest equals the
+ * call's arguments, and the completed provider tool result for this id. Each
+ * event row must be the exact persisted runner event of the retained Run
+ * (schema, Run, runner instance, sequence, session, source event id and its
+ * stored payload digest).
+ */
+async function assertManagedRetainedTerminalCallRecorded(input: {
+  db: Db;
+  claims: ManagedModelClaims;
+  run: typeof heartbeatRuns.$inferSelect;
+  profile: Record<string, unknown>;
+  providerUse: { toolName: string; argumentsHash: string; intent: Record<string, unknown> };
+  callId: string;
+}): Promise<void> {
+  const refuse = () => forbidden("Managed OpenCode terminal placeholder is not the retained Run's recorded terminal call");
+  if (!(MANAGED_OPENCODE_TERMINAL_TOOL_NAMES as readonly string[]).includes(input.providerUse.toolName)) throw refuse();
+  const responseUses = Array.isArray(input.providerUse.intent.responseToolUses)
+    ? input.providerUse.intent.responseToolUses.map(managedRecord) : [];
+  if (responseUses.length !== 1 || responseUses[0]!.id !== input.callId ||
+      managedToolName(String(responseUses[0]!.name ?? "")) !== input.providerUse.toolName ||
+      responseUses[0]!.argumentsHash !== input.providerUse.argumentsHash)
+    throw forbidden("Managed OpenCode semantic completion was not the sole exact provider tool use");
+  const dispatchIntents = Array.isArray(input.profile.nativeModelInputDispatchIntents)
+    ? input.profile.nativeModelInputDispatchIntents.map(managedRecord).filter(intent =>
+        intent.turnInputDigest === input.providerUse.intent.sourceDispatchDigest &&
+        intent.responsibleUserId === input.claims.responsible_user_id && intent.continuation === false &&
+        typeof intent.dispatchId === "string" && typeof intent.turnId === "string" &&
+        Number.isInteger(intent.eventSeq) && Number.isInteger(intent.attempt)) : [];
+  if (dispatchIntents.length !== 1)
+    throw forbidden("Managed OpenCode semantic completion has no exact acknowledged Native input dispatch");
+  const turnId = dispatchIntents[0]!.turnId;
+  if (!input.run.runnerInstanceId || !input.run.nativeSessionId || input.run.id !== input.claims.run_id) throw refuse();
+  const rows = await input.db.select({ eventType: heartbeatRunEvents.eventType, sourceInstanceId: heartbeatRunEvents.sourceInstanceId,
+    sourceEventId: heartbeatRunEvents.sourceEventId, sourceSeq: heartbeatRunEvents.sourceSeq,
+    sourcePayloadSha256: heartbeatRunEvents.sourcePayloadSha256,
+    payload: heartbeatRunEvents.payload }).from(heartbeatRunEvents).where(and(
+      eq(heartbeatRunEvents.companyId, input.claims.company_id), eq(heartbeatRunEvents.runId, input.claims.run_id),
+      eq(heartbeatRunEvents.sourceInstanceId, input.run.runnerInstanceId),
+      inArray(heartbeatRunEvents.eventType, ["item.started", "run.result.proposed", "item.completed"]))).limit(4096);
+  if (rows.length >= 4096) throw refuse();
+  const events = rows.flatMap(row => {
+    const event = managedRecord(managedRecord(row.payload).prpEvent);
+    // Runner events are stored with the bare digest of the persisted event,
+    // as `native-session-executor` verifies them on recovery.
+    if (!validatePrpEvent(event).ok || event.eventType !== row.eventType || event.runId !== input.claims.run_id ||
+        event.sourceInstanceId !== row.sourceInstanceId || event.sourceInstanceId !== input.run.runnerInstanceId ||
+        event.sourceSeq !== row.sourceSeq || !Number.isInteger(event.sourceSeq) ||
+        event.normalizedSessionId !== input.run.nativeSessionId ||
+        row.sourceEventId !== `${input.run.runnerInstanceId}:${input.run.id}:${String(event.sourceSeq)}` ||
+        row.sourcePayloadSha256 !== nativeSha256(event)) return [];
+    return [{ event, seq: event.sourceSeq as number, payload: managedRecord(event.payload) }];
+  });
+  const providerItems = (eventType: string, kind: string) => events.filter(({ event, payload }) => {
+    const item = managedRecord(payload.item);
+    return event.eventType === eventType && event.turnId === turnId && event.itemId === input.callId &&
+      payload.kind === kind && item.type === kind && item.id === input.callId;
+  });
+  const calls = providerItems("item.started", "tool_call");
+  const results = providerItems("item.completed", "tool_result");
+  const proposals = events.filter(({ event }) => event.eventType === "run.result.proposed");
+  const proposed = proposals.length === 1 ? validatePrpStructuredRunResult(proposals[0]!.payload) : null;
+  if (calls.length !== 1 || results.length !== 1 || !proposed?.ok || proposals[0]!.event.turnId !== turnId ||
+      nativeSha256(proposed.result) !== input.providerUse.argumentsHash ||
+      managedRecord(results[0]!.payload.item).status !== "completed" ||
+      !(calls[0]!.seq < proposals[0]!.seq && proposals[0]!.seq < results[0]!.seq))
+    throw refuse();
+}
+
+type ManagedRetainedHistory = NonNullable<Awaited<ReturnType<typeof loadManagedRetainedHistory>>>;
+
+/**
+ * CONF15-W6/W7. The part of a managed OpenCode request that the current Run's
+ * own receipts must cover. Without a retained Run it is the whole request.
+ * With one, the leading history must be the retained Run's exact sealed
+ * prefix (`managedRetainedHistoryPrefix`), and every replayed tool result in
+ * it must equal the retained Run's own record: a `paperclip_finish`
+ * acknowledgement through `assertManagedPaperclipFinishResult`, a captured
+ * tool through `managedRetainedToolResultMatchesReceipt`, or (W7) the pinned
+ * OpenCode placeholder for the retained Run's final response's sole terminal
+ * call, whose acceptance the retained Run's own events prove. The remainder,
+ * from the current prompt onward, is returned; a terminal placeholder there
+ * refuses. Reads only existing records; writes nothing.
+ */
+export async function managedOpenCodeRequestOwnMessages(input: {
+  db: Db;
+  claims: ManagedModelClaims;
+  messages: readonly unknown[];
+  currentPromptHashes: readonly string[];
+  retainedHistory: ManagedRetainedHistory | null;
+}): Promise<unknown[]> {
+  const { db, claims, retainedHistory } = input;
+  let ownMessages: unknown[] = [...input.messages];
+  if (retainedHistory) {
+    const prefix = managedRetainedHistoryPrefix({ messages: input.messages, currentPromptHashes: input.currentPromptHashes,
+      retainedPrompts: retainedHistory.retainedPrompts, retainedResponses: retainedHistory.retainedResponses });
+    if (!prefix.ok) throw forbidden(`Managed OpenCode history is not the exact admitted retained Run prefix (${prefix.reason})`);
+    const retainedClaims = { ...claims, run_id: retainedHistory.run.id };
+    const finalResponse = retainedHistory.retainedResponses[retainedHistory.retainedResponses.length - 1];
+    for (const result of prefix.toolResults) {
+      if (managedOpenCodeTerminalPlaceholderResult({ toolName: result.use.toolName, block: result.block })) {
+        if (!finalResponse || result.use.intent !== finalResponse.intent)
+          throw forbidden("Managed OpenCode terminal placeholder is not for the retained Run's final response");
+        await assertManagedRetainedTerminalCallRecorded({ db, claims: retainedClaims, run: retainedHistory.run,
+          profile: retainedHistory.profile, providerUse: result.use, callId: result.callId });
+      } else if (result.use.toolName === "paperclip_finish") {
+        await assertManagedPaperclipFinishResult({ db, claims: retainedClaims,
+          run: retainedHistory.run, profile: retainedHistory.profile, providerUse: result.use, callId: result.callId,
+          content: result.content, block: result.block });
+      } else if (!managedRetainedToolResultMatchesReceipt({ profile: retainedHistory.profile,
+        responsibleUserId: retainedHistory.run.responsibleUserId!, callId: result.callId, use: result.use,
+        block: result.block, content: result.content }))
+        throw forbidden("Managed OpenCode retained tool result has no exact receipt of the retained Run");
+    }
+    const closing = managedRecord(input.messages[prefix.messageIndex]);
+    const closingBlocks = typeof closing.content === "string" ? [{ type: "text", text: closing.content }]
+      : (closing.content as unknown[]);
+    ownMessages = [{ ...closing, content: closingBlocks.slice(prefix.blockIndex) }, ...input.messages.slice(prefix.messageIndex + 1)];
+  }
+  if (managedOwnTurnsCarryTerminalPlaceholder(ownMessages))
+    throw forbidden("Managed OpenCode terminal placeholder is outside the retained Run's verified history");
+  return ownMessages;
+}
+
 export type WorkerModelDispatchWireReceipt = ReadOnlyModelWireReceipt & {
   reservationId: string;
   callId: string;
@@ -806,7 +974,6 @@ async function assertManagedOpenCodeRequestSources(db: Db, claims: ManagedModelC
   // consumed source component or spend), then check the current Run's part
   // from its own prompt onward exactly as before.
   const allMessages: unknown[] = Array.isArray(request.messages) ? request.messages : [];
-  let ownMessages: unknown[] = allMessages;
   const firstMessage = managedRecord(allMessages[0]);
   const firstBlock = managedRecord(typeof firstMessage.content === "string" ? { type: "text", text: firstMessage.content }
     : Array.isArray(firstMessage.content) ? firstMessage.content[0] : null);
@@ -814,25 +981,8 @@ async function assertManagedOpenCodeRequestSources(db: Db, claims: ManagedModelC
     typeof firstBlock.text === "string" && prompts.includes(nativeSha256(firstBlock.text));
   const retainedHistory = startsWithCurrentPrompt ? null
     : await loadManagedRetainedHistory(db, claims, run, profile, receipt.data);
-  if (retainedHistory) {
-    const prefix = managedRetainedHistoryPrefix({ messages: allMessages, currentPromptHashes: prompts as string[],
-      retainedPrompts: retainedHistory.retainedPrompts, retainedResponses: retainedHistory.retainedResponses });
-    if (!prefix.ok) throw forbidden(`Managed OpenCode history is not the exact admitted retained Run prefix (${prefix.reason})`);
-    for (const result of prefix.toolResults) {
-      if (result.use.toolName === "paperclip_finish") {
-        await assertManagedPaperclipFinishResult({ db, claims: { ...claims, run_id: retainedHistory.run.id },
-          run: retainedHistory.run, profile: retainedHistory.profile, providerUse: result.use, callId: result.callId,
-          content: result.content, block: result.block });
-      } else if (!managedRetainedToolResultMatchesReceipt({ profile: retainedHistory.profile,
-        responsibleUserId: retainedHistory.run.responsibleUserId!, callId: result.callId, use: result.use,
-        block: result.block, content: result.content }))
-        throw forbidden("Managed OpenCode retained tool result has no exact receipt of the retained Run");
-    }
-    const closing = managedRecord(allMessages[prefix.messageIndex]);
-    const closingBlocks = typeof closing.content === "string" ? [{ type: "text", text: closing.content }]
-      : (closing.content as unknown[]);
-    ownMessages = [{ ...closing, content: closingBlocks.slice(prefix.blockIndex) }, ...allMessages.slice(prefix.messageIndex + 1)];
-  }
+  const ownMessages = await managedOpenCodeRequestOwnMessages({ db, claims, messages: allMessages,
+    currentPromptHashes: prompts as string[], retainedHistory });
   for (const messageValue of ownMessages) {
     const message = managedRecord(messageValue);
     const blocks = typeof message.content === "string" ? [{ type: "text", text: message.content }] :
