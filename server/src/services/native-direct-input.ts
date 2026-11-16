@@ -4310,6 +4310,56 @@ async function assertNativeAttachmentSourceCurrentInScope(db: Db | Transaction, 
   }
 }
 
+type NativeWakeTaskInput = Extract<NativePayloadSourceInput, { kind: "task" }>;
+type NativeWakePairingRun = { id: string; agentId: string; nativeIssueId: string | null; nativeSessionId: string | null };
+
+/** The Task input a source set's task wake is version-checked against, or null
+ * to refuse; the paired input is always at the wake's own version. Each wake
+ * pairs with the Task input of its own Run. The current Run's wake, and a wake
+ * of a Run the set does not name as retained, pair with the set's first Task
+ * input for that Task (unchanged). A wake of the Run the set's retained-run
+ * source names is admitted only as CONF15-W3 admits it
+ * (exactly one such wake beside exactly one current wake, one retained-run
+ * source, the same company, Agent, Task and Native session, equal to the one
+ * own wake in its sealed receipt) and pairs only with that Run's own sealed Task
+ * input, which must be in the same set at the wake's version. It never pairs
+ * with the current Task version. */
+export function nativeTaskWakeTaskInputForSource(input: {
+  companyId: string;
+  run: NativeWakePairingRun;
+  source: Extract<NativePayloadSourceInput, { kind: "native_task_wake" }>;
+  inputs: readonly NativePayloadSourceInput[];
+  policy: Pick<NativePayloadSourcePolicy, "runIds">;
+  sourceRun: NativeWakePairingRun | null;
+  sourceReceipt: NativeRunInputSourceReceipt | null;
+}): NativeWakeTaskInput | null {
+  const { run, source } = input;
+  const atWakeVersion = (task: NativeWakeTaskInput | null | undefined) =>
+    task && task.sourceVersion === source.sourceVersion ? task : null;
+  const firstTask = input.inputs.find((value): value is NativeWakeTaskInput =>
+    value.kind === "task" && value.issueId === source.issueId);
+  if (source.runId === run.id) return atWakeVersion(firstTask);
+  const retained = input.inputs.filter((value): value is Extract<NativePayloadSourceInput, { kind: "retained_run" }> =>
+    value.kind === "retained_run");
+  if (!retained.some(value => value.runId === source.runId)) return atWakeVersion(firstTask);
+  const wakes = input.inputs.filter((value): value is Extract<NativePayloadSourceInput, { kind: "native_task_wake" }> =>
+    value.kind === "native_task_wake");
+  const { sourceRun, sourceReceipt } = input;
+  if (retained.length !== 1 || wakes.filter(value => value.runId !== run.id).length !== 1 ||
+    wakes.filter(value => value.runId === run.id).length !== 1 || source.issueId !== run.nativeIssueId ||
+    !input.policy.runIds.includes(source.runId) || !sourceRun || sourceRun.id !== source.runId ||
+    sourceRun.agentId !== run.agentId || sourceRun.nativeIssueId !== run.nativeIssueId ||
+    !run.nativeSessionId || sourceRun.nativeSessionId !== run.nativeSessionId || !sourceReceipt ||
+    sourceReceipt.binding.companyId !== input.companyId || sourceReceipt.binding.runId !== source.runId ||
+    sourceReceipt.binding.agentId !== run.agentId || sourceReceipt.binding.issueId !== source.issueId) return null;
+  const ownWakes = sourceReceipt.bootstrap.inputs.filter(value => value.kind === "native_task_wake" && value.runId === source.runId);
+  const ownTasks = sourceReceipt.bootstrap.inputs.filter((value): value is NativeWakeTaskInput =>
+    value.kind === "task" && value.issueId === source.issueId);
+  if (ownWakes.length !== 1 || !isDeepStrictEqual(ownWakes[0], source) || ownTasks.length !== 1) return null;
+  const ownTask = ownTasks[0]!;
+  return input.inputs.some(value => isDeepStrictEqual(value, ownTask)) ? atWakeVersion(ownTask) : null;
+}
+
 async function assertNativePayloadSourceSetCurrentUncachedInScope(db: Db | Transaction, input: {
   companyId: string; issueId: string; runId: string; actor: AuthorizationActor;
   policy: NativePayloadSourcePolicy; inputs: NativePayloadSourceInput[];
@@ -4594,8 +4644,6 @@ async function assertNativePayloadSourceSetCurrentUncachedInScope(db: Db | Trans
       continue;
     }
     if (source.kind === "native_task_wake") {
-      const task = inputs.data.find((value): value is Extract<NativePayloadSourceInput, { kind: "task" }> =>
-        value.kind === "task" && value.issueId === source.issueId);
       const sourceRun = source.runId === input.runId ? run : await nativeSourceReadRun(db, input.companyId, source.runId, scope);
       const sourceProfile = sourceRun?.runnerProfileJson && typeof sourceRun.runnerProfileJson === "object" && !Array.isArray(sourceRun.runnerProfileJson)
         ? sourceRun.runnerProfileJson as Record<string, unknown> : null;
@@ -4604,12 +4652,21 @@ async function assertNativePayloadSourceSetCurrentUncachedInScope(db: Db | Trans
         sourceReceipt.data.binding.companyId === input.companyId && sourceReceipt.data.binding.runId === source.runId &&
         sourceReceipt.data.binding.agentId === sourceRun.agentId && sourceReceipt.data.binding.issueId === source.issueId &&
         sourceReceipt.data.binding.responsibleUserId === (sourceRun.responsibleUserId ?? null));
+      // CONF15-W4: each wake is version-checked against its own Run's Task input.
+      const task = nativeTaskWakeTaskInputForSource({ companyId: input.companyId, run, source, inputs: inputs.data,
+        policy: policy.data, sourceRun, sourceReceipt: sourceReceipt?.success ? sourceReceipt.data : null });
+      const retainedWake = source.runId !== input.runId && inputs.data.some(value =>
+        value.kind === "retained_run" && value.runId === source.runId);
       if (!sourceRun || !sourceBindingCurrent || !sourceReceipt?.success || sourceRun.nativeIssueId !== source.issueId || !task ||
         task.sourceVersion !== source.sourceVersion || !isDeepStrictEqual(sourceReceipt.data.bootstrap.inputs.find(value =>
           value.kind === "native_task_wake" && value.runId === source.runId), source))
         throw forbidden("A Native task wake source changed");
+      // The retained Run's wake is reconstructed against that Run's own Task
+      // input only; the current Task version is never offered to it.
+      const wakeInputs = retainedWake ? inputs.data.filter(value =>
+        value.kind !== "task" || value.issueId !== source.issueId || isDeepStrictEqual(value, task)) : inputs.data;
       await assertNativeTaskWakeSourceCurrentInScope(db, scope, { companyId: input.companyId, issueId: source.issueId,
-        runId: source.runId, actor: input.actor, source, inputs: inputs.data, policy: policy.data, bootstrapInputs: sourceReceipt.data.bootstrap.inputs, historicalTransition });
+        runId: source.runId, actor: input.actor, source, inputs: wakeInputs, policy: policy.data, bootstrapInputs: sourceReceipt.data.bootstrap.inputs, historicalTransition });
       continue;
     }
     if (source.kind === "worker_model_dispatch") {

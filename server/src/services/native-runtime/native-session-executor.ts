@@ -7852,6 +7852,57 @@ export function canonicalManagedOpenCodeContinuationTurn(input: {
   };
 }
 
+type NativeClosureTaskWake = Extract<NativePayloadSourceInput, { kind: "native_task_wake" }>;
+type NativeClosureWakeRun = { id: string; companyId: string; agentId: string; nativeIssueId: string | null;
+  nativeSessionId: string | null };
+
+/** The one retained Run whose wake a bootstrap closure may carry beside the
+ * current Run's own wake, or null when the closure names no such Run. A
+ * document revision the retained Run wrote carries that Run's wake in its
+ * payload source snapshot; it is provenance, never a second live wake. */
+export function nativeClosureRetainedWakeRunId(run: { id: string }, inputs: readonly NativePayloadSourceInput[]): string | null {
+  const retained = inputs.filter((input): input is Extract<NativePayloadSourceInput, { kind: "retained_run" }> =>
+    input.kind === "retained_run");
+  return inputs.some(input => input.kind === "native_task_wake" && input.runId !== run.id) && retained.length === 1
+    ? retained[0]!.runId : null;
+}
+
+/** Only the current Run's own wake counts as the task wake. A wake of another
+ * Run is admitted only as provenance of the single admitted retained-run
+ * source: exactly one, from exactly `retainedSource.runId`, on this Task, with
+ * the retained Run in the same company, Agent, Task and Native session, and
+ * equal to the wake that Run's own sealed bootstrap receipt holds. */
+export function nativeClosureTaskWakeBinding(input: {
+  run: NativeClosureWakeRun;
+  inputs: readonly NativePayloadSourceInput[];
+  retainedRun: (NativeClosureWakeRun & { runnerProfileJson: unknown }) | null;
+}): { currentWakes: NativeClosureTaskWake[] } | null {
+  const { run } = input;
+  const wakes = input.inputs.filter((source): source is NativeClosureTaskWake => source.kind === "native_task_wake");
+  const currentWakes = wakes.filter(wake => wake.runId === run.id);
+  const historicalWakes = wakes.filter(wake => wake.runId !== run.id);
+  if (currentWakes.length > 1 || currentWakes.some(wake => wake.issueId !== run.nativeIssueId)) return null;
+  if (historicalWakes.length === 0) return { currentWakes };
+  if (historicalWakes.length !== 1 || currentWakes.length !== 1) return null;
+  const retained = input.inputs.filter((source): source is Extract<NativePayloadSourceInput, { kind: "retained_run" }> =>
+    source.kind === "retained_run");
+  const historical = historicalWakes[0]!;
+  const retainedRun = input.retainedRun;
+  // The retained Run row is the one named by the retained-run source: the
+  // caller reads exactly that id, and the sealed-wake equality below binds the
+  // row to the historical wake's Run.
+  if (retained.length !== 1 || historical.runId !== retained[0]!.runId || historical.issueId !== run.nativeIssueId ||
+    !retainedRun || retainedRun.companyId !== run.companyId || retainedRun.agentId !== run.agentId ||
+    retainedRun.nativeIssueId !== run.nativeIssueId ||
+    !run.nativeSessionId || retainedRun.nativeSessionId !== run.nativeSessionId) return null;
+  const receipt = nativeRunInputSourceReceiptSchema.safeParse(record(retainedRun.runnerProfileJson).nativeInputSourceReceipt);
+  if (!receipt.success || receipt.data.binding.companyId !== run.companyId || receipt.data.binding.runId !== retainedRun.id ||
+    receipt.data.binding.agentId !== run.agentId || receipt.data.binding.issueId !== run.nativeIssueId) return null;
+  const retainedOwnWakes = receipt.data.bootstrap.inputs.filter(source =>
+    source.kind === "native_task_wake" && source.runId === retainedRun.id);
+  return retainedOwnWakes.length === 1 && isDeepStrictEqual(retainedOwnWakes[0], historical) ? { currentWakes } : null;
+}
+
 async function nativeTurnFrameMatchesSourceClosure(tx: Parameters<Parameters<Db["transaction"]>[0]>[0],
   run: typeof heartbeatRuns.$inferSelect, turnInput: Parameters<NativeSession["startTurn"]>[0],
   closure: NativeBootstrapSourceClosure | null | undefined, rawNativeExecutionInput: unknown,
@@ -8052,12 +8103,19 @@ async function nativeTurnFrameMatchesSourceClosure(tx: Parameters<Parameters<Db[
   // The closure's taskEnvelopeDigest binds those final prompt bytes, while the
   // server-only wake capture preserves the exact source payload hash.
 
-  if (wakeInputs.length > 1 || wakeInputs.some(input => input.runId !== run.id || input.issueId !== run.nativeIssueId)) return no("wake_binding");
-  if (!nativeTaskWakeGuidanceSourceMatches(wakeInputs, "initialCommunicationGuidance" in parsedExecution ? parsedExecution.initialCommunicationGuidance : null)) return no("wake_binding");
+  const retainedWakeRunId = nativeClosureRetainedWakeRunId(run, closure.sourceSet.inputs);
+  const [retainedWakeRun] = retainedWakeRunId ? await tx.select({ id: heartbeatRuns.id, companyId: heartbeatRuns.companyId,
+    agentId: heartbeatRuns.agentId, nativeIssueId: heartbeatRuns.nativeIssueId, nativeSessionId: heartbeatRuns.nativeSessionId,
+    runnerProfileJson: heartbeatRuns.runnerProfileJson }).from(heartbeatRuns).where(and(
+      eq(heartbeatRuns.companyId, run.companyId), eq(heartbeatRuns.id, retainedWakeRunId))) : [];
+  const wakeBinding = nativeClosureTaskWakeBinding({ run, inputs: closure.sourceSet.inputs, retainedRun: retainedWakeRun ?? null });
+  if (!wakeBinding) return no("wake_binding");
+  const currentWakeInputs = wakeBinding.currentWakes;
+  if (!nativeTaskWakeGuidanceSourceMatches(currentWakeInputs, "initialCommunicationGuidance" in parsedExecution ? parsedExecution.initialCommunicationGuidance : null)) return no("wake_binding");
   // The Task source was checked against its current payload-only owner hash
   // immediately above. Bind the wake to that captured Task source version;
   // `issues.updatedAt` also changes for operational conversation activity.
-  if (wakeInputs.length === 1 && (!taskInput || wakeInputs[0]!.sourceVersion !== taskInput.sourceVersion))
+  if (currentWakeInputs.length === 1 && (!taskInput || currentWakeInputs[0]!.sourceVersion !== taskInput.sourceVersion))
     return no("wake_version");
 
   if (!run.completionContractId || !run.completionContractSha256 ||
