@@ -32,6 +32,8 @@ import {
   resolveQualifiedAcpxProfile,
 } from "../../vendor/paperclip-runner/index.js";
 import { readNativeBootstrapContextWitness, type NativeBootstrapContextWitness } from "../context/native-bootstrap-context-witness.js";
+import { exactNativeRunLivenessContinuationTrigger, nativeRunLivenessContinuationProjection,
+  type NativeRunLivenessContinuationTrigger } from "./native-liveness-continuation-source.js";
 import {
   isPaperclipExternalChatContractTurn,
   isPaperclipExternalChatQuestionResponseTurn,
@@ -200,7 +202,9 @@ export function exactNativeTaskContinuation(input: { value: unknown; companyId: 
   runId: string; agentId?: string; responsibleUserId?: string | null; wakeupRequestId?: string | null; wakeReason: string | null;
   /** Optional objective from the already canonical safe Task projection. */
   taskObjective?: string;
-  capture?: NativeTaskContinuationCapture | null; stageTrigger?: import("../execution-continuation.js").NativeStageTaskContinuationTrigger; historicalPendingSources?: readonly import("./native-interaction-bridge.js").NativeGovernedPendingInteractionCapture[] }): NativeTaskContinuationCapture | null {
+  capture?: NativeTaskContinuationCapture | null; stageTrigger?: import("../execution-continuation.js").NativeStageTaskContinuationTrigger; historicalPendingSources?: readonly import("./native-interaction-bridge.js").NativeGovernedPendingInteractionCapture[];
+  /** Server-captured bounded run-liveness continuation record for this exact Run. */
+  livenessTrigger?: NativeRunLivenessContinuationTrigger }): NativeTaskContinuationCapture | null {
   const { capture } = input;
   let serialized: string;
   try {
@@ -388,6 +392,29 @@ export function exactNativeTaskContinuation(input: { value: unknown; companyId: 
       capture.wake.requestedByActorId !== `native-status-wake-dispatch:${stageTrigger.intentId}` ||
       !Array.isArray(capture.wake.originCommentIds) || capture.wake.originCommentIds.length !== 0) return null;
   }
+  // A bounded run-liveness continuation: a system wake written by the
+  // heartbeat for one plan-only or empty source Run. It resumes that source
+  // Run's retained session and carries only its accepted finalized result as
+  // completed work; no Human request, interaction or summary document joins it.
+  const livenessTrigger = input.livenessTrigger;
+  const hasLivenessTrigger = livenessTrigger !== undefined;
+  if (hasLivenessTrigger) {
+    if (!exactNativeRunLivenessContinuationTrigger(livenessTrigger, { companyId: input.companyId, issueId: input.issueId,
+        runId: input.runId, agentId: input.agentId, responsibleUserId: input.responsibleUserId,
+        wakeupRequestId: input.wakeupRequestId, wakeReason: input.wakeReason }) ||
+      hasStageTrigger || hasResolutionWake || hasExplicitHumanSource || hasSummaryAssignment ||
+      capture.currentHumanAssignment !== undefined || capture.governedInteractions !== undefined ||
+      capture.answeredQuestions !== undefined || capture.humanReviewWithdrawals !== undefined ||
+      capture.adminExpiredInteractions !== undefined || capture.acceptedPlanReview !== undefined ||
+      capture.delivery !== undefined || capture.pendingInteractions !== undefined || capture.summary !== undefined ||
+      capture.wake?.manualQueueAdoption !== undefined || capture.wake?.requestedByActorType !== "system" ||
+      capture.wake.requestedByActorId !== "heartbeat" ||
+      !Array.isArray(capture.wake.originCommentIds) || capture.wake.originCommentIds.length !== 0 ||
+      // The retained-resume finalized summary below binds the summary to this
+      // retained source; here the retained source is bound to the source Run.
+      !capture.finalizedSummary ||
+      capture.retainedSource?.kind !== "retained_run" || capture.retainedSource.runId !== livenessTrigger.sourceRunId) return null;
+  }
   if (!c || typeof c !== "object" || Array.isArray(c) || !c.trigger || typeof c.trigger !== "object" ||
     Array.isArray(c.trigger) || !c.coverage || typeof c.coverage !== "object" || Array.isArray(c.coverage) ||
     !capture.wake || Object.keys(capture.wake).sort().join(",") !== ["originCommentIds", "reason", "requestedByActorId", "requestedByActorType", ...(capture.wake.interaction ? ["interaction"] : []),
@@ -406,8 +433,8 @@ export function exactNativeTaskContinuation(input: { value: unknown; companyId: 
     // without one has empty history and no origins. The accepted-plan branch
     // below still binds the exact interaction, resolver, wake, plan revision
     // and the owner's recorded origin set (which may legitimately be empty).
-    !Array.isArray(c.messages) || (c.messages.length === 0 && !hasStageTrigger && !hasSummaryAssignment && !hasAcceptedPlanReview) || c.messages.length > 256 ||
-    !Array.isArray(c.originCommentIds) || (!hasReviewWithdrawals && !hasAcceptedPlanReview && (hasStageTrigger || hasSummaryAssignment ? c.originCommentIds.length !== 0 : c.originCommentIds.length === 0)) || c.originCommentIds.length > 256 ||
+    !Array.isArray(c.messages) || (c.messages.length === 0 && !hasStageTrigger && !hasSummaryAssignment && !hasAcceptedPlanReview && !hasLivenessTrigger) || c.messages.length > 256 ||
+    !Array.isArray(c.originCommentIds) || (!hasReviewWithdrawals && !hasAcceptedPlanReview && (hasStageTrigger || hasSummaryAssignment || hasLivenessTrigger ? c.originCommentIds.length !== 0 : c.originCommentIds.length === 0)) || c.originCommentIds.length > 256 ||
     new Set(c.originCommentIds).size !== c.originCommentIds.length ||
     (c.humanResponses !== undefined && (!Array.isArray(c.humanResponses) || (!hasGoverned && !hasAcceptedPlanReview && !hasQuestions && !hasAdministrativeExpiries && !hasReviewWithdrawals && c.humanResponses.length !== 0))) ||
     !Array.isArray(c.interactionOutcomes) || (!hasGoverned && !hasAcceptedPlanReview && !hasQuestions && !hasAdministrativeExpiries && !hasReviewWithdrawals && c.interactionOutcomes.length !== 0) ||
@@ -415,7 +442,7 @@ export function exactNativeTaskContinuation(input: { value: unknown; companyId: 
     (c.completedActions !== undefined && (!Array.isArray(c.completedActions) || c.completedActions.length > 64)) ||
     (c.completedWork !== null && c.completedWork !== capture.summary?.rendition?.body && c.completedWork !== capture.finalizedSummary?.body) || !Array.isArray(c.unresolvedInteractionIds) || c.unresolvedInteractionIds.length > 256 ||
     capture.commentSources.length !== c.messages.length || capture.wake.reason !== input.wakeReason ||
-    (!hasStageTrigger && !hasSummaryAssignment && (capture.wake.requestedByActorType !== "user" || !capture.wake.requestedByActorId))) return null;
+    (!hasStageTrigger && !hasSummaryAssignment && !hasLivenessTrigger && (capture.wake.requestedByActorType !== "user" || !capture.wake.requestedByActorId))) return null;
   const adoption = capture.wake.manualQueueAdoption;
   if (adoption && (Object.keys(adoption).sort().join(",") !==
       "agentId,companyId,issueId,operatorUserId,originCommentIds,originQueueIds,runId,schema,wakeupRequestId" ||
@@ -554,7 +581,9 @@ export function exactNativeTaskContinuation(input: { value: unknown; companyId: 
         value.projection.owner?.sourceKind === "native_interaction" &&
         value.projection.owner.sourceRunStatus === "succeeded" &&
         value.projection.owner.sourceRunId === message.createdByRunId);
-      if ((!hasSummaryAssignment && !exactWithdrawalProducer) || sourceSnapshot.success ||
+      // A liveness continuation's own source Run, bound by its record.
+      const livenessProducer = hasLivenessTrigger && message.createdByRunId === livenessTrigger!.sourceRunId;
+      if ((!hasSummaryAssignment && !exactWithdrawalProducer && !livenessProducer) || sourceSnapshot.success ||
           !exactNativeAcceptedPresentationCommentOwner(presentationOwner, {
             binding: { companyId: input.companyId, issueId: input.issueId, agentId: input.agentId }, commentSource: sources[0]!.input,
           }) || presentationOwner.acceptedSummaryOwner.sourceRunId !== message.createdByRunId || message.authorType !== "agent") return null;
@@ -819,7 +848,7 @@ export function exactNativeTaskContinuation(input: { value: unknown; companyId: 
       response.kind !== "request_confirmation" || response.status !== "accepted" || response.resolvedByUserId !== plan.resolvedByUserId ||
       response.resolvedAt !== plan.resolvedAt || capture.delivery !== undefined || governed !== undefined) return null;
     if (origins.some(message => !message) || capture.wake.originCommentIds.some(id => !plan.originCommentIds.includes(id))) return null;
-  } else if (!hasReviewWithdrawals && (governed !== undefined || capture.delivery !== undefined || capture.wake.interaction || (!hasStageTrigger && !hasSummaryAssignment && (origins.some(message => !message || message.authorType !== "user" || message.createdByRunId !== null) ||
+  } else if (!hasReviewWithdrawals && (governed !== undefined || capture.delivery !== undefined || capture.wake.interaction || (!hasStageTrigger && !hasSummaryAssignment && !hasLivenessTrigger && (origins.some(message => !message || message.authorType !== "user" || message.createdByRunId !== null) ||
     admittedWakeOrigins.length === 0 || admittedWakeOrigins.some(message => !message || message.authorType !== "user" ||
       message.createdByRunId !== null || (!adoption && message.authorId !== capture.wake.requestedByActorId) ||
       !c.originCommentIds.includes(message.id) || (adoption && !adoption.originCommentIds.includes(message.id))))))) return null;
@@ -827,9 +856,10 @@ export function exactNativeTaskContinuation(input: { value: unknown; companyId: 
   const withdrawalTaskObjective = hasReviewWithdrawals && typeof input.taskObjective === "string" &&
     Buffer.byteLength(input.taskObjective, "utf8") <= 64_000 ? input.taskObjective : null;
   if ((!latest && hasReviewWithdrawals && withdrawalTaskObjective === null) ||
-    (!latest && !hasStageTrigger && !hasAcceptedPlanReview && !hasSummaryAssignment && !hasReviewWithdrawals) ||
+    (!latest && !hasStageTrigger && !hasAcceptedPlanReview && !hasSummaryAssignment && !hasReviewWithdrawals && !hasLivenessTrigger) ||
     c.objective !== (hasSummaryAssignment ? input.taskObjective : latest?.body ??
-      (hasReviewWithdrawals ? withdrawalTaskObjective : hasAcceptedPlanReview ? acceptedPlanReview!.taskObjective : stageTrigger?.taskObjective)) || Object.keys(c.coverage).sort().join(",") !==
+      (hasReviewWithdrawals ? withdrawalTaskObjective : hasAcceptedPlanReview ? acceptedPlanReview!.taskObjective :
+        hasLivenessTrigger ? input.taskObjective : stageTrigger?.taskObjective)) || Object.keys(c.coverage).sort().join(",") !==
     "kind,summaryThroughCommentId,throughCommentId" ||
     c.coverage.kind !== "full_task_history" || c.coverage.throughCommentId !== (c.messages.at(-1)?.id ?? null) ||
     c.coverage.summaryThroughCommentId !== null) return null;
@@ -912,6 +942,8 @@ export function captureNativeTaskWakeSource(input: {
   ordinaryPlanRead?: NativeOrdinaryPlanReadCapture | null;
   stageTrigger?: import("../execution-continuation.js").NativeStageTaskContinuationTrigger;
   historicalPendingSources?: readonly import("./native-interaction-bridge.js").NativeGovernedPendingInteractionCapture[];
+  /** Independently captured bounded run-liveness continuation record, never a wake flag. */
+  livenessTrigger?: NativeRunLivenessContinuationTrigger;
   /** Actual constructor input plus its captured metadata source. The recurring
    * reader re-parses the locked profile and checks the current metadata owner. */
   workspaceCapture?: { execution: NativeExecutionInput;
@@ -975,7 +1007,8 @@ export function captureNativeTaskWakeSource(input: {
   const closedContinuation = exactNativeTaskContinuation({ value: payload.executionContinuation, companyId: input.companyId,
     issueId: input.issueId, runId: input.runId, agentId: input.agentId, responsibleUserId: input.responsibleUserId,
     wakeupRequestId: input.wakeupRequestId, wakeReason: input.persistedWakeReason,
-    taskObjective: input.task.description ?? input.task.title, capture: input.continuationCapture, stageTrigger: input.stageTrigger, historicalPendingSources: input.historicalPendingSources });
+    taskObjective: input.task.description ?? input.task.title, capture: input.continuationCapture, stageTrigger: input.stageTrigger, historicalPendingSources: input.historicalPendingSources,
+    ...(input.livenessTrigger ? { livenessTrigger: input.livenessTrigger } : {}) });
   const governedWake = closedContinuation?.governedInteractions?.length || closedContinuation?.acceptedPlanReview || closedContinuation?.answeredQuestions?.length || closedContinuation?.humanReviewWithdrawals?.length
     ? closedContinuation.wake.interaction ?? null : null;
   const blocked = input.blockedHumanInteraction;
@@ -1010,14 +1043,19 @@ export function captureNativeTaskWakeSource(input: {
       runId: input.runId, agentId: input.agentId, responsibleUserId: input.responsibleUserId, wakeupRequestId: input.wakeupRequestId,
       wakeReason: input.persistedWakeReason, taskObjective: input.task.description ?? input.task.title,
       capture: input.continuationCapture,
-      stageTrigger: input.stageTrigger, historicalPendingSources: input.historicalPendingSources }) !== null,
+      stageTrigger: input.stageTrigger, historicalPendingSources: input.historicalPendingSources,
+      ...(input.livenessTrigger ? { livenessTrigger: input.livenessTrigger } : {}) }) !== null,
     attachmentOmissions: Array.isArray(payload.attachmentOmissions) && payload.attachmentOmissions.length === 0,
     externalChatProvider: payload.externalChatProvider === (input.externalChatProvider ?? null),
     recovery: payload.recovery === null,
     agentMessage: isDeepStrictEqual(payload.agentMessage, closedContinuation?.delivery?.projection.agentMessage ?? null),
     childIssueSummaries: Array.isArray(payload.childIssueSummaries) && payload.childIssueSummaries.length === 0,
     childIssueSummaryTruncated: payload.childIssueSummaryTruncated === false,
-    dispositionRepair: payload.dispositionRepair === null, livenessContinuation: payload.livenessContinuation === null,
+    dispositionRepair: payload.dispositionRepair === null,
+    livenessContinuation: input.livenessTrigger
+      ? Boolean(closedContinuation && isDeepStrictEqual(payload.livenessContinuation,
+          nativeRunLivenessContinuationProjection(input.livenessTrigger)))
+      : payload.livenessContinuation === null,
     interactionKind: payload.interactionKind === (governedWake?.interactionKind ?? null),
     interactionStatus: payload.interactionStatus === (governedWake?.interactionStatus ?? null),
     interactionId: payload.interactionId === (governedWake?.interactionId ?? null),
@@ -1142,7 +1180,10 @@ export function captureNativeTaskWakeSource(input: {
       : { wake: sourcePayload, manualQueueAdoption })
     : coordination ? { wake: sourcePayload, workspaceCoordination: coordination } : sourcePayload;
   const initialGuidanceHash = input.nativeInitialGuidance ? nativeSha256(input.nativeInitialGuidance) : undefined;
-  const aggregatedContent = reviewWitness ? { wake: content, nativeReview: reviewWitness } : content;
+  if (reviewWitness && input.livenessTrigger) return reject("wake_fields_invalid", ["livenessContinuation"]);
+  // The source binds the exact bounded continuation record it was admitted on.
+  const aggregatedContent = reviewWitness ? { wake: content, nativeReview: reviewWitness }
+    : input.livenessTrigger ? { wake: content, runLivenessContinuation: input.livenessTrigger } : content;
   return { kind: "native_task_wake", runId: input.runId, issueId: input.issueId, sourceVersion: input.sourceVersion,
     contentHash: nativeSha256(aggregatedContent), ...(input.externalChatProvider ? { externalChatProvider: input.externalChatProvider } : {}),
     ...(initialGuidanceHash ? { initialGuidanceHash } : {}), ...(reviewWitness ? { nativeReview: reviewWitness } : {}) };

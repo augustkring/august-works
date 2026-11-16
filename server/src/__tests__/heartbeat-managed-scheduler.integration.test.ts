@@ -516,7 +516,10 @@ it("reconstructs the current source-qualified v2 frame on a same-Task new Run wi
       const prematureLivenessWakes = await db.select().from(agentWakeupRequests).where(and(
         eq(agentWakeupRequests.companyId, companyId), eq(agentWakeupRequests.agentId, agentId),
         eq(agentWakeupRequests.reason, "run_liveness_continuation")));
-      expect(prematureLivenessWakes.filter(wake => wake.payload?.retryOfRunId === prior.id)).toEqual([]);
+      // The bounded liveness record names its source Run as `sourceRunId`
+      // (`recovery/run-liveness-continuations.ts`); `retryOfRunId` is the
+      // failed-run retry chain and is never written on this wake.
+      expect(prematureLivenessWakes.filter(wake => wake.payload?.sourceRunId === prior.id)).toEqual([]);
 
       const comment = await issueService(db).addComment(task.id, commentBody,
         { userId: actor.userId! }, { manualInputActor: actor });
@@ -715,7 +718,8 @@ it.each([false, true])("actual managed OpenCode plan-only output queues one boun
         const wakes = await db.select().from(agentWakeupRequests).where(and(
           eq(agentWakeupRequests.companyId, companyId), eq(agentWakeupRequests.agentId, agentId),
           eq(agentWakeupRequests.reason, "run_liveness_continuation")));
-        const matching = wakes.filter(wake => wake.payload?.retryOfRunId === current.id && wake.payload?.issueId === task.id);
+        // The bounded liveness record names its source Run as `sourceRunId`.
+        const matching = wakes.filter(wake => wake.payload?.sourceRunId === current.id && wake.payload?.issueId === task.id);
         if (wakes.length !== 1 || matching.length !== 1 || typeof matching[0]!.runId !== "string" || !matching[0]!.runId)
           return false;
         source = current;
