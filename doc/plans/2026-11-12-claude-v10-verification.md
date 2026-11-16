@@ -171,6 +171,10 @@ This is the status ledger for the Claude Code verification pass. Earlier history
 | H. Product browser, agent chat | Unknown. A 110 MB failure artifact | 1 | Open |
 | F2. e2e onboarding cleanup | `aw-v9-onboarding-permission-consent.spec.ts:286`: cleanup `DELETE /api/companies/:id` returns non-OK (first seen on #47; passed on base) | e2e 8/8 | Open. Seen again on #64 (run 43760997799) at `:147`/`:216`, the same cleanup DELETE; passed on that run's rerun |
 | F11. e2e workflow-intent draft button | `aw-v9-workflow-intent.spec.ts:48`: "Save draft" stayed disabled for the 5 s expect timeout after both fields were filled (#64 rerun, run 43760997799, job 132985341657). The spec mocks its draft endpoints, changes instance-wide experimental flags, and starts no agent Run. Shard 8 passed on #63 and on the first #64 attempt (when only F2 failed) | e2e 8/8 | Open (intermittent). Check whether another spec in shard 8 changes the same instance flags concurrently before changing the spec |
+| F12. e2e feedback retention erasure | `aw-v9-feedback-retention-erasure.spec.ts:85` failed on the first #69 run (e2e 5/8) and passed on the rerun. #69 touches no feedback, retention or erasure code | e2e 5/8 | Open (intermittent) |
+| E1. Company export storage outcome | `company-export-transfers.integration.test.ts:198`: `company_export_storage_outcome_unknown` on the first #66 run (server 3); passed on the rerun. #66 touches no export code | Server 3 | Open (intermittent) |
+| RS1. Routines service timing | `routines-service.test.ts:1120` failed on the first #67 run (server 13) and passed on the rerun | Server 13 | Open (intermittent) |
+| WB2. Managed-positive wake-batching cancels | `heartbeat-comment-wake-batching-managed-positive`, the three "cancels…" cases time out locally with the provider pack, the same on `1335b09a` without the CONF15-W4 change (found 2026-11-16) | Managed Native | Open. Not yet compared with CI; check the file's CI result before investigating |
 | T. Repository tests server-1 to server-4 | Hit the 60-minute timeout | 4 | Open |
 
 The Codex notes said many Native jobs died during sandbox or bwrap install. The logs do not show this.
