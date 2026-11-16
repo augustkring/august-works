@@ -2342,6 +2342,27 @@ export function nativeManagedProgressReceiptSourceSet(capture: NativeModelOutput
     inputs: unionNativePayloadSourceInputs([[source], [capture.dispatch], capture.sourceSet.inputs]) };
 }
 
+/** CONF15-W8. The output-specific binding for a model output's one
+ * `retained_run` input: the producer Run's own bootstrap carries exactly this
+ * input (never a dispatch or additional input), both policies name its Run,
+ * it is not the producer itself, and no second retained Run joins the set.
+ * The ordinary source-set walk owns the witness, privacy and retained
+ * component checks; this binding never replaces them. */
+export function nativeOutputRetainedRunSourceBound(input: {
+  source: Extract<NativePayloadSourceInput, { kind: "retained_run" }>;
+  producerRunId: string;
+  sourceSet: NativePayloadSourceSet;
+  bootstrap: NativePayloadSourceSet;
+}): boolean {
+  const { source, sourceSet, bootstrap } = input;
+  return source.runId !== input.producerRunId && sourceSet.policy.runIds.includes(source.runId) &&
+    bootstrap.policy.runIds.includes(source.runId) &&
+    sourceSet.inputs.filter(value => value.kind === "retained_run").length === 1 &&
+    bootstrap.inputs.filter(value => value.kind === "retained_run").length === 1 &&
+    sourceSet.inputs.some(value => isDeepStrictEqual(value, source)) &&
+    bootstrap.inputs.some(value => isDeepStrictEqual(value, source));
+}
+
 /** Validate the server-only provider/tool output carrier against the settled
  * Messages response, recorded tool-use block, dispatch association, and exact
  * run receipt source set. The caller never supplies this object. */
@@ -3557,6 +3578,16 @@ async function assertNativeModelOutputCaptureCurrentInScope(db: Db | Transaction
   // The source-set walk above checks every ordinary owner. Keep the
   // output-specific binding and the few policy/output checks it cannot prove.
   for (const source of capture.sourceSet.inputs) {
+    // CONF15-W8. A Run that resumes a retained provider session (a run-liveness
+    // continuation, or a same-Task Run on the retained checkpoint) carries its
+    // one `retained_run` input in its own bootstrap. The walk above already
+    // proved that witness, its privacy read and every retained component set.
+    // Bind it here to this Run's exact bootstrap input and policy, once.
+    if (source.kind === "retained_run") {
+      if (!nativeOutputRetainedRunSourceBound({ source, producerRunId: capture.runId, sourceSet: capture.sourceSet, bootstrap }))
+        throw forbidden("A Native output retained Run source is unavailable");
+      continue;
+    }
     if (["task", "project", "project_workspace", "memory", "context", "document_revision", "completion_contract", "runtime_instructions", "runtime_skill", "workspace_metadata", "worker_model_dispatch", "conversation_model_dispatch", "native_task_wake", "tool_result", "comment", "interaction", "attachment", "authored_definition", "skill_version", "playbook_revision", "foundation_revision", "role_pack_version"].includes(source.kind)) {
       if (source.kind === "memory") {
         if (!capture.sourceSet.policy.memoryIds.includes(source.memoryId)) throw forbidden("A Native Memory source is unavailable");
