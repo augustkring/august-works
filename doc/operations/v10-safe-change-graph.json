@@ -13908,7 +13908,7 @@
         },
         {
           "path": "server/src/__tests__/helpers/managed-native-heartbeat-fixture.ts",
-          "sha256": "f405c02b98381a9f1dd5ccfc56a1091a5bdf62319110114acd4aa66dea909462"
+          "sha256": "0bab183942e14379e34c9e348bfbe2031e2f52c07af49725bb6b2ebf0ed393f3"
         },
         {
           "path": "server/src/__tests__/helpers/prepare-genuine-native-draft-conformance-fixture.ts",
@@ -32085,7 +32085,7 @@
         },
         {
           "path": "server/src/__tests__/helpers/managed-native-conversation-sandbox-host.ts",
-          "sha256": "d8f76500fac9479c4d9e33b67b10461050d635fb81a8830b45f4dc1a684eb92e"
+          "sha256": "61effe509397e3170f62a9f4659bfd7c303f1f43a622be2b25ee35d3413319a8"
         },
         {
           "path": "server/src/__tests__/helpers/managed-native-infrastructure-cleanup.test.ts",
@@ -52866,7 +52866,7 @@
       "id": "source:server/src/__tests__/helpers/managed-native-heartbeat-fixture.ts",
       "kind": "current_source_owner",
       "path": "server/src/__tests__/helpers/managed-native-heartbeat-fixture.ts",
-      "sha256": "f405c02b98381a9f1dd5ccfc56a1091a5bdf62319110114acd4aa66dea909462",
+      "sha256": "0bab183942e14379e34c9e348bfbe2031e2f52c07af49725bb6b2ebf0ed393f3",
       "changeIds": [
         "SCR-V10-WORKFLOWS-DURABLE-OPERATIONS"
       ],
@@ -72375,7 +72375,7 @@
       "id": "source:server/src/__tests__/helpers/managed-native-conversation-sandbox-host.ts",
       "kind": "current_source_owner",
       "path": "server/src/__tests__/helpers/managed-native-conversation-sandbox-host.ts",
-      "sha256": "d8f76500fac9479c4d9e33b67b10461050d635fb81a8830b45f4dc1a684eb92e",
+      "sha256": "61effe509397e3170f62a9f4659bfd7c303f1f43a622be2b25ee35d3413319a8",
       "changeIds": [
         "SCR-V10-PRODUCT-IDENTITY-HELP-LANGUAGE"
       ],
