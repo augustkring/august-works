@@ -48,6 +48,6 @@ The private original stays private. Recipients still need current access to the 
 
 When you add evidence to an existing Human-created Memory item, Blentera checks your current account and every original and new Task source again. If any source is no longer current or accessible, the update is blocked and the existing source restrictions remain in place.
 
-Choosing **Forget permanently** deletes the selected Memory content and its derived correction or sharing records. If that Memory came from a managed OpenCode run, Blentera also queues erasure of the run's app-managed runtime files. That file cleanup waits until Native confirms the run has stopped; provider-held data outside Blentera's managed runtime storage is not covered by this action.
+Choosing **Forget permanently** deletes the selected Memory content and its derived correction or sharing records. If that Memory came from a managed OpenCode run, Blentera also queues erasure of the run's app-managed runtime files. That file cleanup waits until Native confirms the run has stopped. If a later run of the same Task continued that run's session, Blentera also erases that later run's copy of those files once that run has stopped too. Provider-held data outside Blentera's managed runtime storage is not covered by this action.
 
 Managed file cleanup stays pending until process and storage removal can be verified. If it remains pending, contact human support with the saved receipt; a completed Memory deletion does not confirm removal of provider-held data.

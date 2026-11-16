@@ -1,8 +1,8 @@
 import path from "node:path";
 import fs from "node:fs/promises";
-import type { Dir } from "node:fs";
+import { constants as fsConstants, type Dir, type Stats } from "node:fs";
 import { createHash } from "node:crypto";
-import { and, desc, eq, inArray, sql } from "drizzle-orm";
+import { and, desc, eq, gte, inArray, lte, ne, sql } from "drizzle-orm";
 import { companies, companyDeletionOperations, environmentLeases, heartbeatRuns, memoryJobs, nativeRunFinalizations, runtimeHostCommands, type Db } from "@paperclipai/db";
 import { resolvePaperclipInstanceRoot } from "../../home-paths.js";
 import { lockAnalyticalCompany } from "../analytical-privacy.js";
@@ -597,6 +597,239 @@ export function managedOpenCodeRuntimeDirectory(owner: NativeRuntimeAssetOwner) 
   return path.join(nativeRuntimeAssetsRoot(owner), "provider-opencode");
 }
 
+const TERMINAL_RUN_STATUSES = ["succeeded", "interrupted", "failed", "cancelled", "timed_out"];
+
+/** CONF15-R (A). Closed refusal codes of the cross-Run carry; the executor
+ * fails closed with `native_session_carry_<code>`. */
+export const NATIVE_SESSION_CARRY_REFUSALS = [
+  "no_handoff", "scope_mismatch", "prior_erasure_pending", "source_missing", "path_escape", "symlink",
+  "special_file", "hardlink", "bound_exceeded", "digest_mismatch", "target_conflict", "copy_failed",
+] as const;
+export type NativeSessionCarryRefusal = (typeof NATIVE_SESSION_CARRY_REFUSALS)[number];
+export type NativeSessionCarryResult =
+  | { ok: true; status: "carried" | "already_present"; digest: string; entryCount: number; byteCount: number }
+  | { ok: false; refusal: NativeSessionCarryRefusal };
+/** The verified cold lease handoff (`verifyNativeColdLeaseHandoff`) this carry
+ * follows: the prior Run it names and the current Run's lease it accepted. */
+export type NativeSessionCarryHandoff = { priorRunId: string; normalizedSessionId: string; currentEnvironmentLeaseId: string };
+
+class NativeSessionCarryRefused extends Error {
+  constructor(readonly refusal: NativeSessionCarryRefusal) { super(`native_session_carry_${refusal}`); }
+}
+
+/** Only these session-root entries hold OpenCode's resumable provider data:
+ * `workspace` (the recorded working directory, read by `recoverSession`) and
+ * `data` (its XDG data home). Config and the source plugin hold per-launch
+ * bridge and MCP secrets and are rewritten by every launch; cache and the
+ * per-launch homes are not session state. Nothing else is carried. */
+const CARRIED_SESSION_ENTRIES = [{ name: "workspace", kind: "file" }, { name: "data", kind: "dir" }] as const;
+const CARRY_LIMITS = { maxEntries: 20_000, maxBytes: 256 * 1024 * 1024 };
+type CarryLimits = typeof CARRY_LIMITS;
+type CarryEntry = { path: string; kind: "dir" | "file"; mode: number; size: number; sha256: string | null };
+
+async function readCarryFile(absolute: string, expected: Stats): Promise<Buffer> {
+  // O_NONBLOCK: a FIFO swapped in after inspection must not block the carry.
+  const handle = await fs.open(absolute, fsConstants.O_RDONLY | fsConstants.O_NOFOLLOW | fsConstants.O_NONBLOCK);
+  try {
+    const opened = await handle.stat();
+    // The inode read must be the one inspected; a swap is a changed source.
+    if (!opened.isFile() || opened.ino !== expected.ino || opened.dev !== expected.dev || opened.size !== expected.size)
+      throw new NativeSessionCarryRefused("digest_mismatch");
+    const content = await handle.readFile();
+    if (content.length !== expected.size) throw new NativeSessionCarryRefused("digest_mismatch");
+    return content;
+  } finally { await handle.close(); }
+}
+
+/** Exact content inventory of the carried entries of one session root. It
+ * refuses a symlink, a special file and a multiply linked file anywhere, and
+ * never follows a link: every entry is inspected with lstat and read with
+ * O_NOFOLLOW against the inspected inode. */
+async function inventoryCarriedSession(sessionRoot: string, limits: CarryLimits) {
+  const entries: CarryEntry[] = [];
+  let bytes = 0;
+  const visit = async (relative: string, expected?: "dir" | "file"): Promise<void> => {
+    const absolute = path.join(sessionRoot, ...relative.split("/"));
+    let stat: Stats;
+    try { stat = await fs.lstat(absolute); } catch (error) {
+      if ((error as NodeJS.ErrnoException).code === "ENOENT") throw new NativeSessionCarryRefused("source_missing");
+      throw error;
+    }
+    if (stat.isSymbolicLink()) throw new NativeSessionCarryRefused("symlink");
+    if (entries.length >= limits.maxEntries) throw new NativeSessionCarryRefused("bound_exceeded");
+    if (stat.isDirectory() && expected !== "file") {
+      entries.push({ path: relative, kind: "dir", mode: stat.mode & 0o777, size: 0, sha256: null });
+      for (const name of (await fs.readdir(absolute)).sort()) await visit(`${relative}/${name}`);
+      return;
+    }
+    if (!stat.isFile() || expected === "dir") throw new NativeSessionCarryRefused("special_file");
+    if (stat.nlink !== 1) throw new NativeSessionCarryRefused("hardlink");
+    bytes += stat.size;
+    if (bytes > limits.maxBytes) throw new NativeSessionCarryRefused("bound_exceeded");
+    const content = await readCarryFile(absolute, stat);
+    entries.push({ path: relative, kind: "file", mode: stat.mode & 0o777, size: stat.size,
+      sha256: createHash("sha256").update(content).digest("hex") });
+  };
+  for (const entry of CARRIED_SESSION_ENTRIES) await visit(entry.name, entry.kind);
+  return { entries, bytes, digest: sha256(JSON.stringify(entries)) };
+}
+
+async function assertCarryDirectoryChain(directory: string, create = false) {
+  try {
+    await assertRuntimeStorageDirectories(directory, resolvePaperclipInstanceRoot(), create);
+  } catch (error) {
+    if ((error as NodeJS.ErrnoException).code === "ENOENT") throw new NativeSessionCarryRefused("source_missing");
+    throw new NativeSessionCarryRefused("path_escape");
+  }
+}
+
+/**
+ * CONF15-R (A) carry. After `verifyNativeColdLeaseHandoff` accepted Run 2's
+ * cold lease handoff from Run 1, copy exactly Run 1's managed OpenCode data
+ * for this native session from Run 1's retained per-Run folder into Run 2's
+ * per-Run folder. Run 2 keeps its own folder; nothing becomes shared. The
+ * copy must equal the source by digest, and the source must be unchanged
+ * after the copy. Run 1's later erasure reaches this copy through the
+ * descendant cascade in `eraseNativeRuntimeAssets`, so a carry is refused
+ * once an erasure of Run 1 or an earlier Run of the session exists. The
+ * privacy locks are taken shared in the canonical order (analytical, then
+ * Memory), so a carry and an erasure of this company never interleave.
+ */
+export async function carryManagedOpenCodeSessionData(db: Db, input: {
+  companyId: string; runId: string; handoff: NativeSessionCarryHandoff | null;
+}, options: { limits?: Partial<CarryLimits>; afterCopy?: (stagingRoot: string) => Promise<void> } = {}):
+  Promise<NativeSessionCarryResult> {
+  const limits = { ...CARRY_LIMITS, ...options.limits };
+  const pending: { staging: string | null } = { staging: null };
+  try {
+    const handoff = input.handoff;
+    if (!handoff) throw new NativeSessionCarryRefused("no_handoff");
+    return await db.transaction(async rawTx => {
+      const tx = rawTx as unknown as Db;
+      await lockAnalyticalCompany(tx, input.companyId, "read"); await lockMemoryPrivacy(tx, input.companyId, "read");
+      const [current] = await tx.select().from(heartbeatRuns).where(and(
+        eq(heartbeatRuns.companyId, input.companyId), eq(heartbeatRuns.id, input.runId)));
+      const [currentLease] = current ? await tx.select({ id: environmentLeases.id }).from(environmentLeases).where(and(
+        eq(environmentLeases.companyId, current.companyId), eq(environmentLeases.id, handoff.currentEnvironmentLeaseId),
+        eq(environmentLeases.heartbeatRunId, current.id))) : [];
+      // The handoff must be the one accepted for this Run and this session.
+      if (!current || !currentLease || !current.nativeSessionId || handoff.normalizedSessionId !== current.nativeSessionId)
+        throw new NativeSessionCarryRefused("no_handoff");
+      const [prior] = await tx.select().from(heartbeatRuns).where(eq(heartbeatRuns.id, handoff.priorRunId));
+      if (!prior || prior.companyId !== current.companyId || prior.agentId !== current.agentId ||
+        !prior.nativeIssueId || prior.nativeIssueId !== current.nativeIssueId ||
+        prior.nativeSessionId !== current.nativeSessionId ||
+        prior.id === current.id || prior.createdAt > current.createdAt || !TERMINAL_RUN_STATUSES.includes(prior.status) ||
+        [prior, current].some(run => run.runtimeMode !== "native" || run.driverKind !== "opencode_server"))
+        throw new NativeSessionCarryRefused("scope_mismatch");
+      const sessionId = current.nativeSessionId;
+      // Any erasure job of Run 1 or of an earlier Run of this session, in any
+      // state, means its bytes are being or have been erased: never copy them.
+      const earlier = await tx.select({ id: heartbeatRuns.id }).from(heartbeatRuns).where(and(
+        eq(heartbeatRuns.companyId, prior.companyId), eq(heartbeatRuns.agentId, prior.agentId),
+        eq(heartbeatRuns.nativeIssueId, prior.nativeIssueId), eq(heartbeatRuns.nativeSessionId, sessionId),
+        lte(heartbeatRuns.createdAt, prior.createdAt)));
+      const [erasure] = await tx.select({ id: memoryJobs.id }).from(memoryJobs).where(and(
+        eq(memoryJobs.companyId, prior.companyId), sql`${memoryJobs.sourceRefJson}->>'kind'='runtime_asset_erasure'`,
+        inArray(sql<string>`${memoryJobs.sourceRefJson}->>'runId'`, [...new Set([prior.id, ...earlier.map(run => run.id)])])))
+        .limit(1);
+      if (erasure) throw new NativeSessionCarryRefused("prior_erasure_pending");
+      const sourceRoot = path.join(managedOpenCodeRuntimeDirectory({ companyId: prior.companyId, runId: prior.id }), sessionId);
+      await assertCarryDirectoryChain(sourceRoot);
+      const source = await inventoryCarriedSession(sourceRoot, limits);
+      const targetRunRoot = nativeRuntimeAssetsRoot({ companyId: current.companyId, runId: current.id });
+      const targetHome = managedOpenCodeRuntimeDirectory({ companyId: current.companyId, runId: current.id });
+      await assertCarryDirectoryChain(targetRunRoot, true);
+      await fs.mkdir(targetHome, { mode: 0o700 }).catch((error: NodeJS.ErrnoException) => {
+        if (error.code !== "EEXIST") throw error;
+      });
+      await assertCarryDirectoryChain(targetHome);
+      const target = path.join(targetHome, sessionId);
+      let existing: Stats | null = null;
+      try { existing = await fs.lstat(target); } catch (error) {
+        if ((error as NodeJS.ErrnoException).code !== "ENOENT") throw error;
+      }
+      if (existing) {
+        if (existing.isSymbolicLink() || !existing.isDirectory()) throw new NativeSessionCarryRefused("target_conflict");
+        const present = await inventoryCarriedSession(target, limits).catch(() => null);
+        if (present?.digest !== source.digest) throw new NativeSessionCarryRefused("target_conflict");
+        return { ok: true as const, status: "already_present" as const, digest: source.digest,
+          entryCount: source.entries.length, byteCount: source.bytes };
+      }
+      const staging = pending.staging = await fs.mkdtemp(path.join(targetHome, ".carry-"));
+      for (const entry of source.entries) {
+        const destination = path.join(staging, ...entry.path.split("/"));
+        if (entry.kind === "dir") { await fs.mkdir(destination, { mode: 0o700 }); continue; }
+        const absolute = path.join(sourceRoot, ...entry.path.split("/"));
+        const stat = await fs.lstat(absolute);
+        if (!stat.isFile() || stat.nlink !== 1) throw new NativeSessionCarryRefused("digest_mismatch");
+        const content = await readCarryFile(absolute, stat);
+        const handle = await fs.open(destination,
+          fsConstants.O_WRONLY | fsConstants.O_CREAT | fsConstants.O_EXCL | fsConstants.O_NOFOLLOW, 0o600);
+        try { await handle.writeFile(content); } finally { await handle.close(); }
+        await fs.chmod(destination, entry.mode);
+      }
+      for (const entry of [...source.entries].reverse())
+        if (entry.kind === "dir") await fs.chmod(path.join(staging, ...entry.path.split("/")), entry.mode);
+      await options.afterCopy?.(staging);
+      const copied = await inventoryCarriedSession(staging, limits);
+      if (copied.digest !== source.digest) throw new NativeSessionCarryRefused("digest_mismatch");
+      const after = await inventoryCarriedSession(sourceRoot, limits);
+      if (after.digest !== source.digest) throw new NativeSessionCarryRefused("digest_mismatch");
+      try { await fs.rename(staging, target); } catch (error) {
+        if (["EEXIST", "ENOTEMPTY"].includes((error as NodeJS.ErrnoException).code ?? ""))
+          throw new NativeSessionCarryRefused("target_conflict");
+        throw error;
+      }
+      pending.staging = null;
+      return { ok: true as const, status: "carried" as const, digest: source.digest,
+        entryCount: source.entries.length, byteCount: source.bytes };
+    });
+  } catch (error) {
+    if (pending.staging) await removeRuntimeStorageTree(pending.staging).catch(() => undefined);
+    if (error instanceof NativeSessionCarryRefused) return { ok: false, refusal: error.refusal };
+    return { ok: false, refusal: "copy_failed" };
+  }
+}
+
+/** Every later Run of the same company, Agent, Task and native session can
+ * hold bytes carried from `run` (directly or through an intermediate Run).
+ * No record names the carry source, so the cascade conservatively covers all
+ * of them rather than guessing provenance. */
+async function managedOpenCodeCarryDescendants(tx: Db, run: typeof heartbeatRuns.$inferSelect) {
+  if (!run.nativeSessionId || !run.nativeIssueId) return [];
+  const descendants = await tx.select().from(heartbeatRuns).where(and(
+    eq(heartbeatRuns.companyId, run.companyId), eq(heartbeatRuns.agentId, run.agentId),
+    eq(heartbeatRuns.nativeIssueId, run.nativeIssueId), eq(heartbeatRuns.nativeSessionId, run.nativeSessionId),
+    ne(heartbeatRuns.id, run.id), gte(heartbeatRuns.createdAt, run.createdAt))).limit(10_001);
+  if (descendants.length > 10_000) throw conflict("Managed OpenCode carried data exceeds its erasure cascade bound");
+  return descendants;
+}
+
+/** The existing Stop gate, applied to a later Run before its carried copy is
+ * removed. A later Run that is still active defers the whole job (it fails
+ * and is retried), exactly like an unstopped owner; nothing is erased under a
+ * live Run. A terminal later Run without a provider home holds no copy. */
+async function assertManagedOpenCodeCarryDescendantStopped(tx: Db, run: typeof heartbeatRuns.$inferSelect,
+  providerHomeExists: boolean) {
+  const profile = run.runnerProfileJson && typeof run.runnerProfileJson === "object" && !Array.isArray(run.runnerProfileJson)
+    ? run.runnerProfileJson as Record<string, unknown> : null;
+  const canonicalRemoteStopped = run.nativeProcessCleanupPending === false &&
+    Boolean(profile?.nativeRemoteRuntimeAssetLocator) && await remoteExecutionHasStopped(tx, run.companyId, run.id);
+  if (!TERMINAL_RUN_STATUSES.includes(run.status) || (run.processPid !== null && !canonicalRemoteStopped) ||
+    run.processGroupId !== null || run.controllerLeaseExpiresAt !== null)
+    throw new Error("Managed OpenCode carried data erasure awaits a later Run's confirmed Native Stop");
+  if (!providerHomeExists) return;
+  const [finalization] = await tx.select({ phase: nativeRunFinalizations.phase,
+    leaseOwner: nativeRunFinalizations.leaseOwner, leaseExpiresAt: nativeRunFinalizations.leaseExpiresAt })
+    .from(nativeRunFinalizations).where(and(eq(nativeRunFinalizations.companyId, run.companyId),
+      eq(nativeRunFinalizations.runId, run.id)));
+  if (!finalization || !["committed", "terminal_failure"].includes(finalization.phase) ||
+    finalization.leaseOwner !== null || finalization.leaseExpiresAt !== null ||
+    (!canonicalRemoteStopped && !await hasNativeLocalProcessStop(tx, run.companyId, run.id)))
+    throw new Error("Managed OpenCode carried data erasure awaits a later Run's Native Stop receipt");
+}
+
 function legacyProfileDigests(profile: unknown) {
   if (!profile || typeof profile !== "object" || Array.isArray(profile)) return [] as string[];
   const nativeInput = (profile as Record<string, unknown>).nativeExecutionInput;
@@ -1066,10 +1299,33 @@ export async function eraseNativeRuntimeAssets(db: Db, owner: NativeRuntimeAsset
       }
     }
     const storageRoot = resolvePaperclipInstanceRoot(), runRoot = nativeRuntimeAssetsRoot(owner);
+    // CONF15-R (A) cascade (CE-15: erasure reaches current, historical and
+    // indirect copies). A later Run of this session may hold a carried copy
+    // of this Run's managed OpenCode data in its own per-Run provider home.
+    // Every such Run must pass the Stop gate before anything is removed.
+    const carryHomes: string[] = [];
+    for (const descendant of run ? await managedOpenCodeCarryDescendants(tx, run) : []) {
+      const home = managedOpenCodeRuntimeDirectory({ companyId: descendant.companyId, runId: descendant.id });
+      let homeExists = false;
+      try {
+        await assertRuntimeStorageDirectories(home, storageRoot);
+        homeExists = true;
+      } catch (error) {
+        if ((error as NodeJS.ErrnoException).code !== "ENOENT") throw error;
+      }
+      await assertManagedOpenCodeCarryDescendantStopped(tx, descendant, homeExists);
+      if (homeExists) carryHomes.push(home);
+    }
     try {
       await assertRuntimeStorageDirectories(runRoot, storageRoot);
       await removeRuntimeStorageTree(runRoot);
     } catch (error) { if ((error as NodeJS.ErrnoException).code !== "ENOENT") throw error; }
+    for (const home of carryHomes) {
+      try {
+        await assertRuntimeStorageDirectories(home, storageRoot);
+        await removeRuntimeStorageTree(home);
+      } catch (error) { if ((error as NodeJS.ErrnoException).code !== "ENOENT") throw error; }
+    }
     // ponytail: scan original persisted profiles for each of at most 256 legacy digests;
     // use a native expression index if historical profile volume needs it.
     for (const digest of new Set(legacyDigests)) {
