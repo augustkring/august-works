@@ -104,7 +104,8 @@ import { agentRuntimeCandidateService } from "../agents/authoring-runtime-candid
 import { agentRuntimeCandidateConformanceService } from "../agents/authoring-runtime-candidate-conformance.js";
 import { callNativeOpenCodeConformanceMessages, issueNativeOpenCodeConformanceRun } from "./native-opencode-conformance-admission.js";
 import { issueRecoveryActionService } from "../issue-recovery-actions.js";
-import { validatePrpEvent, validatePrpStructuredRunResult } from "../../vendor/paperclip-runner/index.js";
+import { parseNativeExecutionInput, validatePrpEvent, validatePrpStructuredRunResult } from "../../vendor/paperclip-runner/index.js";
+import { nativeRetainedRunResumeWitness, nativeToolContractFingerprintForTarget } from "../native-runtime/native-session-resume.js";
 import { managedOpenCodeProviderToolsMatchCatalog, managedOpenCodeToolName } from "../native-runtime/managed-opencode-terminal-tools.js";
 
 type BoundClaims = RuntimeToolsTokenClaims & {
@@ -273,6 +274,259 @@ async function assertManagedPaperclipFinishResult(input: {
   const canonicalResult = { type: "text", text: managedRecord(completions[0]!.payload.item).result };
   if (input.content !== JSON.stringify(canonicalResult) || canonicalResult.text !== "Semantic completion accepted.")
     throw forbidden("Managed OpenCode semantic completion result digest does not match its accepted server result");
+}
+
+/**
+ * CONF15-W6. The single retained Run whose sealed history a resumed managed
+ * OpenCode request may replay, or null when the current receipt names none.
+ * It must be exactly the Run the W3/W4 admission bound: one `retained_run`
+ * input in the current bootstrap, named in its policy, a different Run of the
+ * same company, Agent, Task, Native session and responsible Human, with its
+ * own sealed receipt bound to the same, and a retained-run witness recomputed
+ * from that Run that equals the sealed input exactly.
+ */
+export function managedRetainedHistoryBinding(input: {
+  run: { id: string; companyId: string; agentId: string; nativeIssueId: string | null; nativeSessionId: string | null;
+    responsibleUserId: string | null };
+  receipt: NativeRunInputSourceReceipt;
+  retainedRun: { id: string; companyId: string; agentId: string; nativeIssueId: string | null; nativeSessionId: string | null;
+    responsibleUserId: string | null; runnerProfileJson: unknown } | null;
+  witnessSource: unknown;
+}): { retainedReceipt: NativeRunInputSourceReceipt } | "none" | null {
+  const retained = input.receipt.bootstrap.inputs.filter((source): source is Extract<NativePayloadSourceInput, { kind: "retained_run" }> =>
+    source.kind === "retained_run");
+  if (retained.length === 0) return "none";
+  if (retained.length !== 1) return null;
+  const source = retained[0]!;
+  const { run, retainedRun } = input;
+  if (!retainedRun || retainedRun.id !== source.runId || retainedRun.id === run.id) return null;
+  if (!input.receipt.bootstrap.policy.runIds.includes(retainedRun.id)) return null;
+  if (retainedRun.companyId !== run.companyId || retainedRun.agentId !== run.agentId) return null;
+  if (!run.nativeIssueId || retainedRun.nativeIssueId !== run.nativeIssueId) return null;
+  if (!run.nativeSessionId || retainedRun.nativeSessionId !== run.nativeSessionId) return null;
+  if (!run.responsibleUserId || retainedRun.responsibleUserId !== run.responsibleUserId) return null;
+  const retainedReceipt = nativeRunInputSourceReceiptSchema.safeParse(managedRecord(retainedRun.runnerProfileJson).nativeInputSourceReceipt);
+  if (!retainedReceipt.success) return null;
+  const binding = retainedReceipt.data.binding;
+  if (binding.companyId !== run.companyId || binding.runId !== retainedRun.id || binding.agentId !== run.agentId ||
+    binding.issueId !== run.nativeIssueId || binding.responsibleUserId !== run.responsibleUserId) return null;
+  if (!input.witnessSource || !isDeepStrictEqual(input.witnessSource, source)) return null;
+  return { retainedReceipt: retainedReceipt.data };
+}
+
+type ManagedRetainedPromptBinding = { promptHash: string; sourceSetHash: string };
+type ManagedRetainedToolUse = { toolName: string; argumentsHash: string; intent: Record<string, unknown> };
+export type ManagedRetainedHistoryPrefix =
+  | { ok: true; messageIndex: number; blockIndex: number;
+      toolResults: Array<{ callId: string; use: ManagedRetainedToolUse; block: Record<string, unknown>; content: string }> }
+  | { ok: false; reason: string };
+
+function managedToolResultContent(block: Record<string, unknown>): string {
+  return typeof block.content === "string" ? block.content : Array.isArray(block.content)
+    ? block.content.map((part) => typeof managedRecord(part).text === "string" ? managedRecord(part).text : "").join("") : "";
+}
+
+/**
+ * CONF15-W6. Match the leading earlier-turn history of a resumed managed
+ * OpenCode request against the admitted retained Run's sealed records. The
+ * prefix must be exactly the retained Run's transcript: its authorized
+ * prompts (by hash, each once, all of them), its accepted responses (by
+ * content digest, all of them, in recorded order, each after the prompt its
+ * dispatch was bound to), and tool results only for the tool uses of the
+ * immediately preceding retained response. The current Run's authorized
+ * prompt must close the prefix as the last block of its user message; the
+ * caller checks everything after it as today. Pure: tool-result receipts are
+ * checked by the caller against the retained Run's own records.
+ */
+export function managedRetainedHistoryPrefix(input: {
+  messages: readonly unknown[];
+  currentPromptHashes: readonly string[];
+  retainedPrompts: readonly ManagedRetainedPromptBinding[];
+  retainedResponses: readonly { intent: Record<string, unknown> }[];
+}): ManagedRetainedHistoryPrefix {
+  const refuse = (reason: string): ManagedRetainedHistoryPrefix => ({ ok: false, reason });
+  let responseIndex = 0;
+  let promptBinding: ManagedRetainedPromptBinding | null = null;
+  const seenPrompts = new Set<string>();
+  let pending = new Map<string, ManagedRetainedToolUse>();
+  const toolResults: Extract<ManagedRetainedHistoryPrefix, { ok: true }>["toolResults"] = [];
+  for (let messageIndex = 0; messageIndex < input.messages.length; messageIndex += 1) {
+    const message = managedRecord(input.messages[messageIndex]);
+    if (message.role === "assistant") {
+      if (pending.size > 0) return refuse("unresolved_tool_use");
+      const response = input.retainedResponses[responseIndex];
+      if (!response) return refuse("extra_assistant");
+      if (typeof response.intent.responseContentHash !== "string" ||
+        nativeSha256(message.content) !== response.intent.responseContentHash) return refuse("assistant_mismatch");
+      if (!promptBinding || promptBinding.sourceSetHash !== response.intent.sourceSetHash) return refuse("assistant_prompt_order");
+      const uses = response.intent.responseToolUses;
+      if (!Array.isArray(uses)) return refuse("tool_use_receipt_invalid");
+      pending = new Map();
+      for (const value of uses) {
+        const call = managedRecord(value);
+        const toolName = typeof call.name === "string" ? managedToolName(call.name) : "";
+        if (typeof call.id !== "string" || !/^[\x21-\x7e]{1,200}$/.test(call.id) || !toolName ||
+          typeof call.argumentsHash !== "string" || !/^[0-9a-f]{64}$/.test(call.argumentsHash) || pending.has(call.id))
+          return refuse("tool_use_receipt_invalid");
+        pending.set(call.id, { toolName, argumentsHash: call.argumentsHash, intent: response.intent });
+      }
+      responseIndex += 1;
+      continue;
+    }
+    if (message.role !== "user") return refuse("unsupported_role");
+    const blocks = typeof message.content === "string" ? [{ type: "text", text: message.content }] :
+      Array.isArray(message.content) ? message.content.map(managedRecord) : [];
+    if (blocks.length === 0) return refuse("empty_user_message");
+    for (let blockIndex = 0; blockIndex < blocks.length; blockIndex += 1) {
+      const block = blocks[blockIndex]!;
+      if (block.type === "text") {
+        if (typeof block.text !== "string") return refuse("user_mismatch");
+        const promptHash = nativeSha256(block.text);
+        if (input.currentPromptHashes.includes(promptHash)) {
+          if (messageIndex === 0 && blockIndex === 0) return refuse("no_retained_history");
+          if (blockIndex !== blocks.length - 1) return refuse("current_prompt_not_final");
+          if (pending.size > 0) return refuse("unresolved_tool_use");
+          if (responseIndex !== input.retainedResponses.length) return refuse("missing_retained_response");
+          if (seenPrompts.size !== input.retainedPrompts.length) return refuse("missing_retained_prompt");
+          return { ok: true, messageIndex, blockIndex, toolResults };
+        }
+        const bindings = input.retainedPrompts.filter((binding) => binding.promptHash === promptHash);
+        if (bindings.length !== 1 || seenPrompts.has(promptHash)) return refuse("user_mismatch");
+        seenPrompts.add(promptHash);
+        promptBinding = bindings[0]!;
+        continue;
+      }
+      if (block.type === "tool_result") {
+        const callId = block.tool_use_id;
+        const use = typeof callId === "string" ? pending.get(callId) : undefined;
+        if (typeof callId !== "string" || !use) return refuse("tool_result_without_retained_use");
+        pending.delete(callId);
+        toolResults.push({ callId, use, block, content: managedToolResultContent(block) });
+        continue;
+      }
+      return refuse("unsupported_block");
+    }
+  }
+  return refuse("missing_current_prompt");
+}
+
+/** Tool results a retained prefix may replay by their sealed capture alone. */
+const MANAGED_RETAINED_CAPTURED_TOOLS = new Set(["write_document", "read_document"]);
+
+/**
+ * CONF15-W6. A replayed tool result of the retained Run equals that Run's own
+ * recorded receipt: the exact acknowledged Native dispatch of its response,
+ * one tool-call association for this call, tool and arguments, one managed
+ * capture on that association, and a result whose digest and source identity
+ * equal the capture. Error results, assigned MCP and any other tool refuse.
+ */
+export function managedRetainedToolResultMatchesReceipt(input: {
+  profile: Record<string, unknown>;
+  responsibleUserId: string;
+  callId: string;
+  use: ManagedRetainedToolUse;
+  block: Record<string, unknown>;
+  content: string;
+}): boolean {
+  const { profile, use, callId } = input;
+  if (input.block.is_error === true || !MANAGED_RETAINED_CAPTURED_TOOLS.has(use.toolName)) return false;
+  const dispatches = Array.isArray(profile.nativeModelInputDispatchIntents)
+    ? profile.nativeModelInputDispatchIntents.map(managedRecord).filter((item) =>
+        item.turnInputDigest === use.intent.sourceDispatchDigest && item.responsibleUserId === input.responsibleUserId &&
+        item.continuation === false && typeof item.turnId === "string" && typeof item.dispatchId === "string") : [];
+  if (dispatches.length !== 1) return false;
+  const dispatch = dispatches[0]!;
+  const associations = (Array.isArray(profile.nativeToolCallDispatchAssociations)
+    ? profile.nativeToolCallDispatchAssociations.map(managedRecord) : []).filter((item) =>
+      item.callId === callId && item.tool === use.toolName && item.turnId === dispatch.turnId &&
+      item.dispatchId === dispatch.dispatchId && item.eventSeq === dispatch.eventSeq && item.attempt === dispatch.attempt &&
+      item.argumentsHash === use.argumentsHash);
+  if (associations.length !== 1) return false;
+  const association = associations[0]!;
+  const captures = (Array.isArray(profile.nativeToolResultSourceCaptures)
+    ? profile.nativeToolResultSourceCaptures.map(managedRecord) : []).filter((item) =>
+      item.managedOpenCode === true && item.callId === callId && item.tool === use.toolName &&
+      typeof item.resultDigest === "string" && item.turnId === association.turnId &&
+      item.eventSeq === association.eventSeq && item.attempt === association.attempt);
+  if (captures.length !== 1) return false;
+  const capture = captures[0]!;
+  if (capture.assignedMcp !== undefined || capture.assignedMcpSearch !== undefined) return false;
+  let result: unknown;
+  try { result = JSON.parse(input.content); } catch { return false; }
+  const digest = nativeSha256(result);
+  const source = managedRecord(capture.source);
+  return digest === capture.resultDigest && source.kind === "tool_result" && source.contentHash === digest &&
+    source.callId === callId && source.toolName === managedToolSourceName(use.toolName);
+}
+
+/**
+ * CONF15-W6. Load the admitted retained Run and its accepted responses for a
+ * Worker request whose history does not start with the current prompt. Reads
+ * only existing records (the retained Run row, its sealed receipt and wire
+ * intents, and their completed reservations); writes nothing. Returns null
+ * when the current receipt names no retained Run.
+ */
+async function loadManagedRetainedHistory(db: Db, claims: ManagedModelClaims, run: typeof heartbeatRuns.$inferSelect,
+  profile: Record<string, unknown>, receipt: NativeRunInputSourceReceipt) {
+  if (claims.scope !== "worker_model") return null;
+  const retainedSources = receipt.bootstrap.inputs.filter((source): source is Extract<NativePayloadSourceInput, { kind: "retained_run" }> =>
+    source.kind === "retained_run");
+  if (retainedSources.length === 0) return null;
+  const [retainedRun] = retainedSources.length === 1 ? await db.select().from(heartbeatRuns).where(and(
+    eq(heartbeatRuns.companyId, claims.company_id), eq(heartbeatRuns.id, retainedSources[0]!.runId))) : [];
+  // The same witness the source reader recomputes for a retained-run input.
+  let currentExecution: ReturnType<typeof parseNativeExecutionInput> | null = null;
+  try { currentExecution = parseNativeExecutionInput(profile.nativeExecutionInput); } catch { currentExecution = null; }
+  const targetKind = profile.nativeToolContractFingerprint === nativeToolContractFingerprintForTarget("remote") ? "remote"
+    : profile.nativeToolContractFingerprint === nativeToolContractFingerprintForTarget("local") ? "local" : null;
+  const generationValue = managedRecord(run.contextSnapshot).conversationSessionGeneration;
+  const generation = Number.isSafeInteger(generationValue) && (generationValue as number) >= 0 ? generationValue as number : null;
+  const [issue] = run.nativeIssueId ? await db.select({ conversationAgentId: issues.conversationAgentId }).from(issues)
+    .where(and(eq(issues.companyId, claims.company_id), eq(issues.id, run.nativeIssueId))) : [];
+  const witness = retainedRun && currentExecution && targetKind && issue ? nativeRetainedRunResumeWitness({
+    previousRun: retainedRun, currentExecution, currentResponsibleUserId: run.responsibleUserId ?? null,
+    currentConversationSessionGeneration: generation, requireConversationGeneration: issue.conversationAgentId != null,
+    executionTargetKind: targetKind }) : null;
+  const binding = managedRetainedHistoryBinding({ run, receipt, retainedRun: retainedRun ?? null,
+    witnessSource: witness?.source ?? null });
+  if (binding === "none") return null;
+  if (!binding || !retainedRun)
+    throw forbidden("Managed OpenCode history names no exact admitted retained Run");
+  const retainedProfile = managedRecord(retainedRun.runnerProfileJson);
+  const authority = managedRecord(retainedProfile.nativeOpenCodeSourceAuthority);
+  const rawPrompts = authority.authorizedPromptHashes;
+  const rawBindings = authority.promptSourceBindings;
+  if (!Array.isArray(rawPrompts) || !Array.isArray(rawBindings) || rawPrompts.length < 1 || rawPrompts.length > 64 ||
+    rawBindings.length !== rawPrompts.length || rawBindings.some((value, index) =>
+      managedRecord(value).promptHash !== rawPrompts[index] || typeof managedRecord(value).promptHash !== "string" ||
+      !/^[0-9a-f]{64}$/.test(managedRecord(value).promptHash as string) || typeof managedRecord(value).sourceSetHash !== "string" ||
+      !/^[0-9a-f]{64}$/.test(managedRecord(value).sourceSetHash as string)))
+    throw forbidden("Managed OpenCode retained Run has no exact prompt receipts");
+  const retainedPrompts = rawBindings.map((value) => ({ promptHash: managedRecord(value).promptHash as string,
+    sourceSetHash: managedRecord(value).sourceSetHash as string }));
+  const retainedPolicyHash = nativeSha256(binding.retainedReceipt.bootstrap);
+  const wireIntents = Array.isArray(retainedProfile.nativeAwModelWireIntents)
+    ? retainedProfile.nativeAwModelWireIntents.map(managedRecord) : [];
+  const retainedResponses: Array<{ intent: Record<string, unknown> }> = [];
+  for (const intent of wireIntents) {
+    // Only an intent with a captured response is part of the transcript.
+    if (intent.responseContentHash === undefined) continue;
+    if (typeof intent.responseContentHash !== "string" || !/^[0-9a-f]{64}$/.test(intent.responseContentHash) ||
+      intent.modelPurpose !== "worker_model" || intent.sourcePolicyHash !== retainedPolicyHash ||
+      typeof intent.reservationId !== "string")
+      throw forbidden("Managed OpenCode retained response has no exact accepted provider receipt");
+    const [reservation] = await db.select().from(orchestrationModelReservations).where(and(
+      eq(orchestrationModelReservations.companyId, claims.company_id),
+      eq(orchestrationModelReservations.id, intent.reservationId),
+      eq(orchestrationModelReservations.purpose, "worker_model"),
+      eq(orchestrationModelReservations.status, "completed")));
+    if (!reservation || typeof reservation.providerResponseHash !== "string" ||
+      !exactManagedAssistantHistoryPrefix({ receipt: binding.retainedReceipt, intent, runId: retainedRun.id,
+        providerResponseHash: reservation.providerResponseHash }))
+      throw forbidden("Managed OpenCode retained response has no exact accepted provider receipt");
+    retainedResponses.push({ intent });
+  }
+  return { run: retainedRun, profile: retainedProfile, retainedPrompts, retainedResponses };
 }
 
 export type WorkerModelDispatchWireReceipt = ReadOnlyModelWireReceipt & {
@@ -546,7 +800,40 @@ async function assertManagedOpenCodeRequestSources(db: Db, claims: ManagedModelC
   let pendingAssignedMcp = false;
   const priorProviderToolUses = new Map<string, { toolName: string; argumentsHash: string; intent: Record<string, unknown> }>();
   const consumedProviderToolUses = new Set<string>();
-  for (const messageValue of Array.isArray(request.messages) ? request.messages : []) {
+  // CONF15-W6. A resumed same-session request replays the admitted retained
+  // Run's transcript before the current prompt. Accept it only as the exact
+  // sealed prefix of that Run (replayed input, not new authority: it adds no
+  // consumed source component or spend), then check the current Run's part
+  // from its own prompt onward exactly as before.
+  const allMessages: unknown[] = Array.isArray(request.messages) ? request.messages : [];
+  let ownMessages: unknown[] = allMessages;
+  const firstMessage = managedRecord(allMessages[0]);
+  const firstBlock = managedRecord(typeof firstMessage.content === "string" ? { type: "text", text: firstMessage.content }
+    : Array.isArray(firstMessage.content) ? firstMessage.content[0] : null);
+  const startsWithCurrentPrompt = firstMessage.role === "user" && firstBlock.type === "text" &&
+    typeof firstBlock.text === "string" && prompts.includes(nativeSha256(firstBlock.text));
+  const retainedHistory = startsWithCurrentPrompt ? null
+    : await loadManagedRetainedHistory(db, claims, run, profile, receipt.data);
+  if (retainedHistory) {
+    const prefix = managedRetainedHistoryPrefix({ messages: allMessages, currentPromptHashes: prompts as string[],
+      retainedPrompts: retainedHistory.retainedPrompts, retainedResponses: retainedHistory.retainedResponses });
+    if (!prefix.ok) throw forbidden(`Managed OpenCode history is not the exact admitted retained Run prefix (${prefix.reason})`);
+    for (const result of prefix.toolResults) {
+      if (result.use.toolName === "paperclip_finish") {
+        await assertManagedPaperclipFinishResult({ db, claims: { ...claims, run_id: retainedHistory.run.id },
+          run: retainedHistory.run, profile: retainedHistory.profile, providerUse: result.use, callId: result.callId,
+          content: result.content, block: result.block });
+      } else if (!managedRetainedToolResultMatchesReceipt({ profile: retainedHistory.profile,
+        responsibleUserId: retainedHistory.run.responsibleUserId!, callId: result.callId, use: result.use,
+        block: result.block, content: result.content }))
+        throw forbidden("Managed OpenCode retained tool result has no exact receipt of the retained Run");
+    }
+    const closing = managedRecord(allMessages[prefix.messageIndex]);
+    const closingBlocks = typeof closing.content === "string" ? [{ type: "text", text: closing.content }]
+      : (closing.content as unknown[]);
+    ownMessages = [{ ...closing, content: closingBlocks.slice(prefix.blockIndex) }, ...allMessages.slice(prefix.messageIndex + 1)];
+  }
+  for (const messageValue of ownMessages) {
     const message = managedRecord(messageValue);
     const blocks = typeof message.content === "string" ? [{ type: "text", text: message.content }] :
       Array.isArray(message.content) ? message.content.map(managedRecord) : [];
