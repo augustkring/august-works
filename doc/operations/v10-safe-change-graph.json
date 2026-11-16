@@ -4517,7 +4517,7 @@
         },
         {
           "path": "server/src/services/orchestration/worker-model-gateway.ts",
-          "sha256": "eca915957c7568f54bf5be0890a87c9c76414c914b2660586a380fe70da9131c"
+          "sha256": "41f233843800c20c63d210cebca899239706ba7e05a6025c71e656a3475717fa"
         },
         {
           "path": "server/src/services/tool-gateway.ts",
@@ -10377,7 +10377,7 @@
         },
         {
           "path": "server/src/services/orchestration/worker-model-gateway.ts",
-          "sha256": "eca915957c7568f54bf5be0890a87c9c76414c914b2660586a380fe70da9131c"
+          "sha256": "41f233843800c20c63d210cebca899239706ba7e05a6025c71e656a3475717fa"
         },
         {
           "path": "server/src/services/platform-skill-admission.ts",
@@ -24630,15 +24630,15 @@
         },
         {
           "path": "packages/paperclip-runner/src/contracts/native-session-backend.ts",
-          "sha256": "0d5364a0219cebcd239418a75594ff35f3a15545f8bcc334735cf7d37fae5907"
+          "sha256": "91d052353aa8487228af43f78966c92472d392cd16569b4f0d7ec47fff1eea99"
         },
         {
           "path": "packages/paperclip-runner/src/control-plane/durable-prp-control-plane.test.ts",
-          "sha256": "052a5a16198a96bd0f6160f8b339f2f461c45e07a0893baf94959fc019a6bc6c"
+          "sha256": "9100e99692506fb2cadd32439f9e9cbabfb0bc354518ed5a52c36aa321fdd3d5"
         },
         {
           "path": "packages/paperclip-runner/src/control-plane/durable-prp-control-plane.ts",
-          "sha256": "ed95efa14b462c1183cf470940d122d936feee5e1dd462c0259427e3bdb1439f"
+          "sha256": "32bf0074f0acf0ab6470d03810ece6b42083ab44f9ee5e249e1c103d01d20d15"
         },
         {
           "path": "packages/paperclip-runner/src/drivers/acpx/installation-integrity.test.ts",
@@ -24650,7 +24650,7 @@
         },
         {
           "path": "packages/paperclip-runner/src/drivers/codex/codex-app-server-driver-impl.ts",
-          "sha256": "2a1274d7fd3760e51c333c3798965da6c9a950cd7b1d6feba0369de6692953fc"
+          "sha256": "7676ea77a42c6a30e1b8bb1f4c24a168278d20b80f44b6744e7a89ce2da70608"
         },
         {
           "path": "packages/paperclip-runner/src/drivers/codex/codex-app-server-driver.test.ts",
@@ -24662,7 +24662,7 @@
         },
         {
           "path": "packages/paperclip-runner/src/drivers/codex/codex-harness-session.ts",
-          "sha256": "e733330597e5f4374b35e34f6c8e9939d55d6c5eb497a7be73b2788fb91591d4"
+          "sha256": "9e4a23885ca13b3bc1f69e521fc0ddf936d8f952414d716b01dd7a5fc59c7448"
         },
         {
           "path": "packages/paperclip-runner/src/drivers/codex/codex-session-state.ts",
@@ -24702,7 +24702,7 @@
         },
         {
           "path": "packages/paperclip-runner/src/live/runnerd-codex-transport.ts",
-          "sha256": "b90f90eaec3321837821e9b54488d1daacaec7d1725db8670f6a1638cdeceb69"
+          "sha256": "171a17777a6aeba796174ca2649ade00128b23c056ad58ee7467ef25499ca309"
         },
         {
           "path": "packages/paperclip-runner/src/native-session-runtime.test.ts",
@@ -25002,11 +25002,11 @@
         },
         {
           "path": "server/src/services/native-opencode-conformance-bootstrap-order.test.ts",
-          "sha256": "b81ca644cfb7f0c19a4551d8e11db09e4c6e419c9756c606ff8695ce659f549f"
+          "sha256": "41f48378be9e87a144ba409fef8741da3a8e2b3670a001602f7dede069f0ad52"
         },
         {
           "path": "server/src/services/native-opencode-conformance.ts",
-          "sha256": "3b9a9451fa8d91e77c02117374c58c49819cf66e25960e6e30ff026db38ffa23"
+          "sha256": "2b9f3328f0766d3825e42731f5bc2cee5ed02e5af29a1e76718cbdf0e53f826c"
         },
         {
           "path": "server/src/services/native-owner-release.ts",
@@ -25330,7 +25330,7 @@
         },
         {
           "path": "server/src/vendor/paperclip-runner/index.ts",
-          "sha256": "0f1e1543d64b147beee3c1f5bd2476267e1314af69cde152b3234ddb9c584f13"
+          "sha256": "459945e9f65e697b0a9b32c98524fe8a67f80f6dbd69e60a8035a2e27e05a78f"
         },
         {
           "path": "tests/e2e/aw-v9-runtime-candidates.spec.ts",
@@ -47080,7 +47080,7 @@
       "id": "source:server/src/services/orchestration/worker-model-gateway.ts",
       "kind": "current_source_owner",
       "path": "server/src/services/orchestration/worker-model-gateway.ts",
-      "sha256": "eca915957c7568f54bf5be0890a87c9c76414c914b2660586a380fe70da9131c",
+      "sha256": "41f233843800c20c63d210cebca899239706ba7e05a6025c71e656a3475717fa",
       "changeIds": [
         "SCR-V10-HOTSPOT-01",
         "SCR-V10-HOTSPOT-07"
@@ -62290,7 +62290,7 @@
       "id": "source:packages/paperclip-runner/src/contracts/native-session-backend.ts",
       "kind": "current_source_owner",
       "path": "packages/paperclip-runner/src/contracts/native-session-backend.ts",
-      "sha256": "0d5364a0219cebcd239418a75594ff35f3a15545f8bcc334735cf7d37fae5907",
+      "sha256": "91d052353aa8487228af43f78966c92472d392cd16569b4f0d7ec47fff1eea99",
       "changeIds": [
         "SCR-V10-NATIVE-RUNTIME-AND-AUTHORITY"
       ],
@@ -62305,7 +62305,7 @@
       "id": "source:packages/paperclip-runner/src/control-plane/durable-prp-control-plane.test.ts",
       "kind": "current_source_owner",
       "path": "packages/paperclip-runner/src/control-plane/durable-prp-control-plane.test.ts",
-      "sha256": "052a5a16198a96bd0f6160f8b339f2f461c45e07a0893baf94959fc019a6bc6c",
+      "sha256": "9100e99692506fb2cadd32439f9e9cbabfb0bc354518ed5a52c36aa321fdd3d5",
       "changeIds": [
         "SCR-V10-NATIVE-RUNTIME-AND-AUTHORITY"
       ],
@@ -62320,7 +62320,7 @@
       "id": "source:packages/paperclip-runner/src/control-plane/durable-prp-control-plane.ts",
       "kind": "current_source_owner",
       "path": "packages/paperclip-runner/src/control-plane/durable-prp-control-plane.ts",
-      "sha256": "ed95efa14b462c1183cf470940d122d936feee5e1dd462c0259427e3bdb1439f",
+      "sha256": "32bf0074f0acf0ab6470d03810ece6b42083ab44f9ee5e249e1c103d01d20d15",
       "changeIds": [
         "SCR-V10-NATIVE-RUNTIME-AND-AUTHORITY"
       ],
@@ -62365,7 +62365,7 @@
       "id": "source:packages/paperclip-runner/src/drivers/codex/codex-app-server-driver-impl.ts",
       "kind": "current_source_owner",
       "path": "packages/paperclip-runner/src/drivers/codex/codex-app-server-driver-impl.ts",
-      "sha256": "2a1274d7fd3760e51c333c3798965da6c9a950cd7b1d6feba0369de6692953fc",
+      "sha256": "7676ea77a42c6a30e1b8bb1f4c24a168278d20b80f44b6744e7a89ce2da70608",
       "changeIds": [
         "SCR-V10-NATIVE-RUNTIME-AND-AUTHORITY"
       ],
@@ -62410,7 +62410,7 @@
       "id": "source:packages/paperclip-runner/src/drivers/codex/codex-harness-session.ts",
       "kind": "current_source_owner",
       "path": "packages/paperclip-runner/src/drivers/codex/codex-harness-session.ts",
-      "sha256": "e733330597e5f4374b35e34f6c8e9939d55d6c5eb497a7be73b2788fb91591d4",
+      "sha256": "9e4a23885ca13b3bc1f69e521fc0ddf936d8f952414d716b01dd7a5fc59c7448",
       "changeIds": [
         "SCR-V10-NATIVE-RUNTIME-AND-AUTHORITY"
       ],
@@ -62560,7 +62560,7 @@
       "id": "source:packages/paperclip-runner/src/live/runnerd-codex-transport.ts",
       "kind": "current_source_owner",
       "path": "packages/paperclip-runner/src/live/runnerd-codex-transport.ts",
-      "sha256": "b90f90eaec3321837821e9b54488d1daacaec7d1725db8670f6a1638cdeceb69",
+      "sha256": "171a17777a6aeba796174ca2649ade00128b23c056ad58ee7467ef25499ca309",
       "changeIds": [
         "SCR-V10-NATIVE-RUNTIME-AND-AUTHORITY"
       ],
@@ -63688,7 +63688,7 @@
       "id": "source:server/src/services/native-opencode-conformance-bootstrap-order.test.ts",
       "kind": "current_source_owner",
       "path": "server/src/services/native-opencode-conformance-bootstrap-order.test.ts",
-      "sha256": "b81ca644cfb7f0c19a4551d8e11db09e4c6e419c9756c606ff8695ce659f549f",
+      "sha256": "41f48378be9e87a144ba409fef8741da3a8e2b3670a001602f7dede069f0ad52",
       "changeIds": [
         "SCR-V10-NATIVE-RUNTIME-AND-AUTHORITY"
       ],
@@ -63703,7 +63703,7 @@
       "id": "source:server/src/services/native-opencode-conformance.ts",
       "kind": "current_source_owner",
       "path": "server/src/services/native-opencode-conformance.ts",
-      "sha256": "3b9a9451fa8d91e77c02117374c58c49819cf66e25960e6e30ff026db38ffa23",
+      "sha256": "2b9f3328f0766d3825e42731f5bc2cee5ed02e5af29a1e76718cbdf0e53f826c",
       "changeIds": [
         "SCR-V10-NATIVE-RUNTIME-AND-AUTHORITY"
       ],
@@ -64873,7 +64873,7 @@
       "id": "source:server/src/vendor/paperclip-runner/index.ts",
       "kind": "current_source_owner",
       "path": "server/src/vendor/paperclip-runner/index.ts",
-      "sha256": "0f1e1543d64b147beee3c1f5bd2476267e1314af69cde152b3234ddb9c584f13",
+      "sha256": "459945e9f65e697b0a9b32c98524fe8a67f80f6dbd69e60a8035a2e27e05a78f",
       "changeIds": [
         "SCR-V10-NATIVE-RUNTIME-AND-AUTHORITY"
       ],
