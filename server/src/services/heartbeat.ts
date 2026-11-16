@@ -67,7 +67,7 @@ import {
 import { executionFailureRetryCount, executionRetryAttemptCount, accountingForScheduledRetry } from "./execution-recovery-attempt.js";
 import { buildHeartbeatRunStatusLiveEventPayload } from "./heartbeat-run-status-payload.js";
 export { buildHeartbeatRunStatusLiveEventPayload } from "./heartbeat-run-status-payload.js";
-import { buildExecutionContinuation, nativeRetainedResumeEmptyBaseline, StaleExecutionContinuationError } from "./execution-continuation.js";
+import { applyNativeRetainedResumeEmptyBaseline, buildExecutionContinuation, StaleExecutionContinuationError } from "./execution-continuation.js";
 import { renderPaperclipWakePrompt } from "@paperclipai/adapter-utils/server-utils";
 import { PROJECT_REPOSITORIES_DIR } from "@paperclipai/adapter-utils/git-workspace-sync";
 import { materializeManagedProjectWorkspace } from "./managed-repository-checkout.js";
@@ -24569,22 +24569,16 @@ export function heartbeatService(
             // pre-W9 envelope and prompt.
             if (nativeVerifiedRetainedResumeApplies({ execution: nativeExecutionWithCheckpoint.execution,
               witnessSource: nativeBootstrapRetainedRunSource?.source ?? null, previousRunId: previousNativeRun?.id ?? null })) {
-              const envelope = executionContinuation;
-              const capture = nativeTaskContinuationCapture.value;
               // Assigned by the continuation builder's callback above.
               const reportedBaseline = nativeEmptyDeliveredBaseline as { baseRunId: string } | null;
-              const baseline = envelope && reportedBaseline &&
-                reportedBaseline.baseRunId === nativeBootstrapRetainedRunSource!.source.runId &&
-                parseObject(context.paperclipWake).executionContinuation === envelope &&
-                (!capture || (capture.envelope.resumeDelta === undefined && capture.previousContext === undefined))
-                ? nativeRetainedResumeEmptyBaseline(envelope, reportedBaseline.baseRunId) : null;
-              if (baseline) {
-                envelope!.resumeDelta = baseline.resumeDelta;
-                if (capture) {
-                  capture.envelope.resumeDelta = structuredClone(baseline.resumeDelta);
-                  capture.previousContext = baseline.previousContext;
-                }
-              }
+              // The wake payload holds its own redacted copy of the envelope;
+              // every copy (and the capture's) gets the baseline, or none does.
+              const baseline = reportedBaseline &&
+                reportedBaseline.baseRunId === nativeBootstrapRetainedRunSource!.source.runId
+                ? applyNativeRetainedResumeEmptyBaseline({ envelope: executionContinuation,
+                    wakeContinuation: parseObject(context.paperclipWake).executionContinuation,
+                    capture: nativeTaskContinuationCapture.value, baseRunId: reportedBaseline.baseRunId })
+                : null;
               nativeVerifiedRetainedResume = true;
               const rebuilt = buildNativeExecutionSelection();
               const rebuiltWitness = nativeRetainedResumeWitnessFor(rebuilt);
@@ -24596,10 +24590,7 @@ export function heartbeatService(
                   .where(eq(heartbeatRuns.id, run.id));
               } else {
                 nativeVerifiedRetainedResume = false;
-                if (baseline) {
-                  delete envelope!.resumeDelta;
-                  if (capture) { delete capture.envelope.resumeDelta; delete capture.previousContext; }
-                }
+                baseline?.revert();
               }
             }
             nativeExecution = nativeExecutionWithCheckpoint.execution;

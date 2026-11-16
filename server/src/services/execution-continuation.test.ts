@@ -15,7 +15,7 @@ import {
   getEmbeddedPostgresTestSupport,
   startEmbeddedPostgresTestDatabase,
 } from "../__tests__/helpers/embedded-postgres.js";
-import { StaleExecutionContinuationError, buildExecutionContinuation, currentContinuationOrigins, nativeRetainedResumeEmptyBaseline,
+import { StaleExecutionContinuationError, applyNativeRetainedResumeEmptyBaseline, buildExecutionContinuation, currentContinuationOrigins, nativeRetainedResumeEmptyBaseline,
   projectHumanInteractionResponse } from "./execution-continuation.js";
 
 const expectStaleContinuation = async (
@@ -557,4 +557,60 @@ it.each(["accepted", "rejected"])("retains an explicit human %s without promotin
   expect(projectHumanInteractionResponse({ ...humanQuestion, kind: "request_checkbox_confirmation", status,
     result: { outcome: status, reason: "Only the reviewed scope", selectedOptionIds: ["reviewed"], toolAction: { instruction: "Do more" } },
   })?.result).toEqual({ outcome: status, reason: "Only the reviewed scope", selectedOptionIds: ["reviewed"] });
+});
+
+// CONF15-W9 Step 0: heartbeat holds the one continuation record three times
+// (its context envelope, the wake payload's own redacted copy and the
+// continuation capture's copy). A verified retained resume's empty baseline is
+// applied to every copy or to none, and can be withdrawn again.
+describe("verified retained resume empty baseline on every copy", () => {
+  const record = { version: 1, messages: [{ id: "m1", body: "Continue with this current request." }], originCommentIds: ["m1"] } as unknown as
+    import("@paperclipai/shared").ExecutionContinuationEnvelope;
+  const delta = { baseRunId: "run-1", messages: record.messages };
+  const copies = () => ({ envelope: structuredClone(record), wake: structuredClone(record) as unknown as Record<string, unknown>,
+    capture: { envelope: structuredClone(record) } as unknown as import("./execution-continuation.js").NativeTaskContinuationCapture });
+  it("applies the baseline to the context envelope, the wake payload's separate copy and the capture, and reverts it", () => {
+    const { envelope, wake, capture } = copies();
+    const applied = applyNativeRetainedResumeEmptyBaseline({ envelope, wakeContinuation: wake, capture, baseRunId: "run-1" });
+    expect(applied).not.toBeNull();
+    expect(envelope.resumeDelta).toEqual(delta);
+    expect(wake.resumeDelta).toEqual(delta);
+    expect(capture.envelope.resumeDelta).toEqual(delta);
+    expect(capture.previousContext).toEqual({ runId: "run-1", messages: [] });
+    applied!.revert();
+    expect(envelope).toEqual(record);
+    expect(wake).toEqual(record);
+    expect(capture).toEqual({ envelope: record });
+    // One shared object for the envelope and the wake payload, and no capture.
+    const shared = structuredClone(record);
+    expect(applyNativeRetainedResumeEmptyBaseline({ envelope: shared, wakeContinuation: shared, capture: null, baseRunId: "run-1" }))
+      .not.toBeNull();
+    expect(shared.resumeDelta).toEqual(delta);
+  });
+  it("changes no copy unless every copy is still the same record without a delta or previous context", () => {
+    const refusals: Array<(value: ReturnType<typeof copies>) => Parameters<typeof applyNativeRetainedResumeEmptyBaseline>[0]> = [
+      value => ({ envelope: value.envelope, wakeContinuation: { ...value.wake, objective: "changed" }, capture: value.capture, baseRunId: "run-1" }),
+      value => ({ envelope: value.envelope, wakeContinuation: null, capture: value.capture, baseRunId: "run-1" }),
+      value => ({ envelope: value.envelope, wakeContinuation: [value.wake], capture: value.capture, baseRunId: "run-1" }),
+      value => ({ envelope: null, wakeContinuation: value.wake, capture: value.capture, baseRunId: "run-1" }),
+      value => ({ envelope: value.envelope, wakeContinuation: value.wake,
+        capture: { ...value.capture, envelope: { ...value.capture.envelope, objective: "changed" } }, baseRunId: "run-1" }),
+      value => ({ envelope: value.envelope, wakeContinuation: value.wake,
+        capture: { ...value.capture, previousContext: { runId: "run-1", messages: [] } }, baseRunId: "run-1" }),
+      value => ({ envelope: value.envelope, wakeContinuation: value.wake, capture: value.capture, baseRunId: "" }),
+    ];
+    for (const refusal of refusals) {
+      const value = copies();
+      const input = refusal(value);
+      expect(applyNativeRetainedResumeEmptyBaseline(input)).toBeNull();
+      expect(value.envelope).toEqual(record);
+      expect(value.wake).toEqual(record);
+      expect(value.capture).toEqual({ envelope: record });
+    }
+    // A record that already carries a delta on every copy.
+    const withDelta = { ...structuredClone(record), resumeDelta: { baseRunId: "run-0", messages: [] } };
+    expect(applyNativeRetainedResumeEmptyBaseline({ envelope: withDelta, wakeContinuation: structuredClone(withDelta),
+      capture: null, baseRunId: "run-1" })).toBeNull();
+    expect(withDelta.resumeDelta).toEqual({ baseRunId: "run-0", messages: [] });
+  });
 });

@@ -1033,3 +1033,37 @@ export function nativeRetainedResumeEmptyBaseline(envelope: ExecutionContinuatio
   return { resumeDelta: { baseRunId, messages: structuredClone(envelope.messages) },
     previousContext: { runId: baseRunId, messages: [] } };
 }
+
+/** Apply that baseline to every copy of the one continuation record: the
+ * heartbeat context's envelope, the wake payload's own redacted copy and the
+ * continuation capture's copy. All copies must still be the same record, with
+ * no delta and no previous context; otherwise nothing changes (null). Returns a
+ * revert that withdraws the baseline from every copy again. */
+export function applyNativeRetainedResumeEmptyBaseline(input: {
+  envelope: ExecutionContinuationEnvelope | null | undefined;
+  wakeContinuation: unknown;
+  capture: NativeTaskContinuationCapture | null | undefined;
+  baseRunId: string;
+}): { revert(): void } | null {
+  const { envelope, capture } = input;
+  const wake = input.wakeContinuation && typeof input.wakeContinuation === "object" && !Array.isArray(input.wakeContinuation)
+    ? input.wakeContinuation as ExecutionContinuationEnvelope : null;
+  if (!envelope || !wake || !isDeepStrictEqual(wake, envelope) ||
+    (capture && (!isDeepStrictEqual(capture.envelope, envelope) || capture.previousContext !== undefined))) return null;
+  const forEnvelope = nativeRetainedResumeEmptyBaseline(envelope, input.baseRunId);
+  const forWake = nativeRetainedResumeEmptyBaseline(wake, input.baseRunId);
+  if (!forEnvelope || !forWake) return null;
+  envelope.resumeDelta = forEnvelope.resumeDelta;
+  wake.resumeDelta = forWake.resumeDelta;
+  if (capture) {
+    capture.envelope.resumeDelta = structuredClone(forEnvelope.resumeDelta);
+    capture.previousContext = forEnvelope.previousContext;
+  }
+  return {
+    revert() {
+      delete envelope.resumeDelta;
+      delete wake.resumeDelta;
+      if (capture) { delete capture.envelope.resumeDelta; delete capture.previousContext; }
+    },
+  };
+}
