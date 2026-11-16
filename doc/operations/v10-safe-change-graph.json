@@ -14783,7 +14783,7 @@
       "sources": [
         {
           "path": ".github/workflows/pr-trusted.yml",
-          "sha256": "e92d71fbed766830cf1808e718a2198de073210ba74206117dbc5b8ffa531963"
+          "sha256": "731526a626752ad9dbcbd121a308c3932f75e271a65823947980c316beb005a7"
         },
         {
           "path": "cli/src/__tests__/service-health-check.test.ts",
@@ -32716,7 +32716,7 @@
         },
         {
           "path": "scripts/__tests__/run-vitest-stable-shard.test.mjs",
-          "sha256": "eee218ee5dee5032d9c4281d72aba279a6685bdbb9d55fca34b37ad3cf4f47ce"
+          "sha256": "5f8b9a4df7bb7b409cf8a74c196d8bd7a5ed7f31831ac81aea1d2da97ac6d14d"
         },
         {
           "path": "scripts/assert-cloud-image-sentry.mjs",
@@ -32816,7 +32816,7 @@
         },
         {
           "path": "scripts/run-vitest-stable.mjs",
-          "sha256": "92dded726f54814d92448aa2cb3d83579f496f856702f78cabd33896607a1d47"
+          "sha256": "7ae0aa092031a710d2346aa2215b4795675f1b118417ff0b1d07ee2f4b00a887"
         },
         {
           "path": "scripts/server-boot-smoke.sh",
@@ -53601,7 +53601,7 @@
       "id": "source:.github/workflows/pr-trusted.yml",
       "kind": "current_source_owner",
       "path": ".github/workflows/pr-trusted.yml",
-      "sha256": "e92d71fbed766830cf1808e718a2198de073210ba74206117dbc5b8ffa531963",
+      "sha256": "731526a626752ad9dbcbd121a308c3932f75e271a65823947980c316beb005a7",
       "changeIds": [
         "SCR-V10-SUPPORT-STATUS-TRUST-NOTICES"
       ],
@@ -73155,7 +73155,7 @@
       "id": "source:scripts/__tests__/run-vitest-stable-shard.test.mjs",
       "kind": "current_source_owner",
       "path": "scripts/__tests__/run-vitest-stable-shard.test.mjs",
-      "sha256": "eee218ee5dee5032d9c4281d72aba279a6685bdbb9d55fca34b37ad3cf4f47ce",
+      "sha256": "5f8b9a4df7bb7b409cf8a74c196d8bd7a5ed7f31831ac81aea1d2da97ac6d14d",
       "changeIds": [
         "SCR-V10-CI-RELEASE-AND-CATALOG-GOVERNANCE"
       ],
@@ -73530,7 +73530,7 @@
       "id": "source:scripts/run-vitest-stable.mjs",
       "kind": "current_source_owner",
       "path": "scripts/run-vitest-stable.mjs",
-      "sha256": "92dded726f54814d92448aa2cb3d83579f496f856702f78cabd33896607a1d47",
+      "sha256": "7ae0aa092031a710d2346aa2215b4795675f1b118417ff0b1d07ee2f4b00a887",
       "changeIds": [
         "SCR-V10-CI-RELEASE-AND-CATALOG-GOVERNANCE"
       ],
