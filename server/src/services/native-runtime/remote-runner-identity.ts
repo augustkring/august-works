@@ -35,6 +35,51 @@ for directory in "$task_root" "$task_root/.paperclip-runtime" "$task_root/.paper
 test -f "$lock_dir/owner" && test ! -L "$lock_dir/owner" && test "$(cat -- "$lock_dir/owner")" = "$fence_nonce"
 rm -- "$lock_dir/owner"; rmdir -- "$lock_dir"`;
 
+/** Moves only a suspended runner's state file aside into its authority-epoch
+ * archive and prints the archived copy. Shared by the transport's external
+ * archive and the exact conformance relay matcher (CONF15 A2). */
+export const REMOTE_RUNNER_AUTHORITY_ARCHIVE_SCRIPT =
+  'set -eu; if test -L "$2" || { test -e "$2" && test ! -d "$2"; }; then exit 1; fi; if test -f "$1" && test ! -L "$1" && test ! -e "$3" && test ! -L "$3"; then umask 077; install -d -m 0700 "$2"; mv -- "$1" "$3"; elif test ! -e "$1" && test ! -L "$1" && test -f "$3" && test ! -L "$3"; then :; else exit 1; fi; base64 < "$3"';
+
+/** Reads back one platform-staged runtime-context folder of this session so
+ * the server can verify it against the prior Run's recorded bundle digest.
+ * Exit 3: absent. Exit 4: a symlink on the path, a non-directory, an entry that
+ * is neither a file nor a directory, or a target outside the filesystem root. */
+export const REMOTE_RUNTIME_CONTEXT_READBACK_SCRIPT = String.raw`set -eu
+root=$1; target=$2
+case "$target" in "$root"/*) ;; *) exit 4 ;; esac
+test -d "$root" && test ! -L "$root" || exit 4
+p=$target; while test "$p" != "$root"; do if test -L "$p"; then exit 4; fi; p=$(dirname -- "$p"); done
+if test ! -e "$target"; then exit 3; fi
+test -d "$target" || exit 4
+if test -n "$(find "$target" ! -type d ! -type f -print | head -n 1)"; then exit 4; fi
+tar -czf - -C "$target" . | base64`;
+
+/** Swaps a freshly staged per-Run runtime-context folder into place. Mode
+ * "absent" installs only when nothing is there; mode "replace" removes only an
+ * existing real folder the server has verified as the prior Run's staged
+ * content. Exit 3: the target is not in the expected state. Exit 4: unsafe. */
+export const REMOTE_RUNTIME_CONTEXT_SWAP_SCRIPT = String.raw`set -eu
+root=$1; target=$2; staging=$3; mode=$4
+case "$target" in "$root"/*) ;; *) exit 4 ;; esac
+case "$staging" in "$root"/*) ;; *) exit 4 ;; esac
+test "$(dirname -- "$staging")" = "$(dirname -- "$target")" || exit 4
+test -d "$root" && test ! -L "$root" || exit 4
+for start in "$target" "$staging"; do p=$start; while test "$p" != "$root"; do if test -L "$p"; then exit 4; fi; p=$(dirname -- "$p"); done; done
+test -d "$staging" || exit 4
+if test -n "$(find "$staging" ! -type d ! -type f -print | head -n 1)"; then exit 4; fi
+if test "$mode" = absent; then
+  if test -e "$target"; then exit 3; fi
+elif test "$mode" = replace; then
+  test -d "$target" || exit 3
+  if test -n "$(find "$target" ! -type d ! -type f -print | head -n 1)"; then exit 4; fi
+  chmod -R u+w -- "$target"
+  rm -rf -- "$target"
+else
+  exit 4
+fi
+mv -- "$staging" "$target"`;
+
 /** Cleanup only a launch whose exact marker remains current. Every signal is
  * preceded by the same process-generation check used by the monitor. An absent
  * process needs no signal; live or reused PIDs still fail closed.

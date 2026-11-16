@@ -275,6 +275,47 @@ function latestArchivedControlPlaneState(
   return null;
 }
 
+function coldLeaseHandoffSeedState(
+  root: string,
+  handoff: NonNullable<CapabilityRunnerdCodexTransportOptions["coldLeaseHandoff"]>,
+  desired: DurableRecoveryIdentity,
+  localStateOwner: boolean,
+): Record<string, unknown> {
+  const prior = handoff.priorIdentity;
+  const breaks = resolve(root, "continuity-breaks");
+  const directory = resolve(handoff.archivedControlPlaneDirectory);
+  if (
+    !/^[a-f0-9]{64}$/.test(handoff.evidenceDigest) ||
+    dirname(dirname(directory)) !== breaks ||
+    basename(directory) !== "control-plane" ||
+    prior.runnerInstanceId !== desired.runnerInstanceId ||
+    prior.normalizedSessionId !== desired.normalizedSessionId ||
+    prior.runId === desired.runId ||
+    prior.environmentLeaseId === desired.environmentLeaseId ||
+    existsSync(resolve(root, "control-plane")) ||
+    (localStateOwner && existsSync(resolve(root, "runner", "runner-state.json")))
+  ) {
+    throw new Error("native_runner_cold_lease_handoff_unproven");
+  }
+  assertRealDirectory(breaks);
+  assertRealDirectory(dirname(directory));
+  assertRealDirectory(directory);
+  const state = readControlPlaneState(directory);
+  const identity = controlPlaneIdentity(state);
+  if (
+    identity.runnerInstanceId !== prior.runnerInstanceId ||
+    identity.environmentLeaseId !== prior.environmentLeaseId ||
+    identity.runId !== prior.runId ||
+    identity.normalizedSessionId !== prior.normalizedSessionId ||
+    state.warmTransition !== undefined ||
+    state.schema ===
+      "paperclip.runner.durable.control-plane-state.warm-transition.v1"
+  ) {
+    throw new Error("native_runner_cold_lease_handoff_unproven");
+  }
+  return state;
+}
+
 function rotateLocalAuthorityEpoch(
   root: string,
   controlPlaneState: Record<string, unknown>,
@@ -1194,6 +1235,27 @@ export interface CapabilityRunnerdCodexTransportOptions {
     normalizedSessionId: string;
     turnId: string;
     itemId: string;
+  };
+  /**
+   * Server-verified cold lease handoff (CONF15 A2). The controller proved the
+   * prior Run terminal, its runner authority suspended, its lease released
+   * with the stored remote-termination receipt and its process cleanup
+   * settled, then archived only that Run's PRP control-plane and runner
+   * identity (provider data stays). The archived state is read only as the
+   * provider seed for a fresh runner bound to `prpIdentity` (same runner
+   * instance and session, this Run and its current lease). It never binds
+   * this runner to the prior Run or lease. Without this evidence an archived
+   * identity for another lease is never accepted.
+   */
+  coldLeaseHandoff?: {
+    archivedControlPlaneDirectory: string;
+    priorIdentity: {
+      runnerInstanceId: string;
+      environmentLeaseId: string;
+      runId: string;
+      normalizedSessionId: string;
+    };
+    evidenceDigest: string;
   };
   /** Registers the run-bound PRP authority on Paperclip's shared HTTP server. */
   controlPlaneRegistration?: (
@@ -4981,7 +5043,47 @@ class DurablePrpCodexTransport implements CodexAppServerTransport {
       identity.turnId === desiredIdentity.turnId &&
       identity.itemId === desiredIdentity.itemId;
     let rotatedAuthority = false;
-    if (controlPlaneState === null) {
+    const coldLeaseHandoff = this.options.coldLeaseHandoff;
+    if (coldLeaseHandoff !== undefined) {
+      // Only a fresh runner may take a verified cold handoff: no active or
+      // warm-transition authority can coexist with the archived predecessor.
+      if (!localProvider || controlPlaneState !== null || hasWarmBoundary) {
+        throw new Error("native_runner_cold_lease_handoff_unproven");
+      }
+      const seedState = coldLeaseHandoffSeedState(
+        this.#root,
+        coldLeaseHandoff,
+        desiredIdentity,
+        localStateOwner,
+      );
+      if (!localStateOwner) {
+        // Provider data stays in the sandbox (on another provider lease the
+        // controller restored it from the verified failover backup). Only the
+        // prior Run's suspended runner state moves aside, through the same
+        // external archive an ordinary rotation uses, so a fresh runnerd
+        // binds this Run and lease.
+        if (
+          this.options.readRunnerState === undefined ||
+          this.options.prepareExternalRunnerState === undefined ||
+          this.options.archiveExternalRunnerState === undefined
+        ) {
+          throw new Error("native_runner_cold_lease_handoff_unproven");
+        }
+        await this.options.prepareExternalRunnerState();
+        const priorIdentity = controlPlaneIdentity(seedState);
+        const archivedRunnerState =
+          await this.options.archiveExternalRunnerState({
+            archiveKey: basename(
+              authorityArchiveDirectory(this.#root, priorIdentity),
+            ).replace(/^epoch-/, ""),
+            priorIdentity,
+          });
+        assertSuspendedRunnerState(archivedRunnerState, priorIdentity);
+      }
+      controlPlaneState = seedState;
+      identity = desiredIdentity;
+      rotatedAuthority = true;
+    } else if (controlPlaneState === null) {
       if (!localProvider) {
         throw new Error("PRP provider resume state is unavailable");
       }
@@ -5212,7 +5314,7 @@ class DurablePrpCodexTransport implements CodexAppServerTransport {
         committedEvents[adoptedProviderIdentityIndex]!,
       );
     } else if (
-      (exactAuthority || warmRecovery !== null) &&
+      (exactAuthority || warmRecovery !== null || coldLeaseHandoff !== undefined) &&
       this.options.resumeProviderSession?.driverSessionId.trim() &&
       this.options.resumeProviderSession.providerSessionId?.trim()
     ) {
@@ -6741,6 +6843,7 @@ export const runnerdLaunchProfileInternals = Object.freeze({
 });
 
 export const runnerdRecoveryInternals = Object.freeze({
+  coldLeaseHandoffSeedState,
   completedMaintenanceTerminalReceipt,
   completedMaintenanceTerminalReplayMatches,
   awaitProviderDrainBarrier,

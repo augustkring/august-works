@@ -102,7 +102,9 @@ import { parseNativeExecutionInput } from "../../vendor/paperclip-runner/index.j
 import { REMOTE_NATIVE_ERASER_ENV, nativeRuntimeErasureEnvironmentExact, nativeRuntimeErasurePolicyIsolated, REMOTE_NATIVE_RUNTIME_ASSET_ERASURE_PROFILE_HASH, REMOTE_NATIVE_RUNTIME_ASSET_ERASURE_SCRIPT, REMOTE_RUNNER_CHILD_LAUNCH_SCRIPT,
   REMOTE_NATIVE_RUNTIME_ASSET_ERASURE_PROBE_SCRIPT, REMOTE_RUNNER_FAILED_IDENTITY_CLEANUP_SCRIPT,
   REMOTE_RUNNER_IDENTITY_CHECK_SCRIPT, REMOTE_NATIVE_SESSION_FENCE_ACQUIRE_SCRIPT,
-  REMOTE_NATIVE_SESSION_FENCE_RELEASE_SCRIPT } from "../native-runtime/remote-runner-identity.js";
+  REMOTE_NATIVE_SESSION_FENCE_RELEASE_SCRIPT, REMOTE_RUNNER_AUTHORITY_ARCHIVE_SCRIPT, REMOTE_RUNTIME_CONTEXT_READBACK_SCRIPT,
+  REMOTE_RUNTIME_CONTEXT_SWAP_SCRIPT } from "../native-runtime/remote-runner-identity.js";
+import { readNativeConformanceAuthorityArchiveGrant, type NativeConformanceAuthorityArchiveGrant } from "../native-runtime/native-conformance-authority-archive.js";
 import { sandboxProbeCases, nativeRuntimeCleanupProbeCases } from "../execution-sandbox/backend.js";
 import { SANDBOX_CONTROLS, NATIVE_RUNTIME_CLEANUP_PURPOSE, NATIVE_RUNTIME_CLEANUP_PROFILE } from "@paperclipai/shared";
 import { nativeSandboxHostTransport, type RemoteRuntimeCleanupAttestation } from "../execution-sandbox/native-host-bridge.js";
@@ -222,6 +224,39 @@ export function exactNativeHarnessStateCommand(input: {
   return persistenceRoots.some(directory => matches("sh", "-c",
     `umask 077; mkdir -p ${quote(directory)} && base64 -d | tar -xzf - -C ${quote(directory)} && chmod 700 ${quote(directory)}`)) &&
     archiveIsBoundedBase64;
+}
+
+/** CONF15 A2, decision C: the one authority-archive command of a cold lease
+ * handoff, admitted only in the credentialless conformance harness-state lane.
+ * It requires the server-recorded handoff grant for this exact hidden
+ * `provider_conformance` Run of the `resume` probe, its current lease, session
+ * and task root, the fixed argv and paths, no stdin, no env and no credential. */
+export function exactNativeConformanceAuthorityArchiveCommand(input: {
+  request: import("@paperclipai/shared").RuntimeSandboxExecRelayRequest;
+  taskRoot: string;
+  execution: ReturnType<typeof parseNativeExecutionInput>;
+  run: { id: string; companyId: string; triggerDetail: string | null };
+  leaseId: string;
+  grant: NativeConformanceAuthorityArchiveGrant | null;
+}): boolean {
+  const { request, execution, run, grant } = input;
+  if (!grant || execution.provider.kind !== "opencode" || execution.session.driverKind !== "opencode_server" ||
+    run.triggerDetail !== "provider_conformance" || grant.probeKind !== "resume" ||
+    grant.companyId !== run.companyId || grant.runId !== run.id || execution.binding.runId !== run.id ||
+    execution.binding.companyId !== run.companyId || grant.environmentLeaseId !== input.leaseId ||
+    grant.taskRoot !== input.taskRoot || !/^[0-9a-f]{24}$/.test(grant.archiveKey) ||
+    !/^[a-f0-9]{64}$/.test(grant.evidenceDigest) || grant.priorRunId === run.id) return false;
+  const sessionId = execution.session.normalizedSessionId ?? `session-${run.id}`;
+  if (grant.normalizedSessionId !== sessionId) return false;
+  if (request.cwd !== input.taskRoot || request.stdinBase64 !== "" || Object.keys(request.env ?? {}).length !== 0 ||
+    request.modelBrokerCredential !== undefined || request.brokerCredential !== undefined ||
+    request.modelBrokerSession !== undefined) return false;
+  const sessionRoot = path.posix.join(input.taskRoot, ".paperclip-runtime", "paperclip-runner", "sessions", sha256(sessionId));
+  const archiveDirectory = path.posix.join(sessionRoot, "authority-epochs", `epoch-${grant.archiveKey}`);
+  const expected = ["sh", "-c", REMOTE_RUNNER_AUTHORITY_ARCHIVE_SCRIPT, "paperclip-runner-authority-archive",
+    path.posix.join(sessionRoot, "runner", "runner-state.json"), archiveDirectory,
+    path.posix.join(archiveDirectory, "runner-state.json")];
+  return request.argv.length === expected.length && expected.every((value, index) => request.argv[index] === value);
 }
 
 export function exactNativeSessionFilesystemFenceCommand(input: {
@@ -385,6 +420,45 @@ function exactNativeRuntimeContextPrepareCommand(input: {
   return argv[2] === stageRuntimeContextFile && fileBytesAreBoundedBase64;
 }
 
+/** CONF15 W: the Worker lane's fresh per-Run runtime-context staging and its
+ * verified swap. Only this execution's fixed context targets, their per-Run
+ * staging siblings, the fixed read-back and swap scripts, no stdin for the
+ * read-back and swap, and no env. The server verifies a replaced folder
+ * against the prior Run's recorded bundle digest before it issues "replace". */
+export function exactNativeRuntimeContextSwapCommand(input: {
+  request: import("@paperclipai/shared").RuntimeSandboxExecRelayRequest;
+  taskRoot: string;
+  execution: ReturnType<typeof parseNativeExecutionInput>;
+  runId: string;
+}): boolean {
+  const context = "runtimeContext" in input.execution ? input.execution.runtimeContext : null;
+  if (!context || input.execution.provider.kind !== "opencode" || input.execution.session.driverKind !== "opencode_server" ||
+    input.request.cwd !== input.taskRoot || input.execution.binding.runId !== input.runId ||
+    !/^[0-9a-f-]{36}$/i.test(input.runId)) return false;
+  const sessionId = input.execution.session.normalizedSessionId ?? `session-${input.execution.binding.runId}`;
+  const filesystemRoot = path.posix.join(input.taskRoot, ".paperclip-runtime", "paperclip-runner", "sessions",
+    sha256(sessionId), "filesystem");
+  const targets = [
+    path.posix.join(filesystemRoot, "context", "instructions"),
+    ...context.skills.map((skill, index) => path.posix.join(
+      filesystemRoot, "context", "skills", `${index}-${skill.bundle.digest.slice(0, 12)}`,
+    )),
+  ];
+  const staging = (target: string) => path.posix.join(path.posix.dirname(target),
+    `.${path.posix.basename(target)}.staging-${input.runId}`);
+  const quote = (value: string) => `'${value.replaceAll("'", "'\\''")}'`;
+  const argv = input.request.argv;
+  if (argv[0] !== "sh" || argv[1] !== "-c") return false;
+  if (input.request.stdinBase64 !== "" && argv.length === 3) return targets.some(target => argv[2] ===
+    `umask 077; mkdir -p ${quote(staging(target))} && base64 -d | tar -xzf - -C ${quote(staging(target))} && chmod 555 ${quote(staging(target))}`);
+  if (input.request.stdinBase64 !== "" || Object.keys(input.request.env ?? {}).length !== 0) return false;
+  if (argv.length === 6 && argv[2] === REMOTE_RUNTIME_CONTEXT_READBACK_SCRIPT &&
+    argv[3] === "paperclip-runtime-context-readback" && argv[4] === filesystemRoot) return targets.includes(argv[5]!);
+  return argv.length === 8 && argv[2] === REMOTE_RUNTIME_CONTEXT_SWAP_SCRIPT && argv[3] === "paperclip-runtime-context-swap" &&
+    argv[4] === filesystemRoot && targets.includes(argv[5]!) && argv[6] === staging(argv[5]!) &&
+    (argv[7] === "absent" || argv[7] === "replace");
+}
+
 /** Pure owner predicate for server-staged runtime context. RuntimeControl still
  * checks the current Human/task source in its transaction; this closes the
  * additional immutable Run/manifest/profile, exact target, and no-credential
@@ -402,6 +476,8 @@ export function exactNativeRuntimeContextPreparationOwner(input: {
   sourceAuthority: unknown;
   credentialMode: string;
   credentialBindingCount: number;
+  /** Worker lane only (CONF15 W): also admit the per-Run staging and swap. */
+  workerStagedSwap?: true;
 }): boolean {
   const authority = input.sourceAuthority && typeof input.sourceAuthority === "object" && !Array.isArray(input.sourceAuthority)
     ? input.sourceAuthority as Record<string, unknown> : {};
@@ -420,7 +496,9 @@ export function exactNativeRuntimeContextPreparationOwner(input: {
     input.credentialMode === "none" && input.credentialBindingCount === 0 &&
     input.request.modelBrokerCredential === undefined && input.request.brokerCredential === undefined &&
     !Object.keys(env).some(key => forbiddenEnvironmentKeys.includes(key)) &&
-    exactNativeRuntimeContextPrepareCommand({ request: input.request, taskRoot: input.taskRoot, execution: input.execution });
+    (exactNativeRuntimeContextPrepareCommand({ request: input.request, taskRoot: input.taskRoot, execution: input.execution }) ||
+      (input.workerStagedSwap === true && exactNativeRuntimeContextSwapCommand({ request: input.request,
+        taskRoot: input.taskRoot, execution: input.execution, runId: input.runId })));
 }
 
 /** Decode only the canonical single-quoted words emitted by shellQuote.
@@ -3994,7 +4072,11 @@ export function runtimeControlService(
             taskRoot: conformanceWorkspaceRoot, runId: source.run.id, sessionDigest });
         const exactHarness = nativeHarnessState && (request.modelBrokerSession === undefined || request.modelBrokerSession.phase === "stop") &&
           noWorkloadCredential && noManagedModelEnvironment && request.modelBrokerCredential === undefined &&
-          exactNativeHarnessStateCommand({ request, taskRoot: conformanceWorkspaceRoot, execution, runId: source.run.id });
+          (exactNativeHarnessStateCommand({ request, taskRoot: conformanceWorkspaceRoot, execution, runId: source.run.id }) ||
+            // CONF15 A2 decision C: only this hidden Run's verified cold-handoff archive.
+            exactNativeConformanceAuthorityArchiveCommand({ request, taskRoot: conformanceWorkspaceRoot, execution,
+              run: source.run, leaseId: source.lease.id,
+              grant: readNativeConformanceAuthorityArchiveGrant(claims.company_id, source.run.id) }));
         const exactTrustBundle = nativeRunnerTrustBundle && request.modelBrokerCredential === undefined &&
           request.modelBrokerSession === undefined && noWorkloadCredential && noManagedModelEnvironment &&
           exactNativeConformanceRunnerTrustBundleCommand({ request, taskRoot: conformanceWorkspaceRoot, execution,
@@ -4068,7 +4150,7 @@ export function runtimeControlService(
               responsibleUserId: source.run.responsibleUserId!, manifest: { runId: source.manifest.runId,
                 agentId: source.manifest.agentId, responsibleUserId: source.run.responsibleUserId! },
               nativeExecutionInput: profile.nativeExecutionInput, sourceAuthority: profile.nativeOpenCodeSourceAuthority,
-              credentialMode: credentials.mode, credentialBindingCount: credentials.bindings.length })
+              credentialMode: credentials.mode, credentialBindingCount: credentials.bindings.length, workerStagedSwap: true })
             : nativeHarnessState
               ? exactNativeHarnessStateCommand({ request, taskRoot: workerPreparationRoot, execution, runId: source.run.id })
             : nativeRuntimeAssetErasureProbe
