@@ -9288,7 +9288,7 @@
         },
         {
           "path": "server/src/services/native-direct-input.ts",
-          "sha256": "1fed326862a1e701d1bb5e4d8ec8dbbbe3a2776f1b0e56be578a9a5ec56ddca9"
+          "sha256": "531e5b02ed409afd6603415c7c53e6e9e11afd3fee55d8fb1de3d9ba463e3d2a"
         },
         {
           "path": "server/src/services/native-project-output.ts",
@@ -10329,7 +10329,7 @@
         },
         {
           "path": "server/src/services/execution-sandbox/sandbox-service.ts",
-          "sha256": "f39a18bf3eead17b2443647b432c9e6b1f4db97d6a571d094376e8a699b8b407"
+          "sha256": "e785cc0d4840db092dbe77a23250616e3d5da3be4d984f737eef6c4cace36bb3"
         },
         {
           "path": "server/src/services/heartbeat.ts",
@@ -24934,7 +24934,7 @@
         },
         {
           "path": "server/src/services/execution-sandbox/native-host-bridge.ts",
-          "sha256": "cdbe432d6e3bd7ba2fa43d64d650386751299d82925231262cb54039a864a886"
+          "sha256": "4799a7af59e48d7c04a14b1dd3714a8de4cc631b75977e31956d26fde9075488"
         },
         {
           "path": "server/src/services/execution-sandbox/native-prelaunch-cleanup.ts",
@@ -32788,7 +32788,7 @@
         },
         {
           "path": "scripts/general-server-shard-durations.json",
-          "sha256": "e61cfa29704191af269db30ebe7268b7e0ac6a67a6fe1d32f58780c8b4dfce09"
+          "sha256": "ac134a24abedef6bc93e82f63fbd0e6aa666acf0303baed72acbff170fb848f9"
         },
         {
           "path": "scripts/generate-feature-catalog.ts",
@@ -50770,7 +50770,7 @@
       "id": "source:server/src/services/native-direct-input.ts",
       "kind": "current_source_owner",
       "path": "server/src/services/native-direct-input.ts",
-      "sha256": "1fed326862a1e701d1bb5e4d8ec8dbbbe3a2776f1b0e56be578a9a5ec56ddca9",
+      "sha256": "531e5b02ed409afd6603415c7c53e6e9e11afd3fee55d8fb1de3d9ba463e3d2a",
       "changeIds": [
         "SCR-V10-HOTSPOT-06"
       ],
@@ -51441,7 +51441,7 @@
       "id": "source:server/src/services/execution-sandbox/sandbox-service.ts",
       "kind": "current_source_owner",
       "path": "server/src/services/execution-sandbox/sandbox-service.ts",
-      "sha256": "f39a18bf3eead17b2443647b432c9e6b1f4db97d6a571d094376e8a699b8b407",
+      "sha256": "e785cc0d4840db092dbe77a23250616e3d5da3be4d984f737eef6c4cace36bb3",
       "changeIds": [
         "SCR-V10-HOTSPOT-07"
       ],
@@ -63433,7 +63433,7 @@
       "id": "source:server/src/services/execution-sandbox/native-host-bridge.ts",
       "kind": "current_source_owner",
       "path": "server/src/services/execution-sandbox/native-host-bridge.ts",
-      "sha256": "cdbe432d6e3bd7ba2fa43d64d650386751299d82925231262cb54039a864a886",
+      "sha256": "4799a7af59e48d7c04a14b1dd3714a8de4cc631b75977e31956d26fde9075488",
       "changeIds": [
         "SCR-V10-NATIVE-RUNTIME-AND-AUTHORITY"
       ],
@@ -73425,7 +73425,7 @@
       "id": "source:scripts/general-server-shard-durations.json",
       "kind": "current_source_owner",
       "path": "scripts/general-server-shard-durations.json",
-      "sha256": "e61cfa29704191af269db30ebe7268b7e0ac6a67a6fe1d32f58780c8b4dfce09",
+      "sha256": "ac134a24abedef6bc93e82f63fbd0e6aa666acf0303baed72acbff170fb848f9",
       "changeIds": [
         "SCR-V10-CI-RELEASE-AND-CATALOG-GOVERNANCE"
       ],
