@@ -5,7 +5,7 @@ import { assertNativeBootstrapPrelaunchStopClaim, nativeBootstrapPrelaunchStopCl
 import { randomUUID } from "node:crypto";
 import path from "node:path";
 import type { SandboxQualificationCredentialClaim } from "../../agent-auth-jwt.js";
-import { assertHumanAuthentication } from "../../auth/authenticator-assurance.js";
+import { assertNativeConformanceHumanAuthentication } from "./native-conformance-authentication.js";
 import { and, desc, eq, gt, inArray, isNull, sql } from "drizzle-orm";
 import { activityLog, agentExecutionManifests, agents, agentPresenceRuntimeBindings, agentProviderBindings, billingAccounts, companyMemberships, principalPermissionGrants, heartbeatRuns, issues, environmentLeases, runtimeCapacityProfiles, orchestrationPlans, orchestrationWorkerAttempts, runtimeCells, runtimeHosts, runtimeSandboxBindings, runtimePolicySnapshots, runtimeOperations, sandboxQualificationRuns, type Db } from "@paperclipai/db";
 import { SANDBOX_CONTROLS, sandboxBindingCreateSchema, sandboxCapabilitySnapshotSchema, sandboxCompileSchema, type SandboxAdmissionInput, type SandboxBindingCreateInput, type SandboxCompileInput, type SandboxPosture, type SandboxPolicy, type SandboxCapabilitySnapshot } from "@paperclipai/shared";
@@ -177,7 +177,10 @@ export function executionSandboxService(db: Db, options: {
   }
   async function assertNativeConformanceBootstrap(tx: Db, actor: AuthorizationActor, companyId: string,
     input: NativeConformanceBootstrap) {
-    await assertHumanAuthentication(tx, actor, { requireRecent: true, phishingResistant: false });
+    // CONF15-P4: one Human request runs every probe of the group; a later
+    // probe may rely on the authentication that was recent at the group start.
+    await assertNativeConformanceHumanAuthentication(tx, actor, { companyId, groupId: input.groupId,
+      planId: input.planId, runId: input.runId, taskId: input.taskId });
     await assertV7Authorization(tx, actor, companyId, "runtime:manage");
     const source = await authority(tx, companyId, input.manifestId, actor);
     const { run, task, record } = source;

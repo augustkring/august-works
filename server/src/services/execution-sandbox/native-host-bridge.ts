@@ -31,6 +31,7 @@ import {
 } from "@paperclipai/shared";
 import type { AuthorizationActor } from "../authorization.js";
 import { assertConfiguredOperatorAuthentication, assertHumanAuthentication } from "../../auth/authenticator-assurance.js";
+import { assertNativeConformanceHumanAuthentication } from "./native-conformance-authentication.js";
 import {
   assertV7Authorization,
   assertV7Enabled,
@@ -764,7 +765,9 @@ export function nativeSandboxHostTransport(
       if (cleanup) return assertNativeConformanceAdmissionCleanup(reader, actor, scope, conformance, cleanup, action, idempotencyKey,
         safetyCleanup ? { sandboxId: safetyCleanup.sandboxId, containerId: safetyCleanup.containerId } : undefined);
       if (safetyCleanup) throw forbidden("Admission cleanup authority is restricted to its exact stop and inspect commands");
-      const humanProof = await assertHumanAuthentication(reader, actor, { requireRecent: true, phishingResistant: false });
+      // CONF15-P4: the same group-bound rule as the Sandbox bootstrap owner.
+      const humanProof = await assertNativeConformanceHumanAuthentication(reader, actor, { companyId: scope.companyId,
+        groupId: conformance.groupId, planId: conformance.planId, runId: conformance.runId, taskId: conformance.taskId });
       if (actor.type !== "board" || actor.source !== "session" || !actor.sessionId || !Number.isSafeInteger(humanProof.credentialExpiresAt.getTime()))
         throw forbidden("The authenticated Human session is required for conformance policy proof");
       const authenticatedSource = { requesterSessionId: actor.sessionId,
