@@ -228,6 +228,64 @@ export async function waitForNativeOpenCodeConformanceWire(input: {
   return false;
 }
 
+type NativeOpenCodeConformanceReservationRow = typeof orchestrationModelReservations.$inferSelect;
+
+/** Upper bound for the cancel probe's wait on the broker's own outcome write.
+ * The broker re-validates the probe Run every second and aborts its provider
+ * call once the Run is terminal, so the outcome normally lands within seconds. */
+export const NATIVE_OPENCODE_CONFORMANCE_CANCEL_OUTCOME_SETTLE_MS = 60_000;
+
+/**
+ * CONF15-P7b. Read the probe's new reservation rows for the receipt step.
+ *
+ * The managed model broker, not the probe, records the reservation outcome
+ * (`recordOutcome` moves `dispatched` to `completed`, `failed` or `unknown`).
+ * It does so in its own request handler, after the runner's HTTP request is
+ * aborted or the provider responds. After a real cancel, that write can land
+ * before or after the probe has closed its session and released the Run. So a
+ * single read can find the exact receipt on a row that is still `dispatched`.
+ * That row has no outcome yet: wait for the broker's write, within a bound.
+ * This only waits. The caller's strict check still decides which settled
+ * outcome counts as proof, and a row still `dispatched` at the bound fails it.
+ */
+export async function readNativeOpenCodeConformanceProbeReservations(input: {
+  db: Db; planId: string; priorReservationIds: readonly string[];
+  /** Only the cancel probe ends its turn before the broker's outcome write. */
+  awaitCancelledDispatchOutcome: boolean;
+  settleTimeoutMs?: number; pollMs?: number;
+}): Promise<NativeOpenCodeConformanceReservationRow[]> {
+  const deadline = Date.now() + (input.settleTimeoutMs ?? NATIVE_OPENCODE_CONFORMANCE_CANCEL_OUTCOME_SETTLE_MS);
+  for (;;) {
+    const after = await input.db.select().from(orchestrationModelReservations)
+      .where(eq(orchestrationModelReservations.planId, input.planId));
+    const newRows = after.filter(row => !input.priorReservationIds.includes(row.id));
+    const outcomePending = input.awaitCancelledDispatchOutcome && newRows.length === 1 &&
+      newRows[0]!.status === "dispatched" && newRows[0]!.providerWireReceipt != null;
+    if (!outcomePending || Date.now() >= deadline) return newRows;
+    await new Promise<void>(resolveWait => setTimeout(resolveWait, input.pollMs ?? 100));
+  }
+}
+
+/** The receipt step's strict proof: exactly one new provider-conformance
+ * reservation at the quoted ceiling, carrying the exact persisted POST receipt,
+ * and settled as `completed` with its response hash and usage. Only the cancel
+ * probe may instead settle as `unknown`, keeping the full quoted liability. */
+export function nativeOpenCodeConformanceProbeReservationProven(input: {
+  newRows: readonly NativeOpenCodeConformanceReservationRow[];
+  maximumMinor: NativeOpenCodeConformanceReservationRow["maximumMinor"]; cancel: boolean;
+}): NativeOpenCodeConformanceReservationRow | null {
+  const [reservation] = input.newRows;
+  const wire = reservation?.providerWireReceipt;
+  if (input.newRows.length !== 1 || !reservation || reservation.purpose !== "provider_conformance" ||
+      reservation.maximumMinor !== input.maximumMinor || !wire || wire.version !== 1 ||
+      wire.reservationId !== reservation.id || wire.endpoint !== "https://api.anthropic.com/v1/messages" ||
+      wire.method !== "POST" || wire.requestHash !== reservation.requestHash || !/^[a-f0-9]{64}$/.test(wire.bodySha256) ||
+      !(reservation.status === "completed" && reservation.providerResponseHash && reservation.usage ||
+        input.cancel && reservation.status === "unknown" && reservation.maximumMinor === input.maximumMinor))
+    return null;
+  return reservation;
+}
+
 /** A turn driven by the actual managed Remote OpenCode session backend. */
 export type ManagedOpenCodeProbe = Readonly<{
   identity: { runId: string; sessionId: string; companyId: string; issueId: string; agentId: string };
@@ -1045,18 +1103,15 @@ export function nativeOpenCodeConformanceService(db: Db, options: Options) {
         if (result.state === "completed" && result.snapshot) snapshots.set(target.agent.id, result.snapshot);
         probeHistory.set(target.agent.id, [...historyPrefix, { role: "user", text: prompt },
           ...(result.state === "completed" ? [{ role: "assistant" as const, text: result.output }] : [])]);
-        const after = await db.select().from(orchestrationModelReservations).where(eq(orchestrationModelReservations.planId, plan.id));
-        const newRows = after.filter(row => !oldReservations.some(old => old.id === row.id));
-        const reservation = newRows[0];
-        const wire = reservation?.providerWireReceipt;
-        if (newRows.length !== 1 || reservation!.purpose !== "provider_conformance" ||
-            reservation!.maximumMinor !== targetQuote.maximumMinor || !wire || wire.version !== 1 ||
-            wire.reservationId !== reservation!.id || wire.endpoint !== "https://api.anthropic.com/v1/messages" ||
-            wire.method !== "POST" || wire.requestHash !== reservation!.requestHash || !/^[a-f0-9]{64}$/.test(wire.bodySha256) ||
-            !(reservation!.status === "completed" && reservation!.providerResponseHash && reservation!.usage ||
-              cancel && reservation!.status === "unknown" && reservation!.maximumMinor === targetQuote.maximumMinor))
+        // CONF15-P7b: the broker records the outcome in its own request; a
+        // cancelled turn can settle here first, so wait for that write.
+        const newRows = await readNativeOpenCodeConformanceProbeReservations({ db, planId: plan.id,
+          priorReservationIds: oldReservations.map(old => old.id), awaitCancelledDispatchOutcome: cancel });
+        const reservation = nativeOpenCodeConformanceProbeReservationProven({ newRows,
+          maximumMinor: targetQuote.maximumMinor, cancel });
+        if (!reservation)
           throw forbidden("The actual one-probe managed model wire receipt and reservation are required");
-        ledgerIds.push(reservation!.id);
+        ledgerIds.push(reservation.id);
         const [finalRun] = await db.select().from(heartbeatRuns).where(eq(heartbeatRuns.id, run.id)).limit(1);
         const [finalLease] = await db.select().from(environmentLeases).where(eq(environmentLeases.id, lease.id)).limit(1);
         // Reusable Sandbox leases use the canonical release owner’s
@@ -1075,7 +1130,7 @@ export function nativeOpenCodeConformanceService(db: Db, options: Options) {
             finalLease.metadata?.remoteExecutionTermination);
           remoteStopConfirmed = true;
         } catch { /* local handle closure and database cleanup labels are not remote Stop evidence */ }
-        return { result, reservation: reservation!, remoteStopConfirmed };
+        return { result, reservation, remoteStopConfirmed };
         } finally {
           if (!settled) {
             if (!releaseCoordinator) {
