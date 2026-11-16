@@ -32788,7 +32788,7 @@
         },
         {
           "path": "scripts/general-server-shard-durations.json",
-          "sha256": "ac134a24abedef6bc93e82f63fbd0e6aa666acf0303baed72acbff170fb848f9"
+          "sha256": "935b97ac068f6cf903e22f26b6d6dd9f4e37de600aed5b9fd1c4cf8c9f77c877"
         },
         {
           "path": "scripts/generate-feature-catalog.ts",
@@ -73425,7 +73425,7 @@
       "id": "source:scripts/general-server-shard-durations.json",
       "kind": "current_source_owner",
       "path": "scripts/general-server-shard-durations.json",
-      "sha256": "ac134a24abedef6bc93e82f63fbd0e6aa666acf0303baed72acbff170fb848f9",
+      "sha256": "935b97ac068f6cf903e22f26b6d6dd9f4e37de600aed5b9fd1c4cf8c9f77c877",
       "changeIds": [
         "SCR-V10-CI-RELEASE-AND-CATALOG-GOVERNANCE"
       ],
