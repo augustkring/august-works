@@ -704,6 +704,43 @@ describe("native bootstrap rendered-source closure", () => {
     expect(input({ interactionResponses: [response, response], interactionSources: [source] })).toBeNull();
   });
 
+  it("closes a Native Reviewer wake only without the assignee's unowned continuation summary (MS1h)", () => {
+    const humanId = randomUUID();
+    const task = { id: issueId, identifier: "NATIVE-1", title: "Draft", description: "Internal draft",
+      status: "in_review", priority: "medium", workMode: "standard" };
+    const payload = {
+      reason: "issue_status_changed", executionContinuation: null, attachmentOmissions: [], externalChatProvider: null,
+      recovery: null, issue: { id: task.id, identifier: task.identifier, title: task.title, description: task.description,
+        descriptionTruncated: false, status: task.status, priority: task.priority, workMode: task.workMode },
+      agentMessage: null, childIssueSummaries: [], childIssueSummaryTruncated: false, dispositionRepair: null,
+      livenessContinuation: null, interactionKind: null, interactionStatus: null, interactionId: null, sourceRunId: null,
+      externalChatQuestionResponse: null, externalInteractionContinuation: false, checkboxSelection: null,
+      checkedOutByHarness: false, externalChatExecutionBound: false, simplifiedEnglishInteractions: false,
+      dependencyBlockedInteraction: false, treeHoldInteraction: false, activeTreeHold: {}, unresolvedBlockerIssueIds: [],
+      unresolvedBlockerSummaries: [], executionStage: null, taskWatchdog: null, skillTest: null, continuationSummary: null,
+      commentIds: [], latestCommentId: null, comments: [], annotationDeltas: [], planReviewContext: null,
+      documentReviewContext: null, commentWindow: { requestedCount: 0, includedCount: 0, missingCount: 0 },
+      truncated: false, fallbackFetchNeeded: false,
+    };
+    const nativeReviewWitness = { version: 1, companyId, issueId, reviewerRunId: runId, reviewerAgentId: agentId,
+      responsibleUserId: humanId } as unknown as Parameters<typeof captureNativeTaskWakeSource>[0]["nativeReviewWitness"];
+    const diagnostics: string[] = [];
+    // The Reviewer is never the Task assignee, so the heartbeat builds no
+    // execution-continuation capture for it (continuationCapture stays null).
+    const reviewerWake = (wakePayload: Record<string, unknown>) => captureNativeTaskWakeSource({ companyId, runId, issueId,
+      agentId, responsibleUserId: humanId, wakeupRequestId: randomUUID(), sourceVersion: "1",
+      persistedWakeReason: "issue_status_changed", task, payload: wakePayload, nativeReviewWitness, continuationCapture: null,
+      onDiagnostic: (reason, fields) => { diagnostics.push(fields?.length ? `${reason}:${fields.join("+")}` : reason); } });
+    expect(reviewerWake(payload)).toMatchObject({ kind: "native_task_wake", runId, issueId, nativeReview: nativeReviewWitness });
+    expect(diagnostics).toEqual([]);
+    // The executor's finalized continuation summary has no closed owner in the
+    // Reviewer's wake: the wake source stays unavailable, which is why the
+    // heartbeat omits it from a Native Reviewer's wake payload.
+    expect(reviewerWake({ ...payload, continuationSummary: { key: "continuation-summary", title: "Continuation summary",
+      body: "Executor summary", bodyTruncated: false, sourceTrust: null, updatedAt: new Date(0).toISOString() } })).toBeNull();
+    expect(diagnostics).toEqual(["wake_fields_invalid:continuationSummary"]);
+  });
+
   it("closes a Task-only wake or comments whose exact rendered bodies have owner captures", () => {
     const task = { id: issueId, identifier: "NATIVE-1", title: "Draft", description: "Internal draft",
       status: "todo", priority: "medium", workMode: "standard" };

@@ -1,5 +1,6 @@
 import { describe, expect, it } from "vitest";
 import {
+  nativeReviewWakeExcludesContinuationSummary,
   readNativeReviewAssignmentContext,
   validateNativeReviewAssignmentFacts,
   type NativeReviewAssignmentFacts,
@@ -37,6 +38,18 @@ describe("native review participant", () => {
     expect(readNativeReviewAssignmentContext({ nativeReviewInteractionId: "i" })).toBeNull();
     expect(readNativeReviewAssignmentContext(ids)).toEqual(ids);
     expect(readNativeReviewAssignmentContext({ ...ids, nativeReviewDecisionId: "bad" })).toBeNull();
+  });
+
+  it("omits the assignee's continuation summary only from a Native Reviewer wake (MS1h)", () => {
+    expect(nativeReviewWakeExcludesContinuationSummary({ adapterType: "paperclip_runner",
+      contextSnapshot: { issueId: "33333333-3333-4333-8333-333333333333", ...ids } })).toBe(true);
+    // Ordinary Native Task wakes, other adapters and malformed review bindings keep their summary.
+    expect(nativeReviewWakeExcludesContinuationSummary({ adapterType: "paperclip_runner",
+      contextSnapshot: { issueId: "33333333-3333-4333-8333-333333333333" } })).toBe(false);
+    expect(nativeReviewWakeExcludesContinuationSummary({ adapterType: "codex_local", contextSnapshot: ids })).toBe(false);
+    expect(nativeReviewWakeExcludesContinuationSummary({ adapterType: "paperclip_runner",
+      contextSnapshot: { nativeReviewInteractionId: ids.nativeReviewInteractionId } })).toBe(false);
+    expect(nativeReviewWakeExcludesContinuationSummary({ adapterType: "paperclip_runner", contextSnapshot: null })).toBe(false);
   });
 
   it("accepts an authoritative pending review", () => {
