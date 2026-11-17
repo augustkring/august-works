@@ -7654,7 +7654,7 @@
         },
         {
           "path": "server/src/services/memory/memory-jobs.ts",
-          "sha256": "a81e334aeb8ecfd9c6b918cddd9b3554de80cbdb340cd7365e3684d57353ba89"
+          "sha256": "8beffcf65e4879f904bb70bef7d395906a02647c6f7c2db30eae14173ffec58c"
         },
         {
           "path": "server/src/services/native-local-process-stop.ts",
@@ -7682,11 +7682,11 @@
         },
         {
           "path": "server/src/services/native-runtime/native-session-executor.test.ts",
-          "sha256": "1c8d1fddc499c7cb5cbe4f779b572cf932c1cf0977a86147896a16cb7d295ecd"
+          "sha256": "6595836d685c1af748ef9859721bb326f15db22e7d0c99c13ff064094576a353"
         },
         {
           "path": "server/src/services/native-runtime/native-session-executor.ts",
-          "sha256": "7fa319596e81303be74d2aa94d2a207a4bbea4d93f689c446e439c6e5f9b759a"
+          "sha256": "1fc77d13059ca2be5b32af57823e797a330c4df7ec35dd30cde0fc72e5813263"
         },
         {
           "path": "server/src/services/native-runtime/native-session-resume.test.ts",
@@ -7710,7 +7710,7 @@
         },
         {
           "path": "server/src/services/runtime/native-harness-state-owner.test.ts",
-          "sha256": "55fb857d6fbb146237247820511387eb566406a7a9f5dad2635ea1374c842714"
+          "sha256": "1a95bda037179f261c6c91dce760720519cf2e07cb611d89fd0393940de8d3ca"
         },
         {
           "path": "server/src/services/runtime/native-runtime-context-preparation.test.ts",
@@ -9080,7 +9080,7 @@
         },
         {
           "path": "server/src/__tests__/native-payload-temporal-sources.integration.test.ts",
-          "sha256": "e9d7efe73869514f2397e6a04a47775575856267b41e3d88e5e4f3bfdba75a0a"
+          "sha256": "6272f6702e2517359a8f36f496a5b91bf71f8aaaaf74f806a872c5a6037b99ee"
         },
         {
           "path": "server/src/__tests__/native-status-arbiter-corpus.test.ts",
@@ -9360,11 +9360,11 @@
         },
         {
           "path": "server/src/services/native-runtime/native-session-executor.test.ts",
-          "sha256": "1c8d1fddc499c7cb5cbe4f779b572cf932c1cf0977a86147896a16cb7d295ecd"
+          "sha256": "6595836d685c1af748ef9859721bb326f15db22e7d0c99c13ff064094576a353"
         },
         {
           "path": "server/src/services/native-runtime/native-session-executor.ts",
-          "sha256": "7fa319596e81303be74d2aa94d2a207a4bbea4d93f689c446e439c6e5f9b759a"
+          "sha256": "1fc77d13059ca2be5b32af57823e797a330c4df7ec35dd30cde0fc72e5813263"
         },
         {
           "path": "server/src/services/native-runtime/native-tool-task-privacy.integration.test.ts",
@@ -10177,7 +10177,7 @@
         },
         {
           "path": "server/src/__tests__/native-payload-temporal-sources.integration.test.ts",
-          "sha256": "e9d7efe73869514f2397e6a04a47775575856267b41e3d88e5e4f3bfdba75a0a"
+          "sha256": "6272f6702e2517359a8f36f496a5b91bf71f8aaaaf74f806a872c5a6037b99ee"
         },
         {
           "path": "server/src/__tests__/opaque-mcp-company-purpose.integration.test.ts",
@@ -16346,7 +16346,7 @@
         },
         {
           "path": "server/src/services/saas/offboarding.ts",
-          "sha256": "c8e81010a5a43b1243c861205babbdebc587be5d7c01f37de5bf26e95ca12f98"
+          "sha256": "636d22d603aa666c613d4726bf6370c7fab165e9b85cd17ffb65ae2cb522fcf0"
         },
         {
           "path": "server/src/services/slack-board-authority.ts",
@@ -21412,7 +21412,7 @@
         },
         {
           "path": "server/src/services/saas/company-purge.ts",
-          "sha256": "6c524acb82cdde868b36f9a8ba9589273e485bd9d93545bbb4911477ab3582b8"
+          "sha256": "8e4b23a432b5448b44543ff3b776bb3fe595c4ec7396dbc238a1f2914c6172bd"
         },
         {
           "path": "server/src/services/saas/object-erasure.ts",
@@ -24682,11 +24682,11 @@
         },
         {
           "path": "packages/paperclip-runner/src/drivers/opencode/opencode-server-driver.test.ts",
-          "sha256": "fd17fa9c828b883e7b3761a85b489d2a6e257f9f7940070b524250fe16520456"
+          "sha256": "3091c8d388fe4abd3770ff897c3a95ec9709ff4c0d4621a76c753ce4e5b68f38"
         },
         {
           "path": "packages/paperclip-runner/src/drivers/opencode/opencode-server-driver.ts",
-          "sha256": "d7962bbdcf1a515087ac865f7e1d99498ab401f9a21296209be0dd41b48cdf31"
+          "sha256": "b32f8bb585a63339ad15fe6cff924350f9f8d99942bcfd518a34a35b4881800d"
         },
         {
           "path": "packages/paperclip-runner/src/index.ts",
@@ -25226,7 +25226,7 @@
         },
         {
           "path": "server/src/services/native-runtime/remote-runner-identity.ts",
-          "sha256": "d5c27078f46ec775a5060b305e6363472e694fee52e9126c9bb5eed0d5866172"
+          "sha256": "70bc53ccb4a1aadf84b46b9f2175c2f0288818062d217f97c198e353e0dd7f12"
         },
         {
           "path": "server/src/services/native-runtime/runner-api-policy.ts",
@@ -25238,11 +25238,11 @@
         },
         {
           "path": "server/src/services/native-runtime/runtime-asset-retention.test.ts",
-          "sha256": "ac8894fc49424ca52068212725ad03b3e3d903860ba435323f156591ee27aad9"
+          "sha256": "de3e6d45e6959a2ed73e5ca7402e6e883e32e65f10d4ac4fe85e7d2cd88a1b36"
         },
         {
           "path": "server/src/services/native-runtime/runtime-asset-retention.ts",
-          "sha256": "3defc94929b59490b3149a15687dc497b38378e00f3e8c8bb3f116b232b459a6"
+          "sha256": "5eb4e556827828fc74a6fcb68dc389d38e1021f52b6f5e7dbf5a31a68586f220"
         },
         {
           "path": "server/src/services/native-runtime/runtime-context.test-fixture.ts",
@@ -32121,7 +32121,7 @@
         },
         {
           "path": "server/src/services/company-search-help.generated.ts",
-          "sha256": "bfce3147c2ed397af8d8db17c110ce3acaf8e1078844efc57a06e1ad8c6410ba"
+          "sha256": "e423b8453ccebebda942b281ef8f776f3497e8191360f89b96ec0d5b04c4b0df"
         },
         {
           "path": "server/src/services/task-search.ts",
@@ -49756,7 +49756,7 @@
       "id": "source:server/src/services/memory/memory-jobs.ts",
       "kind": "current_source_owner",
       "path": "server/src/services/memory/memory-jobs.ts",
-      "sha256": "a81e334aeb8ecfd9c6b918cddd9b3554de80cbdb340cd7365e3684d57353ba89",
+      "sha256": "8beffcf65e4879f904bb70bef7d395906a02647c6f7c2db30eae14173ffec58c",
       "changeIds": [
         "SCR-V10-HOTSPOT-05"
       ],
@@ -49801,7 +49801,7 @@
       "id": "source:server/src/services/native-runtime/native-session-executor.test.ts",
       "kind": "current_source_owner",
       "path": "server/src/services/native-runtime/native-session-executor.test.ts",
-      "sha256": "1c8d1fddc499c7cb5cbe4f779b572cf932c1cf0977a86147896a16cb7d295ecd",
+      "sha256": "6595836d685c1af748ef9859721bb326f15db22e7d0c99c13ff064094576a353",
       "changeIds": [
         "SCR-V10-HOTSPOT-05",
         "SCR-V10-HOTSPOT-06"
@@ -49817,7 +49817,7 @@
       "id": "source:server/src/services/native-runtime/native-session-executor.ts",
       "kind": "current_source_owner",
       "path": "server/src/services/native-runtime/native-session-executor.ts",
-      "sha256": "7fa319596e81303be74d2aa94d2a207a4bbea4d93f689c446e439c6e5f9b759a",
+      "sha256": "1fc77d13059ca2be5b32af57823e797a330c4df7ec35dd30cde0fc72e5813263",
       "changeIds": [
         "SCR-V10-HOTSPOT-05",
         "SCR-V10-HOTSPOT-06"
@@ -49893,7 +49893,7 @@
       "id": "source:server/src/services/runtime/native-harness-state-owner.test.ts",
       "kind": "current_source_owner",
       "path": "server/src/services/runtime/native-harness-state-owner.test.ts",
-      "sha256": "55fb857d6fbb146237247820511387eb566406a7a9f5dad2635ea1374c842714",
+      "sha256": "1a95bda037179f261c6c91dce760720519cf2e07cb611d89fd0393940de8d3ca",
       "changeIds": [
         "SCR-V10-HOTSPOT-05"
       ],
@@ -50196,7 +50196,7 @@
       "id": "source:server/src/__tests__/native-payload-temporal-sources.integration.test.ts",
       "kind": "current_source_owner",
       "path": "server/src/__tests__/native-payload-temporal-sources.integration.test.ts",
-      "sha256": "e9d7efe73869514f2397e6a04a47775575856267b41e3d88e5e4f3bfdba75a0a",
+      "sha256": "6272f6702e2517359a8f36f496a5b91bf71f8aaaaf74f806a872c5a6037b99ee",
       "changeIds": [
         "SCR-V10-HOTSPOT-06",
         "SCR-V10-HOTSPOT-07"
@@ -55786,7 +55786,7 @@
       "id": "source:server/src/services/saas/offboarding.ts",
       "kind": "current_source_owner",
       "path": "server/src/services/saas/offboarding.ts",
-      "sha256": "c8e81010a5a43b1243c861205babbdebc587be5d7c01f37de5bf26e95ca12f98",
+      "sha256": "636d22d603aa666c613d4726bf6370c7fab165e9b85cd17ffb65ae2cb522fcf0",
       "changeIds": [
         "SCR-V10-AUTH-IDENTITY"
       ],
@@ -60380,7 +60380,7 @@
       "id": "source:server/src/services/saas/company-purge.ts",
       "kind": "current_source_owner",
       "path": "server/src/services/saas/company-purge.ts",
-      "sha256": "6c524acb82cdde868b36f9a8ba9589273e485bd9d93545bbb4911477ab3582b8",
+      "sha256": "8e4b23a432b5448b44543ff3b776bb3fe595c4ec7396dbc238a1f2914c6172bd",
       "changeIds": [
         "SCR-V10-PRIVATE-DATA-ERASURE"
       ],
@@ -62495,7 +62495,7 @@
       "id": "source:packages/paperclip-runner/src/drivers/opencode/opencode-server-driver.test.ts",
       "kind": "current_source_owner",
       "path": "packages/paperclip-runner/src/drivers/opencode/opencode-server-driver.test.ts",
-      "sha256": "fd17fa9c828b883e7b3761a85b489d2a6e257f9f7940070b524250fe16520456",
+      "sha256": "3091c8d388fe4abd3770ff897c3a95ec9709ff4c0d4621a76c753ce4e5b68f38",
       "changeIds": [
         "SCR-V10-NATIVE-RUNTIME-AND-AUTHORITY"
       ],
@@ -62510,7 +62510,7 @@
       "id": "source:packages/paperclip-runner/src/drivers/opencode/opencode-server-driver.ts",
       "kind": "current_source_owner",
       "path": "packages/paperclip-runner/src/drivers/opencode/opencode-server-driver.ts",
-      "sha256": "d7962bbdcf1a515087ac865f7e1d99498ab401f9a21296209be0dd41b48cdf31",
+      "sha256": "b32f8bb585a63339ad15fe6cff924350f9f8d99942bcfd518a34a35b4881800d",
       "changeIds": [
         "SCR-V10-NATIVE-RUNTIME-AND-AUTHORITY"
       ],
@@ -64493,7 +64493,7 @@
       "id": "source:server/src/services/native-runtime/remote-runner-identity.ts",
       "kind": "current_source_owner",
       "path": "server/src/services/native-runtime/remote-runner-identity.ts",
-      "sha256": "d5c27078f46ec775a5060b305e6363472e694fee52e9126c9bb5eed0d5866172",
+      "sha256": "70bc53ccb4a1aadf84b46b9f2175c2f0288818062d217f97c198e353e0dd7f12",
       "changeIds": [
         "SCR-V10-NATIVE-RUNTIME-AND-AUTHORITY"
       ],
@@ -64538,7 +64538,7 @@
       "id": "source:server/src/services/native-runtime/runtime-asset-retention.test.ts",
       "kind": "current_source_owner",
       "path": "server/src/services/native-runtime/runtime-asset-retention.test.ts",
-      "sha256": "ac8894fc49424ca52068212725ad03b3e3d903860ba435323f156591ee27aad9",
+      "sha256": "de3e6d45e6959a2ed73e5ca7402e6e883e32e65f10d4ac4fe85e7d2cd88a1b36",
       "changeIds": [
         "SCR-V10-NATIVE-RUNTIME-AND-AUTHORITY"
       ],
@@ -64553,7 +64553,7 @@
       "id": "source:server/src/services/native-runtime/runtime-asset-retention.ts",
       "kind": "current_source_owner",
       "path": "server/src/services/native-runtime/runtime-asset-retention.ts",
-      "sha256": "3defc94929b59490b3149a15687dc497b38378e00f3e8c8bb3f116b232b459a6",
+      "sha256": "5eb4e556827828fc74a6fcb68dc389d38e1021f52b6f5e7dbf5a31a68586f220",
       "changeIds": [
         "SCR-V10-NATIVE-RUNTIME-AND-AUTHORITY"
       ],
@@ -72520,7 +72520,7 @@
       "id": "source:server/src/services/company-search-help.generated.ts",
       "kind": "current_source_owner",
       "path": "server/src/services/company-search-help.generated.ts",
-      "sha256": "bfce3147c2ed397af8d8db17c110ce3acaf8e1078844efc57a06e1ad8c6410ba",
+      "sha256": "e423b8453ccebebda942b281ef8f776f3497e8191360f89b96ec0d5b04c4b0df",
       "changeIds": [
         "SCR-V10-PRODUCT-IDENTITY-HELP-LANGUAGE"
       ],

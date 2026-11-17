@@ -20,6 +20,8 @@ import { exactNativeManagedArtifactCommand, NATIVE_FIXED_ARTIFACT_CHECKSUM_SCRIP
 import { sha256DirectoryTree, stageRemoteRunnerTrustBundle } from "./native-session-executor.js";
 import { REMOTE_NATIVE_ERASER_ENV } from "./remote-runner-identity.js";
 import { nativeRunnerOperatorSettings } from "./runner-operator-settings.js";
+import { createRemoteRuntimeAssetLocator, managedOpenCodeRemoteRuntimeDirectory,
+  managedOpenCodeRuntimeDirectory } from "./runtime-asset-retention.js";
 
 // CONF3a and CONF3b. The hidden conformance probe built its runnerd backend
 // without the server's direct runner URL and CA bundle, so a Sandbox without
@@ -316,8 +318,39 @@ describe("provider-conformance runner transport and preinstalled provider pack (
       return handle.completion.then(() => undefined, (error: unknown) => error);
     };
     return { ids, taskRoot, execution, manifest, installedPack, stagedPack, commands, refusals, register, launch,
-      serverEnvironment, runnerEnvironment, caBundle, createBackend };
+      serverEnvironment, runnerEnvironment, caBundle, createBackend, run, providerLeaseId };
   }
+
+  // PRIV-R1. The executor handed the remote managed OpenCode process the
+  // controller's per-Run path (`<instance>/runtime-context-assets/runs/...`).
+  // On a real Sandbox that path is outside the session tree the remote
+  // erasure removes, so provider data written there survived erasure.
+  it("hands the remote managed OpenCode process a provider home inside its locator-erased session tree (PRIV-R1)", async () => {
+    const { ids, taskRoot, createBackend, run, providerLeaseId } = await fixture();
+    await createBackend();
+    const backendOptions = state.createBackend.mock.calls.at(-1)![1] as { codexTransportFactory: () => unknown };
+    backendOptions.codexTransportFactory();
+    const transportOptions = state.createTransport.mock.calls.at(-1)![0] as { opencodeRuntimeDirectory?: string };
+    const sessionTree = posix.join(taskRoot, ".paperclip-runtime", "paperclip-runner", "sessions",
+      createHash("sha256").update(ids.session).digest("hex"));
+    expect(transportOptions.opencodeRuntimeDirectory).toBe(posix.join(sessionTree, "provider-opencode"));
+    expect(transportOptions.opencodeRuntimeDirectory)
+      .toBe(managedOpenCodeRemoteRuntimeDirectory({ remoteCwd: taskRoot, normalizedSessionId: ids.session }));
+    expect(transportOptions.opencodeRuntimeDirectory)
+      .not.toBe(managedOpenCodeRuntimeDirectory({ companyId: ids.company, runId: ids.run }));
+    // The tree is exactly the one this Run's persisted locator names, which is
+    // the one the remote erasure removes and receipts.
+    const persisted = (run.runnerProfileJson as Row).nativeRemoteRuntimeAssetLocator as { relativePath: string };
+    const expected = createRemoteRuntimeAssetLocator({ companyId: ids.company, runId: ids.run, environmentId: ids.environment,
+      environmentLeaseId: ids.lease, provider: "fixture-sandbox", providerLeaseId, runnerInstanceId: ids.runner,
+      normalizedSessionId: ids.session, remoteCwd: taskRoot });
+    expect(persisted).toEqual(expected);
+    expect(posix.join(taskRoot, ".paperclip-runtime", "paperclip-runner", persisted.relativePath)).toBe(sessionTree);
+    expect(transportOptions.opencodeRuntimeDirectory!.startsWith(`${sessionTree}/`)).toBe(true);
+    // Not inside the controller-local failover backup roots.
+    for (const backupRoot of [posix.join(sessionTree, "runner"), posix.join(sessionTree, "filesystem", "opencode")])
+      expect(transportOptions.opencodeRuntimeDirectory!.startsWith(`${backupRoot}/`)).toBe(false);
+  });
 
   it("stages the runner trust bundle through its credentialless conformance purpose (CONF4b)", async () => {
     const { taskRoot, execution, commands, refusals, register, launch, caBundle } = await fixture();

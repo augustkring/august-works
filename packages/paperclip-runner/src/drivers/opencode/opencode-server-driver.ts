@@ -389,6 +389,12 @@ export class OpenCodeServerDriver implements HarnessDriver {
       input.normalizedSessionId,
     );
     await mkdir(root, { recursive: true, mode: 0o700 });
+    // On a remote Sandbox this private provider home sits inside the session
+    // tree, which lives inside the task's Git workspace (PRIV-R1). Ignore the
+    // whole home before OpenCode starts: otherwise OpenCode's own workspace
+    // snapshot stores its data, and then its snapshot store, again on every
+    // step, and the workspace's Git scans list every provider file.
+    await writeFile(join(root, ".gitignore"), "*\n", { mode: 0o600 });
     await writeFile(join(root, "workspace"), `${cwd}\n`, { mode: 0o600 });
     const trace = await createProviderTraceFileSink({
       path: this.#options.environment?.PAPERCLIP_PROVIDER_TRACE_PATH,

@@ -9,6 +9,7 @@ import {
   stat,
   writeFile,
 } from "node:fs/promises";
+import { execFileSync } from "node:child_process";
 import { tmpdir } from "node:os";
 import { join, resolve } from "node:path";
 import { afterAll, afterEach, describe, expect, it } from "vitest";
@@ -873,6 +874,64 @@ describe("OpenCodeServerDriver", () => {
       "provider.notice.recorded",
     );
     await session.close({ reason: "test" });
+  });
+
+  it("keeps a provider home inside the task Git workspace out of Git", async () => {
+    // PRIV-R1 puts the remote provider home in the session tree under the
+    // task workspace. Neither OpenCode's workspace snapshot nor the
+    // workspace's own Git scans may see provider data there.
+    await chmod(fixture, 0o755);
+    const workspace = await mkdtemp(
+      join(tmpdir(), "paperclip-opencode-git-workspace-"),
+    );
+    roots.push(workspace);
+    const git = (...args: string[]) =>
+      execFileSync("git", args, {
+        cwd: workspace,
+        encoding: "utf8",
+        env: { ...process.env, GIT_CONFIG_NOSYSTEM: "1", HOME: workspace },
+      });
+    git("init", "-q", "-b", "main");
+    await writeFile(join(workspace, "README.md"), "fixture\n");
+    git("add", "README.md");
+    git("-c", "user.name=fixture", "-c", "user.email=fixture@example.invalid",
+      "commit", "-q", "-m", "fixture");
+    const root = join(workspace, ".paperclip-runtime", "paperclip-runner",
+      "sessions", "a".repeat(64), "provider-opencode");
+    const driver = new OpenCodeServerDriver({
+      model: "openrouter/deepseek/deepseek-v4-flash-0731",
+      runtimeDirectory: root,
+      command: fixture,
+      environment: {
+        PATH: process.env.PATH,
+        OPENROUTER_API_KEY: "fixture-key",
+      },
+    });
+    const session = await driver.openSession({
+      runId: "run-git-workspace",
+      normalizedSessionId: "git-workspace",
+      workingDirectory: workspace,
+    });
+    try {
+      const home = join(root, "git-workspace");
+      expect(await readFile(join(home, "workspace"), "utf8")).toBe(`${workspace}\n`);
+      expect((await readdir(home)).length).toBeGreaterThan(2);
+      await writeFile(join(workspace, "task-output.md"), "result\n");
+      const untracked = git("ls-files", "--others", "--exclude-standard", "-z")
+        .split("\0").filter(Boolean);
+      expect(untracked).toEqual(["task-output.md"]);
+      // OpenCode's snapshot drops paths that `check-ignore --no-index`
+      // reports, so its own database and snapshot store stay out of it.
+      const homePath = ".paperclip-runtime/paperclip-runner/sessions/" +
+        "a".repeat(64) + "/provider-opencode/git-workspace";
+      const ignored = git("check-ignore", "--no-index",
+        `${homePath}/data/opencode/opencode.db`,
+        `${homePath}/data/opencode/snapshot/project/objects/pack/a.pack`,
+        `${homePath}/workspace`).trim().split("\n");
+      expect(ignored).toHaveLength(3);
+    } finally {
+      await session.close({ reason: "test" });
+    }
   });
 
   it("keeps OpenCode in an outer supervisor process group when requested", async () => {

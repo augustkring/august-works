@@ -5,7 +5,7 @@ import { execFileSync } from "node:child_process";
 import { join } from "node:path";
 import { and, eq, sql } from "drizzle-orm";
 import { afterAll, afterEach, beforeAll, describe, expect, it, vi } from "vitest";
-import { agents, agentWakeupRequests, nativeRunFinalizations, orchestrationPlans, companyMemberships, completionContracts, contextManifestItems, createDb, documents, documentRevisions,
+import { agents, agentWakeupRequests, environmentLeases, nativeRunFinalizations, orchestrationPlans, companyMemberships, completionContracts, contextManifestItems, createDb, documents, documentRevisions,
   heartbeatRuns, issueComments, issueDocuments, issues, memoryJobs, memoryRecords, toolInvocations, orchestrationModelReservations, orchestrationWorkerAttempts, issuePrivacySources } from "@paperclipai/db";
 import { nativePayloadSourceSnapshotSchema, nativeRunInputSourceReceiptSchema, type NativePayloadSourceInput } from "@paperclipai/shared";
 import { activeMemoryTemporalContexts, canActorReadIssuePrivacy, withReadMemoryTemporalSources,
@@ -24,7 +24,7 @@ import { assertNativeDocumentRevisionCurrentSourceAccess, assertNativeMemoryOutp
 import { nativeCommentProjectionHash, nativeSha256 } from "../services/native-runtime/canonical.js";
 import { lockAnalyticalCompany } from "../services/analytical-privacy.js";
 import { canActorReadMemorySourceSet, canActorReadMemorySources, lockMemoryPrivacy } from "../services/memory/memory-privacy.js";
-import { managedOpenCodeRuntimeDirectory } from "../services/native-runtime/runtime-asset-retention.js";
+import { managedOpenCodeRemoteRuntimeDirectory, managedOpenCodeRuntimeDirectory } from "../services/native-runtime/runtime-asset-retention.js";
 import { assertScopedNativeMemoryReplayReceiptCurrent } from "../services/tool-gateway.js";
 import { startEmbeddedPostgresTestDatabase } from "./helpers/embedded-postgres.js";
 import { configureManagedConversationSandboxHost } from "./helpers/managed-native-conversation-sandbox-host.js";
@@ -1002,10 +1002,22 @@ nativeOpenCodeTemporalDescribe("Native model outputs retain only the source clos
 
   it("erases exact Task and Memory copies while preserving independent earlier Task, Memory, and document", async () => {
     const { first, second, documentKey, documentKeyB, taskAId, taskBId, memoryAId, memoryBId, privateRootId, memoryCId } = temporal;
-    const providerDb = join(managedOpenCodeRuntimeDirectory({ companyId: first.companyId, runId: first.runId }),
-      first.nativeFinalization.normalizedSessionId, "data", "opencode", "opencode.db");
-    const laterProviderDb = join(managedOpenCodeRuntimeDirectory({ companyId: second.companyId, runId: second.runId }),
-      second.nativeFinalization.normalizedSessionId, "data", "opencode", "opencode.db");
+    // PRIV-R1: on the Sandbox the managed provider home is inside the Run's
+    // remote session tree (here the software Sandbox shares this filesystem),
+    // never the controller's per-Run folder.
+    const remoteProviderDb = async (producer: typeof first) => {
+      const [lease] = await db.select({ metadata: environmentLeases.metadata }).from(environmentLeases).where(and(
+        eq(environmentLeases.companyId, producer.companyId), eq(environmentLeases.heartbeatRunId, producer.runId),
+        sql`${environmentLeases.provider} is not null and ${environmentLeases.provider}<>'local'`)).limit(1);
+      const remoteCwd = typeof lease?.metadata?.remoteCwd === "string" ? lease.metadata.remoteCwd : "";
+      const sessionId = producer.nativeFinalization.normalizedSessionId;
+      expect(await stat(join(managedOpenCodeRuntimeDirectory({ companyId: producer.companyId, runId: producer.runId }), sessionId))
+        .catch((error: NodeJS.ErrnoException) => error.code)).toBe("ENOENT");
+      return join(managedOpenCodeRemoteRuntimeDirectory({ remoteCwd, normalizedSessionId: sessionId }),
+        sessionId, "data", "opencode", "opencode.db");
+    };
+    const providerDb = await remoteProviderDb(first);
+    const laterProviderDb = await remoteProviderDb(second);
     expect((await readFile(providerDb)).byteLength).toBeGreaterThan(0);
     expect((await readFile(laterProviderDb)).byteLength).toBeGreaterThan(0);
     const memories = memoryService(db);

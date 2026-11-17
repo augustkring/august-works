@@ -14,7 +14,8 @@ import { readNativeConformanceAuthorityArchiveGrant, recordNativeConformanceAuth
 import { createRemoteRunnerProcessLauncher, remoteRunnerPathExists, stageRemoteRunnerDirectory, syncRemoteRunnerDirectoryOut } from "../native-runtime/native-session-executor.js";
 import { REMOTE_NATIVE_ERASER_ENV, REMOTE_NATIVE_SESSION_FENCE_ACQUIRE_SCRIPT, REMOTE_NATIVE_SESSION_FENCE_RELEASE_SCRIPT,
   REMOTE_NATIVE_RUNTIME_ASSET_ERASURE_SCRIPT, REMOTE_RUNNER_FAILED_IDENTITY_CLEANUP_SCRIPT,
-  REMOTE_RUNNER_IDENTITY_CHECK_SCRIPT, REMOTE_RUNNER_AUTHORITY_ARCHIVE_SCRIPT } from "../native-runtime/remote-runner-identity.js";
+  REMOTE_RUNNER_IDENTITY_CHECK_SCRIPT, REMOTE_RUNNER_AUTHORITY_ARCHIVE_SCRIPT,
+  REMOTE_NATIVE_CONTINUITY_BREAK_ARCHIVE_SCRIPT } from "../native-runtime/remote-runner-identity.js";
 import { createRemoteRuntimeAssetLocator } from "../native-runtime/runtime-asset-retention.js";
 
 describe("Native harness-state relay command owner", () => {
@@ -162,6 +163,13 @@ describe("Native harness-state relay command owner", () => {
       ...execution, session: { ...execution.session, normalizedSessionId: randomUUID() },
     }), runId })).toBe(false);
     expect(exactNativeHarnessStateCommand({ request: { ...probe, cwd: posix.join(taskRoot, "other") }, taskRoot, execution, runId })).toBe(false);
+    // PRIV-R3 audit evidence: this managed lane admits no continuity-break
+    // archive move, neither the pre-fix sibling rename nor the in-tree archive.
+    for (const argv of [
+      ["sh", "-c", `if test -d '${sessionRoot}'; then mv '${sessionRoot}' '${sessionRoot}.continuity-break-1-${randomUUID()}'; fi`],
+      ["sh", "-c", REMOTE_NATIVE_CONTINUITY_BREAK_ARCHIVE_SCRIPT, "paperclip-runner-continuity-break-archive", sessionRoot,
+        `1-${randomUUID()}`],
+    ]) expect(exactNativeHarnessStateCommand({ request: { ...probe, argv }, taskRoot, execution, runId })).toBe(false);
 
     const runnerInstanceId = randomUUID();
     let launchNonce = "";
