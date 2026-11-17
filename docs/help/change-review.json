@@ -949,10 +949,10 @@
     {
       "source": "server/src/services/company-search-help.generated.ts",
       "articleId": "help-and-human-support",
-      "sourceSha256": "5881ca028f2788dcd6a0b06a8e6ec5d064d0cd32697f3d8b7b13819317aac191",
+      "sourceSha256": "a44345ae106c938465cf15c6bcc8cdf8273c81696e292eb77f496ad062603def",
       "articleSha256": "bec6b2b830586252df7700cc8b8f23018da446ede36284d98e53f8db2b049a1b",
       "decision": "no_change",
-      "rationale": "Regenerated Help search catalog only refreshes the EN/DA Work with Co-workers entries (PRIV-R7 Delete a disapproved Co-worker section and verification date). Help and human support routes, contacts and escalation guidance are unchanged."
+      "rationale": "Regenerated Help search catalog only refreshes the EN/DA Work with Co-workers entries (PRIV-R7 Delete a disapproved Co-worker section and verification date). Help and human support routes, contacts and escalation guidance are unchanged. PRIV-R7c adds one sentence about finalized-run refusal to the Work with Co-workers entries only."
     },
     {
       "source": "server/src/services/company-search.ts",
@@ -1261,10 +1261,10 @@
     {
       "source": "server/src/services/company-search-help.generated.ts",
       "articleId": "help-and-human-support-da",
-      "sourceSha256": "5881ca028f2788dcd6a0b06a8e6ec5d064d0cd32697f3d8b7b13819317aac191",
+      "sourceSha256": "a44345ae106c938465cf15c6bcc8cdf8273c81696e292eb77f496ad062603def",
       "articleSha256": "2c92acfc98fc458e84cf4bf6fc421119816d6f471922dceee726e311804bf6b5",
       "decision": "no_change",
-      "rationale": "Regenerated Help search catalog only refreshes the EN/DA Work with Co-workers entries (PRIV-R7 Delete a disapproved Co-worker section and verification date). Help and human support routes, contacts and escalation guidance are unchanged."
+      "rationale": "Regenerated Help search catalog only refreshes the EN/DA Work with Co-workers entries (PRIV-R7 Delete a disapproved Co-worker section and verification date). Help and human support routes, contacts and escalation guidance are unchanged. PRIV-R7c adds one sentence about finalized-run refusal to the Work with Co-workers entries only."
     },
     {
       "source": "server/src/services/company-search.ts",

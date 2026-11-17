@@ -32121,7 +32121,7 @@
         },
         {
           "path": "server/src/services/company-search-help.generated.ts",
-          "sha256": "5881ca028f2788dcd6a0b06a8e6ec5d064d0cd32697f3d8b7b13819317aac191"
+          "sha256": "a44345ae106c938465cf15c6bcc8cdf8273c81696e292eb77f496ad062603def"
         },
         {
           "path": "server/src/services/task-search.ts",
@@ -72520,7 +72520,7 @@
       "id": "source:server/src/services/company-search-help.generated.ts",
       "kind": "current_source_owner",
       "path": "server/src/services/company-search-help.generated.ts",
-      "sha256": "5881ca028f2788dcd6a0b06a8e6ec5d064d0cd32697f3d8b7b13819317aac191",
+      "sha256": "a44345ae106c938465cf15c6bcc8cdf8273c81696e292eb77f496ad062603def",
       "changeIds": [
         "SCR-V10-PRODUCT-IDENTITY-HELP-LANGUAGE"
       ],
