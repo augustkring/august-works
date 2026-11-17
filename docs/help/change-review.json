@@ -1565,10 +1565,10 @@
     {
       "source": "server/src/services/heartbeat.ts",
       "articleId": "recovering-work",
-      "sourceSha256": "340d65ab00b3214db8991f5ca5828f144f1b85c65498bcf0a96162613f0753ea",
+      "sourceSha256": "19ad16311f14f3f1e02948ba61157c82d2e62ed5d6d9c6a3a3bf6bb587efbdaa",
       "articleSha256": "0296c2c8ae18c613eef9c17ea9679b146e8afbcd3504451a5511a218d6d8b955",
       "decision": "no_change",
-      "rationale": "2026-11-16 CONF15-W9R follow-up review: a verified retained resume now applies its empty delivered baseline to every copy of the continuation record (internal Native input construction only); every other run builds its continuation as before CONF15-W9. Task status, retry, stop, continuation, recovery, export and deletion behaviour shown to people is unchanged; no article change needed."
+      "rationale": "2026-11-17 MS1h review: a Native completion Reviewer\u2019s wake payload no longer carries the Task assignee\u2019s issue continuation summary (internal Native input construction only; the Reviewer\u2019s prompt is its review request). Ordinary task runs, task status, retry, stop, continuation, recovery, export and deletion behavior are unchanged, so the article stays accurate. 2026-11-16 CONF15-W9R follow-up review: a verified retained resume now applies its empty delivered baseline to every copy of the continuation record (internal Native input construction only); every other run builds its continuation as before CONF15-W9. Task status, retry, stop, continuation, recovery, export and deletion behaviour shown to people is unchanged; no article change needed."
     },
     {
       "source": "server/src/services/issue-recovery-actions.ts",
@@ -1669,10 +1669,10 @@
     {
       "source": "server/src/services/heartbeat.ts",
       "articleId": "recovering-work-da",
-      "sourceSha256": "340d65ab00b3214db8991f5ca5828f144f1b85c65498bcf0a96162613f0753ea",
+      "sourceSha256": "19ad16311f14f3f1e02948ba61157c82d2e62ed5d6d9c6a3a3bf6bb587efbdaa",
       "articleSha256": "ce0a7beaa56a5db23963d81eed8c19687d2efc5405773ec33dfd635a377090bc",
       "decision": "no_change",
-      "rationale": "2026-11-16 CONF15-W9R follow-up review: a verified retained resume now applies its empty delivered baseline to every copy of the continuation record (internal Native input construction only); every other run builds its continuation as before CONF15-W9. Task status, retry, stop, continuation, recovery, export and deletion behaviour shown to people is unchanged; no article change needed."
+      "rationale": "2026-11-17 MS1h review: a Native completion Reviewer\u2019s wake payload no longer carries the Task assignee\u2019s issue continuation summary (internal Native input construction only; the Reviewer\u2019s prompt is its review request). Ordinary task runs, task status, retry, stop, continuation, recovery, export and deletion behavior are unchanged, so the article stays accurate. 2026-11-16 CONF15-W9R follow-up review: a verified retained resume now applies its empty delivered baseline to every copy of the continuation record (internal Native input construction only); every other run builds its continuation as before CONF15-W9. Task status, retry, stop, continuation, recovery, export and deletion behaviour shown to people is unchanged; no article change needed."
     },
     {
       "source": "server/src/services/issue-recovery-actions.ts",
@@ -2053,18 +2053,18 @@
     {
       "source": "server/src/services/heartbeat.ts",
       "articleId": "export-and-delete",
-      "sourceSha256": "340d65ab00b3214db8991f5ca5828f144f1b85c65498bcf0a96162613f0753ea",
+      "sourceSha256": "19ad16311f14f3f1e02948ba61157c82d2e62ed5d6d9c6a3a3bf6bb587efbdaa",
       "articleSha256": "025c1dc0070dac27b8de6bb1b273a5946d3dcfbc48e5c2c22200f6adcfff54f2",
       "decision": "no_change",
-      "rationale": "2026-11-16 CONF15-W9R follow-up review: a verified retained resume now applies its empty delivered baseline to every copy of the continuation record (internal Native input construction only); every other run builds its continuation as before CONF15-W9. Task status, retry, stop, continuation, recovery, export and deletion behaviour shown to people is unchanged; no article change needed."
+      "rationale": "2026-11-17 MS1h review: a Native completion Reviewer\u2019s wake payload no longer carries the Task assignee\u2019s issue continuation summary (internal Native input construction only; the Reviewer\u2019s prompt is its review request). Ordinary task runs, task status, retry, stop, continuation, recovery, export and deletion behavior are unchanged, so the article stays accurate. 2026-11-16 CONF15-W9R follow-up review: a verified retained resume now applies its empty delivered baseline to every copy of the continuation record (internal Native input construction only); every other run builds its continuation as before CONF15-W9. Task status, retry, stop, continuation, recovery, export and deletion behaviour shown to people is unchanged; no article change needed."
     },
     {
       "source": "server/src/services/heartbeat.ts",
       "articleId": "export-and-delete-da",
-      "sourceSha256": "340d65ab00b3214db8991f5ca5828f144f1b85c65498bcf0a96162613f0753ea",
+      "sourceSha256": "19ad16311f14f3f1e02948ba61157c82d2e62ed5d6d9c6a3a3bf6bb587efbdaa",
       "articleSha256": "bcb1f62a22cdbf735058cad2f47d0b0864941fea9f69b6cb9942c49f3c4ac544",
       "decision": "no_change",
-      "rationale": "2026-11-16 CONF15-W9R follow-up review: a verified retained resume now applies its empty delivered baseline to every copy of the continuation record (internal Native input construction only); every other run builds its continuation as before CONF15-W9. Task status, retry, stop, continuation, recovery, export and deletion behaviour shown to people is unchanged; no article change needed."
+      "rationale": "2026-11-17 MS1h review: a Native completion Reviewer\u2019s wake payload no longer carries the Task assignee\u2019s issue continuation summary (internal Native input construction only; the Reviewer\u2019s prompt is its review request). Ordinary task runs, task status, retry, stop, continuation, recovery, export and deletion behavior are unchanged, so the article stays accurate. 2026-11-16 CONF15-W9R follow-up review: a verified retained resume now applies its empty delivered baseline to every copy of the continuation record (internal Native input construction only); every other run builds its continuation as before CONF15-W9. Task status, retry, stop, continuation, recovery, export and deletion behaviour shown to people is unchanged; no article change needed."
     },
     {
       "source": "ui/src/pages/CompanySettings.tsx",
@@ -2757,18 +2757,18 @@
     {
       "source": "server/src/services/heartbeat.ts",
       "articleId": "create-and-track-work",
-      "sourceSha256": "340d65ab00b3214db8991f5ca5828f144f1b85c65498bcf0a96162613f0753ea",
+      "sourceSha256": "19ad16311f14f3f1e02948ba61157c82d2e62ed5d6d9c6a3a3bf6bb587efbdaa",
       "articleSha256": "d689db2dabb61c675518460fb12bfeec898665ce74e9a4b5a920c8301a1d46d9",
       "decision": "no_change",
-      "rationale": "2026-11-16 CONF15-W9R follow-up review: a verified retained resume now applies its empty delivered baseline to every copy of the continuation record (internal Native input construction only); every other run builds its continuation as before CONF15-W9. Task status, retry, stop, continuation, recovery, export and deletion behaviour shown to people is unchanged; no article change needed."
+      "rationale": "2026-11-17 MS1h review: a Native completion Reviewer\u2019s wake payload no longer carries the Task assignee\u2019s issue continuation summary (internal Native input construction only; the Reviewer\u2019s prompt is its review request). Ordinary task runs, task status, retry, stop, continuation, recovery, export and deletion behavior are unchanged, so the article stays accurate. 2026-11-16 CONF15-W9R follow-up review: a verified retained resume now applies its empty delivered baseline to every copy of the continuation record (internal Native input construction only); every other run builds its continuation as before CONF15-W9. Task status, retry, stop, continuation, recovery, export and deletion behaviour shown to people is unchanged; no article change needed."
     },
     {
       "source": "server/src/services/heartbeat.ts",
       "articleId": "create-and-track-work-da",
-      "sourceSha256": "340d65ab00b3214db8991f5ca5828f144f1b85c65498bcf0a96162613f0753ea",
+      "sourceSha256": "19ad16311f14f3f1e02948ba61157c82d2e62ed5d6d9c6a3a3bf6bb587efbdaa",
       "articleSha256": "9b7915956fb5c4a86f119627dea10499795af2e387d3c7e7f3a110723894831f",
       "decision": "no_change",
-      "rationale": "2026-11-16 CONF15-W9R follow-up review: a verified retained resume now applies its empty delivered baseline to every copy of the continuation record (internal Native input construction only); every other run builds its continuation as before CONF15-W9. Task status, retry, stop, continuation, recovery, export and deletion behaviour shown to people is unchanged; no article change needed."
+      "rationale": "2026-11-17 MS1h review: a Native completion Reviewer\u2019s wake payload no longer carries the Task assignee\u2019s issue continuation summary (internal Native input construction only; the Reviewer\u2019s prompt is its review request). Ordinary task runs, task status, retry, stop, continuation, recovery, export and deletion behavior are unchanged, so the article stays accurate. 2026-11-16 CONF15-W9R follow-up review: a verified retained resume now applies its empty delivered baseline to every copy of the continuation record (internal Native input construction only); every other run builds its continuation as before CONF15-W9. Task status, retry, stop, continuation, recovery, export and deletion behaviour shown to people is unchanged; no article change needed."
     },
     {
       "source": "ui/src/pages/Orchestration.tsx",
