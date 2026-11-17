@@ -30,6 +30,7 @@ import type { billingService } from "../billing/billing.js";
 import type { runtimeControlService } from "../runtime/control.js";
 import { assertCompanyManagedOpenCodeRuntimeDataErased, enqueueCompanyManagedOpenCodeRuntimeErasure,
   retireCompanyNativeLegacyRuntimeProfiles } from "../native-runtime/runtime-asset-retention.js";
+import { eraseCompanyNativeDurableSessions } from "../native-runtime/native-durable-session-erasure.js";
 import { memoryJobService } from "../memory/memory-jobs.js";
 import { SecretProviderClientError } from "../../secrets/types.js";
 import type { AuthorizationActor } from "../authorization.js";
@@ -479,6 +480,9 @@ export function saasOffboardingService(
           }).tick({ limit: 50, companyId: operation.companyId });
         }
         try {
+          // PRIV-R5. Close warm owners and erase the company's controller
+          // durable session folders; an unstopped session Run keeps this pending.
+          await eraseCompanyNativeDurableSessions(db, operation.companyId);
           await assertCompanyManagedOpenCodeRuntimeDataErased(db, operation.companyId, operation.id);
         } catch (error) {
           if (!(error && typeof error === "object" && "status" in error && error.status === 409)) throw error;

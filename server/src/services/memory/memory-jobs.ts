@@ -739,9 +739,16 @@ export function memoryJobService(
           throw conflict("Memory job lease was lost");
       }
       const { closeWarmNativeSessionsForRun } = await import("../native-runtime/native-session-executor.js");
-      const stop = await closeWarmNativeSessionsForRun({ companyId: job.companyId, runId: source.runId,
-        reason: source.companyPurgeOperationId ? "company offboarding" : "source erasure" });
-      if (stop.busy || stop.failed) throw new Error("Managed Native provider Stop is still pending for run asset erasure");
+      const { nativeDurableSessionTargetsForRun } = await import("../native-runtime/native-durable-session-erasure.js");
+      // PRIV-R5. A warm owner of the same session (opened by any of its Runs)
+      // writes into the durable folder this job removes; close it first.
+      const sessionRunIds = [...(await nativeDurableSessionTargetsForRun(db, job.companyId, source.runId))?.values() ?? []]
+        .flatMap(ids => [...ids]);
+      for (const runId of new Set([source.runId as string, ...sessionRunIds])) {
+        const stop = await closeWarmNativeSessionsForRun({ companyId: job.companyId, runId,
+          reason: source.companyPurgeOperationId ? "company offboarding" : "source erasure" });
+        if (stop.busy || stop.failed) throw new Error("Managed Native provider Stop is still pending for run asset erasure");
+      }
       if (currentRemoteLocator) {
         if (!options.eraseRemoteNativeRuntimeAsset)
           throw new Error("Managed remote Native runtime asset erasure is unavailable");
@@ -756,12 +763,13 @@ export function memoryJobService(
             !ready.removalReceipt || nativeSha256(ready.removalReceipt) !== nativeSha256(remoteReceipt))
           throw conflict("Managed remote Native runtime asset receipt lost its current MemoryJob authority");
       }
-      await eraseNativeRuntimeAssets(db, { companyId: job.companyId, runId: source.runId }, source.legacyDigests as string[],
+      const erased = await eraseNativeRuntimeAssets(db, { companyId: job.companyId, runId: source.runId }, source.legacyDigests as string[],
         { ...(typeof source.companyPurgeOperationId === "string" ? { companyPurgeOperationId: source.companyPurgeOperationId } : {}),
           ...(remoteReceipt ? { remoteAssetLocator: source.remoteAssetLocator as RemoteRuntimeAssetLocator, remoteAssetReceipt: remoteReceipt,
             remoteJobClaim: { jobId: job.id, jobAttemptNumber: job.attemptNumber, executionOwnerId: ownerId } } : {}) });
       return { summary: "Erased the native run's generated runtime assets.", result: { processedRunCount: 1,
-        ...(remoteReceipt ? { remoteRuntimeAssetRemovalReceipt: remoteReceipt } : {}) } };
+        ...(remoteReceipt ? { remoteRuntimeAssetRemovalReceipt: remoteReceipt } : {}),
+        ...(erased.durableSessionErasure ? { nativeDurableSessionErasure: erased.durableSessionErasure } : {}) } };
     }
     if (source.kind === "skill_version_file_erasure") {
       if (typeof source.skillId !== "string" || typeof source.versionId !== "string" ||

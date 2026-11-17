@@ -1,5 +1,6 @@
 import { assertCompanyManagedSecretErasureComplete } from "../secrets.js";
 import { assertCompanyManagedOpenCodeRuntimeDataErased, enqueueCompanyRuntimeAssetErasure } from "../native-runtime/runtime-asset-retention.js";
+import { eraseCompanyNativeDurableSessionsInTransaction } from "../native-runtime/native-durable-session-erasure.js";
 import { enqueueSkillVersionFileErasure } from "../learning/skill-file-erasure.js";
 import { and, eq, inArray, is, sql, type SQL } from "drizzle-orm";
 import { PgTable, getTableConfig } from "drizzle-orm/pg-core";
@@ -52,6 +53,10 @@ export async function purgeCompanyContent(
     await companyTransferRunService.assertCompanyExportErasureComplete(tx as unknown as Db, companyId);
     await assertCompanyManagedSecretErasureComplete(tx, companyId);
     await assertCompanyManagedOpenCodeRuntimeDataErased(tx as unknown as Db, companyId, options.operationId);
+    // PRIV-R5. Controller durable session folders are keyed by a scope digest,
+    // not by company. Remove every folder of this company's sessions while the
+    // Run rows that bind them still exist, and prove none remains.
+    await eraseCompanyNativeDurableSessionsInTransaction(tx as unknown as Db, companyId);
     let platformModelFunding: Record<string, string> | undefined;
     let nativeConversationModelFunding: Record<string, string> | undefined;
     const [hasFunding] = await tx.select({ id: orchestrationCompanyPurposeBudgets.id })

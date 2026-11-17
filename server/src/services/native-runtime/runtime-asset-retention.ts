@@ -14,6 +14,7 @@ import { SANDBOX_HOST_COMMAND, sandboxHostReplySchema, sandboxHostRequestSchema 
 import { nativeSha256 } from "./canonical.js";
 import { remoteExecutionHasStopped } from "../remote-execution-termination.js";
 import { REMOTE_ASSET_ERASURE_ERRORS } from "./runtime-asset-erasure-errors.js";
+import { eraseNativeDurableSessionForRun } from "./native-durable-session-erasure.js";
 
 export type NativeRuntimeAssetOwner = { companyId: string; runId: string };
 const digestPattern = /^[a-f0-9]{64}$/;
@@ -1275,7 +1276,7 @@ export async function eraseNativeRuntimeAssets(db: Db, owner: NativeRuntimeAsset
     legacyDigests.some(digest => !digestPattern.test(digest)) ||
     (authorization?.companyPurgeOperationId !== undefined && !uuidPattern.test(authorization.companyPurgeOperationId)))
     throw new Error("Invalid native runtime asset erasure binding");
-  await db.transaction(async rawTx => {
+  return await db.transaction(async rawTx => {
     const tx = rawTx as unknown as Db;
     await lockAnalyticalCompany(tx, owner.companyId); await lockMemoryPrivacy(tx, owner.companyId);
     let companyPurgeAuthorized = false;
@@ -1387,6 +1388,11 @@ export async function eraseNativeRuntimeAssets(db: Db, owner: NativeRuntimeAsset
       await assertManagedOpenCodeCarryDescendantStopped(tx, descendant, homeExists);
       if (homeExists) carryHomes.push(home);
     }
+    // PRIV-R5 (CE-15). The controller's durable folder of this Run's session
+    // holds its committed control-plane events, runner/provider state and
+    // continuity-break archives for every Run of the session. It is removed
+    // only after every such Run has stopped; otherwise the job stays pending.
+    const durableSessionErasure = run ? await eraseNativeDurableSessionForRun(tx, owner.companyId, owner.runId) : null;
     try {
       await assertRuntimeStorageDirectories(runRoot, storageRoot);
       await removeRuntimeStorageTree(runRoot);
@@ -1404,6 +1410,7 @@ export async function eraseNativeRuntimeAssets(db: Db, owner: NativeRuntimeAsset
       if (erased === null)
         throw conflict("Native legacy runtime asset is still retained by a current Run profile");
     }
+    return { durableSessionErasure };
   });
 }
 
