@@ -4569,18 +4569,23 @@ export function runtimeControlService(
           modelClaims.exp * 1000 >= Date.now() && Date.parse(modelCredential.expiresAt) <= modelClaims.exp * 1000 &&
           !!modelAttempt && !!modelPlan && modelPlan.issueId === source.run.nativeIssueId;
         let reviewCredentialValid = false;
-        if (reviewBinding && modelCredential && source.run.responsibleUserId && source.run.agentId) {
-          const current = await options.workerModels?.issueForReviewRun({ companyId: claims.company_id,
-            agentId: source.run.agentId, runId: source.run.id, responsibleUserId: source.run.responsibleUserId });
-          const currentClaims = current ? verifyRuntimeToolsToken(current.token, "review_model") : null;
-          reviewCredentialValid = !!currentClaims?.review_model && !!source.capability.modelBrokerProviderProfile &&
-            exactProfileAndEnvironment && inputAndExpiryValid && reviewModelClaims?.company_id === claims.company_id &&
+        if (reviewBinding && reviewModelClaims && modelCredential && source.run.responsibleUserId && source.run.agentId) {
+          // MS1h4. Read the current review binding in this transaction. Re-minting
+          // through issueForReviewRun ran its run write gate on the gateway's own
+          // connection, which upserts the entitlement snapshot this transaction
+          // already upserted in assertTaskExecutionContext, and waited on it
+          // forever. The read is limited to the Run this transaction gated.
+          const reviewClaimsBound = reviewModelClaims.company_id === claims.company_id &&
             reviewModelClaims.sub === source.run.agentId && reviewModelClaims.run_id === source.run.id &&
-            reviewModelClaims.responsible_user_id === source.run.responsibleUserId && reviewModelClaims.exp * 1000 >= Date.now() &&
+            reviewModelClaims.responsible_user_id === source.run.responsibleUserId;
+          const current = reviewClaimsBound ? await options.workerModels?.currentReviewBinding(tx, reviewModelClaims,
+            { companyId: claims.company_id, agentId: source.run.agentId, runId: source.run.id }) : null;
+          reviewCredentialValid = !!current?.binding && !!source.capability.modelBrokerProviderProfile &&
+            exactProfileAndEnvironment && inputAndExpiryValid && reviewClaimsBound && reviewModelClaims.exp * 1000 >= Date.now() &&
             Date.parse(modelCredential.expiresAt) <= reviewModelClaims.exp * 1000 && reviewBinding.reviewerAgentId === source.run.agentId &&
             reviewBinding.reviewerRunId === source.run.id && reviewBinding.issueId === source.run.nativeIssueId &&
             reviewBinding.executionManifestId === source.manifest.id &&
-            nativeSha256(reviewBinding) === nativeSha256(currentClaims.review_model);
+            nativeSha256(reviewBinding) === nativeSha256(current.binding);
         }
         let conversationCredentialValid = false;
         let conversationCredentialChecks: Record<string, boolean> | null = null;
