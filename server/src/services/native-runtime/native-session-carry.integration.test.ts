@@ -13,8 +13,10 @@ import { removeRuntimeStorageTree } from "../runtime-skill-cache.js";
 import {
   assertCompanyManagedOpenCodeRuntimeDataErased,
   carryManagedOpenCodeSessionData,
+  continueManagedOpenCodeSessionAfterHandoff,
   enqueueCompanyManagedOpenCodeRuntimeErasure,
   eraseNativeRuntimeAssets,
+  managedOpenCodeRemoteRuntimeDirectory,
   managedOpenCodeRuntimeDirectory,
   nativeRuntimeAssetsRoot,
 } from "./runtime-asset-retention.js";
@@ -337,6 +339,86 @@ const support = await getEmbeddedPostgresTestSupport();
       expect(await seeded.carry()).toEqual({ ok: false, refusal: "target_conflict" });
       expect(await fs.readFile(path.join(seeded.target, "data", "opencode", "opencode.db"), "utf8"))
         .toBe("Run 2 own transcript provider database");
+    });
+  });
+
+  // PRIV-R1. On a remote Sandbox the managed provider home is the session
+  // tree's own `provider-opencode` (erased with that tree), so Run 2 resumes
+  // it in place under the carry's admission; nothing is copied anywhere.
+  describe("remote in-place resume (PRIV-R1)", () => {
+    const remoteCwd = "/sandbox/workspace";
+    async function seedRemote(options: Parameters<typeof seedCarry>[0] = {}) {
+      const seeded = await seedCarry(options);
+      const runtimeDirectory = managedOpenCodeRemoteRuntimeDirectory({ remoteCwd, normalizedSessionId: seeded.sessionId });
+      const resume = (overrides: Partial<typeof seeded.handoff> | null = {},
+        remote: { remoteCwd: string; runtimeDirectory: string } | null = { remoteCwd, runtimeDirectory }) =>
+        continueManagedOpenCodeSessionAfterHandoff(db, { companyId: seeded.companyId, runId: seeded.run2,
+          handoff: overrides === null ? null : { ...seeded.handoff, ...overrides }, remote });
+      return { ...seeded, runtimeDirectory, resume };
+    }
+    async function expectNothingCopied(seeded: Awaited<ReturnType<typeof seedRemote>>) {
+      expect(await exists(path.dirname(seeded.target))).toBe(false);
+      expect(await fs.readFile(path.join(seeded.source, "data", "opencode", "opencode.db"), "utf8"))
+        .toBe("Run 1 transcript provider database");
+    }
+
+    it("admits an in-place resume of the session tree's provider home and copies nothing on the controller", async () => {
+      const seeded = await seedRemote();
+      expect(await seeded.resume()).toEqual({ ok: true, status: "resumed_in_place" });
+      await expectNothingCopied(seeded);
+      // A real remote Run 1 wrote nothing on the controller: the carry would
+      // refuse there, the in-place resume does not depend on it.
+      await removeRuntimeStorageTree(managedOpenCodeRuntimeDirectory({ companyId: seeded.companyId, runId: seeded.run1 }));
+      expect(await seeded.resume()).toEqual({ ok: true, status: "resumed_in_place" });
+      expect(await exists(path.dirname(seeded.target))).toBe(false);
+    });
+
+    it("applies the carry's handoff, scope and erasure refusals before an in-place resume", async () => {
+      const seeded = await seedRemote();
+      expect(await seeded.resume(null)).toEqual({ ok: false, refusal: "no_handoff" });
+      expect(await seeded.resume({ normalizedSessionId: randomUUID() })).toEqual({ ok: false, refusal: "no_handoff" });
+      const run3 = await insertRun({ ...seeded, createdAt: new Date(seeded.base + 120_000), status: "running" });
+      expect(await seeded.resume({ currentEnvironmentLeaseId: await lease(seeded.companyId, run3, seeded.issueId) }))
+        .toEqual({ ok: false, refusal: "no_handoff" });
+      const otherTask = await insertRun({ ...seeded, issueId: seeded.otherIssueId, createdAt: new Date(seeded.base) });
+      expect(await seeded.resume({ priorRunId: otherTask })).toEqual({ ok: false, refusal: "scope_mismatch" });
+      const otherAgent = await insertRun({ ...seeded, agentId: seeded.otherAgentId, createdAt: new Date(seeded.base) });
+      expect(await seeded.resume({ priorRunId: otherAgent })).toEqual({ ok: false, refusal: "scope_mismatch" });
+      const live = await seedRemote({ priorStatus: "running" });
+      expect(await live.resume()).toEqual({ ok: false, refusal: "scope_mismatch" });
+      await db.insert(memoryJobs).values({ companyId: seeded.companyId, operationType: "retention", status: "queued",
+        jobKey: `runtime-asset-erasure:v1:${seeded.run1}`,
+        sourceRefJson: { kind: "runtime_asset_erasure", runId: seeded.run1, legacyDigests: [] } });
+      expect(await seeded.resume()).toEqual({ ok: false, refusal: "prior_erasure_pending" });
+      const earlier = await seedRemote();
+      const run0 = await insertRun({ ...earlier, createdAt: new Date(earlier.base - 60_000) });
+      await db.insert(memoryJobs).values({ companyId: earlier.companyId, operationType: "retention", status: "failed",
+        finishedAt: new Date(), jobKey: `runtime-asset-erasure:v1:${run0}`,
+        sourceRefJson: { kind: "runtime_asset_erasure", runId: run0, legacyDigests: [] } });
+      expect(await earlier.resume()).toEqual({ ok: false, refusal: "prior_erasure_pending" });
+      for (const refused of [seeded, live, earlier]) await expectNothingCopied(refused);
+    });
+
+    it("refuses an in-place home that is not this session's tree on the current lease's remoteCwd", async () => {
+      const seeded = await seedRemote();
+      const controllerHome = managedOpenCodeRuntimeDirectory({ companyId: seeded.companyId, runId: seeded.run2 });
+      const otherCwd = "/sandbox/other-workspace";
+      for (const remote of [
+        { remoteCwd, runtimeDirectory: controllerHome },
+        { remoteCwd, runtimeDirectory: managedOpenCodeRemoteRuntimeDirectory({ remoteCwd, normalizedSessionId: randomUUID() }) },
+        { remoteCwd, runtimeDirectory: path.posix.join(path.posix.dirname(seeded.runtimeDirectory), "filesystem", "opencode") },
+        { remoteCwd: otherCwd, runtimeDirectory: managedOpenCodeRemoteRuntimeDirectory({ remoteCwd: otherCwd,
+          normalizedSessionId: seeded.sessionId }) },
+        { remoteCwd: "sandbox/workspace", runtimeDirectory: seeded.runtimeDirectory },
+      ]) expect(await seeded.resume({}, remote)).toEqual({ ok: false, refusal: "path_escape" });
+      await expectNothingCopied(seeded);
+    });
+
+    it("keeps the controller-local carry when there is no remote session tree", async () => {
+      const seeded = await seedRemote();
+      expect(await seeded.resume({}, null)).toMatchObject({ ok: true, status: "carried", entryCount: 7 });
+      expect(await fs.readFile(path.join(seeded.target, "data", "opencode", "opencode.db"), "utf8"))
+        .toBe("Run 1 transcript provider database");
     });
   });
 

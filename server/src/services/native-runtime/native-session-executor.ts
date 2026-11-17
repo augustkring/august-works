@@ -41,9 +41,10 @@ import { nativeConformanceAuthorityArchiveGrantForUse, nativeConformanceColdHand
 export { REMOTE_RUNNER_CHILD_LAUNCH_SCRIPT };
 import { hasRemoteTerminationReceipt, remoteLeaseCleanupScope } from "../remote-execution-termination.js";
 import {
-  carryManagedOpenCodeSessionData,
+  continueManagedOpenCodeSessionAfterHandoff,
   createRemoteRuntimeAssetLocator,
   isRemoteRuntimeAssetLocator,
+  managedOpenCodeRemoteRuntimeDirectory,
   managedOpenCodeRuntimeDirectory,
   remoteRuntimeAssetLocatorDigest,
   type RemoteRuntimeAssetLocator,
@@ -15263,6 +15264,15 @@ async function createRunnerdBackendWithinSessionClaim(
   const remoteSessionRoot = remoteRuntimeRoot
     ? posix.join(remoteRuntimeRoot, "sessions", remoteSessionDigest)
     : null;
+  // PRIV-R1: a remote Sandbox writes managed OpenCode data inside the exact
+  // session tree its locator names, so the remote erasure of that tree removes
+  // it. The controller's per-Run path is for a local runner only.
+  const managedOpenCodeRemoteHome = managedOpenCodeDataHome && remoteTarget
+    ? managedOpenCodeRemoteRuntimeDirectory({ remoteCwd: remoteTarget.remoteCwd,
+        normalizedSessionId: nativeSessionKey(input.execution) })
+    : null;
+  if (managedOpenCodeRemoteHome && (!remoteSessionRoot || posix.dirname(managedOpenCodeRemoteHome) !== remoteSessionRoot))
+    throw new Error("native_managed_opencode_remote_home_outside_erased_tree");
   const nativeOwnedHarnessState = (input.conversationMode === true || input.prepareManagedWorkspace !== undefined || input.providerConformanceProbe === true) &&
     remoteTarget?.transport === "sandbox" && input.execution.provider.kind === "opencode" &&
     input.execution.session.driverKind === "opencode_server";
@@ -15781,15 +15791,20 @@ async function createRunnerdBackendWithinSessionClaim(
     coldLeaseHandoffVerification.refusal !== "not_applicable")
     throw new Error(`native_cold_lease_handoff_${coldLeaseHandoffVerification.refusal}`);
   const coldLeaseHandoff = coldLeaseHandoffVerification?.ok ? coldLeaseHandoffVerification.evidence : null;
-  // CONF15-R (A): the managed OpenCode data home is per Run. Only after the
-  // verified handoff above, carry Run 1's exact session data into this Run's
-  // own folder (digest-checked); Run 1's erasure cascades to this copy.
+  // CONF15-R (A): only after the verified handoff above may this Run continue
+  // the prior Run's managed OpenCode session. A local runner carries Run 1's
+  // exact per-Run data into its own folder (Run 1's erasure cascades to it);
+  // a remote Sandbox (PRIV-R1) resumes the session tree's own provider home in
+  // place under the same admission, and the remote session-tree erasure
+  // removes it.
   if (coldLeaseHandoff && managedOpenCodeDataHome) {
-    const carried = await carryManagedOpenCodeSessionData(input.db, {
+    const carried = await continueManagedOpenCodeSessionAfterHandoff(input.db, {
       companyId: input.execution.binding.companyId, runId: input.execution.binding.runId,
       handoff: { priorRunId: coldLeaseHandoff.priorIdentity.runId,
         normalizedSessionId: coldLeaseHandoff.priorIdentity.normalizedSessionId,
         currentEnvironmentLeaseId: coldLeaseHandoff.currentEnvironmentLeaseId },
+      remote: managedOpenCodeRemoteHome && remoteTarget
+        ? { remoteCwd: remoteTarget.remoteCwd, runtimeDirectory: managedOpenCodeRemoteHome } : null,
     });
     if (!carried.ok) throw new Error(`native_session_carry_${carried.refusal}`);
   }
@@ -17750,7 +17765,7 @@ async function createRunnerdBackendWithinSessionClaim(
         resumeWorkingDirectory: runnerExecution.workspace.cwd,
         externallySandboxed: remoteTarget?.transport === "sandbox",
         opencodeRuntimeDirectory: managedOpenCodeDataHome
-          ? managedOpenCodeRuntimeDirectory({ companyId: input.execution.binding.companyId,
+          ? managedOpenCodeRemoteHome ?? managedOpenCodeRuntimeDirectory({ companyId: input.execution.binding.companyId,
               runId: input.execution.binding.runId })
           : remoteRunnerFilesystemRoot
             ? posix.join(remoteRunnerFilesystemRoot, "opencode")

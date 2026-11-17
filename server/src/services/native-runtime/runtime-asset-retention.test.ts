@@ -18,6 +18,8 @@ import {
   createRemoteRuntimeAssetLocator,
   isRemoteRuntimeAssetLocator,
   isRemoteRuntimeAssetRemovalReceipt,
+  managedOpenCodeRemoteRuntimeDirectory,
+  managedOpenCodeRuntimeDirectory,
   remoteRuntimeAssetErasureLeaseIsCurrent,
   remoteRuntimeAssetLocatorDigest,
   remoteRuntimeAssetPathDigest,
@@ -130,6 +132,28 @@ describe("remote Native runtime asset erasure binding", () => {
     expect(isRemoteRuntimeAssetLocator(replacement, locator)).toBe(true);
     expect(remoteRuntimeAssetLocatorDigest(replacement)).not.toBe(remoteRuntimeAssetLocatorDigest(locator));
     expect(isRemoteRuntimeAssetLocator({ ...locator, arbitraryPath: "/tmp/other" }, locator)).toBe(false);
+  });
+
+  // PRIV-R1. A remote Sandbox's managed OpenCode home must be inside the one
+  // tree the locator names, removed and receipted by the remote erasure.
+  it("places a remote managed OpenCode home as a direct child of the locator's erased session tree (PRIV-R1)", () => {
+    const { locator } = fixture();
+    const remoteCwd = "/workspace/safe-fixture", sessionId = randomUUID();
+    const sameSession = createRemoteRuntimeAssetLocator({ ...locator, normalizedSessionId: sessionId, remoteCwd });
+    const home = managedOpenCodeRemoteRuntimeDirectory({ remoteCwd, normalizedSessionId: sessionId });
+    const tree = `${remoteCwd}/.paperclip-runtime/paperclip-runner/${sameSession.relativePath}`;
+    expect(home).toBe(`${tree}/provider-opencode`);
+    // Never the controller's per-Run path, and never inside the controller-local
+    // failover backup roots (`runner`, `filesystem/opencode`).
+    expect(home).not.toBe(managedOpenCodeRuntimeDirectory({ companyId: locator.companyId, runId: locator.runId }));
+    expect(home.startsWith(`${tree}/runner/`) || home.startsWith(`${tree}/filesystem/`)).toBe(false);
+    // Another session is another tree; the homes never alias.
+    expect(managedOpenCodeRemoteRuntimeDirectory({ remoteCwd, normalizedSessionId: randomUUID() }).startsWith(`${tree}/`))
+      .toBe(false);
+    for (const invalid of [{ remoteCwd: "workspace/relative", normalizedSessionId: sessionId },
+      { remoteCwd: ` ${remoteCwd}`, normalizedSessionId: sessionId }, { remoteCwd, normalizedSessionId: "" },
+      { remoteCwd, normalizedSessionId: ` ${sessionId}` }, { remoteCwd: `${remoteCwd}\0`, normalizedSessionId: sessionId }])
+      expect(() => managedOpenCodeRemoteRuntimeDirectory(invalid)).toThrow("Invalid remote managed OpenCode runtime owner");
   });
 
   it("accepts only a locator-bound process-stop, exact-target, post-delete receipt", () => {
@@ -358,6 +382,68 @@ describe("remote Native runtime asset erasure binding", () => {
         join(sessionRoot, "filesystem", "context", "skills", "0-immutable-skill"),
         join(sessionRoot, "filesystem", "context", "skills", "0-immutable-skill", "references")])
         await chmod(directory, 0o700).catch(() => undefined);
+      await rm(root, { recursive: true, force: true });
+    }
+  });
+
+  // PRIV-R1. The real fixed remote eraser removes the managed OpenCode home
+  // the executor now hands a remote Sandbox, with the rest of the session
+  // tree. Data at the old unmapped controller-shaped path, outside the tree,
+  // is exactly what it never reaches.
+  it.skipIf(process.platform !== "linux")("removes the remote managed OpenCode provider home with its session tree (PRIV-R1)", async () => {
+    const root = await mkdtemp(join(tmpdir(), "native-runtime-provider-erasure-"));
+    const taskRoot = join(root, "task");
+    const runId = randomUUID(), runnerInstanceId = randomUUID(), environmentLeaseId = randomUUID();
+    const providerLeaseId = randomUUID(), normalizedSessionId = randomUUID(), companyId = randomUUID();
+    const digest = createHash("sha256").update(normalizedSessionId).digest("hex");
+    const sessionRoot = join(taskRoot, ".paperclip-runtime", "paperclip-runner", "sessions", digest);
+    const runnerRoot = join(sessionRoot, "runner");
+    const providerHome = managedOpenCodeRemoteRuntimeDirectory({ remoteCwd: taskRoot, normalizedSessionId });
+    const providerSession = join(providerHome, normalizedSessionId);
+    // The pre-fix placement: the controller-shaped absolute path, created on
+    // the Sandbox filesystem outside the session tree.
+    const unmappedSession = join(root, "instance", "runtime-context-assets", "runs", companyId, runId,
+      "provider-opencode", normalizedSessionId);
+    const runner = spawn(process.execPath, ["-e", "setInterval(() => {}, 1000)", "--", "--runner-id", runnerInstanceId],
+      { detached: true, stdio: "ignore" });
+    try {
+      if (!runner.pid) throw new Error("test_runner_pid_unavailable");
+      expect(providerHome.startsWith(`${sessionRoot}/`)).toBe(true);
+      for (const session of [providerSession, unmappedSession]) {
+        await mkdir(join(session, "data", "opencode", "storage", "session"), { recursive: true, mode: 0o700 });
+        await mkdir(join(session, "config", "opencode"), { recursive: true, mode: 0o700 });
+        await writeFile(join(session, "workspace"), `${taskRoot}\n`, { mode: 0o600 });
+        await writeFile(join(session, "data", "opencode", "opencode.db"), "customer transcript", { mode: 0o600 });
+        await writeFile(join(session, "data", "opencode", "storage", "session", "ses_fixture.json"), "{}", { mode: 0o644 });
+        await writeFile(join(session, "config", "opencode", "opencode.json"), "per-launch bridge secret", { mode: 0o400 });
+        await chmod(join(session, "data", "opencode", "storage"), 0o500);
+      }
+      await mkdir(runnerRoot, { recursive: true, mode: 0o700 });
+      const statText = await readFile(`/proc/${runner.pid}/stat`, "utf8");
+      const statEnd = statText.lastIndexOf(") ");
+      const processTicks = statText.slice(statEnd + 2).trim().split(/\s+/)[19];
+      const bootId = (await readFile("/proc/sys/kernel/random/boot_id", "utf8")).trim();
+      if (statEnd < 0 || !/^\d+$/.test(processTicks ?? "") || !/^[-a-f0-9]+$/i.test(bootId))
+        throw new Error("test_runner_fingerprint_unavailable");
+      const startedAt = new Date().toISOString();
+      await writeFile(join(runnerRoot, "runner-state.json"),
+        JSON.stringify({ runId, runnerInstanceId, environmentLeaseId, normalizedSessionId }) + "\n", { mode: 0o600 });
+      await writeFile(join(runnerRoot, "runner-process.identity"),
+        `${randomUUID()}\n${runner.pid}\n${startedAt}\n${runnerInstanceId}\nlinux:${bootId}:${processTicks}\n`, { mode: 0o600 });
+      const erased = runEraser(["-c", REMOTE_NATIVE_RUNTIME_ASSET_ERASURE_SCRIPT, "paperclip-native-runtime-asset-erasure",
+        taskRoot, digest, runId, runnerInstanceId, environmentLeaseId, providerLeaseId, digest, String(runner.pid), startedAt,
+        REMOTE_RUNNER_FAILED_IDENTITY_CLEANUP_SCRIPT, REMOTE_RUNNER_IDENTITY_CHECK_SCRIPT], { encoding: "utf8", timeout: 15_000 });
+      expect(erased.status, JSON.stringify({ stderr: erased.stderr, stdout: erased.stdout })).toBe(0);
+      expect(erased.stdout.trim().split("\n")).toHaveLength(7);
+      expect(await access(providerHome).then(() => true, () => false)).toBe(false);
+      expect(await access(sessionRoot).then(() => true, () => false)).toBe(false);
+      expect(await readFile(join(unmappedSession, "data", "opencode", "opencode.db"), "utf8")).toBe("customer transcript");
+    } finally {
+      if (runner.exitCode === null && runner.signalCode === null) {
+        try { process.kill(-runner.pid!, "SIGKILL"); } catch { /* runner already stopped */ }
+      }
+      for (const session of [providerSession, unmappedSession])
+        await chmod(join(session, "data", "opencode", "storage"), 0o700).catch(() => undefined);
       await rm(root, { recursive: true, force: true });
     }
   });

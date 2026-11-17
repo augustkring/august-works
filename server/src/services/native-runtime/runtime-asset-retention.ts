@@ -597,6 +597,24 @@ export function managedOpenCodeRuntimeDirectory(owner: NativeRuntimeAssetOwner) 
   return path.join(nativeRuntimeAssetsRoot(owner), "provider-opencode");
 }
 
+/**
+ * PRIV-R1. On a remote Sandbox the managed OpenCode provider home is a
+ * direct child of the exact remote session tree a run's locator names
+ * (`remoteRuntimeAssetRelativePath`). The one remote erasure that removes
+ * `sessions/<digest>` and proves its absence therefore removes this data too.
+ * The controller path above names a location outside that tree on a real
+ * Sandbox, so it is never handed to a remote process. It is a sibling of
+ * `runner` and `filesystem`, outside the controller-local failover backup
+ * (`runner` and `filesystem/opencode` only).
+ */
+export function managedOpenCodeRemoteRuntimeDirectory(input: { remoteCwd: string; normalizedSessionId: string }) {
+  if (!path.posix.isAbsolute(input.remoteCwd) || input.remoteCwd !== input.remoteCwd.trim() || input.remoteCwd.includes("\0") ||
+    !input.normalizedSessionId.trim() || input.normalizedSessionId !== input.normalizedSessionId.trim())
+    throw new Error("Invalid remote managed OpenCode runtime owner");
+  return path.posix.join(input.remoteCwd, ".paperclip-runtime", "paperclip-runner",
+    remoteRuntimeAssetRelativePath(sha256(input.normalizedSessionId)), "provider-opencode");
+}
+
 const TERMINAL_RUN_STATUSES = ["succeeded", "interrupted", "failed", "cancelled", "timed_out"];
 
 /** CONF15-R (A). Closed refusal codes of the cross-Run carry; the executor
@@ -683,6 +701,86 @@ async function assertCarryDirectoryChain(directory: string, create = false) {
   }
 }
 
+/** The admission shared by the carry and the remote in-place resume: the
+ * privacy locks taken shared in the canonical order (analytical, then
+ * Memory), the handoff bound to this Run, lease and session, the prior Run
+ * in the same company, Agent, Task and session, and no erasure job of the
+ * prior Run or an earlier Run of the session in any state. */
+async function admitManagedOpenCodeSessionHandoff(tx: Db, input: { companyId: string; runId: string },
+  handoff: NativeSessionCarryHandoff) {
+  await lockAnalyticalCompany(tx, input.companyId, "read"); await lockMemoryPrivacy(tx, input.companyId, "read");
+  const [current] = await tx.select().from(heartbeatRuns).where(and(
+    eq(heartbeatRuns.companyId, input.companyId), eq(heartbeatRuns.id, input.runId)));
+  const [currentLease] = current ? await tx.select({ id: environmentLeases.id, metadata: environmentLeases.metadata })
+    .from(environmentLeases).where(and(
+      eq(environmentLeases.companyId, current.companyId), eq(environmentLeases.id, handoff.currentEnvironmentLeaseId),
+      eq(environmentLeases.heartbeatRunId, current.id))) : [];
+  // The handoff must be the one accepted for this Run and this session.
+  if (!current || !currentLease || !current.nativeSessionId || handoff.normalizedSessionId !== current.nativeSessionId)
+    throw new NativeSessionCarryRefused("no_handoff");
+  const [prior] = await tx.select().from(heartbeatRuns).where(eq(heartbeatRuns.id, handoff.priorRunId));
+  if (!prior || prior.companyId !== current.companyId || prior.agentId !== current.agentId ||
+    !prior.nativeIssueId || prior.nativeIssueId !== current.nativeIssueId ||
+    prior.nativeSessionId !== current.nativeSessionId ||
+    prior.id === current.id || prior.createdAt > current.createdAt || !TERMINAL_RUN_STATUSES.includes(prior.status) ||
+    [prior, current].some(run => run.runtimeMode !== "native" || run.driverKind !== "opencode_server"))
+    throw new NativeSessionCarryRefused("scope_mismatch");
+  const sessionId = current.nativeSessionId;
+  // Any erasure job of Run 1 or of an earlier Run of this session, in any
+  // state, means its bytes are being or have been erased: never reuse them.
+  const earlier = await tx.select({ id: heartbeatRuns.id }).from(heartbeatRuns).where(and(
+    eq(heartbeatRuns.companyId, prior.companyId), eq(heartbeatRuns.agentId, prior.agentId),
+    eq(heartbeatRuns.nativeIssueId, prior.nativeIssueId), eq(heartbeatRuns.nativeSessionId, sessionId),
+    lte(heartbeatRuns.createdAt, prior.createdAt)));
+  const [erasure] = await tx.select({ id: memoryJobs.id }).from(memoryJobs).where(and(
+    eq(memoryJobs.companyId, prior.companyId), sql`${memoryJobs.sourceRefJson}->>'kind'='runtime_asset_erasure'`,
+    inArray(sql<string>`${memoryJobs.sourceRefJson}->>'runId'`, [...new Set([prior.id, ...earlier.map(run => run.id)])])))
+    .limit(1);
+  if (erasure) throw new NativeSessionCarryRefused("prior_erasure_pending");
+  const metadata = currentLease.metadata;
+  return { current, prior, sessionId,
+    currentRemoteCwd: metadata && typeof metadata.remoteCwd === "string" ? metadata.remoteCwd.trim() : "" };
+}
+
+/**
+ * PRIV-R1. Continue a managed OpenCode session after a verified cold lease
+ * handoff. On a remote Sandbox (`remote` set) the provider home is the
+ * session tree's own `provider-opencode`, which Run 2 resumes in place: it is
+ * admitted exactly as a carry is (same locks and refusals) and nothing is
+ * copied, on the controller or remotely. The one remote erasure of
+ * `sessions/<digest>` removes every Run's bytes there; while more than one
+ * Run owns the session, that erasure refuses (`coOwner`) instead of issuing
+ * a partial receipt. Without `remote` the controller-local CONF15-R carry
+ * applies unchanged.
+ */
+export async function continueManagedOpenCodeSessionAfterHandoff(db: Db, input: {
+  companyId: string; runId: string; handoff: NativeSessionCarryHandoff | null;
+  remote: { remoteCwd: string; runtimeDirectory: string } | null;
+}): Promise<NativeSessionCarryResult | { ok: true; status: "resumed_in_place" }> {
+  const remote = input.remote;
+  if (!remote)
+    return carryManagedOpenCodeSessionData(db, { companyId: input.companyId, runId: input.runId, handoff: input.handoff });
+  const handoff = input.handoff;
+  if (!handoff) return { ok: false, refusal: "no_handoff" };
+  try {
+    await db.transaction(async rawTx => {
+      const { sessionId, currentRemoteCwd } = await admitManagedOpenCodeSessionHandoff(rawTx as unknown as Db, input, handoff);
+      // The in-place home must be the exact provider home of this session's
+      // locator-erased tree on the current lease's recorded remoteCwd (the
+      // one the locator digests); any other path escapes the remote erasure.
+      let expected: string | null = null;
+      try { expected = managedOpenCodeRemoteRuntimeDirectory({ remoteCwd: remote.remoteCwd, normalizedSessionId: sessionId }); }
+      catch { expected = null; }
+      if (!expected || currentRemoteCwd !== remote.remoteCwd || remote.runtimeDirectory !== expected)
+        throw new NativeSessionCarryRefused("path_escape");
+    });
+    return { ok: true, status: "resumed_in_place" };
+  } catch (error) {
+    if (error instanceof NativeSessionCarryRefused) return { ok: false, refusal: error.refusal };
+    throw error;
+  }
+}
+
 /**
  * CONF15-R (A) carry. After `verifyNativeColdLeaseHandoff` accepted Run 2's
  * cold lease handoff from Run 1, copy exactly Run 1's managed OpenCode data
@@ -706,34 +804,7 @@ export async function carryManagedOpenCodeSessionData(db: Db, input: {
     if (!handoff) throw new NativeSessionCarryRefused("no_handoff");
     return await db.transaction(async rawTx => {
       const tx = rawTx as unknown as Db;
-      await lockAnalyticalCompany(tx, input.companyId, "read"); await lockMemoryPrivacy(tx, input.companyId, "read");
-      const [current] = await tx.select().from(heartbeatRuns).where(and(
-        eq(heartbeatRuns.companyId, input.companyId), eq(heartbeatRuns.id, input.runId)));
-      const [currentLease] = current ? await tx.select({ id: environmentLeases.id }).from(environmentLeases).where(and(
-        eq(environmentLeases.companyId, current.companyId), eq(environmentLeases.id, handoff.currentEnvironmentLeaseId),
-        eq(environmentLeases.heartbeatRunId, current.id))) : [];
-      // The handoff must be the one accepted for this Run and this session.
-      if (!current || !currentLease || !current.nativeSessionId || handoff.normalizedSessionId !== current.nativeSessionId)
-        throw new NativeSessionCarryRefused("no_handoff");
-      const [prior] = await tx.select().from(heartbeatRuns).where(eq(heartbeatRuns.id, handoff.priorRunId));
-      if (!prior || prior.companyId !== current.companyId || prior.agentId !== current.agentId ||
-        !prior.nativeIssueId || prior.nativeIssueId !== current.nativeIssueId ||
-        prior.nativeSessionId !== current.nativeSessionId ||
-        prior.id === current.id || prior.createdAt > current.createdAt || !TERMINAL_RUN_STATUSES.includes(prior.status) ||
-        [prior, current].some(run => run.runtimeMode !== "native" || run.driverKind !== "opencode_server"))
-        throw new NativeSessionCarryRefused("scope_mismatch");
-      const sessionId = current.nativeSessionId;
-      // Any erasure job of Run 1 or of an earlier Run of this session, in any
-      // state, means its bytes are being or have been erased: never copy them.
-      const earlier = await tx.select({ id: heartbeatRuns.id }).from(heartbeatRuns).where(and(
-        eq(heartbeatRuns.companyId, prior.companyId), eq(heartbeatRuns.agentId, prior.agentId),
-        eq(heartbeatRuns.nativeIssueId, prior.nativeIssueId), eq(heartbeatRuns.nativeSessionId, sessionId),
-        lte(heartbeatRuns.createdAt, prior.createdAt)));
-      const [erasure] = await tx.select({ id: memoryJobs.id }).from(memoryJobs).where(and(
-        eq(memoryJobs.companyId, prior.companyId), sql`${memoryJobs.sourceRefJson}->>'kind'='runtime_asset_erasure'`,
-        inArray(sql<string>`${memoryJobs.sourceRefJson}->>'runId'`, [...new Set([prior.id, ...earlier.map(run => run.id)])])))
-        .limit(1);
-      if (erasure) throw new NativeSessionCarryRefused("prior_erasure_pending");
+      const { current, prior, sessionId } = await admitManagedOpenCodeSessionHandoff(tx, input, handoff);
       const sourceRoot = path.join(managedOpenCodeRuntimeDirectory({ companyId: prior.companyId, runId: prior.id }), sessionId);
       await assertCarryDirectoryChain(sourceRoot);
       const source = await inventoryCarriedSession(sourceRoot, limits);
