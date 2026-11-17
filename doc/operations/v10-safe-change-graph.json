@@ -27085,7 +27085,7 @@
         },
         {
           "path": "server/src/__tests__/company-portability-routes.test.ts",
-          "sha256": "3108c39aac6609ea01ada4ea4584d61db09749d75ca84dca4910af2826d6a68f"
+          "sha256": "bfba97faf3a771ee11ed3f91687ce3b28278cd4c0870be33be3e36d9a80b9c08"
         },
         {
           "path": "server/src/__tests__/company-transfer-runs.test.ts",
@@ -65423,7 +65423,7 @@
       "id": "source:server/src/__tests__/company-portability-routes.test.ts",
       "kind": "current_source_owner",
       "path": "server/src/__tests__/company-portability-routes.test.ts",
-      "sha256": "3108c39aac6609ea01ada4ea4584d61db09749d75ca84dca4910af2826d6a68f",
+      "sha256": "bfba97faf3a771ee11ed3f91687ce3b28278cd4c0870be33be3e36d9a80b9c08",
       "changeIds": [
         "SCR-V10-UNCLASSIFIED-REGISTERED-OWNER"
       ],
