@@ -1,7 +1,7 @@
 import { createHash, randomUUID } from "node:crypto";
 import { realpathSync, statSync } from "node:fs";
 import { spawn, spawnSync } from "node:child_process";
-import { access, chmod, mkdir, mkdtemp, readFile, rm, stat, symlink, writeFile } from "node:fs/promises";
+import { access, chmod, lstat, mkdir, mkdtemp, readdir, readFile, rm, stat, symlink, writeFile } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import { dirname, join } from "node:path";
 import { describe, expect, it, vi } from "vitest";
@@ -25,7 +25,8 @@ import {
   remoteRuntimeAssetPathDigest,
 } from "./runtime-asset-retention.js";
 import { REMOTE_NATIVE_RUNTIME_ASSET_ERASURE_SCRIPT, REMOTE_RUNNER_FAILED_IDENTITY_CLEANUP_SCRIPT,
-  REMOTE_NATIVE_RUNTIME_ASSET_ERASURE_PROBE_SCRIPT, REMOTE_RUNNER_IDENTITY_CHECK_SCRIPT } from "./remote-runner-identity.js";
+  REMOTE_NATIVE_RUNTIME_ASSET_ERASURE_PROBE_SCRIPT, REMOTE_RUNNER_IDENTITY_CHECK_SCRIPT,
+  REMOTE_NATIVE_CONTINUITY_BREAK_ARCHIVE_SCRIPT } from "./remote-runner-identity.js";
 
 function trustedEraserNodePath(): string | null {
   const candidates = [process.env.PAPERCLIP_TEST_ERASER_NODE_PATH, process.execPath,
@@ -444,6 +445,187 @@ describe("remote Native runtime asset erasure binding", () => {
       }
       for (const session of [providerSession, unmappedSession])
         await chmod(join(session, "data", "opencode", "storage"), 0o700).catch(() => undefined);
+      await rm(root, { recursive: true, force: true });
+    }
+  });
+
+  // PRIV-R3. A continuity break archives the remote session inside the tree
+  // the fixed eraser removes. Two breaks and the live tree are then erased by
+  // one real erasure; the pre-fix sibling placement is what it never reaches.
+  it.skipIf(process.platform !== "linux")("archives continuity breaks inside the erased session tree and erases them with it (PRIV-R3)", async () => {
+    const root = await mkdtemp(join(tmpdir(), "native-runtime-continuity-erasure-"));
+    const taskRoot = join(root, "task");
+    const runId = randomUUID(), runnerInstanceId = randomUUID(), environmentLeaseId = randomUUID();
+    const providerLeaseId = randomUUID(), normalizedSessionId = randomUUID();
+    const digest = createHash("sha256").update(normalizedSessionId).digest("hex");
+    const neighborDigest = createHash("sha256").update(randomUUID()).digest("hex");
+    const sessionsRoot = join(taskRoot, ".paperclip-runtime", "paperclip-runner", "sessions");
+    const sessionRoot = join(sessionsRoot, digest);
+    const neighborFile = join(sessionsRoot, neighborDigest, "runner", "runner-state.json");
+    const providerHome = managedOpenCodeRemoteRuntimeDirectory({ remoteCwd: taskRoot, normalizedSessionId });
+    const legacyName = `${digest}.continuity-break-${Date.now()}-${randomUUID()}`;
+    const legacySibling = join(sessionsRoot, legacyName);
+    const archive = (token: string) => spawnSync("sh", ["-c", REMOTE_NATIVE_CONTINUITY_BREAK_ARCHIVE_SCRIPT,
+      "paperclip-runner-continuity-break-archive", sessionRoot, token], { encoding: "utf8", timeout: 15_000 });
+    // One generation of session state: runner state, Codex home, the PRIV-R1
+    // provider home (with an owner-readonly directory), diagnostics, an
+    // authority epoch and a dotfile.
+    const writeGeneration = async (label: string) => {
+      await mkdir(join(sessionRoot, "runner"), { recursive: true, mode: 0o700 });
+      await writeFile(join(sessionRoot, "runner", "runner-state.json"), JSON.stringify({ label }), { mode: 0o600 });
+      await mkdir(join(sessionRoot, "filesystem", "codex-home", "sessions"), { recursive: true, mode: 0o700 });
+      await writeFile(join(sessionRoot, "filesystem", "codex-home", "sessions", "rollout.jsonl"), `transcript ${label}`);
+      await mkdir(join(providerHome, normalizedSessionId, "data", "opencode", "storage"), { recursive: true, mode: 0o700 });
+      await writeFile(join(providerHome, normalizedSessionId, "data", "opencode", "opencode.db"), `transcript ${label}`);
+      await chmod(join(providerHome, normalizedSessionId, "data", "opencode", "storage"), 0o500);
+      await mkdir(join(sessionRoot, "diagnostics"), { recursive: true, mode: 0o700 });
+      await writeFile(join(sessionRoot, "diagnostics", "runnerd.stderr.log"), `diagnostic ${label}`);
+      await mkdir(join(sessionRoot, "authority-epochs", "epoch-fixture"), { recursive: true, mode: 0o700 });
+      await writeFile(join(sessionRoot, "authority-epochs", "epoch-fixture", "runner-state.json"), `epoch ${label}`);
+      await writeFile(join(sessionRoot, ".runner-marker"), label);
+    };
+    const restoreWritable = async (directory: string): Promise<void> => {
+      const entry = await lstat(directory).catch(() => null);
+      if (!entry?.isDirectory()) return;
+      await chmod(directory, 0o700);
+      for (const name of await readdir(directory)) await restoreWritable(join(directory, name));
+    };
+    const runner = spawn(process.execPath, ["-e", "setInterval(() => {}, 1000)", "--", "--runner-id", runnerInstanceId],
+      { detached: true, stdio: "ignore" });
+    try {
+      if (!runner.pid) throw new Error("test_runner_pid_unavailable");
+      await mkdir(dirname(neighborFile), { recursive: true, mode: 0o700 });
+      await writeFile(neighborFile, "neighbor session");
+      // The pre-fix layout: a whole session tree renamed to a sibling.
+      await mkdir(join(legacySibling, "filesystem"), { recursive: true, mode: 0o700 });
+      await writeFile(join(legacySibling, "filesystem", "rollout.jsonl"), "transcript legacy");
+
+      await writeGeneration("A");
+      const firstToken = `${Date.now()}-${randomUUID()}`;
+      const first = archive(firstToken);
+      expect(first.status, first.stderr).toBe(0);
+      // The session root stays; only the archive folder is left at its top.
+      expect(await readdir(sessionRoot)).toEqual(["continuity-breaks"]);
+      const firstArchive = join(sessionRoot, "continuity-breaks", firstToken);
+      expect((await readdir(firstArchive)).sort()).toEqual(
+        [".runner-marker", "authority-epochs", "diagnostics", "filesystem", "provider-opencode", "runner"]);
+      expect(await readFile(join(firstArchive, "provider-opencode", normalizedSessionId, "data", "opencode", "opencode.db"), "utf8"))
+        .toBe("transcript A");
+      // Nothing is created beside the session tree.
+      expect((await readdir(sessionsRoot)).sort()).toEqual([digest, neighborDigest, legacyName].sort());
+
+      await writeGeneration("B");
+      const secondToken = `${Date.now()}-${randomUUID()}`;
+      const second = archive(secondToken);
+      expect(second.status, second.stderr).toBe(0);
+      expect((await readdir(join(sessionRoot, "continuity-breaks"))).sort()).toEqual([firstToken, secondToken].sort());
+      expect(await readFile(join(firstArchive, "filesystem", "codex-home", "sessions", "rollout.jsonl"), "utf8")).toBe("transcript A");
+      expect(await readFile(join(sessionRoot, "continuity-breaks", secondToken, "filesystem", "codex-home", "sessions", "rollout.jsonl"),
+        "utf8")).toBe("transcript B");
+
+      // The replacement session writes its own generation and live runner.
+      await writeGeneration("C");
+      const statText = await readFile(`/proc/${runner.pid}/stat`, "utf8");
+      const statEnd = statText.lastIndexOf(") ");
+      const processTicks = statText.slice(statEnd + 2).trim().split(/\s+/)[19];
+      const bootId = (await readFile("/proc/sys/kernel/random/boot_id", "utf8")).trim();
+      if (statEnd < 0 || !/^\d+$/.test(processTicks ?? "") || !/^[-a-f0-9]+$/i.test(bootId))
+        throw new Error("test_runner_fingerprint_unavailable");
+      const startedAt = new Date().toISOString();
+      await writeFile(join(sessionRoot, "runner", "runner-state.json"),
+        JSON.stringify({ runId, runnerInstanceId, environmentLeaseId, normalizedSessionId }) + "\n", { mode: 0o600 });
+      await writeFile(join(sessionRoot, "runner", "runner-process.identity"),
+        `${randomUUID()}\n${runner.pid}\n${startedAt}\n${runnerInstanceId}\nlinux:${bootId}:${processTicks}\n`, { mode: 0o600 });
+      const filesUnder = async (directory: string) => (await readdir(directory, { recursive: true, withFileTypes: true }))
+        .filter(entry => entry.isFile()).map(entry => join(entry.parentPath, entry.name));
+      const transcriptsUnder = async (directory: string) => {
+        const found: string[] = [];
+        for (const file of await filesUnder(directory))
+          if ((await readFile(file, "utf8")).startsWith("transcript")) found.push(file);
+        return found.sort();
+      };
+      // Three generations (two archived, one live): 6 + 6 + 7 files, 6 transcripts.
+      expect(await filesUnder(sessionRoot)).toHaveLength(19);
+      expect(await transcriptsUnder(sessionRoot)).toHaveLength(6);
+      const erased = runEraser(["-c", REMOTE_NATIVE_RUNTIME_ASSET_ERASURE_SCRIPT, "paperclip-native-runtime-asset-erasure",
+        taskRoot, digest, runId, runnerInstanceId, environmentLeaseId, providerLeaseId, digest, String(runner.pid), startedAt,
+        REMOTE_RUNNER_FAILED_IDENTITY_CLEANUP_SCRIPT, REMOTE_RUNNER_IDENTITY_CHECK_SCRIPT], { encoding: "utf8", timeout: 15_000 });
+      expect(erased.status, JSON.stringify({ stderr: erased.stderr, stdout: erased.stdout })).toBe(0);
+      expect(erased.stdout.trim().split("\n")).toHaveLength(7);
+      // Current and both archived generations are gone with the one tree.
+      expect(await access(sessionRoot).then(() => true, () => false)).toBe(false);
+      expect(await access(firstArchive).then(() => true, () => false)).toBe(false);
+      expect(await readFile(neighborFile, "utf8")).toBe("neighbor session");
+      // The pre-fix sibling placement is outside the erased tree: it is the
+      // only transcript left anywhere under sessions/.
+      expect(await transcriptsUnder(sessionsRoot)).toEqual([join(legacySibling, "filesystem", "rollout.jsonl")]);
+    } finally {
+      if (runner.exitCode === null && runner.signalCode === null) {
+        try { process.kill(-runner.pid!, "SIGKILL"); } catch { /* runner already stopped */ }
+      }
+      await restoreWritable(root).catch(() => undefined);
+      await rm(root, { recursive: true, force: true });
+    }
+  });
+
+  it("refuses an unsafe continuity-break archive without moving any session state (PRIV-R3)", async () => {
+    const root = await mkdtemp(join(tmpdir(), "native-runtime-continuity-refusal-"));
+    const digest = createHash("sha256").update(randomUUID()).digest("hex");
+    const sessionsRoot = join(root, "task", ".paperclip-runtime", "paperclip-runner", "sessions");
+    const sessionRoot = join(sessionsRoot, digest);
+    const token = `${Date.now()}-${randomUUID()}`;
+    const archive = (target: string, archiveToken = token) => spawnSync("sh", ["-c", REMOTE_NATIVE_CONTINUITY_BREAK_ARCHIVE_SCRIPT,
+      "paperclip-runner-continuity-break-archive", target, archiveToken], { encoding: "utf8", timeout: 15_000 });
+    const untouched = async () => {
+      expect(await readFile(join(sessionRoot, "runner", "runner-state.json"), "utf8")).toBe("live state");
+    };
+    try {
+      // An absent session has nothing to archive and creates nothing.
+      await mkdir(sessionsRoot, { recursive: true, mode: 0o700 });
+      expect(archive(sessionRoot).status).toBe(0);
+      expect(await readdir(sessionsRoot)).toEqual([]);
+
+      await mkdir(join(sessionRoot, "runner"), { recursive: true, mode: 0o700 });
+      await writeFile(join(sessionRoot, "runner", "runner-state.json"), "live state");
+      for (const badToken of ["", "../escape", "A1", "token/1", "1 2"]) {
+        expect(archive(sessionRoot, badToken).status).toBe(4);
+        await untouched();
+      }
+      for (const badTarget of [`${sessionRoot}/`, join(sessionsRoot, "not-a-digest"), join(root, "task", "sessions", digest),
+        `${sessionsRoot}/../sessions/${digest}`, `relative/.paperclip-runtime/paperclip-runner/sessions/${digest}`])
+        expect(archive(badTarget).status).toBe(4);
+      await untouched();
+      expect(await readdir(sessionRoot)).toEqual(["runner"]);
+
+      // A symlinked or non-directory archive folder is never followed.
+      const outside = join(root, "outside");
+      await mkdir(outside, { mode: 0o700 });
+      await symlink(outside, join(sessionRoot, "continuity-breaks"));
+      expect(archive(sessionRoot).status).toBe(4);
+      expect(await readdir(outside)).toEqual([]);
+      await untouched();
+      await rm(join(sessionRoot, "continuity-breaks"));
+      await writeFile(join(sessionRoot, "continuity-breaks"), "not a directory");
+      expect(archive(sessionRoot).status).toBe(4);
+      await untouched();
+      await rm(join(sessionRoot, "continuity-breaks"));
+
+      // An existing archive is never merged into.
+      await mkdir(join(sessionRoot, "continuity-breaks", token), { recursive: true, mode: 0o700 });
+      expect(archive(sessionRoot).status).toBe(4);
+      await untouched();
+      await rm(join(sessionRoot, "continuity-breaks"), { recursive: true });
+
+      // A symlinked session root is refused and its target stays in place.
+      const realRoot = join(root, "real-session");
+      await mkdir(join(realRoot, "runner"), { recursive: true, mode: 0o700 });
+      await writeFile(join(realRoot, "runner", "runner-state.json"), "symlink target");
+      const otherDigest = createHash("sha256").update(randomUUID()).digest("hex");
+      await symlink(realRoot, join(sessionsRoot, otherDigest));
+      expect(archive(join(sessionsRoot, otherDigest)).status).toBe(4);
+      expect(await readdir(realRoot)).toEqual(["runner"]);
+      expect(await readFile(join(realRoot, "runner", "runner-state.json"), "utf8")).toBe("symlink target");
+    } finally {
       await rm(root, { recursive: true, force: true });
     }
   });

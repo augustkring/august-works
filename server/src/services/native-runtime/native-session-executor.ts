@@ -34,7 +34,8 @@ import { REMOTE_NATIVE_ERASER_ENV, REMOTE_NATIVE_RUNTIME_ASSET_ERASURE_PROBE_SCR
   REMOTE_RUNNER_FAILED_IDENTITY_CLEANUP_SCRIPT, REMOTE_RUNNER_IDENTITY_CHECK_SCRIPT,
   REMOTE_RUNNER_PROCESS_FINGERPRINT_SCRIPT, REMOTE_NATIVE_SESSION_FENCE_ACQUIRE_SCRIPT,
   REMOTE_NATIVE_SESSION_FENCE_RELEASE_SCRIPT, REMOTE_RUNNER_AUTHORITY_ARCHIVE_SCRIPT,
-  REMOTE_RUNTIME_CONTEXT_READBACK_SCRIPT, REMOTE_RUNTIME_CONTEXT_SWAP_SCRIPT } from "./remote-runner-identity.js";
+  REMOTE_RUNTIME_CONTEXT_READBACK_SCRIPT, REMOTE_RUNTIME_CONTEXT_SWAP_SCRIPT,
+  REMOTE_NATIVE_CONTINUITY_BREAK_ARCHIVE_SCRIPT } from "./remote-runner-identity.js";
 import { nativeConformanceAuthorityArchiveGrantForUse, nativeConformanceColdHandoffArchiveGrant,
   readNativeConformanceAuthorityArchiveGrant, recordNativeConformanceAuthorityArchiveGrant,
   revokeNativeConformanceAuthorityArchiveGrant } from "./native-conformance-authority-archive.js";
@@ -17488,15 +17489,18 @@ async function createRunnerdBackendWithinSessionClaim(
       if (existsSync(source)) renameSync(source, resolve(archiveRoot, name));
     }
     if (remoteCommandRunner && remoteSessionRoot) {
-      const escapedSource = remoteSessionRoot.replaceAll("'", "'\\''");
-      const archivedRemote = `${remoteSessionRoot}.continuity-break-${archiveToken}`;
-      const escapedArchive = archivedRemote.replaceAll("'", "'\\''");
+      // PRIV-R3: archive inside the session tree the remote erasure removes
+      // (sessions/<digest>/continuity-breaks/<token>), never as a sibling
+      // that survives it. The controller archive above uses the same token.
       await withRemoteSessionFilesystemFence("native_harness_state", async () => {
         const result = await remoteCommandRunner.execute({
           command: "sh",
           args: [
             "-c",
-            `if test -d '${escapedSource}'; then mv '${escapedSource}' '${escapedArchive}'; fi`,
+            REMOTE_NATIVE_CONTINUITY_BREAK_ARCHIVE_SCRIPT,
+            "paperclip-runner-continuity-break-archive",
+            remoteSessionRoot,
+            archiveToken,
           ],
           bypassSession: true,
           timeoutMs: 30_000,

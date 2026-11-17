@@ -1,5 +1,5 @@
 import type { NativePayloadSourceInput } from "@paperclipai/shared";
-import { REMOTE_NATIVE_ERASER_ENV } from "./remote-runner-identity.js";
+import { REMOTE_NATIVE_CONTINUITY_BREAK_ARCHIVE_SCRIPT, REMOTE_NATIVE_ERASER_ENV } from "./remote-runner-identity.js";
 import { exactNativeManagedArtifactCommand, nativeProviderPackVerificationArgs, nativeProviderPackLinkCommand, NATIVE_SELECTED_PROVIDER_PACK_DISCOVERY_SCRIPT, NATIVE_FIXED_ARTIFACT_CHECKSUM_SCRIPT, configuredNativeProviderPackInstallRoot } from "./native-artifact-preparation.js";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import {
@@ -15,7 +15,7 @@ import {
   truncate,
   writeFile,
 } from "node:fs/promises";
-import { execFileSync } from "node:child_process";
+import { execFileSync, spawnSync } from "node:child_process";
 import { createServer as createHttpServer } from "node:http";
 import { runnerPrpWebSocketInternals, setupRunnerPrpWebSocketServer } from "../../realtime/runner-prp-ws.js";
 import { eq } from "drizzle-orm";
@@ -9203,6 +9203,84 @@ describe("runnerd provider runtime wiring", () => {
         priorIdentity: archiveIdentity,
       }),
     ).rejects.toThrow("runner_remote_authority_archive_failed");
+  });
+
+  // PRIV-R3. A remote continuity break must archive the session's remote
+  // state inside sessions/<digest>, the only tree the remote erasure removes,
+  // and still open the replacement session. The controller archive is unchanged.
+  it("archives a remote continuity break inside the erased session tree and opens the replacement (PRIV-R3)", async () => {
+    const remoteCwd = await mkdtemp(join(tmpdir(), "paperclip-continuity-remote-"));
+    try {
+      const normalizedSessionId = execution.session.normalizedSessionId;
+      if (!normalizedSessionId) throw new Error("fixture requires a normalized native session id");
+      const digest = createHash("sha256").update(normalizedSessionId).digest("hex");
+      const sessionsRoot = join(remoteCwd, ".paperclip-runtime", "paperclip-runner", "sessions");
+      const sessionRoot = join(sessionsRoot, digest);
+      await mkdir(join(sessionRoot, "runner"), { recursive: true, mode: 0o700 });
+      await writeFile(join(sessionRoot, "runner", "runner-state.json"), "prior remote runner state");
+      await mkdir(join(sessionRoot, "filesystem", "codex-home", "sessions"), { recursive: true, mode: 0o700 });
+      await writeFile(join(sessionRoot, "filesystem", "codex-home", "sessions", "rollout.jsonl"), "prior transcript");
+      // Run every command that names this session tree on the real (fixture)
+      // filesystem, so the test observes where the archive actually lands.
+      const archiveCommands: Array<{ args: string[]; nativePreparationPurpose?: string }> = [];
+      const remoteExecute = vi.fn(async (request: { command: string; args?: string[]; nativePreparationPurpose?: string }) => {
+        const args = request.args ?? [];
+        if (request.command === "sh" && args[0] === "-c" && args.some(arg => arg.includes(sessionRoot))) {
+          archiveCommands.push({ args, nativePreparationPurpose: request.nativePreparationPurpose });
+          const result = spawnSync("sh", args, { encoding: "utf8", timeout: 15_000 });
+          return { exitCode: result.status ?? 1, timedOut: false, stdout: result.stdout, stderr: result.stderr };
+        }
+        return { exitCode: 0, timedOut: false, stdout: "", stderr: "" };
+      });
+      const remoteTarget = {
+        kind: "remote" as const, transport: "sandbox" as const, providerKey: "daytona",
+        leaseId: "lease-continuity-archive", remoteCwd, runner: { execute: remoteExecute },
+      } as never;
+      const replacement = { close: vi.fn(async () => undefined) };
+      const openSession = vi.fn(async () => replacement);
+      state.createBackend.mockClear();
+      state.createTransport.mockClear();
+      state.createBackend.mockReturnValueOnce({ kind: "test", openSession } as never);
+      const backend = await createRunnerdBackend({
+        db: leaseDb(execution), execution, runnerInstanceId: "runner-continuity-archive",
+        runnerExecutionTarget: remoteTarget,
+      });
+      state.createBackend.mock.calls[0]![1].codexTransportFactory!();
+      const root = state.createTransport.mock.calls[0]![0].stateDirectory!;
+      await mkdir(join(root, "runner"), { recursive: true, mode: 0o700 });
+      await writeFile(join(root, "runner", "runner-state.json"), "prior controller runner state");
+
+      await expect(backend.openReplacementSession!({} as never, {} as never)).resolves.toBe(replacement);
+
+      expect(openSession).toHaveBeenCalledOnce();
+      expect(archiveCommands).toHaveLength(1);
+      // Nothing beside the session tree; the tree keeps only its archive.
+      expect(await readdir(sessionsRoot)).toEqual([digest]);
+      expect(await readdir(sessionRoot)).toEqual(["continuity-breaks"]);
+      expect(archiveCommands[0]!.args.slice(0, 4)).toEqual(
+        ["-c", REMOTE_NATIVE_CONTINUITY_BREAK_ARCHIVE_SCRIPT, "paperclip-runner-continuity-break-archive", sessionRoot]);
+      // This non-managed lane carries no RuntimeControl preparation purpose.
+      expect(archiveCommands[0]!.nativePreparationPurpose).toBeUndefined();
+      const [remoteToken, ...extraRemote] = await readdir(join(sessionRoot, "continuity-breaks"));
+      expect(extraRemote).toEqual([]);
+      expect(await readFile(join(sessionRoot, "continuity-breaks", remoteToken!, "runner", "runner-state.json"), "utf8"))
+        .toBe("prior remote runner state");
+      expect(await readFile(join(sessionRoot, "continuity-breaks", remoteToken!, "filesystem", "codex-home", "sessions",
+        "rollout.jsonl"), "utf8")).toBe("prior transcript");
+      // The controller archive keeps its existing place and shares the token.
+      expect(await readdir(join(root, "continuity-breaks"))).toEqual([remoteToken]);
+      expect(await readFile(join(root, "continuity-breaks", remoteToken!, "runner", "runner-state.json"), "utf8"))
+        .toBe("prior controller runner state");
+      await expect(access(join(root, "runner"))).rejects.toMatchObject({ code: "ENOENT" });
+
+      // A refused remote archive fails closed: no replacement session opens.
+      remoteExecute.mockImplementationOnce(async () => ({ exitCode: 4, timedOut: false, stdout: "", stderr: "" }));
+      await expect(backend.openReplacementSession!({} as never, {} as never))
+        .rejects.toThrow("runner_continuity_break_archive_failed");
+      expect(openSession).toHaveBeenCalledOnce();
+    } finally {
+      await rm(remoteCwd, { recursive: true, force: true });
+    }
   });
 
   it("uses the native execution workspace as the local provider containment root", async () => {

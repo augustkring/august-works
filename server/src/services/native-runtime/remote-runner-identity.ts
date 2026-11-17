@@ -41,6 +41,36 @@ rm -- "$lock_dir/owner"; rmdir -- "$lock_dir"`;
 export const REMOTE_RUNNER_AUTHORITY_ARCHIVE_SCRIPT =
   'set -eu; if test -L "$2" || { test -e "$2" && test ! -d "$2"; }; then exit 1; fi; if test -f "$1" && test ! -L "$1" && test ! -e "$3" && test ! -L "$3"; then umask 077; install -d -m 0700 "$2"; mv -- "$1" "$3"; elif test ! -e "$1" && test ! -L "$1" && test -f "$3" && test ! -L "$3"; then :; else exit 1; fi; base64 < "$3"';
 
+/** PRIV-R3. A continuity break archives the session's remote state inside the
+ * exact tree the remote erasure removes (`sessions/<digest>`), at
+ * `sessions/<digest>/continuity-breaks/<token>`, never as a sibling of it. The
+ * session root stays in place, so the one erasure of `sessions/<digest>` (and
+ * the Host's upper erase of the same directory) removes current and archived
+ * state together, and an emptied tree is never read as already erased. Every
+ * top-level entry except `continuity-breaks` is renamed into the new archive
+ * on the same filesystem; an interrupted run leaves every byte inside the
+ * tree. Exit 4: unsafe path or token. An absent session has nothing to archive. */
+export const REMOTE_NATIVE_CONTINUITY_BREAK_ARCHIVE_SCRIPT = String.raw`set -eu
+session_root=$1; archive_token=$2
+case "$archive_token" in ""|*[!0-9a-f-]*) exit 4 ;; esac
+session_digest=$(basename -- "$session_root"); sessions_root=$(dirname -- "$session_root")
+case "$session_digest" in *[!a-f0-9]*|"") exit 4 ;; esac; test "${"$"}{#session_digest}" -eq 64 || exit 4
+case "$session_root" in /*) ;; *) exit 4 ;; esac; case "$session_root" in *//*|*/./*|*/../*) exit 4 ;; esac
+case "$sessions_root" in */.paperclip-runtime/paperclip-runner/sessions) ;; *) exit 4 ;; esac
+test "$sessions_root/$session_digest" = "$session_root" || exit 4
+if test ! -e "$session_root" && test ! -L "$session_root"; then exit 0; fi
+test -d "$sessions_root" && test ! -L "$sessions_root" && test -d "$session_root" && test ! -L "$session_root" || exit 4
+umask 077; breaks="$session_root/continuity-breaks"; archive="$breaks/$archive_token"
+if test -e "$breaks" || test -L "$breaks"; then test -d "$breaks" && test ! -L "$breaks" || exit 4; else mkdir -m 0700 -- "$breaks"; fi
+test ! -e "$archive" && test ! -L "$archive" || exit 4
+mkdir -m 0700 -- "$archive"
+for entry in "$session_root"/* "$session_root"/.[!.]* "$session_root"/..?*; do
+  if test ! -e "$entry" && test ! -L "$entry"; then continue; fi
+  test "$entry" = "$breaks" && continue
+  mv -- "$entry" "$archive/"
+done
+test -d "$session_root" && test ! -L "$session_root" && test -d "$archive" && test ! -L "$archive"`;
+
 /** Reads back one platform-staged runtime-context folder of this session so
  * the server can verify it against the prior Run's recorded bundle digest.
  * Exit 3: absent. Exit 4: a symlink on the path, a non-directory, an entry that
