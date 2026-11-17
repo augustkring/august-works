@@ -949,10 +949,10 @@
     {
       "source": "server/src/services/company-search-help.generated.ts",
       "articleId": "help-and-human-support",
-      "sourceSha256": "8e0c48a7313582345afbb80f195a232e05f195b3fd51aeb1bc7f58394275fed8",
+      "sourceSha256": "e423b8453ccebebda942b281ef8f776f3497e8191360f89b96ec0d5b04c4b0df",
       "articleSha256": "bec6b2b830586252df7700cc8b8f23018da446ede36284d98e53f8db2b049a1b",
       "decision": "no_change",
-      "rationale": "Regenerated search catalog only picks up the EN/DA export-and-delete sentences about erasing managed OpenCode runtime files with the remote sandbox session folder (PRIV-R1); Help and human support routes, contacts and escalation are unchanged."
+      "rationale": "Regenerated Help search catalog only refreshes the EN/DA export-and-delete entries (PRIV-R5 Forget permanently session-state erasure and verification date). Help and human support routes, contacts and escalation guidance are unchanged."
     },
     {
       "source": "server/src/services/company-search.ts",
@@ -1261,10 +1261,10 @@
     {
       "source": "server/src/services/company-search-help.generated.ts",
       "articleId": "help-and-human-support-da",
-      "sourceSha256": "8e0c48a7313582345afbb80f195a232e05f195b3fd51aeb1bc7f58394275fed8",
+      "sourceSha256": "e423b8453ccebebda942b281ef8f776f3497e8191360f89b96ec0d5b04c4b0df",
       "articleSha256": "2c92acfc98fc458e84cf4bf6fc421119816d6f471922dceee726e311804bf6b5",
       "decision": "no_change",
-      "rationale": "Regenerated search catalog only picks up the EN/DA export-and-delete sentences about erasing managed OpenCode runtime files with the remote sandbox session folder (PRIV-R1); Help and human support routes, contacts and escalation are unchanged."
+      "rationale": "Regenerated Help search catalog only refreshes the EN/DA export-and-delete entries (PRIV-R5 Forget permanently session-state erasure and verification date). Help and human support routes, contacts and escalation guidance are unchanged."
     },
     {
       "source": "server/src/services/company-search.ts",
