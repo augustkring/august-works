@@ -949,10 +949,10 @@
     {
       "source": "server/src/services/company-search-help.generated.ts",
       "articleId": "help-and-human-support",
-      "sourceSha256": "e423b8453ccebebda942b281ef8f776f3497e8191360f89b96ec0d5b04c4b0df",
+      "sourceSha256": "5881ca028f2788dcd6a0b06a8e6ec5d064d0cd32697f3d8b7b13819317aac191",
       "articleSha256": "bec6b2b830586252df7700cc8b8f23018da446ede36284d98e53f8db2b049a1b",
       "decision": "no_change",
-      "rationale": "Regenerated Help search catalog only refreshes the EN/DA export-and-delete entries (PRIV-R5 Forget permanently session-state erasure and verification date). Help and human support routes, contacts and escalation guidance are unchanged."
+      "rationale": "Regenerated Help search catalog only refreshes the EN/DA Work with Co-workers entries (PRIV-R7 Delete a disapproved Co-worker section and verification date). Help and human support routes, contacts and escalation guidance are unchanged."
     },
     {
       "source": "server/src/services/company-search.ts",
@@ -1261,10 +1261,10 @@
     {
       "source": "server/src/services/company-search-help.generated.ts",
       "articleId": "help-and-human-support-da",
-      "sourceSha256": "e423b8453ccebebda942b281ef8f776f3497e8191360f89b96ec0d5b04c4b0df",
+      "sourceSha256": "5881ca028f2788dcd6a0b06a8e6ec5d064d0cd32697f3d8b7b13819317aac191",
       "articleSha256": "2c92acfc98fc458e84cf4bf6fc421119816d6f471922dceee726e311804bf6b5",
       "decision": "no_change",
-      "rationale": "Regenerated Help search catalog only refreshes the EN/DA export-and-delete entries (PRIV-R5 Forget permanently session-state erasure and verification date). Help and human support routes, contacts and escalation guidance are unchanged."
+      "rationale": "Regenerated Help search catalog only refreshes the EN/DA Work with Co-workers entries (PRIV-R7 Delete a disapproved Co-worker section and verification date). Help and human support routes, contacts and escalation guidance are unchanged."
     },
     {
       "source": "server/src/services/company-search.ts",
@@ -1957,16 +1957,32 @@
     {
       "source": "server/src/services/agents.ts",
       "articleId": "working-with-coworkers",
-      "sourceSha256": "105a744ff385b3e34921f13331ae87bf10adeea163ed5d41e8b0b7ae4f743918",
-      "articleSha256": "a019f4c76554bd10229fb1503d72f0871f752aa17d2525a0b1aa355b7d4ae3dc",
+      "sourceSha256": "5e17a620ffad0f81c8081db17666ae44a5b13e7ddb914b6cb39dcf0cf635a48c",
+      "articleSha256": "6ba8d0a6cbe01e196ee0c5f123f5fb655194265a04e160648f57e392ad238f27",
       "decision": "updated",
-      "rationale": "Managed model routing changes now require qualified candidate publication; the article explains exact Human review, rollback and blocked baseline evidence."
+      "rationale": "Reviewed EN/DA Co-worker guidance for PRIV-R7: deleting an agent now erases its Native runs' runtime folders, managed provider homes and controller durable session state with the deletion, and refuses with 409 (deleting nothing) while a run of the agent or of its sessions is active, the files cannot be erased yet, or a run kept files in a remote sandbox. Added a Delete a disapproved Co-worker section."
+    },
+    {
+      "source": "ui/src/pages/ApprovalDetail.tsx",
+      "articleId": "working-with-coworkers",
+      "sourceSha256": "cd8bd0f9021c383cd87d5d0caf468ec04d6fe55e647d92332a855bfd43435e1a",
+      "articleSha256": "6ba8d0a6cbe01e196ee0c5f123f5fb655194265a04e160648f57e392ad238f27",
+      "decision": "updated",
+      "rationale": "Linked for PRIV-R7: the approval page is where a disapproved Co-worker is deleted and shows the server's refusal message; the new Delete a disapproved Co-worker section describes that action and its refusal."
+    },
+    {
+      "source": "server/src/services/native-runtime/native-run-deletion-erasure.ts",
+      "articleId": "working-with-coworkers",
+      "sourceSha256": "27fce489799d5547c9c4e8d2a8f75304f9e75d997a8d177b5561cca4bdb69a91",
+      "articleSha256": "6ba8d0a6cbe01e196ee0c5f123f5fb655194265a04e160648f57e392ad238f27",
+      "decision": "updated",
+      "rationale": "Linked for PRIV-R7: this owner erases the deleted Co-worker's Native runtime folders and durable session state and refuses while a run is active or files are in a remote sandbox, as the new section states."
     },
     {
       "source": "ui/src/pages/AgentDetail.tsx",
       "articleId": "working-with-coworkers",
       "sourceSha256": "3bcc511b3687adb04671e7c8b5287fffff6d3aec3b6cef33f77c084a2fa6a875",
-      "articleSha256": "a019f4c76554bd10229fb1503d72f0871f752aa17d2525a0b1aa355b7d4ae3dc",
+      "articleSha256": "6ba8d0a6cbe01e196ee0c5f123f5fb655194265a04e160648f57e392ad238f27",
       "decision": "updated",
       "rationale": "The agent detail page changes Paperclip labels to Blentera; the setup, run, and pause behavior described in the article is unchanged."
     },
@@ -1974,23 +1990,39 @@
       "source": "ui/src/pages/Agents.tsx",
       "articleId": "working-with-coworkers",
       "sourceSha256": "8040d7f0641c95f8b3d486fa148f4543c03aaf158d26632c5c9447f599dbec9b",
-      "articleSha256": "a019f4c76554bd10229fb1503d72f0871f752aa17d2525a0b1aa355b7d4ae3dc",
+      "articleSha256": "6ba8d0a6cbe01e196ee0c5f123f5fb655194265a04e160648f57e392ad238f27",
       "decision": "updated",
       "rationale": "The agents list changes Paperclip labels to Blentera; the article\u2019s current team setup and activation guidance remains accurate."
     },
     {
       "source": "server/src/services/agents.ts",
       "articleId": "working-with-coworkers-da",
-      "sourceSha256": "105a744ff385b3e34921f13331ae87bf10adeea163ed5d41e8b0b7ae4f743918",
-      "articleSha256": "20cf1df756249a80879da9812f1f0f277687b2f321221883d03ae477aaf14eab",
+      "sourceSha256": "5e17a620ffad0f81c8081db17666ae44a5b13e7ddb914b6cb39dcf0cf635a48c",
+      "articleSha256": "2477bc82b8c743da5d68d6cb58853bee2da30d0f1d93ce59419666ff7558ca9f",
       "decision": "updated",
-      "rationale": "Danish guidance checked against the same source behavior. Managed model routing changes now require qualified candidate publication; the article explains exact Human review, rollback and blocked baseline evidence."
+      "rationale": "Danish guidance checked against the same source behavior. Reviewed EN/DA Co-worker guidance for PRIV-R7: deleting an agent now erases its Native runs' runtime folders, managed provider homes and controller durable session state with the deletion, and refuses with 409 (deleting nothing) while a run of the agent or of its sessions is active, the files cannot be erased yet, or a run kept files in a remote sandbox. Added a Delete a disapproved Co-worker section."
+    },
+    {
+      "source": "ui/src/pages/ApprovalDetail.tsx",
+      "articleId": "working-with-coworkers-da",
+      "sourceSha256": "cd8bd0f9021c383cd87d5d0caf468ec04d6fe55e647d92332a855bfd43435e1a",
+      "articleSha256": "2477bc82b8c743da5d68d6cb58853bee2da30d0f1d93ce59419666ff7558ca9f",
+      "decision": "updated",
+      "rationale": "Danish guidance checked against the same source behavior. Linked for PRIV-R7: the approval page is where a disapproved Co-worker is deleted and shows the server's refusal message; the new Delete a disapproved Co-worker section describes that action and its refusal."
+    },
+    {
+      "source": "server/src/services/native-runtime/native-run-deletion-erasure.ts",
+      "articleId": "working-with-coworkers-da",
+      "sourceSha256": "27fce489799d5547c9c4e8d2a8f75304f9e75d997a8d177b5561cca4bdb69a91",
+      "articleSha256": "2477bc82b8c743da5d68d6cb58853bee2da30d0f1d93ce59419666ff7558ca9f",
+      "decision": "updated",
+      "rationale": "Danish guidance checked against the same source behavior. Linked for PRIV-R7: this owner erases the deleted Co-worker's Native runtime folders and durable session state and refuses while a run is active or files are in a remote sandbox, as the new section states."
     },
     {
       "source": "ui/src/pages/AgentDetail.tsx",
       "articleId": "working-with-coworkers-da",
       "sourceSha256": "3bcc511b3687adb04671e7c8b5287fffff6d3aec3b6cef33f77c084a2fa6a875",
-      "articleSha256": "20cf1df756249a80879da9812f1f0f277687b2f321221883d03ae477aaf14eab",
+      "articleSha256": "2477bc82b8c743da5d68d6cb58853bee2da30d0f1d93ce59419666ff7558ca9f",
       "decision": "updated",
       "rationale": "Danish version checked against the same source delta: the agent detail page changes Paperclip labels to Blentera; the setup, run, and pause behavior described in the article is unchanged."
     },
@@ -1998,7 +2030,7 @@
       "source": "ui/src/pages/Agents.tsx",
       "articleId": "working-with-coworkers-da",
       "sourceSha256": "8040d7f0641c95f8b3d486fa148f4543c03aaf158d26632c5c9447f599dbec9b",
-      "articleSha256": "20cf1df756249a80879da9812f1f0f277687b2f321221883d03ae477aaf14eab",
+      "articleSha256": "2477bc82b8c743da5d68d6cb58853bee2da30d0f1d93ce59419666ff7558ca9f",
       "decision": "updated",
       "rationale": "Danish version checked against the same source delta: the agents list changes Paperclip labels to Blentera; the article\u2019s current team setup and activation guidance remains accurate."
     },
@@ -2221,7 +2253,7 @@
     {
       "source": "server/src/services/agents/authoring-publication.ts",
       "articleId": "working-with-coworkers",
-      "articleSha256": "a019f4c76554bd10229fb1503d72f0871f752aa17d2525a0b1aa355b7d4ae3dc",
+      "articleSha256": "6ba8d0a6cbe01e196ee0c5f123f5fb655194265a04e160648f57e392ad238f27",
       "sourceSha256": "2e61e2cc1ba07f81cf78853b37ff5aca9c1931e3441443501513da81c09316cb",
       "decision": "updated",
       "rationale": "The article retains model migration and rollback qualification requirements and adds the post-publication monitoring step indicated by the publication receipt."
@@ -2229,7 +2261,7 @@
     {
       "source": "server/src/services/experience/model-retirement-notices.ts",
       "articleId": "working-with-coworkers",
-      "articleSha256": "a019f4c76554bd10229fb1503d72f0871f752aa17d2525a0b1aa355b7d4ae3dc",
+      "articleSha256": "6ba8d0a6cbe01e196ee0c5f123f5fb655194265a04e160648f57e392ad238f27",
       "sourceSha256": "9643ad324b6efa179dac7a89925f51a417e8029f31ec6701e141ae3070485cf9",
       "decision": "updated",
       "rationale": "Reviewed the existing Agent notice and enabled company dependency projection. The paired guide now directs other company model dependency notices to their support action and an administrator for a qualified replacement."
@@ -2237,7 +2269,7 @@
     {
       "source": "ui/src/components/AgentRuntimeCandidates.tsx",
       "articleId": "working-with-coworkers",
-      "articleSha256": "a019f4c76554bd10229fb1503d72f0871f752aa17d2525a0b1aa355b7d4ae3dc",
+      "articleSha256": "6ba8d0a6cbe01e196ee0c5f123f5fb655194265a04e160648f57e392ad238f27",
       "sourceSha256": "79d1c44d8f92c557b96064d35abf5ea27bc2d652de22aa274acc36d8bb89d0f2",
       "decision": "updated",
       "rationale": "The article directs administrators through the draft and qualified runtime candidate rather than changing managed routing directly."
@@ -2245,7 +2277,7 @@
     {
       "source": "ui/src/components/AgentDraftPublication.tsx",
       "articleId": "working-with-coworkers",
-      "articleSha256": "a019f4c76554bd10229fb1503d72f0871f752aa17d2525a0b1aa355b7d4ae3dc",
+      "articleSha256": "6ba8d0a6cbe01e196ee0c5f123f5fb655194265a04e160648f57e392ad238f27",
       "sourceSha256": "6999b1fa7da407c295d56015cde178c91ed3393620ccf3d3f8bbd2853765c3b9",
       "decision": "updated",
       "rationale": "The article explains Human-reviewed publication and that missing baseline or qualification evidence blocks model migration."
@@ -2253,7 +2285,7 @@
     {
       "source": "ui/src/components/MandatoryProductNotices.tsx",
       "articleId": "working-with-coworkers",
-      "articleSha256": "a019f4c76554bd10229fb1503d72f0871f752aa17d2525a0b1aa355b7d4ae3dc",
+      "articleSha256": "6ba8d0a6cbe01e196ee0c5f123f5fb655194265a04e160648f57e392ad238f27",
       "sourceSha256": "cb82bfd7eb0a0a88331bce55f740ac2530dae9654a512413bfb3bef29a5c2618",
       "decision": "updated",
       "rationale": "Reviewed the localized mandatory notice actions: selected Agent models open the Agent, and operator-owned company dependencies use the existing Help support action. The EN/DA guide explains both destinations."
@@ -2317,7 +2349,7 @@
     {
       "source": "server/src/services/agents/authoring-publication.ts",
       "articleId": "working-with-coworkers-da",
-      "articleSha256": "20cf1df756249a80879da9812f1f0f277687b2f321221883d03ae477aaf14eab",
+      "articleSha256": "2477bc82b8c743da5d68d6cb58853bee2da30d0f1d93ce59419666ff7558ca9f",
       "sourceSha256": "2e61e2cc1ba07f81cf78853b37ff5aca9c1931e3441443501513da81c09316cb",
       "decision": "updated",
       "rationale": "The article retains model migration and rollback qualification requirements and adds the post-publication monitoring step indicated by the publication receipt."
@@ -2325,7 +2357,7 @@
     {
       "source": "server/src/services/experience/model-retirement-notices.ts",
       "articleId": "working-with-coworkers-da",
-      "articleSha256": "20cf1df756249a80879da9812f1f0f277687b2f321221883d03ae477aaf14eab",
+      "articleSha256": "2477bc82b8c743da5d68d6cb58853bee2da30d0f1d93ce59419666ff7558ca9f",
       "sourceSha256": "9643ad324b6efa179dac7a89925f51a417e8029f31ec6701e141ae3070485cf9",
       "decision": "updated",
       "rationale": "Reviewed the existing Agent notice and enabled company dependency projection. The paired guide now directs other company model dependency notices to their support action and an administrator for a qualified replacement."
@@ -2333,7 +2365,7 @@
     {
       "source": "ui/src/components/AgentRuntimeCandidates.tsx",
       "articleId": "working-with-coworkers-da",
-      "articleSha256": "20cf1df756249a80879da9812f1f0f277687b2f321221883d03ae477aaf14eab",
+      "articleSha256": "2477bc82b8c743da5d68d6cb58853bee2da30d0f1d93ce59419666ff7558ca9f",
       "sourceSha256": "79d1c44d8f92c557b96064d35abf5ea27bc2d652de22aa274acc36d8bb89d0f2",
       "decision": "updated",
       "rationale": "Danish guidance checked against the same source behavior. The article directs administrators through the draft and qualified runtime candidate rather than changing managed routing directly."
@@ -2341,7 +2373,7 @@
     {
       "source": "ui/src/components/AgentDraftPublication.tsx",
       "articleId": "working-with-coworkers-da",
-      "articleSha256": "20cf1df756249a80879da9812f1f0f277687b2f321221883d03ae477aaf14eab",
+      "articleSha256": "2477bc82b8c743da5d68d6cb58853bee2da30d0f1d93ce59419666ff7558ca9f",
       "sourceSha256": "6999b1fa7da407c295d56015cde178c91ed3393620ccf3d3f8bbd2853765c3b9",
       "decision": "updated",
       "rationale": "Danish guidance checked against the same source behavior. The article explains Human-reviewed publication and that missing baseline or qualification evidence blocks model migration."
@@ -2349,7 +2381,7 @@
     {
       "source": "ui/src/components/MandatoryProductNotices.tsx",
       "articleId": "working-with-coworkers-da",
-      "articleSha256": "20cf1df756249a80879da9812f1f0f277687b2f321221883d03ae477aaf14eab",
+      "articleSha256": "2477bc82b8c743da5d68d6cb58853bee2da30d0f1d93ce59419666ff7558ca9f",
       "sourceSha256": "cb82bfd7eb0a0a88331bce55f740ac2530dae9654a512413bfb3bef29a5c2618",
       "decision": "updated",
       "rationale": "Reviewed the localized mandatory notice actions: selected Agent models open the Agent, and operator-owned company dependencies use the existing Help support action. The EN/DA guide explains both destinations."
@@ -2614,7 +2646,7 @@
       "source": "ui/src/components/AgentModelMigrationMonitor.tsx",
       "articleId": "working-with-coworkers",
       "sourceSha256": "e1f66b8a2a038a649bcdce8614473cca4cd1e044ed481c89e6682fe3db4261de",
-      "articleSha256": "a019f4c76554bd10229fb1503d72f0871f752aa17d2525a0b1aa355b7d4ae3dc",
+      "articleSha256": "6ba8d0a6cbe01e196ee0c5f123f5fb655194265a04e160648f57e392ad238f27",
       "decision": "no_change",
       "rationale": "Reviewed the exact current model monitor UI, including its explicit empty-review guard. The guide already requires the current draft, all saved scenarios and independent review before recording the post-publication check."
     },
@@ -2622,7 +2654,7 @@
       "source": "server/src/services/agents/authoring-model-migration-monitor.ts",
       "articleId": "working-with-coworkers",
       "sourceSha256": "cb10a1a6f90654478939c60cbfaf09a74989da19e4bb39e52f0d57f88d4541b4",
-      "articleSha256": "a019f4c76554bd10229fb1503d72f0871f752aa17d2525a0b1aa355b7d4ae3dc",
+      "articleSha256": "6ba8d0a6cbe01e196ee0c5f123f5fb655194265a04e160648f57e392ad238f27",
       "decision": "updated",
       "rationale": "The article now requires a fresh current-baseline draft, post-publication scenarios and independent Human review, with the publishing Human recording the exact qualified migration evidence."
     },
@@ -2630,7 +2662,7 @@
       "source": "server/src/services/agents/authoring-tests.ts",
       "articleId": "working-with-coworkers",
       "sourceSha256": "354f070591cb38393ed5aeb061710b4b49ed4500174a29cf63f52688eb029b3a",
-      "articleSha256": "a019f4c76554bd10229fb1503d72f0871f752aa17d2525a0b1aa355b7d4ae3dc",
+      "articleSha256": "6ba8d0a6cbe01e196ee0c5f123f5fb655194265a04e160648f57e392ad238f27",
       "decision": "updated",
       "rationale": "The article now describes rerunning each saved scenario and independent review; evidence is read through the existing transaction and original runtime qualification owner."
     },
@@ -2638,7 +2670,7 @@
       "source": "ui/src/components/AgentModelMigrationMonitor.tsx",
       "articleId": "working-with-coworkers-da",
       "sourceSha256": "e1f66b8a2a038a649bcdce8614473cca4cd1e044ed481c89e6682fe3db4261de",
-      "articleSha256": "20cf1df756249a80879da9812f1f0f277687b2f321221883d03ae477aaf14eab",
+      "articleSha256": "2477bc82b8c743da5d68d6cb58853bee2da30d0f1d93ce59419666ff7558ca9f",
       "decision": "no_change",
       "rationale": "Reviewed the exact current model monitor UI, including its explicit empty-review guard. The guide already requires the current draft, all saved scenarios and independent review before recording the post-publication check."
     },
@@ -2646,7 +2678,7 @@
       "source": "server/src/services/agents/authoring-model-migration-monitor.ts",
       "articleId": "working-with-coworkers-da",
       "sourceSha256": "cb10a1a6f90654478939c60cbfaf09a74989da19e4bb39e52f0d57f88d4541b4",
-      "articleSha256": "20cf1df756249a80879da9812f1f0f277687b2f321221883d03ae477aaf14eab",
+      "articleSha256": "2477bc82b8c743da5d68d6cb58853bee2da30d0f1d93ce59419666ff7558ca9f",
       "decision": "updated",
       "rationale": "Danish counterpart checked against the same source behavior. The article now requires a fresh current-baseline draft, post-publication scenarios and independent Human review, with the publishing Human recording the exact qualified migration evidence."
     },
@@ -2654,7 +2686,7 @@
       "source": "server/src/services/agents/authoring-tests.ts",
       "articleId": "working-with-coworkers-da",
       "sourceSha256": "354f070591cb38393ed5aeb061710b4b49ed4500174a29cf63f52688eb029b3a",
-      "articleSha256": "20cf1df756249a80879da9812f1f0f277687b2f321221883d03ae477aaf14eab",
+      "articleSha256": "2477bc82b8c743da5d68d6cb58853bee2da30d0f1d93ce59419666ff7558ca9f",
       "decision": "updated",
       "rationale": "Danish counterpart checked against the same source behavior. The article now describes rerunning each saved scenario and independent review; evidence is read through the existing transaction and original runtime qualification owner."
     },
@@ -2710,7 +2742,7 @@
       "source": "packages/adapter-utils/src/paid-model-probe.ts",
       "articleId": "working-with-coworkers",
       "sourceSha256": "642b04ad602b39435301df061360a212dc687c3b493e4a22a78757d29d5e0d9f",
-      "articleSha256": "a019f4c76554bd10229fb1503d72f0871f752aa17d2525a0b1aa355b7d4ae3dc",
+      "articleSha256": "6ba8d0a6cbe01e196ee0c5f123f5fb655194265a04e160648f57e392ad238f27",
       "decision": "updated",
       "rationale": "The paid model probe reports a configuration-incomplete unavailable result without dispatching inference. The new Runtime guidance tells operators to review the full setup result and choose a currently available runtime."
     },
@@ -2718,7 +2750,7 @@
       "source": "packages/adapter-utils/src/paid-model-probe.ts",
       "articleId": "working-with-coworkers-da",
       "sourceSha256": "642b04ad602b39435301df061360a212dc687c3b493e4a22a78757d29d5e0d9f",
-      "articleSha256": "20cf1df756249a80879da9812f1f0f277687b2f321221883d03ae477aaf14eab",
+      "articleSha256": "2477bc82b8c743da5d68d6cb58853bee2da30d0f1d93ce59419666ff7558ca9f",
       "decision": "updated",
       "rationale": "Den betalte modelprobe rapporterer et utilg\u00e6ngeligt resultat med ufuldst\u00e6ndig konfiguration uden at sende inferens. Den nye Runtime-vejledning beder operat\u00f8ren l\u00e6se hele ops\u00e6tningsresultatet og v\u00e6lge en runtime, der aktuelt er tilg\u00e6ngelig."
     },
@@ -2726,7 +2758,7 @@
       "source": "server/src/services/native-runtime/paid-transport-admission.ts",
       "articleId": "working-with-coworkers",
       "sourceSha256": "fe2d33847251f13660e1dc5ff471d98835322559ebef45a8a77f2829605e17d1",
-      "articleSha256": "a019f4c76554bd10229fb1503d72f0871f752aa17d2525a0b1aa355b7d4ae3dc",
+      "articleSha256": "6ba8d0a6cbe01e196ee0c5f123f5fb655194265a04e160648f57e392ad238f27",
       "decision": "updated",
       "rationale": "The managed model admission gate can reject a saved runtime even when installation or connection discovery succeeds. The article directs the operator to the runtime setup notice and a currently available runtime."
     },
@@ -2734,7 +2766,7 @@
       "source": "server/src/services/native-runtime/paid-transport-admission.ts",
       "articleId": "working-with-coworkers-da",
       "sourceSha256": "fe2d33847251f13660e1dc5ff471d98835322559ebef45a8a77f2829605e17d1",
-      "articleSha256": "20cf1df756249a80879da9812f1f0f277687b2f321221883d03ae477aaf14eab",
+      "articleSha256": "2477bc82b8c743da5d68d6cb58853bee2da30d0f1d93ce59419666ff7558ca9f",
       "decision": "updated",
       "rationale": "Adgangskontrollen for administrerede modelkald kan afvise en gemt runtime, selv n\u00e5r installation eller forbindelsesopdagelse lykkes. Artiklen henviser operat\u00f8ren til runtimebeskeden og en runtime, der aktuelt er tilg\u00e6ngelig."
     },
