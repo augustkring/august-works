@@ -15,7 +15,7 @@ import type {
   ToolConnectionHealthCheckResult,
   ToolCatalogRefreshResult,
   ToolAccessDecision,
-  ToolAccessDecisionInput,
+  ToolPolicyTestRequestInput,
   CreateToolPolicy,
   DuplicateToolPolicy,
   McpJsonImportPreview,
@@ -522,8 +522,9 @@ export const toolsApi = {
     api.post<ToolPolicy>(`/companies/${companyId}/tools/trust-rules/${policyId}/revoke`, {
       reason: reason ?? null,
     }),
-  testPolicy: (companyId: string, input: Omit<ToolAccessDecisionInput, "companyId">) =>
-    api.post<ToolPolicyTestResponse>(`/companies/${companyId}/tools/policy/test`, input),
+  // Policy dry run. The server never consumes rate-limit tokens for it.
+  testPolicy: (companyId: string, input: Omit<ToolPolicyTestRequestInput, "companyId">) =>
+    api.post<ToolPolicyTestResponse>(`/companies/${companyId}/tools/policy/test`, { ...input, companyId }),
 
   // --- Review queue (Ask first) ---
   listActionRequests: (companyId: string, status: ToolActionRequestStatus = "pending") =>

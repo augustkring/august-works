@@ -2677,18 +2677,18 @@
     {
       "source": "server/src/services/tool-gateway.ts",
       "articleId": "apps-and-connections",
-      "sourceSha256": "a763da7bbd0b32d8e9e0e2566992c230ba7dc6d29e8399dc011db2c76889cf7f",
+      "sourceSha256": "b74fffebeff6603a75117d06bece667e41ec605eaef4dabd504b7cbad5dc640f",
       "articleSha256": "731cc171b5c7b6b7d1563e8d2476c1c51f32f3f6c3fa3f4adb7aa0fc365836f9",
       "decision": "no_change",
-      "rationale": "2026-11-17 MS1h2 review: the sandbox credential broker owner check now also admits the current Native completion Reviewer of the exact Run, and refuses it any credential binding before a connection or grant is read, so a Reviewer is issued no connection grant or credential. Connection setup, permissions, who can use a connection, reconnect and test behavior shown to people are unchanged, so the article stays accurate. Admitted remote MCP calls no longer count their own already-consumed rate-limit token when the dispatch re-check runs, so a policy with limit N admits exactly N calls per window. The article does not describe rate limits, and its customer-facing connection setup, provider authorization and reconnect steps remain accurate and unchanged."
+      "rationale": "2026-11-17 GW6-GW7 review: an exact replay of a tool invocation (the same idempotency key, or a repeated call matching an executed action request) now takes no rate-limit token; it is re-checked with the token its original admission stored on the invocation, gets no credit after that window ends, and a full window refuses it with 429 rate_limited and the admission details. The article does not describe rate limits, replays or approval mechanics, so no reader-facing text changes."
     },
     {
       "source": "server/src/services/tool-gateway.ts",
       "articleId": "apps-and-connections-da",
-      "sourceSha256": "a763da7bbd0b32d8e9e0e2566992c230ba7dc6d29e8399dc011db2c76889cf7f",
+      "sourceSha256": "b74fffebeff6603a75117d06bece667e41ec605eaef4dabd504b7cbad5dc640f",
       "articleSha256": "cff4bf06d20200c2b5785c92f7f41b197d730d85b0c3f6f1deca43b744906738",
       "decision": "no_change",
-      "rationale": "2026-11-17 MS1h2 review: the sandbox credential broker owner check now also admits the current Native completion Reviewer of the exact Run, and refuses it any credential binding before a connection or grant is read, so a Reviewer is issued no connection grant or credential. Connection setup, permissions, who can use a connection, reconnect and test behavior shown to people are unchanged, so the article stays accurate. Godkendte fjern-MCP-kald t\u00e6ller ikke l\u00e6ngere deres eget allerede forbrugte rate-limit-token, n\u00e5r kontrollen under afsendelse k\u00f8res, s\u00e5 en politik med gr\u00e6nse N tillader pr\u00e6cis N kald pr. vindue. Artiklen beskriver ikke rate limits, og vejledningen til kunder om ops\u00e6tning af forbindelser, udbydergodkendelse og genoprettelse er fortsat korrekt og u\u00e6ndret."
+      "rationale": "2026-11-17 GW6-GW7-gennemgang: en n\u00f8jagtig gentagelse af et v\u00e6rkt\u00f8jskald (samme idempotensn\u00f8gle eller et gentaget kald, der matcher en udf\u00f8rt handlingsanmodning) bruger nu intet rate-limit-token; den kontrolleres igen med det token, som det oprindelige kald gemte, f\u00e5r ingen kredit efter det vindue, og et fuldt vindue afviser den med 429 rate_limited og de samme detaljer som ved tilladelse. Artiklen beskriver ikke rate-limits, gentagelser eller godkendelser, s\u00e5 ingen tekst for l\u00e6seren \u00e6ndres."
     },
     {
       "source": "server/src/services/workflows/workflow-http-request.ts",

@@ -2,7 +2,7 @@ import { packageToolRestriction } from "./agent-packages/execution-gate.js";
 import { governanceToolRestriction } from "./ai-governance/execution-gate.js";
 import { agentRunWritesRevoked } from "../agent-run-cancellation.js";
 import { assertManagedRuntimeCommercialAuthority } from "./billing/managed-runtime-admission.js";
-import { createHash } from "node:crypto";
+import { createHash, randomUUID } from "node:crypto";
 import { and, asc, desc, eq, gt, inArray, ne, sql } from "drizzle-orm";
 import type { Db } from "@paperclipai/db";
 import {
@@ -697,32 +697,191 @@ function scopeAllowsTool(scope: Record<string, unknown> | null, ctx: ToolAccessC
  * window's count never includes this call, so the ordinary `count >= limit`
  * check applies and no extra call is admitted.
  *
+ * A token is charged when a call is admitted to execute, never for a call
+ * that is only parked for human approval: a fresh consuming `decide` whose
+ * outcome is `require_approval` releases the tokens it took. The execution of
+ * that call after approval then uses a ledger created with
+ * `{ approvedExecution: true }`. Its consuming `decide` charges exactly one
+ * token for every matching rate-limit policy, including policies ordered after
+ * the require-approval policy that the approval satisfied, so neither policy
+ * order lets an approved call skip or double-count the limit. Its re-checks
+ * use the same ledger and so do not count that call's own token.
+ *
+ * A call whose dispatch re-check runs later, outside the request that admitted
+ * it (a queued email send, or an exact replay of a tool invocation), carries
+ * its tokens as a `ToolRateLimitCharge`: `toolRateLimitCharge` copies a ledger
+ * into a record that the owning row stores, and
+ * `restoreToolRateLimitTokenLedger` turns that record back into a re-check-only
+ * ledger. The record is bound to its owner, so another send or invocation
+ * cannot present it, and it holds at most one token per policy, bucket and
+ * window. A row without a valid record is counted normally.
+ *
  * This is deliberately not part of `ToolAccessDecisionInput`: it travels as a
  * separate `decide` argument, and only ledgers made by
- * `createToolRateLimitTokenLedger` are honoured, so no request body can set it.
+ * `createToolRateLimitTokenLedger` or `restoreToolRateLimitTokenLedger` are
+ * honoured, so no request body can set it.
  */
 export interface ToolRateLimitTokenLedger {
   heldIn(policyId: string, bucketKey: string, windowStartAt: Date): number;
+}
+
+export interface ToolRateLimitTokenLedgerOptions {
+  /** The call executes an action that a human already approved. */
+  approvedExecution?: boolean;
 }
 
 export interface ToolAccessDecisionInternalOptions {
   rateLimitTokens?: ToolRateLimitTokenLedger;
 }
 
-const rateLimitTokenLedgerEntries = new WeakMap<ToolRateLimitTokenLedger, Map<string, number>>();
+type HeldRateLimitToken = {
+  companyId: string;
+  policyId: string;
+  counterKey: string;
+  windowKind: ReturnType<typeof windowKind>;
+  windowStartAt: Date;
+  count: number;
+};
+
+type RateLimitTokenLedgerState = {
+  approvedExecution: boolean;
+  /** Restored from a stored charge: usable only by non-consuming re-checks, never released. */
+  recheckOnly: boolean;
+  tokens: Map<string, HeldRateLimitToken>;
+};
+
+const rateLimitTokenLedgerStates = new WeakMap<ToolRateLimitTokenLedger, RateLimitTokenLedgerState>();
 
 function rateLimitTokenKey(policyId: string, bucketKey: string, windowStartAt: Date) {
   return JSON.stringify([policyId, bucketKey, windowStartAt.getTime()]);
 }
 
-export function createToolRateLimitTokenLedger(): ToolRateLimitTokenLedger {
-  const entries = new Map<string, number>();
+function newRateLimitTokenLedger(state: RateLimitTokenLedgerState): ToolRateLimitTokenLedger {
   const ledger: ToolRateLimitTokenLedger = Object.freeze({
     heldIn: (policyId: string, bucketKey: string, windowStartAt: Date) =>
-      entries.get(rateLimitTokenKey(policyId, bucketKey, windowStartAt)) ?? 0,
+      state.tokens.get(rateLimitTokenKey(policyId, bucketKey, windowStartAt))?.count ?? 0,
   });
-  rateLimitTokenLedgerEntries.set(ledger, entries);
+  rateLimitTokenLedgerStates.set(ledger, state);
   return ledger;
+}
+
+export function createToolRateLimitTokenLedger(options: ToolRateLimitTokenLedgerOptions = {}): ToolRateLimitTokenLedger {
+  return newRateLimitTokenLedger({ approvedExecution: options.approvedExecution === true, recheckOnly: false, tokens: new Map() });
+}
+
+/**
+ * Durable copy of the rate-limit tokens that one admitted call consumed. Each
+ * `windows` entry is one token held in that policy, bucket and window. `owner`
+ * names the row that stores the record, for example `email-send:<id>`.
+ */
+export interface ToolRateLimitCharge {
+  version: 1;
+  owner: string;
+  windows: Array<{
+    companyId: string;
+    policyId: string;
+    counterKey: string;
+    windowKind: string;
+    windowStartAt: string;
+  }>;
+}
+
+const RATE_LIMIT_WINDOW_KINDS = new Set(["minute", "hour", "day", "month"]);
+const MAX_RATE_LIMIT_CHARGE_WINDOWS = 64;
+
+/**
+ * Copy the tokens a ledger holds into a record bound to `owner`. Returns null
+ * when the ledger holds no token or is not a ledger this module created.
+ */
+export function toolRateLimitCharge(rateLimitTokens: ToolRateLimitTokenLedger, owner: string): ToolRateLimitCharge | null {
+  const state = rateLimitTokenLedgerStates.get(rateLimitTokens);
+  if (!state || state.recheckOnly) return null;
+  const windows = [...state.tokens.values()]
+    .filter((token) => token.count > 0)
+    .map((token) => ({
+      companyId: token.companyId,
+      policyId: token.policyId,
+      counterKey: token.counterKey,
+      windowKind: token.windowKind,
+      windowStartAt: token.windowStartAt.toISOString(),
+    }));
+  return windows.length > 0 ? { version: 1, owner, windows } : null;
+}
+
+/**
+ * Rebuild a re-check-only ledger from a stored charge. A record for another
+ * owner or company, or a malformed record, yields an empty ledger, so the
+ * re-check counts every token in the window. Each policy, bucket and window is
+ * credited at most one token, because one admission takes at most one token
+ * per policy. The ledger cannot consume or release tokens.
+ */
+export function restoreToolRateLimitTokenLedger(
+  charge: unknown,
+  expected: { owner: string; companyId: string },
+): ToolRateLimitTokenLedger {
+  const state: RateLimitTokenLedgerState = { approvedExecution: false, recheckOnly: true, tokens: new Map() };
+  const ledger = newRateLimitTokenLedger(state);
+  if (!isRecord(charge) || charge.version !== 1 || charge.owner !== expected.owner || !Array.isArray(charge.windows)) {
+    return ledger;
+  }
+  for (const entry of charge.windows.slice(0, MAX_RATE_LIMIT_CHARGE_WINDOWS)) {
+    if (!isRecord(entry)) continue;
+    const { companyId, policyId, counterKey, windowKind: kind, windowStartAt } = entry;
+    if (companyId !== expected.companyId || typeof policyId !== "string" || typeof counterKey !== "string") continue;
+    if (typeof kind !== "string" || !RATE_LIMIT_WINDOW_KINDS.has(kind) || typeof windowStartAt !== "string") continue;
+    const start = new Date(windowStartAt);
+    if (Number.isNaN(start.getTime())) continue;
+    const tokenKey = rateLimitTokenKey(policyId, counterKey, start);
+    if (state.tokens.has(tokenKey)) continue;
+    state.tokens.set(tokenKey, {
+      companyId,
+      policyId,
+      counterKey,
+      windowKind: kind as HeldRateLimitToken["windowKind"],
+      windowStartAt: start,
+      count: 1,
+    });
+  }
+  return ledger;
+}
+
+/** Owner name of the rate-limit charge a tool invocation row stores. */
+export function toolInvocationRateLimitOwner(invocationId: string) {
+  return `tool-invocation:${invocationId}`;
+}
+
+/**
+ * The re-check ledger of a stored tool invocation: the tokens its admission
+ * charged, as recorded in `policyExplanation.rateLimitCharge`.
+ */
+export function storedToolInvocationRateLimitTokens(invocation: {
+  id: string;
+  companyId: string;
+  policyExplanation?: Record<string, unknown> | null;
+}): ToolRateLimitTokenLedger {
+  return restoreToolRateLimitTokenLedger(invocation.policyExplanation?.rateLimitCharge, {
+    owner: toolInvocationRateLimitOwner(invocation.id),
+    companyId: invocation.companyId,
+  });
+}
+
+/**
+ * The refusal for a policy decision that does not admit a call, shared by
+ * admission and later re-checks: 429 for a rate limit and 403 otherwise, the
+ * decision's explanation and reason code, and its decision details.
+ */
+export function toolPolicyRefusal(decision: ToolAccessDecision, details: Record<string, unknown>) {
+  return {
+    status: decision.decision === "rate_limited" ? 429 : 403,
+    message: decision.explanation,
+    reasonCode: decision.reasonCode,
+    details: {
+      ...details,
+      decision: decision.decision,
+      matchedPolicyIds: decision.matchedPolicyIds,
+      rateLimitState: decision.rateLimitState ?? null,
+    },
+  };
 }
 
 export function toolAccessPolicyService(db: Db) {
@@ -1110,10 +1269,10 @@ export function toolAccessPolicyService(db: Db) {
     policy: typeof toolPolicies.$inferSelect,
     ctx: ToolAccessContext,
     consume: boolean,
-    rateLimitTokens?: ToolRateLimitTokenLedger,
+    ledger: RateLimitTokenLedgerState | undefined,
+    consumedHere: HeldRateLimitToken[],
   ) {
     const rule = rateLimitRule(policy);
-    const tokenEntries = rateLimitTokens ? rateLimitTokenLedgerEntries.get(rateLimitTokens) : undefined;
     if (!rule) return null;
     const now = new Date();
     const start = windowStart(now, rule.windowSeconds);
@@ -1134,7 +1293,7 @@ export function toolAccessPolicyService(db: Db) {
       // exceed the limit. A re-check by an admitted call excludes only the
       // tokens that call consumed in this same window, so it becomes
       // `count > limit` for a single held token.
-      const heldByThisCall = tokenEntries?.get(rateLimitTokenKey(policy.id, bucketKey, start)) ?? 0;
+      const heldByThisCall = ledger?.tokens.get(rateLimitTokenKey(policy.id, bucketKey, start))?.count ?? 0;
       const othersCount = Math.max(0, count - heldByThisCall);
       return { limited: othersCount >= rule.limit, count, limit: rule.limit, windowSeconds: rule.windowSeconds, bucketKey };
     }
@@ -1173,9 +1332,13 @@ export function toolAccessPolicyService(db: Db) {
     if (!counter) {
       return { limited: true, count: rule.limit, limit: rule.limit, windowSeconds: rule.windowSeconds, bucketKey };
     }
-    if (tokenEntries) {
+    const token = { companyId: ctx.companyId, policyId: policy.id, counterKey: bucketKey, windowKind: kind, windowStartAt: start };
+    consumedHere.push({ ...token, count: 1 });
+    if (ledger) {
       const tokenKey = rateLimitTokenKey(policy.id, bucketKey, start);
-      tokenEntries.set(tokenKey, (tokenEntries.get(tokenKey) ?? 0) + 1);
+      const held = ledger.tokens.get(tokenKey);
+      if (held) held.count += 1;
+      else ledger.tokens.set(tokenKey, { ...token, count: 1 });
     }
     return {
       limited: false,
@@ -1184,6 +1347,70 @@ export function toolAccessPolicyService(db: Db) {
       windowSeconds: rule.windowSeconds,
       bucketKey,
     };
+  }
+
+  /**
+   * Return tokens to the windows they were taken from. Used only for tokens a
+   * fresh admission took for a call that ended up parked for human approval;
+   * that call is charged again when its approved execution is admitted.
+   */
+  async function releaseHeldRateLimitTokens(tokens: HeldRateLimitToken[], ledger?: RateLimitTokenLedgerState) {
+    for (const token of tokens.splice(0)) {
+      if (token.count <= 0) continue;
+      await db
+        .update(toolRateLimitCounters)
+        .set({
+          remaining: sql`least(${toolRateLimitCounters.limit}, ${toolRateLimitCounters.remaining} + ${token.count})`,
+          updatedAt: new Date(),
+        })
+        .where(and(
+          eq(toolRateLimitCounters.companyId, token.companyId),
+          eq(toolRateLimitCounters.policyId, token.policyId),
+          eq(toolRateLimitCounters.counterKey, token.counterKey),
+          eq(toolRateLimitCounters.windowKind, token.windowKind),
+          eq(toolRateLimitCounters.windowStartAt, token.windowStartAt),
+        ));
+      if (!ledger) continue;
+      const tokenKey = rateLimitTokenKey(token.policyId, token.counterKey, token.windowStartAt);
+      const held = ledger.tokens.get(tokenKey);
+      if (!held) continue;
+      held.count -= token.count;
+      if (held.count <= 0) ledger.tokens.delete(tokenKey);
+    }
+  }
+
+  /**
+   * Release every token a fresh admission recorded in its ledger. The Tool
+   * Gateway calls this when it turns an admitted call into an approval request
+   * after `decide` returned, so that parked call holds no token either, and
+   * when the admitted call proves to be an exact replay of an invocation that
+   * already holds its charge. A caller also releases the tokens of a call it
+   * admitted but did not record, such as an email send that was never queued.
+   * An approved execution's tokens and a restored charge are never released.
+   */
+  async function releaseRateLimitTokens(rateLimitTokens: ToolRateLimitTokenLedger) {
+    const ledger = rateLimitTokenLedgerStates.get(rateLimitTokens);
+    if (!ledger || ledger.approvedExecution || ledger.recheckOnly) return;
+    await releaseHeldRateLimitTokens([...ledger.tokens.values()].map((token) => ({ ...token })), ledger);
+  }
+
+  /**
+   * Store the tokens an approved execution's admission took on its invocation
+   * row, so an exact replay of that invocation is re-checked with them.
+   */
+  async function recordInvocationRateLimitCharge(
+    invocation: { id: string; companyId: string },
+    rateLimitTokens: ToolRateLimitTokenLedger,
+  ) {
+    const rateLimitCharge = toolRateLimitCharge(rateLimitTokens, toolInvocationRateLimitOwner(invocation.id));
+    if (!rateLimitCharge) return;
+    await db
+      .update(toolInvocations)
+      .set({
+        policyExplanation: sql`coalesce(${toolInvocations.policyExplanation}, '{}'::jsonb) || ${JSON.stringify({ rateLimitCharge })}::jsonb`,
+        updatedAt: new Date(),
+      })
+      .where(and(eq(toolInvocations.id, invocation.id), eq(toolInvocations.companyId, invocation.companyId)));
   }
 
   async function recordTrustRuleHit(policy: typeof toolPolicies.$inferSelect, ctx: ToolAccessContext, redaction: RedactionResult) {
@@ -1242,10 +1469,20 @@ export function toolAccessPolicyService(db: Db) {
     });
   }
 
-  async function decideCore(input: ToolAccessDecisionInput, internal: ToolAccessDecisionInternalOptions = {}): Promise<ToolAccessDecision> {
+  async function decideCore(
+    input: ToolAccessDecisionInput,
+    internal: ToolAccessDecisionInternalOptions = {},
+    consumedHere: HeldRateLimitToken[] = [],
+  ): Promise<ToolAccessDecision> {
     const loaded = await loadContext(input);
     if (!loaded.ok) return loaded.decision;
     const { ctx, redaction } = loaded;
+    const ledger = internal.rateLimitTokens ? rateLimitTokenLedgerStates.get(internal.rateLimitTokens) : undefined;
+    if (ledger?.recheckOnly && input.consumeRateLimit === true) {
+      // A restored charge only offsets the tokens a call already took.
+      throw new Error("A restored rate-limit charge cannot admit a call");
+    }
+    const approvedExecution = ledger?.approvedExecution === true;
     const profileState = await effectiveProfiles(ctx);
     const effectiveProfileIds = profileState.profiles.map((profile) => profile.id);
     const permittedByProfile = profileState.profiles.some((profile) => {
@@ -1285,13 +1522,51 @@ export function toolAccessPolicyService(db: Db) {
       .map((policy) => ({ policy, conditionEvaluation: evaluatePolicyConditions(policyConditions(policy), ctx) }))
       .filter(({ policy, conditionEvaluation }) => selectorMatches(policy.selectors, ctx) && conditionEvaluation.matched);
     const explicitBlock = matchingPolicies.find(({ policy }) => policy.policyType === "block");
-    for (const { policy, conditionEvaluation } of matchingPolicies) {
-      const policyExplanation = {
-        policyId: policy.id,
-        policyType: policy.policyType,
-        selectorMatched: true,
-        conditionsMatched: conditionEvaluation.matchedGroups,
-      };
+    const explainPolicy = ({ policy, conditionEvaluation }: (typeof matchingPolicies)[number]) => ({
+      policyId: policy.id,
+      policyType: policy.policyType,
+      selectorMatched: true,
+      conditionsMatched: conditionEvaluation.matchedGroups,
+    });
+    const applyRateLimit = async (
+      policy: typeof toolPolicies.$inferSelect,
+      policyExplanation: ReturnType<typeof explainPolicy>,
+    ): Promise<ToolAccessDecision | null> => {
+      if (!rateLimitRule(policy)) {
+        return decision(
+          "deny",
+          "deny_policy_block",
+          "Tool access denied because a matching rate-limit policy has invalid runtime config.",
+          effectiveProfileIds,
+          [policy.id],
+          { redactionPlan: redaction.redactionPlan, policyExplanation },
+        );
+      }
+      const state = await enforceRateLimit(policy, ctx, input.consumeRateLimit === true, ledger, consumedHere);
+      if (state?.limited) {
+        return decision("rate_limited", "rate_limited", "Tool access rate limit exceeded.", effectiveProfileIds, [policy.id], { rateLimitState: state, redactionPlan: redaction.redactionPlan, policyExplanation });
+      }
+      return null;
+    };
+    // A fresh call parked for approval holds no token: it is charged when its
+    // approved execution is admitted. That execution satisfies this
+    // require-approval gate, so every matching rate-limit policy ordered after
+    // it still applies to the call instead of being skipped.
+    const requireApprovalOutcome = async (index: number, outcome: ToolAccessDecision): Promise<ToolAccessDecision> => {
+      if (!approvedExecution) {
+        await releaseHeldRateLimitTokens(consumedHere, ledger);
+        return outcome;
+      }
+      for (const later of matchingPolicies.slice(index + 1)) {
+        if (later.policy.policyType !== "rate_limit") continue;
+        const refused = await applyRateLimit(later.policy, explainPolicy(later));
+        if (refused) return refused;
+      }
+      return outcome;
+    };
+    for (const [index, matchingPolicy] of matchingPolicies.entries()) {
+      const { policy } = matchingPolicy;
+      const policyExplanation = explainPolicy(matchingPolicy);
       if (unsupportedRuntimePolicyType(policy.policyType)) {
         return decision(
           "deny",
@@ -1306,20 +1581,8 @@ export function toolAccessPolicyService(db: Db) {
         return decision("deny", "deny_policy_block", policy.description ?? "Tool access is blocked by policy.", effectiveProfileIds, [policy.id], { redactionPlan: redaction.redactionPlan, policyExplanation });
       }
       if (policy.policyType === "rate_limit") {
-        if (!rateLimitRule(policy)) {
-          return decision(
-            "deny",
-            "deny_policy_block",
-            "Tool access denied because a matching rate-limit policy has invalid runtime config.",
-            effectiveProfileIds,
-            [policy.id],
-            { redactionPlan: redaction.redactionPlan, policyExplanation },
-          );
-        }
-        const state = await enforceRateLimit(policy, ctx, input.consumeRateLimit === true, internal.rateLimitTokens);
-        if (state?.limited) {
-          return decision("rate_limited", "rate_limited", "Tool access rate limit exceeded.", effectiveProfileIds, [policy.id], { rateLimitState: state, redactionPlan: redaction.redactionPlan, policyExplanation });
-        }
+        const refused = await applyRateLimit(policy, policyExplanation);
+        if (refused) return refused;
         continue;
       }
       if (policy.policyType === "trust_rule") {
@@ -1331,14 +1594,14 @@ export function toolAccessPolicyService(db: Db) {
         if (explicitBlock) return decision("deny", "deny_policy_block", explicitBlock.policy.description ?? "Tool access is blocked by policy.", effectiveProfileIds, [explicitBlock.policy.id], { redactionPlan: redaction.redactionPlan });
 
         if (trustRuleNeedsReview(policy, ctx)) {
-          return decision(
+          return requireApprovalOutcome(index, decision(
             "require_approval",
             "requires_review_changed_tool",
             "Tool definition changed or was quarantined after this trust rule was created; review is required.",
             effectiveProfileIds,
             [policy.id],
             { redactionPlan: redaction.redactionPlan, policyExplanation },
-          );
+          ));
         }
         if (input.consumeRateLimit === true) {
           await recordTrustRuleHit(policy, ctx, redaction);
@@ -1349,7 +1612,7 @@ export function toolAccessPolicyService(db: Db) {
         // The connection's Ask first control restricts an existing action grant;
         // it must never grant access to agents outside that connection's profile.
         if (policy.config?.source === "app_gallery_finish" && !permittedByProfile) continue;
-        return decision("require_approval", "requires_approval_policy", policy.description ?? "Tool access requires approval.", effectiveProfileIds, [policy.id], { redactionPlan: redaction.redactionPlan, policyExplanation });
+        return requireApprovalOutcome(index, decision("require_approval", "requires_approval_policy", policy.description ?? "Tool access requires approval.", effectiveProfileIds, [policy.id], { redactionPlan: redaction.redactionPlan, policyExplanation }));
       }
       if (policy.policyType === "allow") {
         return decision("allow", "allow_policy", "Tool access allowed by policy.", effectiveProfileIds, [policy.id], { redactionPlan: redaction.redactionPlan, policyExplanation });
@@ -1382,7 +1645,8 @@ export function toolAccessPolicyService(db: Db) {
    * and never a second argument. See `ToolRateLimitTokenLedger`.
    */
   async function decide(input: ToolAccessDecisionInput, internal: ToolAccessDecisionInternalOptions = {}): Promise<ToolAccessDecision> {
-    const base = await decideCore(input, internal);
+    const consumedHere: HeldRateLimitToken[] = [];
+    const base = await decideCore(input, internal, consumedHere);
     if (!base.allowed && base.decision !== "require_approval") return base;
     const loaded = await loadContext(input); if (!loaded.ok) return loaded.decision;
     if (loaded.ctx.agentId && (input.actor.actorType === "agent" || loaded.ctx.heartbeatRunId)) {
@@ -1393,7 +1657,12 @@ export function toolAccessPolicyService(db: Db) {
     if(packageRestriction.denyReason) return decision("deny", "deny_policy_block", packageRestriction.denyReason, base.effectiveProfileIds, base.matchedPolicyIds);
     const restriction = await governanceToolRestriction(db, loaded.ctx);
     if (restriction.denyReason) return decision("deny", "deny_policy_block", restriction.denyReason, base.effectiveProfileIds, base.matchedPolicyIds);
-    if ((restriction.requireHumanApproval || packageRestriction.requireHumanApproval) && base.allowed) return decision("require_approval", "requires_approval_policy", "The reviewed use case requires a human decision for this material action.", base.effectiveProfileIds, base.matchedPolicyIds);
+    if ((restriction.requireHumanApproval || packageRestriction.requireHumanApproval) && base.allowed) {
+      // The call is parked for approval instead of executing; see decideCore.
+      const ledger = internal.rateLimitTokens ? rateLimitTokenLedgerStates.get(internal.rateLimitTokens) : undefined;
+      if (!ledger?.approvedExecution) await releaseHeldRateLimitTokens(consumedHere, ledger);
+      return decision("require_approval", "requires_approval_policy", "The reviewed use case requires a human decision for this material action.", base.effectiveProfileIds, base.matchedPolicyIds);
+    }
     return base;
   }
 
@@ -1511,8 +1780,14 @@ export function toolAccessPolicyService(db: Db) {
     }
   }
 
+  /**
+   * Record a tool invocation for an access decision. When the decision admits
+   * the call, `rateLimitTokens` is the admitting ledger: its tokens are stored
+   * on the new row as `policyExplanation.rateLimitCharge`, so an exact replay
+   * of this invocation is re-checked with them instead of taking new ones.
+   */
   async function recordInvocation(input: ToolAccessDecisionInput, accessDecision: ToolAccessDecision,
-    options: { nativeMemoryDraft?: true } = {}) {
+    options: { nativeMemoryDraft?: true; rateLimitTokens?: ToolRateLimitTokenLedger } = {}) {
     const loaded = await loadContext(input);
     if (!loaded.ok) throw new Error("Cannot record invocation for invalid tool access context");
     const { ctx, redaction } = loaded;
@@ -1550,7 +1825,12 @@ export function toolAccessPolicyService(db: Db) {
         : accessDecision.decision === "rate_limited"
           ? "rate_limited"
           : "denied";
+    const invocationId = randomUUID();
+    const rateLimitCharge = accessDecision.allowed && options.rateLimitTokens
+      ? toolRateLimitCharge(options.rateLimitTokens, toolInvocationRateLimitOwner(invocationId))
+      : null;
     const [invocation] = await db.insert(toolInvocations).values({
+      id: invocationId,
       companyId: ctx.companyId,
       idempotencyKey,
       idempotencyRequestHash,
@@ -1581,6 +1861,7 @@ export function toolAccessPolicyService(db: Db) {
       argumentsSummary: redaction.summary,
       policyDecision: accessDecision.decision,
       matchedPolicyIds: accessDecision.matchedPolicyIds,
+      policyExplanation: rateLimitCharge ? { rateLimitCharge } : null,
       approvalState: accessDecision.decision === "require_approval" ? "pending" : "not_required",
       status,
       errorCode: accessDecision.allowed || accessDecision.decision === "require_approval" ? null : accessDecision.reasonCode,
@@ -1989,6 +2270,8 @@ export function toolAccessPolicyService(db: Db) {
   return {
     decide,
     decideForPolicyCompilation,
+    releaseRateLimitTokens,
+    recordInvocationRateLimitCharge,
     writeAudit,
     recordInvocation,
     summarizeAndRedact,

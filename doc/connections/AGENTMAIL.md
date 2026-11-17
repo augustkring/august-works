@@ -92,6 +92,16 @@ write access. Configured action policies apply to both. Authority is checked
 again when the durable send executes. A new conversation creates its child task
 and immutable send intent in one transaction before contacting AgentMail.
 
+A `rate_limit` policy on `email.send` or `email.reply` takes one token when the
+send is accepted, and the queued send keeps a record of that token. The check
+when the send executes does not count the send's own token, so with a limit of N
+all N accepted sends pass that check. It still counts every other token. A send
+without its own record, or with a token from another send, is counted normally.
+A token gives no credit after its window ends. A send that is accepted but not
+queued, for example because an attachment is invalid, returns its token. A
+refused send returns `429` with code `rate_limited`; a send refused when it
+executes is marked failed with the reason `Tool access rate limit exceeded.`
+
 All paths below are relative to `/api`:
 
 | Operation | Path |
