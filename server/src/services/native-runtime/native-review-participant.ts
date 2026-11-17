@@ -81,6 +81,22 @@ export function readNativeReviewAssignmentContext(
   return { nativeReviewInteractionId: interactionId, nativeReviewDecisionId: decisionId };
 }
 
+/**
+ * MS1h. A Native completion Reviewer's prompt is its review request, which
+ * replaces the ordinary Task prompt, and the Reviewer is never the Task
+ * assignee, so its wake has no closed execution-continuation capture. The
+ * executor-authored issue continuation summary therefore has no owner in the
+ * Reviewer's wake source closure and must not enter that wake payload; the
+ * Reviewer's input stays the review request bound to the exact source result.
+ */
+export function nativeReviewWakeExcludesContinuationSummary(input: {
+  adapterType: string;
+  contextSnapshot: unknown;
+}): boolean {
+  return input.adapterType === "paperclip_runner" &&
+    readNativeReviewAssignmentContext(input.contextSnapshot) !== null;
+}
+
 function isNativeCompletionReview(interaction: InteractionFacts, decisionId: string) {
   const target = interaction.payload?.target;
   return target?.type === "custom"

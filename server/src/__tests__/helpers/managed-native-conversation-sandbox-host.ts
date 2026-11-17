@@ -32,6 +32,7 @@ import {
 } from "@paperclipai/db";
 import { SANDBOX_CONTROLS, SANDBOX_HOST_COMMAND, runtimeRequestSigningInput, sandboxCapabilitySnapshotSchema, sandboxHostRequestSchema, sandboxHostReplySchema, type NativePayloadSourceInput, type SandboxHostRequest, type SandboxQualificationProbeFixture, type SandboxCapabilitySnapshot } from "@paperclipai/shared";
 import { canActorReadIssuePrivacy, type AuthorizationActor } from "../../services/authorization.js";
+import { getNativeReviewAssignment, readNativeReviewAssignmentContext } from "../../services/native-runtime/native-review-participant.js";
 import { assertNativeConformanceHumanAuthentication } from "../../services/execution-sandbox/native-conformance-authentication.js";
 import { assertNativeWorkspaceMetadataSourcesCurrent } from "../../services/native-direct-input.js";
 import type { NativeBootstrapSourceClosure } from "../../services/native-runtime/native-execution-input.js";
@@ -279,10 +280,26 @@ async function assertFixtureOrdinaryWorker(input: ManagedSandboxHostInput, runId
     const [chat] = await db.select({ id: chatConversations.id }).from(chatConversations).where(and(
       eq(chatConversations.companyId, companyId), eq(chatConversations.issueId, run.nativeIssueId))).limit(1);
     if (!task || chat || task.originKind === "chat_channel" || task.conversationAgentId || task.conversationUserId ||
-      task.assigneeAgentId !== agentId || task.payloadSourceProtocolVersion !== 1 || !task.payloadSourceSnapshot ||
+      (task.assigneeAgentId !== agentId && !await fixtureCurrentNativeReviewer(db, companyId, agentId, run, task)) ||
+      task.payloadSourceProtocolVersion !== 1 || !task.payloadSourceSnapshot ||
       task.payloadSourceSnapshotInvalidated || !await canActorReadIssuePrivacy(db, actor, task))
       throw new Error("worker_software_host_task_binding_invalid");
     return run;
+}
+
+/** MS1h. The exact current assigned Native completion Reviewer of this Task:
+ * its persisted review wake, the pending review addressed to this Agent, the
+ * Task in review with this Run as its execution Run, and this Run as the
+ * acting Run. It is never the Task assignee, so the ordinary Worker owner
+ * check above cannot admit it; the production owners decide the rest. */
+async function fixtureCurrentNativeReviewer(db: ReturnType<typeof createDb>, companyId: string, agentId: string,
+  run: typeof heartbeatRuns.$inferSelect, task: typeof issues.$inferSelect) {
+  const context = readNativeReviewAssignmentContext(run.contextSnapshot);
+  if (!context || task.status !== "in_review" || task.executionRunId !== run.id || task.assigneeAgentId === agentId) return false;
+  const assignment = await getNativeReviewAssignment(db as unknown as Parameters<typeof getNativeReviewAssignment>[0], {
+    companyId, issueId: task.id, agentId, contextSnapshot: context, actingRunId: run.id, issueExecutionRunId: task.executionRunId });
+  return assignment?.interaction.status === "pending" && assignment.interaction.id === context.nativeReviewInteractionId &&
+    assignment.sourceDecision.id === context.nativeReviewDecisionId && assignment.sourceRun.agentId === task.assigneeAgentId;
 }
 
 /** Admit only the registered owner's real hidden Run and current group workspace. */
@@ -3081,7 +3098,9 @@ async function configureManagedSandboxRun(input: ManagedSandboxHostInput,
         task.conversationState === "active" && task.conversationRetiredAt === null &&
         nativeChatWorkspaceCwd(chatScope, null, false) === taskRoot);
       if (!task || !taskRoot || run.nativeIssueId !== task.id || responsibleUserId !== requesterUserId ||
-          task.assigneeAgentId !== run.agentId || task.executionRunId !== run.id ||
+          (task.assigneeAgentId !== run.agentId &&
+            !(workerRun && await fixtureCurrentNativeReviewer(db, companyId, run.agentId, run, task))) ||
+          task.executionRunId !== run.id ||
           (workerRun ? task.conversationAgentId !== null || task.conversationUserId !== null
             : task.conversationRetiredAt !== null || task.hiddenAt !== null ||
               !canonicalChannelTask && !canonicalAppConversationTask) ||

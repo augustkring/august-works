@@ -40,7 +40,7 @@ import { executionBlockerPredicate, getExecutionBlocker, hasPendingRunCleanup } 
 import { lockNativeRuntimeSelectionRows } from "./native-runtime-selection-lock.js";
 import { CONVERSATION_CONTINUATION_POLICY, claimedAdapterType, runUsedConversationAdapter, hasConversationContinuationPolicy, isConversationAdapter } from "./conversation-continuation.js";
 import { recordExecutionWait } from "./execution-wait.js";
-import { getNativeReviewAssignment, readNativeReviewAssignmentContext } from "./native-runtime/native-review-participant.js";
+import { getNativeReviewAssignment, nativeReviewWakeExcludesContinuationSummary, readNativeReviewAssignmentContext } from "./native-runtime/native-review-participant.js";
 import { claimQueuedNativeReviewRun } from "./native-runtime/native-review-dispatch.js";
 import { buildNativeReviewRequest } from "./native-runtime/native-review-prompt.js";
 import { captureNativeReviewWakeWitness } from "./native-runtime/native-review-participant.js";
@@ -21235,7 +21235,9 @@ export function heartbeatService(
         contextSnapshot: context,
         onInlineCommentSourceCapture: agent.adapterType === "paperclip_runner"
           ? capture => inlineWakeCommentSourceCaptures.push(capture) : undefined,
-        continuationSummary: nativeTaskContinuationCapture.value?.finalizedSummary ? null : continuationSummary,
+        continuationSummary: nativeTaskContinuationCapture.value?.finalizedSummary ||
+          nativeReviewWakeExcludesContinuationSummary({ adapterType: agent.adapterType, contextSnapshot: context })
+          ? null : continuationSummary,
         issueSummary: issueRef
           ? {
               id: issueRef.id,
