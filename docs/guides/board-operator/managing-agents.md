@@ -9,10 +9,10 @@ owner: augustkring/august-works
 maturity: preview
 applicable_product_versions: [V10]
 locale: en
-last_verified_at: 2026-11-02
+last_verified_at: 2026-11-17
 review_trigger: Co-worker setup, account connections, status, pause, or task assignment changes
 security_or_privacy_sensitive: true
-linked_source_files: [ui/src/pages/Agents.tsx, ui/src/components/AgentModelMigrationMonitor.tsx, server/src/services/agents/authoring-model-migration-monitor.ts, server/src/services/agents/authoring-tests.ts, ui/src/pages/AgentDetail.tsx, server/src/services/agents.ts, server/src/services/agents/authoring-publication.ts, server/src/services/experience/model-retirement-notices.ts, ui/src/components/AgentRuntimeCandidates.tsx, ui/src/components/AgentDraftPublication.tsx, ui/src/components/MandatoryProductNotices.tsx, server/src/services/native-runtime/paid-transport-admission.ts, packages/adapter-utils/src/paid-model-probe.ts]
+linked_source_files: [ui/src/pages/Agents.tsx, ui/src/components/AgentModelMigrationMonitor.tsx, server/src/services/agents/authoring-model-migration-monitor.ts, server/src/services/agents/authoring-tests.ts, ui/src/pages/AgentDetail.tsx, server/src/services/agents.ts, server/src/services/agents/authoring-publication.ts, server/src/services/experience/model-retirement-notices.ts, ui/src/components/AgentRuntimeCandidates.tsx, ui/src/components/AgentDraftPublication.tsx, ui/src/components/MandatoryProductNotices.tsx, server/src/services/native-runtime/paid-transport-admission.ts, packages/adapter-utils/src/paid-model-probe.ts, ui/src/pages/ApprovalDetail.tsx, server/src/services/native-runtime/native-run-deletion-erasure.ts]
 ---
 
 Blentera calls the workers in your company **Co-workers**. Some current screens still use **Agent**. You can find them in the company’s Agents area and open a Co-worker to review its settings, connection, and recent work.
@@ -36,6 +36,10 @@ Pause a Co-worker when you do not want it to receive new scheduled or assigned w
 When assigning work, review the task’s instructions, owner, and project. The task page is the source for its current status and recorded result; the Co-worker’s status alone does not confirm that a task is complete.
 
 For company members and their access, see [People and company access](/guides/board-operator/org-structure). For a task that did not finish, see [Recover interrupted work](/help/recovering-work).
+
+## Delete a disapproved Co-worker
+
+If a hire request was disapproved, you can delete that Co-worker from its approval page. Deleting a Co-worker removes its runs. For Native runs, Blentera also erases the runtime files and saved session state it kept for those runs. If one of those runs is still active, or the files cannot be erased yet, nothing is deleted and the page shows why. Stop the run and try again. Blentera cannot erase files in a remote sandbox this way, so a Co-worker with such runs is not deleted; pause it instead.
 
 ## Review a model change
 
