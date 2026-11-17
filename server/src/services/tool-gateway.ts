@@ -1,6 +1,7 @@
 import { readSandboxBrokerAuthorityEnforcement } from "./runtime/control.js";
 import { SANDBOX_QUALIFICATION_BINDING_STATES } from "./execution-sandbox/backend.js";
 import { ToolModelEffectAdmissionError } from "./native-runtime/paid-transport-admission.js";
+import { currentNativeReviewerRun } from "./native-runtime/native-review-participant.js";
 import { currentResourcePolicy } from "./resource-governance.js";
 import { assertPackageExecution } from "./agent-packages/execution-gate.js";
 import { assertExecutionGovernance } from "./ai-governance/execution-gate.js";
@@ -10248,10 +10249,20 @@ export function createToolGatewayService(
     if (!run || run.status !== "running" || run.agentId !== input.agentId || run.responsibleUserId !== input.responsibleUserId || !run.issueId) {
       throw new ToolGatewayHttpError(409, "Current responsible run is required for credential brokering", "sandbox_broker_run_changed");
     }
-    const [issue] = await db.select({ projectId: issues.projectId }).from(issues).where(and(
-      eq(issues.companyId, input.companyId), eq(issues.id, run.issueId), eq(issues.assigneeAgentId, input.agentId),
+    const [task] = await db.select({ projectId: issues.projectId, assigneeAgentId: issues.assigneeAgentId }).from(issues).where(and(
+      eq(issues.companyId, input.companyId), eq(issues.id, run.issueId),
     )).limit(1);
-    if (!issue) throw new ToolGatewayHttpError(409, "Current Task owner is required for credential brokering", "sandbox_broker_task_changed");
+    // MS1h2. The Task assignee, or the current Native completion Reviewer of
+    // this exact Run. The Reviewer passes this owner check only to share the
+    // sandbox lifecycle; it is issued no connection grant or credential.
+    const nativeReviewer = !!task && task.assigneeAgentId !== input.agentId && await currentNativeReviewerRun(db, {
+      companyId: input.companyId, agentId: input.agentId, runId: input.runId, issueId: run.issueId,
+    });
+    if (!task || (task.assigneeAgentId !== input.agentId && !nativeReviewer))
+      throw new ToolGatewayHttpError(409, "Current Task owner is required for credential brokering", "sandbox_broker_task_changed");
+    if (nativeReviewer && input.bindings.length !== 0)
+      throw new ToolGatewayHttpError(403, "A Native completion Reviewer is issued no credential bindings", "sandbox_broker_reviewer_credentials_denied");
+    const issue = { projectId: task.projectId };
     const sessionBase: ToolGatewaySession = {
       id: `sandbox-broker:${input.runId}`, token: "", companyId: input.companyId,
       agentId: input.agentId, runId: input.runId, issueId: run.issueId, projectId: issue.projectId,

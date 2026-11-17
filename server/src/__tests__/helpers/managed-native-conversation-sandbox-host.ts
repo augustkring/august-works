@@ -32,7 +32,7 @@ import {
 } from "@paperclipai/db";
 import { SANDBOX_CONTROLS, SANDBOX_HOST_COMMAND, runtimeRequestSigningInput, sandboxCapabilitySnapshotSchema, sandboxHostRequestSchema, sandboxHostReplySchema, type NativePayloadSourceInput, type SandboxHostRequest, type SandboxQualificationProbeFixture, type SandboxCapabilitySnapshot } from "@paperclipai/shared";
 import { canActorReadIssuePrivacy, type AuthorizationActor } from "../../services/authorization.js";
-import { getNativeReviewAssignment, readNativeReviewAssignmentContext } from "../../services/native-runtime/native-review-participant.js";
+import { currentNativeReviewerRun, getNativeReviewAssignment, readNativeReviewAssignmentContext } from "../../services/native-runtime/native-review-participant.js";
 import { assertNativeConformanceHumanAuthentication } from "../../services/execution-sandbox/native-conformance-authentication.js";
 import { assertNativeWorkspaceMetadataSourcesCurrent } from "../../services/native-direct-input.js";
 import type { NativeBootstrapSourceClosure } from "../../services/native-runtime/native-execution-input.js";
@@ -2905,7 +2905,7 @@ async function configureManagedSandboxRun(input: ManagedSandboxHostInput,
       }
     };
   };
-  const createBindingForRun=async(credentialBinding: typeof runtimeBrokerBinding, exactTaskRoot: string)=>{
+  const createBindingForRun=async(credentialBinding: typeof runtimeBrokerBinding | null, exactTaskRoot: string)=>{
     const boundaryPolicy = (() => {
       const boundary = policyFixture(); boundary.riskClass = "C3"; boundary.requiredControls = [...conversationRequiredControls];
       // Each fixture has one server-derived maximum: the chat namespace or
@@ -2914,7 +2914,9 @@ async function configureManagedSandboxRun(input: ManagedSandboxHostInput,
       boundary.filesystem.readPaths = [...new Set([exactTaskRoot, "/.openshell/runtime/openshell-sandbox", ...runtimeBrokerBinaryReadPaths])].sort();
       boundary.filesystem.writePaths = [exactTaskRoot];
       boundary.process.allowedBinaries = []; boundary.process.allowedSyscalls = [];
-      boundary.network.destinations = []; boundary.credentials={mode:"brokered",bindings:[credentialBinding]}; return boundary;
+      // A Native completion Reviewer's maximum names no connection (MS1h2).
+      boundary.network.destinations = [];
+      boundary.credentials={mode:"brokered",bindings:credentialBinding ? [credentialBinding] : []}; return boundary;
     })();
     const [retained] = await db.select().from(runtimeSandboxBindings).where(and(
       eq(runtimeSandboxBindings.companyId, companyId), eq(runtimeSandboxBindings.runtimeCellId, cell.id),
@@ -4568,12 +4570,26 @@ async function configureManagedSandboxRun(input: ManagedSandboxHostInput,
       return;
     }
     preparationStage="resolve_runtime_broker";
-    const resolvedRuntimeBroker=await qualificationGateway.resolveSandboxCredentialBrokerPolicyBindings({companyId,agentId,runId,
-      responsibleUserId:actor.userId!,presenceId:runtimePresence.id,bindings:[{...runtimeBrokerBinding,grantVersionHash:"0".repeat(64)}]});
-    const grantVersionHash=resolvedRuntimeBroker.authorizedConnectionGrantHashes[runtimeConnection.connection.id];
-    assert.ok(grantVersionHash);assert.ok(resolvedRuntimeBroker.bindings[0]?.allowedTools.includes(runtimeConnection.toolName));
+    // MS1h2. A current Native completion Reviewer shares the sandbox lifecycle
+    // but is issued no credential bindings: its boundary carries an empty
+    // connection allowlist, and the production broker owner refuses a binding.
+    const credentiallessReviewer = ordinaryWorkerMode && await currentNativeReviewerRun(db as never, {
+      companyId, agentId, runId, issueId, manifestId: manifest.id });
+    let runtimeCredentialBinding: typeof runtimeBrokerBinding | null = null;
+    if (credentiallessReviewer) {
+      const refused = await qualificationGateway.resolveSandboxCredentialBrokerPolicyBindings({companyId,agentId,runId,
+        responsibleUserId:actor.userId!,presenceId:runtimePresence.id,bindings:[{...runtimeBrokerBinding,grantVersionHash:"0".repeat(64)}]})
+        .then(() => null, (error: unknown) => error as { reasonCode?: unknown });
+      assert.equal(refused?.reasonCode, "sandbox_broker_reviewer_credentials_denied");
+    } else {
+      const resolvedRuntimeBroker=await qualificationGateway.resolveSandboxCredentialBrokerPolicyBindings({companyId,agentId,runId,
+        responsibleUserId:actor.userId!,presenceId:runtimePresence.id,bindings:[{...runtimeBrokerBinding,grantVersionHash:"0".repeat(64)}]});
+      const grantVersionHash=resolvedRuntimeBroker.authorizedConnectionGrantHashes[runtimeConnection.connection.id];
+      assert.ok(grantVersionHash);assert.ok(resolvedRuntimeBroker.bindings[0]?.allowedTools.includes(runtimeConnection.toolName));
+      runtimeCredentialBinding={...runtimeBrokerBinding,grantVersionHash};
+    }
     preparationStage="create_binding";
-    await createBindingForRun({...runtimeBrokerBinding,grantVersionHash}, taskRoot);
+    await createBindingForRun(runtimeCredentialBinding, taskRoot);
     preparationStage="qualify";await qualifyHost();preparationStage="compile";
     const boundary = policyFixture(); boundary.riskClass = "C3"; boundary.requiredControls = [...conversationRequiredControls];
     boundary.filesystem.readPaths = [...new Set([taskRoot, "/.openshell/runtime/openshell-sandbox", ...runtimeBrokerBinaryReadPaths])].sort();
