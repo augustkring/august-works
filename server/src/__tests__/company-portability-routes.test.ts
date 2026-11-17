@@ -1348,6 +1348,8 @@ describe.sequential("company portability routes", () => {
       expect(different.body.job).toBeUndefined();
       expect(different.body.statusUrl).toBeUndefined();
       expect(different.body.error).toMatch(/different import is already running/i);
+      // The accepted job starts its import asynchronously after the 202.
+      await vi.waitFor(() => expect(mockCompanyPortabilityService.importBundle).toHaveBeenCalledTimes(1));
       expect(mockCompanyPortabilityService.importBundle).toHaveBeenCalledTimes(1);
     },
   );
