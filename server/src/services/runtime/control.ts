@@ -1,5 +1,5 @@
 import { exactNativeManagedArtifactCommand } from "../native-runtime/native-artifact-preparation.js";
-import { readNativeReviewAssignmentContext } from "../native-runtime/native-review-participant.js";
+import { currentNativeReviewerRun, readNativeReviewAssignmentContext } from "../native-runtime/native-review-participant.js";
 import { NATIVE_ATTACHMENT_CLEANUP_PREPARATION_PURPOSE, NATIVE_ATTACHMENT_STAGE_PREPARATION_PURPOSE, parseNativeRemoteAttachmentStageCommand } from "../native-runtime/native-attachment-remote-stage.js";
 import { captureNativeRemoteAttachmentReadbackOwner, captureNativeRemoteAttachmentStageOwner } from "../native-runtime/native-attachment-remote-stage-owner.js";
 import { buildRemoteRunnerFileStageScript, NATIVE_RUNNER_TRUST_BUNDLE_MAX_BYTES, NATIVE_RUNNER_TRUST_BUNDLE_MODE,
@@ -714,7 +714,8 @@ const WORKER_NATIVE_PREPARATION_PURPOSES = new Set(["provider_artifact", "native
 const CONFORMANCE_NATIVE_PREPARATION_PURPOSES = new Set(["provider_artifact", "native_harness_state", "native_workspace_prepare", "native_session_start", "native_provider_data_erasure_probe",
   NATIVE_RUNNER_TRUST_BUNDLE_PREPARATION_PURPOSE]);
 
-async function currentWorkerNativePreparationRoot(tx: Db, source: CurrentSandboxTaskSource,
+/** The exact ordinary Worker preparation root (exported for regression tests). */
+export async function currentWorkerNativePreparationRoot(tx: Db, source: CurrentSandboxTaskSource,
   purpose: string | undefined): Promise<string | null> {
   if (!purpose || !WORKER_NATIVE_PREPARATION_PURPOSES.has(purpose)) return null;
   const { run, manifest } = source, task = source.source.task;
@@ -746,9 +747,14 @@ async function currentWorkerNativePreparationRoot(tx: Db, source: CurrentSandbox
       ["/bin/sh", "/usr/bin/sha256sum", "/bin/sha256sum"].some(binary =>
         binary === path.resolve(value) || binary.startsWith(path.resolve(value).replace(/\/$/, "") + "/")))))
     throw conflict("Worker installed provider pack must be outside all tenant writable policy roots");
+  // MS1h2. The Task assignee, or the current Native completion Reviewer of this
+  // exact Run and manifest, rechecked in this transaction.
+  const preparationOwner = !!run.agentId && (task.assigneeAgentId === run.agentId ||
+    await currentNativeReviewerRun(tx, { companyId: run.companyId, agentId: run.agentId, runId: run.id,
+      issueId: task.id, manifestId: manifest.id }));
   if (run.status !== "running" || run.runtimeMode !== "native" || run.scopeKind !== "issue" ||
     !run.agentId || !run.responsibleUserId || run.nativeIssueId !== task.id || task.hiddenAt ||
-    ["done", "cancelled"].includes(task.status) || task.assigneeAgentId !== run.agentId || task.executionRunId !== run.id ||
+    ["done", "cancelled"].includes(task.status) || !preparationOwner || task.executionRunId !== run.id ||
     manifest.runId !== run.id || manifest.agentId !== run.agentId || manifest.manifest.responsibleUserId !== run.responsibleUserId ||
     execution.provider.kind !== "opencode" || execution.session.driverKind !== "opencode_server" ||
     execution.binding.companyId !== run.companyId || execution.binding.runId !== run.id || execution.binding.issueId !== task.id ||

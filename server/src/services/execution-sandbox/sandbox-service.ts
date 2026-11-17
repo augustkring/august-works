@@ -15,6 +15,7 @@ import type { AuthorizationActor } from "../authorization.js";
 import { assertV7Authorization, assertV7Enabled, v7HumanActorId } from "../v7-authorization.js";
 import { logActivity, withV7ActivityTransaction } from "../v7-mutations.js";
 import { nativeSha256 } from "../native-runtime/canonical.js";
+import { currentNativeReviewerRun } from "../native-runtime/native-review-participant.js";
 import { resolvePaperclipRunnerProviderProfile } from "../native-runtime/provider-profile.js";
 import { agentRunWritesRevoked, assertAgentRunPolicyAllowed, assertAgentRunWriteAllowed } from "../../agent-run-cancellation.js";
 import { agentProviderBindingService } from "../agent-provider-bindings.js";
@@ -145,7 +146,12 @@ export function executionSandboxService(db: Db, options: {
       run.contextSnapshot?.providerConformanceGroupId === qualificationGroupId && run.contextSnapshot?.providerConformancePlanId === conformancePlan.id &&
       !run.contextSnapshot?.runtimeCandidateConformanceRequestId && hasWorkerAttempts.length === 0 &&
       task.conversationAgentId === null && task.conversationUserId === null);
-    if (!task || (task.hiddenAt && !providerConformanceBootstrap) || task.assigneeAgentId !== record.agentId)
+    // MS1h2. The Task assignee, or the current Native completion Reviewer of
+    // this exact Run and manifest (an independent verifier, brief §57.1). The
+    // Reviewer shares the sandbox lifecycle only; it is issued no credentials.
+    const nativeReviewer = !!task && !task.hiddenAt && task.assigneeAgentId !== record.agentId &&
+      await currentNativeReviewerRun(tx, { companyId, agentId: record.agentId, runId: run.id, issueId: task.id, manifestId: record.id });
+    if (!task || (task.hiddenAt && !providerConformanceBootstrap) || (task.assigneeAgentId !== record.agentId && !nativeReviewer))
       throw conflict("Execution Task changed its current owner");
     await assertV7Authorization(tx, actor, companyId, "issue:read", { type: "issue", companyId, issueId: task.id, projectId: task.projectId });
     if (providerConformanceBootstrap) {
@@ -170,7 +176,7 @@ export function executionSandboxService(db: Db, options: {
     const currentCapabilities = await capabilityResolverService(tx).search(worker, companyId, "");
     // Projection never grants broker credentials from an inventory pin. Direct
     // credential bindings stay closed until the native broker is qualified.
-    return { record, task, run, agent, runtime, currentCapabilities, providerConformanceBootstrap,
+    return { record, task, run, agent, runtime, currentCapabilities, providerConformanceBootstrap, nativeReviewer,
       conformancePlan: providerConformanceBootstrap ? conformancePlan : null, qualificationGroupId: providerConformanceBootstrap ? qualificationGroupId : null,
       conformanceConfigurationHash: providerConformanceBootstrap && agent
         ? hashContextPolicySnapshot({ adapterType: agent.adapterType, adapterConfig: agent.adapterConfig }) : null,
@@ -245,8 +251,10 @@ export function executionSandboxService(db: Db, options: {
     const worker: AuthorizationActor = { type: "agent", companyId: input.companyId, agentId: run.agentId, runId: run.id, onBehalfOfUserId: run.responsibleUserId };
     const source = await authority(tx, input.companyId, manifest.id, worker);
     await assertAgentRunWriteAllowed(tx, input.companyId, { agentId: run.agentId, runId: run.id });
-    if (source.record.hash !== manifest.hash || (source.task.hiddenAt && !source.providerConformanceBootstrap) || source.task.assigneeAgentId !== run.agentId ||
-      source.task.executionRunId !== run.id)
+    // MS1h2. `authority` decided the current Native Reviewer for this exact
+    // Run and manifest in this transaction; reuse that decision.
+    if (source.record.hash !== manifest.hash || (source.task.hiddenAt && !source.providerConformanceBootstrap) ||
+      (source.task.assigneeAgentId !== run.agentId && !source.nativeReviewer) || source.task.executionRunId !== run.id)
       throw conflict("Task or manifest binding changed before sandbox execution");
     const cellRef = /^aw:cell:([0-9a-f-]{36}):generation:([1-9][0-9]{0,18})$/i.exec(source.runtime.providerProfileRef);
     if (!cellRef) return null;

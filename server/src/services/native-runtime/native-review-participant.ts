@@ -1,4 +1,5 @@
 import {
+  agentExecutionManifests,
   agents,
   heartbeatRuns,
   nativeRunFinalizations,
@@ -236,6 +237,65 @@ export async function getNativeReviewAssignment(
     allowResolvedByRunId: input.allowResolvedByRunId,
   });
   return valid ? { interaction, sourceDecision: decision, sourceRun } : null;
+}
+
+/**
+ * MS1h2. The one sandbox-lifecycle owner predicate for a current Native
+ * completion Reviewer Run. Brief §57.1 asks for an independent verifier where
+ * consequence requires one, and that Reviewer is never the Task assignee, so
+ * the managed sandbox owners admit `assignee || currentNativeReviewerRun`.
+ *
+ * True only when every fact the review model-token path (`currentReview`)
+ * checks for the pending path holds, read in the caller's transaction:
+ * 1. the pending native completion review this Run's persisted wake binds is
+ *    addressed to this Agent, with this Run as the acting Run
+ *    (`getNativeReviewAssignment` with `actingRunId`, no resolved allowance);
+ * 2. the Task is `in_review` with this Run as its execution Run;
+ * 3. this Run is the Reviewer's running Native Run on this Task, and its
+ *    execution manifest is bound to the Reviewer Agent, this Run and the Run's
+ *    responsible Human;
+ * 4. the reviewed source Run is committed, with process cleanup done.
+ *
+ * It grants nothing by itself: callers keep every other gate (company, Human
+ * authorization, provider, policy, commercial and run-write checks), and the
+ * credential broker issues a Reviewer no credential bindings.
+ */
+export async function currentNativeReviewerRun(db: Db, input: {
+  companyId: string;
+  agentId: string;
+  runId: string;
+  issueId: string;
+  manifestId?: string;
+}): Promise<boolean> {
+  // 3. This Run: the Reviewer's running Native Run on this Task, in this company.
+  const [run] = await db.select().from(heartbeatRuns).where(and(
+    eq(heartbeatRuns.companyId, input.companyId), eq(heartbeatRuns.id, input.runId),
+    eq(heartbeatRuns.agentId, input.agentId),
+  )).limit(1);
+  if (!run || run.status !== "running" || run.runtimeMode !== "native" ||
+    run.nativeIssueId !== input.issueId || !run.responsibleUserId) return false;
+  // 2. The Task is in review and this Run holds its execution lease.
+  const [task] = await db.select().from(issues).where(and(
+    eq(issues.companyId, input.companyId), eq(issues.id, input.issueId),
+  )).limit(1);
+  if (!task || task.status !== "in_review" || task.executionRunId !== run.id) return false;
+  // 3. This Run's own manifest (one per Run) is bound to the Reviewer and its Human.
+  const [manifest] = await db.select().from(agentExecutionManifests).where(and(
+    eq(agentExecutionManifests.companyId, input.companyId), eq(agentExecutionManifests.runId, run.id),
+    eq(agentExecutionManifests.agentId, input.agentId),
+  )).limit(1);
+  if (!manifest || (input.manifestId !== undefined && manifest.id !== input.manifestId) ||
+    manifest.manifest.responsibleUserId !== run.responsibleUserId) return false;
+  // 1. The pending review this Run's persisted wake binds, addressed to this
+  // Agent, with this Run acting. No resolved-review allowance is passed.
+  const assignment = await getNativeReviewAssignment(db, {
+    companyId: input.companyId, issueId: input.issueId, agentId: input.agentId,
+    contextSnapshot: run.contextSnapshot, actingRunId: run.id, issueExecutionRunId: task.executionRunId,
+  });
+  if (!assignment || assignment.interaction.status !== "pending") return false;
+  // 4. The reviewed source Run is committed and its process cleanup is done.
+  return assignment.sourceRun.status === "succeeded" && assignment.sourceRun.nativePhase === "committed" &&
+    assignment.sourceRun.nativeProcessCleanupPending === false;
 }
 
 /** Resolve an already-captured review's immutable owner rows without applying
