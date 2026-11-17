@@ -69,7 +69,7 @@ import {
   type ScopedToolGatewayContext,
 } from "../services/tool-gateway.js";
 import { AGENT_NATIVE_EXISTING_API_OPERATION_MANIFEST, AGENT_NATIVE_OPERATION_MANIFEST, agentNativeOperationForToolName, blenteraToolCatalogContractHash } from "../services/agent-native-operation-manifest.js";
-import { canonicalToolArguments, signToolArguments } from "../services/tool-content-guards.js";
+import { canonicalToolArguments, signToolArguments, validateToolContent } from "../services/tool-content-guards.js";
 import {
   getEmbeddedPostgresTestSupport,
   startEmbeddedPostgresTestDatabase,
@@ -1220,6 +1220,11 @@ describeEmbeddedPostgres("tool gateway service", () => {
 
         await expect(approve(first!)).resolves.toMatchObject({ status: "executed" });
         expect(await counts()).toEqual([1]);
+        // GW7: the execution's token is stored on its invocation for replays.
+        const [executed] = await db.select().from(toolActionRequests).where(eq(toolActionRequests.id, first!));
+        const [executedInvocation] = await db.select().from(toolInvocations).where(eq(toolInvocations.id, executed.invocationId));
+        expect(executedInvocation.policyExplanation).toMatchObject({ rateLimitCharge: {
+          owner: `tool-invocation:${executed.invocationId}`, windows: [expect.objectContaining({ windowKind: "minute" })] } });
 
         // The window is full: approving the second call is refused like any
         // other rate-limited call and it stays pending, unexecuted.
@@ -1262,6 +1267,11 @@ describeEmbeddedPostgres("tool gateway service", () => {
         const refused = results.filter((result): result is PromiseRejectedResult => result.status === "rejected");
         expect(completed).toHaveLength(1);
         expect(completed[0]).toMatchObject({ value: { status: "completed" } });
+        // GW7: the admitted retry's token is stored on its invocation for replays.
+        const completedInvocationId = (completed[0] as PromiseFulfilledResult<{ invocationId: string }>).value.invocationId;
+        const [completedInvocation] = await db.select().from(toolInvocations).where(eq(toolInvocations.id, completedInvocationId));
+        expect(completedInvocation.policyExplanation).toMatchObject({ rateLimitCharge: {
+          owner: `tool-invocation:${completedInvocationId}`, windows: [expect.objectContaining({ windowKind: "hour" })] } });
         expect(refused).toHaveLength(1);
         expect(refused[0]!.reason).toMatchObject({ status: 429, reasonCode: "rate_limited",
           details: { decision: "rate_limited", invocationId: expect.any(String) } });
@@ -1419,6 +1429,142 @@ describeEmbeddedPostgres("tool gateway service", () => {
     } finally {
       vi.useRealTimers();
     }
+  });
+
+  // GW7: an exact replay of a first-party invocation is that invocation, not a
+  // new call. It takes no token; it is re-checked with the token its original
+  // admission took, only in that window, and a full window refuses it with the
+  // admission 429 contract.
+  describe("first-party replay rate limits", () => {
+    const commentTool = "blentera.task.comment.add";
+    const legacyCommentTool = "paperclip-self:report_progress";
+
+    async function commentFixture(windowInstant: Date) {
+      const { company, agent, issue, run } = await createRunFixture(db);
+      const userId = `gateway-replay-human-${randomUUID()}`;
+      await seedCurrentHumanSourceActor(db, [company.id], userId);
+      await db.insert(companyMemberships).values({ companyId: company.id, principalType: "agent", principalId: agent.id,
+        status: "active", membershipRole: "member" });
+      await db.update(heartbeatRuns).set({ responsibleUserId: userId, runtimeMode: "native", nativeIssueId: issue.id })
+        .where(eq(heartbeatRuns.id, run.id));
+      await db.update(issues).set({ executionRunId: run.id }).where(eq(issues.id, issue.id));
+      await preparePlatformSkillAdmission(db, { companyId: company.id, agentId: agent.id, runId: run.id,
+        responsibleUserId: userId, requireExisting: false }, blenteraPlatformContractHashes());
+      const humanMembership = await db.select().from(companyMemberships).where(and(
+        eq(companyMemberships.companyId, company.id), eq(companyMemberships.principalType, "user"),
+        eq(companyMemberships.principalId, userId), eq(companyMemberships.status, "active"),
+      )).then(rows => rows[0]!);
+      const actor: AuthorizationActor = { type: "agent", source: "agent_jwt", companyId: company.id, agentId: agent.id,
+        runId: run.id, onBehalfOfUserId: userId, authenticatedCredentialExpiresAt: windowInstant.getTime() + 3600_000,
+        keyScope: { kind: "standard" }, companyIds: [company.id],
+        memberships: [{ companyId: company.id, membershipRole: "member", status: "active" }],
+        onBehalfOfMemberships: [{ companyId: humanMembership.companyId, membershipRole: humanMembership.membershipRole,
+          status: humanMembership.status }] };
+      await db.insert(toolPolicies).values({ companyId: company.id, name: "Allow internal Task comment",
+        policyType: "allow", priority: 100, selectors: { toolName: legacyCommentTool } });
+      const [rateLimit] = await db.insert(toolPolicies).values({ companyId: company.id, name: "Two comments per minute",
+        policyType: "rate_limit", priority: -10, selectors: { toolName: legacyCommentTool },
+        config: { rateLimit: { limit: 2, windowSeconds: 60, keyBy: ["agent", "tool"] } } }).returning();
+      const gateway = createTestToolGatewayService(db);
+      const session = await gateway.createSession({ companyId: company.id, agentId: agent.id, runId: run.id,
+        issueId: issue.id, authorizationActor: actor });
+      const comment = (parameters: { idempotencyKey: string; body: string }) =>
+        gateway.executeTool({ sessionToken: session.token, tool: commentTool, parameters });
+      const counts = async () => (await db.select().from(toolRateLimitCounters)
+        .where(eq(toolRateLimitCounters.policyId, rateLimit!.id)))
+        .sort((left, right) => left.windowStartAt.getTime() - right.windowStartAt.getTime())
+        .map((row) => row.limit - row.remaining);
+      const parameters = (body: string) => ({ idempotencyKey: randomUUID(), body });
+      return { company, agent, issue, run, rateLimit: rateLimit!, comment, counts, parameters };
+    }
+
+    it("charges idempotent replays nothing and re-checks them with the original token", async () => {
+      const windowInstant = new Date(); windowInstant.setUTCSeconds(10, 0);
+      vi.useFakeTimers({ toFake: ["Date"] }); vi.setSystemTime(windowInstant);
+      try {
+        const f = await commentFixture(windowInstant);
+        const a = f.parameters("First replayed comment.");
+        const first = await f.comment(a);
+        expect(first.status).toBe("completed");
+        expect(await f.counts()).toEqual([1]);
+        for (let replay = 0; replay < 3; replay++) {
+          await expect(f.comment(a)).resolves.toMatchObject({ status: "replayed", invocationId: first.invocationId });
+        }
+        expect(await f.counts()).toEqual([1]);
+
+        const b = f.parameters("Second comment fills the window.");
+        const second = await f.comment(b);
+        expect(second.status).toBe("completed");
+        expect(await f.counts()).toEqual([2]);
+        // The window is full, but each replay holds its own token in it.
+        await expect(f.comment(a)).resolves.toMatchObject({ status: "replayed", invocationId: first.invocationId });
+        await expect(f.comment(b)).resolves.toMatchObject({ status: "replayed", invocationId: second.invocationId });
+        await expect(f.comment(f.parameters("A new call."))).rejects.toMatchObject({ status: 429, reasonCode: "rate_limited" });
+        expect(await f.counts()).toEqual([2]);
+
+        // One invocation cannot present another invocation's stored charge.
+        const [firstRow] = await db.select().from(toolInvocations).where(eq(toolInvocations.id, first.invocationId));
+        expect(firstRow.policyExplanation).toMatchObject({ rateLimitCharge: {
+          owner: `tool-invocation:${first.invocationId}`, windows: [expect.objectContaining({ policyId: f.rateLimit.id })] } });
+        await db.update(toolInvocations).set({ policyExplanation: firstRow.policyExplanation })
+          .where(eq(toolInvocations.id, second.invocationId));
+        await expect(f.comment(b)).rejects.toMatchObject({ status: 429, reasonCode: "rate_limited",
+          details: { invocationId: second.invocationId, decision: "rate_limited" } });
+        expect(await f.counts()).toEqual([2]);
+
+        // Next window: the stored charge gives no credit there.
+        vi.setSystemTime(new Date(windowInstant.getTime() + 60_000));
+        expect((await f.comment(f.parameters("Third comment."))).status).toBe("completed");
+        expect((await f.comment(f.parameters("Fourth comment."))).status).toBe("completed");
+        const refusal = await f.comment(a).then(() => null, (error: unknown) => error);
+        expect(refusal).toBeInstanceOf(ToolGatewayHttpError);
+        expect(refusal).toMatchObject({ status: 429, reasonCode: "rate_limited", details: {
+          invocationId: first.invocationId, tool: legacyCommentTool, decision: "rate_limited",
+          matchedPolicyIds: [f.rateLimit.id], rateLimitState: expect.objectContaining({ limited: true, limit: 2 }) } });
+        expect(await f.counts()).toEqual([2, 2]);
+      } finally {
+        vi.useRealTimers();
+      }
+    });
+
+    it("re-checks a first-party replay of an executed action request without charging it", async () => {
+      const windowInstant = new Date(); windowInstant.setUTCSeconds(10, 0);
+      vi.useFakeTimers({ toFake: ["Date"] }); vi.setSystemTime(windowInstant);
+      try {
+        const f = await commentFixture(windowInstant);
+        const a = f.parameters("Executed action request comment.");
+        const first = await f.comment(a);
+        expect(first.status).toBe("completed");
+        // An executed action request for these exact arguments makes every
+        // later identical call a replay of that request's invocation.
+        const summary = validateToolContent({ value: a, direction: "arguments", sensitiveMode: "redact",
+          promptInjectionMode: "ignore" }).summary;
+        await db.insert(toolActionRequests).values({ companyId: f.company.id, invocationId: first.invocationId,
+          issueId: f.issue.id, status: "executed", canonicalArgumentsHash: summary.sha256!, canonicalArgumentsSummary: summary,
+          requestedByAgentId: f.agent.id, decidedAt: new Date(), resolvedAt: new Date() });
+        expect(await f.counts()).toEqual([1]);
+        for (let replay = 0; replay < 3; replay++) {
+          await expect(f.comment(a)).resolves.toMatchObject({ status: "replayed", invocationId: first.invocationId });
+        }
+        expect(await f.counts()).toEqual([1]);
+        expect((await f.comment(f.parameters("Second comment fills the window."))).status).toBe("completed");
+        expect(await f.counts()).toEqual([2]);
+        await expect(f.comment(a)).resolves.toMatchObject({ status: "replayed", invocationId: first.invocationId });
+        expect(await f.counts()).toEqual([2]);
+
+        vi.setSystemTime(new Date(windowInstant.getTime() + 60_000));
+        expect((await f.comment(f.parameters("Third comment."))).status).toBe("completed");
+        expect((await f.comment(f.parameters("Fourth comment."))).status).toBe("completed");
+        const refusal = await f.comment(a).then(() => null, (error: unknown) => error);
+        expect(refusal).toBeInstanceOf(ToolGatewayHttpError);
+        expect(refusal).toMatchObject({ status: 429, reasonCode: "rate_limited", details: {
+          invocationId: first.invocationId, tool: legacyCommentTool, decision: "rate_limited",
+          matchedPolicyIds: [f.rateLimit.id], rateLimitState: expect.objectContaining({ limited: true, limit: 2 }) } });
+        expect(await f.counts()).toEqual([2, 2]);
+      } finally {
+        vi.useRealTimers();
+      }
+    });
   });
 
   it("approves a pending action request directly from the review queue and preserves signed arguments", async () => {

@@ -49,6 +49,8 @@ import {
   toolConnections,
   toolConnectionInstalls,
   connectionGrants,
+  toolPolicies,
+  toolRateLimitCounters,
 } from "@paperclipai/db";
 import { startEmbeddedPostgresTestDatabase } from "./helpers/embedded-postgres.js";
 import {
@@ -672,6 +674,182 @@ describe("AgentMail durable email pipeline", () => {
       (await f.service.publication(input.idempotencyKey, f.companyId)).outcome,
     ).toBe("failed");
   });
+  // GW6: publishing takes a send's rate-limit token and the queued row carries
+  // it, bound to that publication, so the dispatch re-check excludes exactly
+  // that token. Refusals use the Tool Access 429 contract.
+  describe("email send rate limits", () => {
+    async function rateLimited(limit: number) {
+      const f = await fixture();
+      const parent = await issueService(db).create(f.companyId, {
+        title: "Parent",
+        status: "todo",
+        assigneeAgentId: f.agentId,
+      });
+      const [rateLimit] = await db
+        .insert(toolPolicies)
+        .values({
+          companyId: f.companyId,
+          name: "Email sends per minute",
+          policyType: "rate_limit",
+          selectors: { toolName: "email.send" },
+          config: { rateLimit: { limit, windowSeconds: 60 } },
+        })
+        .returning();
+      const input = (text: string, extra: Record<string, unknown> = {}) =>
+        emailSendSchema.parse({
+          endpointId: f.endpointId,
+          parentIssueId: parent.id,
+          to: ["recipient@example.test"],
+          subject: "Hello",
+          text,
+          idempotencyKey: randomUUID(),
+          ...extra,
+        });
+      const queue = (send: ReturnType<typeof input>) =>
+        f.service.queueSend(f.companyId, send, { userId: "email-board" });
+      const counts = async () =>
+        (
+          await db
+            .select()
+            .from(toolRateLimitCounters)
+            .where(eq(toolRateLimitCounters.policyId, rateLimit!.id))
+        )
+          .sort((left, right) => left.windowStartAt.getTime() - right.windowStartAt.getTime())
+          .map((row) => row.limit - row.remaining);
+      const storedActor = async (publicationId: string) =>
+        (
+          await db
+            .select()
+            .from(emailSends)
+            .where(eq(emailSends.publicationId, publicationId))
+        )[0]!.actor as Record<string, unknown>;
+      return { ...f, rateLimit: rateLimit!, input, queue, counts, storedActor };
+    }
+
+    it("dispatches exactly as many sends as the limit admitted and refuses the next with 429", async () => {
+      const windowInstant = new Date();
+      vi.useFakeTimers({ toFake: ["Date"] });
+      vi.setSystemTime(windowInstant);
+      try {
+        const f = await rateLimited(2);
+        // A send that is never queued holds no token.
+        await expect(
+          f.queue(f.input("Not queued", { attachmentIds: [randomUUID()] })),
+        ).rejects.toThrow(/attachments must belong/);
+        expect(await f.counts()).toEqual([0]);
+        const first = f.input("First");
+        const second = f.input("Second");
+        await f.queue(first);
+        await f.queue(second);
+        await f.queue(first);
+        expect(await f.counts()).toEqual([2]);
+        expect(await f.storedActor(first.idempotencyKey)).toMatchObject({
+          userId: "email-board",
+          rateLimitCharge: {
+            owner: `email-send:${first.idempotencyKey}`,
+            windows: [expect.objectContaining({ policyId: f.rateLimit.id })],
+          },
+        });
+        const refusal = await f
+          .queue(f.input("Third"))
+          .then(() => null, (error: unknown) => error);
+        expect(refusal).toMatchObject({
+          status: 429,
+          message: "Tool access rate limit exceeded.",
+          details: {
+            code: "rate_limited",
+            tool: "email.send",
+            decision: "rate_limited",
+            matchedPolicyIds: [f.rateLimit.id],
+            rateLimitState: expect.objectContaining({ limited: true, limit: 2 }),
+          },
+        });
+        await f.service.tick();
+        await f.service.tick();
+        // Both admitted sends pass their dispatch re-check and reach AgentMail.
+        // (The fixture gives every new send the same provider thread, so the
+        // later one can record "uncertain"; neither is refused.)
+        expect(f.sends.map((send) => send.key).sort()).toEqual(
+          [first.idempotencyKey, second.idempotencyKey].sort(),
+        );
+        for (const send of [first, second])
+          expect(
+            (await f.service.publication(send.idempotencyKey, f.companyId))
+              .outcome,
+          ).not.toBe("failed");
+        expect(await f.counts()).toEqual([2]);
+      } finally {
+        vi.useRealTimers();
+      }
+    });
+
+    it("counts a send whose stored token belongs to another send or is missing", async () => {
+      const windowInstant = new Date();
+      vi.useFakeTimers({ toFake: ["Date"] });
+      vi.setSystemTime(windowInstant);
+      try {
+        const f = await rateLimited(3);
+        const owner = f.input("Owner");
+        const borrower = f.input("Borrower");
+        const untracked = f.input("Untracked");
+        for (const send of [owner, borrower, untracked]) await f.queue(send);
+        expect(await f.counts()).toEqual([3]);
+        // The borrower presents the owner's token; the untracked send has none.
+        const ownerActor = await f.storedActor(owner.idempotencyKey);
+        await db
+          .update(emailSends)
+          .set({ actor: ownerActor as typeof emailSends.$inferInsert.actor })
+          .where(eq(emailSends.publicationId, borrower.idempotencyKey));
+        const { rateLimitCharge: _dropped, ...withoutCharge } =
+          await f.storedActor(untracked.idempotencyKey);
+        await db
+          .update(emailSends)
+          .set({ actor: withoutCharge as typeof emailSends.$inferInsert.actor })
+          .where(eq(emailSends.publicationId, untracked.idempotencyKey));
+        await f.service.tick();
+        await f.service.tick();
+        expect(f.sends.map((send) => send.key)).toEqual([owner.idempotencyKey]);
+        for (const send of [borrower, untracked])
+          expect(
+            await f.service.publication(send.idempotencyKey, f.companyId),
+          ).toMatchObject({
+            outcome: "failed",
+            error: "Tool access rate limit exceeded.",
+          });
+        expect(await f.counts()).toEqual([3]);
+      } finally {
+        vi.useRealTimers();
+      }
+    });
+
+    it("gives a queued send no credit after its window rolls over", async () => {
+      const windowInstant = new Date();
+      vi.useFakeTimers({ toFake: ["Date"] });
+      vi.setSystemTime(windowInstant);
+      try {
+        const f = await rateLimited(1);
+        const early = f.input("Queued in the first window");
+        await f.queue(early);
+        vi.setSystemTime(new Date(windowInstant.getTime() + 60_000));
+        const late = f.input("Queued in the next window");
+        await f.queue(late);
+        expect(await f.counts()).toEqual([1, 1]);
+        await f.service.tick();
+        await f.service.tick();
+        expect(f.sends.map((send) => send.key)).toEqual([late.idempotencyKey]);
+        expect(
+          await f.service.publication(early.idempotencyKey, f.companyId),
+        ).toMatchObject({
+          outcome: "failed",
+          error: "Tool access rate limit exceeded.",
+        });
+        expect(await f.counts()).toEqual([1, 1]);
+      } finally {
+        vi.useRealTimers();
+      }
+    });
+  });
+
   it("updates delivery receipts once without creating another task or wake", async () => {
     const f = await fixture();
     const parent = await issueService(db).create(f.companyId, {

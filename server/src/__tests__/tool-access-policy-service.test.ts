@@ -33,7 +33,9 @@ import {
 } from "./helpers/embedded-postgres.js";
 import {
   createToolRateLimitTokenLedger,
+  restoreToolRateLimitTokenLedger,
   toolAccessPolicyService,
+  toolRateLimitCharge,
   type ToolRateLimitTokenLedger,
 } from "../services/tool-access-policy.js";
 import { toolAccessService } from "../services/tool-access.js";
@@ -1287,6 +1289,85 @@ describeEmbeddedPostgres("tool access policy service", () => {
         .toMatchObject({ decision: "rate_limited" });
     } finally {
       governanceOverride.requireHumanApproval = false;
+      vi.useRealTimers();
+    }
+  });
+
+  // GW6/GW7: a call re-checked outside its admitting request carries a stored
+  // charge. It offsets only that call's own token, only for its owner and only
+  // in the window the token was taken in.
+  it("re-checks a stored rate-limit charge only for its owner, company and window", async () => {
+    const company = await createCompany(db);
+    const otherCompany = await createCompany(db);
+    const agent = await createAgent(db, company.id);
+    const { connection } = await createTool(db, company.id);
+    await db.insert(principalPermissionGrants).values({
+      companyId: company.id,
+      principalType: "agent",
+      principalId: agent.id,
+      permissionKey: "tools:use",
+      scope: { toolName: "send_email" },
+    });
+    await db.insert(toolPolicies).values({
+      companyId: company.id,
+      name: "Two sends per hour",
+      policyType: "rate_limit",
+      selectors: { toolName: "send_email" },
+      config: { limit: 2, windowSeconds: 3600, keyBy: ["agent", "tool"] },
+    });
+    const input = {
+      companyId: company.id,
+      actor: { actorType: "agent" as const, actorId: agent.id, agentId: agent.id },
+      request: { connectionId: connection.id, toolName: "send_email" },
+      consumeRateLimit: true,
+    };
+    const recheck = { ...input, consumeRateLimit: false };
+    const policy = toolAccessPolicyService(db);
+    const counts = async () => (await db.select().from(toolRateLimitCounters)).map((row) => row.limit - row.remaining);
+    const owner = { owner: "email-send:first", companyId: company.id };
+
+    const windowInstant = new Date(); windowInstant.setUTCMinutes(10, 0, 0);
+    vi.useFakeTimers({ toFake: ["Date"] }); vi.setSystemTime(windowInstant);
+    try {
+      const first = createToolRateLimitTokenLedger();
+      expect(await policy.decide(input, { rateLimitTokens: first })).toMatchObject({ allowed: true });
+      const charge = toolRateLimitCharge(first, owner.owner);
+      expect(charge).toMatchObject({ version: 1, owner: owner.owner, windows: [expect.objectContaining({
+        companyId: company.id, windowKind: "hour", windowStartAt: new Date(Math.floor(windowInstant.getTime() / 3600_000) * 3600_000).toISOString(),
+      })] });
+      expect(toolRateLimitCharge(createToolRateLimitTokenLedger(), owner.owner)).toBeNull();
+      expect(await policy.decide(input, { rateLimitTokens: createToolRateLimitTokenLedger() })).toMatchObject({ allowed: true });
+      expect(await counts()).toEqual([2]);
+
+      // The window is full. The first call's own charge offsets its own token.
+      const restored = () => restoreToolRateLimitTokenLedger(JSON.parse(JSON.stringify(charge)), owner);
+      expect(await policy.decide(recheck, { rateLimitTokens: restored() })).toMatchObject({ allowed: true });
+      expect(await policy.decide(recheck)).toMatchObject({ decision: "rate_limited" });
+      // Another owner or company, a malformed record, or duplicated windows get
+      // no more than the record's owner would.
+      for (const forged of [
+        restoreToolRateLimitTokenLedger(charge, { owner: "email-send:second", companyId: company.id }),
+        restoreToolRateLimitTokenLedger(charge, { owner: owner.owner, companyId: otherCompany.id }),
+        restoreToolRateLimitTokenLedger({ ...charge, version: 2 }, owner),
+        restoreToolRateLimitTokenLedger(null, owner),
+      ]) {
+        expect(await policy.decide(recheck, { rateLimitTokens: forged })).toMatchObject({ decision: "rate_limited" });
+      }
+      const doubled = restoreToolRateLimitTokenLedger({ ...charge!, windows: [...charge!.windows, ...charge!.windows] }, owner);
+      const [held] = charge!.windows;
+      expect(doubled.heldIn(held!.policyId, held!.counterKey, new Date(held!.windowStartAt))).toBe(1);
+
+      // A restored charge never admits a call and is never released.
+      await expect(policy.decide(input, { rateLimitTokens: restored() })).rejects.toThrow(/cannot admit/);
+      await policy.releaseRateLimitTokens(restored());
+      expect(await counts()).toEqual([2]);
+
+      // After the window rolls over the charge gives no credit.
+      vi.setSystemTime(new Date(windowInstant.getTime() + 3600_000));
+      expect(await policy.decide(input, { rateLimitTokens: createToolRateLimitTokenLedger() })).toMatchObject({ allowed: true });
+      expect(await policy.decide(input, { rateLimitTokens: createToolRateLimitTokenLedger() })).toMatchObject({ allowed: true });
+      expect(await policy.decide(recheck, { rateLimitTokens: restored() })).toMatchObject({ decision: "rate_limited" });
+    } finally {
       vi.useRealTimers();
     }
   });

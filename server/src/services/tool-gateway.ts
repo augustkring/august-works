@@ -194,7 +194,9 @@ import {
 } from "./remote-url-credentials.js";
 import {
   createToolRateLimitTokenLedger,
+  storedToolInvocationRateLimitTokens,
   toolAccessPolicyService,
+  toolPolicyRefusal,
   type ToolRateLimitTokenLedger,
 } from "./tool-access-policy.js";
 import { commitToolActionReview } from "./tool-action-review.js";
@@ -3872,8 +3874,7 @@ export function createToolGatewayService(
   }
 
   function policyErrorStatus(decision: ToolAccessDecision) {
-    if (decision.decision === "rate_limited") return 429;
-    return 403;
+    return toolPolicyRefusal(decision, {}).status;
   }
 
   /**
@@ -3883,12 +3884,8 @@ export function createToolGatewayService(
    * caller sees one error contract wherever the call was stopped.
    */
   function policyRefusalError(decision: ToolAccessDecision, details: { invocationId: string; tool: string }) {
-    return new ToolGatewayHttpError(policyErrorStatus(decision), decision.explanation, decision.reasonCode, {
-      ...details,
-      decision: decision.decision,
-      matchedPolicyIds: decision.matchedPolicyIds,
-      rateLimitState: decision.rateLimitState ?? null,
-    });
+    const refusal = toolPolicyRefusal(decision, details);
+    return new ToolGatewayHttpError(refusal.status, refusal.message, refusal.reasonCode, refusal.details);
   }
 
   function findStaticTool(toolName: string): ToolGatewayDescriptor {
@@ -9861,6 +9858,8 @@ export function createToolGatewayService(
       );
       if (!executionAccess.allowed && executionAccess.decision !== "require_approval")
         throw policyRefusalError(executionAccess, { invocationId: invocation.id, tool: tool.name });
+      // An exact replay of this invocation is re-checked with this charge.
+      await policyService.recordInvocationRateLimitCharge(invocation, rateLimitTokens);
     } catch (error) {
       await markApprovedActionFailed({
         actionRequestId: claimed.id,
@@ -12901,12 +12900,31 @@ export function createToolGatewayService(
             // current Tool Gateway policy is also required. An operation
             // without a known safe owner class fails closed instead of using
             // the generic cached result.
+            //
+            // The replay is the original invocation, not a new call: it takes
+            // no rate-limit token. Its check is a re-check with the tokens the
+            // original admission charged (stored on the invocation), so it
+            // does not count its own token in that window and gets no credit
+            // after the window rolls over.
+            const [replayedInvocation] = await db
+              .select({ id: toolInvocations.id, companyId: toolInvocations.companyId,
+                policyExplanation: toolInvocations.policyExplanation })
+              .from(toolInvocations)
+              .where(and(eq(toolInvocations.id, replay.invocationId), eq(toolInvocations.companyId, session.companyId)))
+              .limit(1);
             const currentPolicy = await policyService.decide(policyInputForTool({
               session,
               tool,
               parameters: requestedParameters,
-              consumeRateLimit: true,
-            }));
+              consumeRateLimit: false,
+            }), {
+              rateLimitTokens: replayedInvocation
+                ? storedToolInvocationRateLimitTokens(replayedInvocation)
+                : undefined,
+            });
+            if (currentPolicy.decision === "rate_limited") {
+              throw policyRefusalError(currentPolicy, { invocationId: replay.invocationId, tool: tool.name });
+            }
             let reviewedMemoryReplay = false;
             if (tool.name === "paperclip-self:remember" && currentPolicy.decision === "require_approval") {
               const [receipt] = await db.select({ signedArguments: toolActionRequests.signedArguments })
@@ -13310,6 +13328,8 @@ export function createToolGatewayService(
           }), { rateLimitTokens });
           if (!executionAccess.allowed && executionAccess.decision !== "require_approval")
             throw policyRefusalError(executionAccess, { invocationId: storedInvocation.id, tool: tool.name });
+          // An exact replay of this invocation is re-checked with this charge.
+          await policyService.recordInvocationRateLimitCharge(storedInvocation, rateLimitTokens);
         } catch (error) {
           await markApprovedActionFailed({
             actionRequestId: claimed.id,
@@ -13356,13 +13376,23 @@ export function createToolGatewayService(
         const rememberDraft = scopedMemoryCapture && tool.name === "paperclip-self:remember"
           ? memoryAgentRememberInputSchema.safeParse(effectiveParameters).success : false;
         const recorded = await policyService.recordInvocation(decisionInput, accessDecision,
-          rememberDraft ? { nativeMemoryDraft: true } : undefined);
+          rememberDraft ? { nativeMemoryDraft: true, rateLimitTokens } : { rateLimitTokens });
         await policyService.writeAudit(decisionInput, accessDecision);
         invocationId = recorded.invocation.id;
         const retryingSlackRateLimit = recorded.replayed && accessDecision.allowed && tool.providerType === "paperclip_slack_chat" && session.agentId && session.runId && session.issueId
           ? await claimSlackRateLimitRetry(db, { companyId: session.companyId, agentId: session.agentId, runId: session.runId, issueId: session.issueId, endpointId: String(asRecord(tool.providerMetadata)?.endpointId ?? ""), identityContextId: session.identityContextId }, invocationId)
           : false;
         if (recorded.replayed && !retryingSlackRateLimit) {
+          // An exact replay returns the existing invocation and dispatches
+          // nothing, so it takes no rate-limit token: return the tokens this
+          // admission just took. A rate-limited replay is re-checked with the
+          // charge its original admission stored, so it does not count its own
+          // token in that window and gets no credit after a rollover.
+          await policyService.releaseRateLimitTokens(rateLimitTokens);
+          if (accessDecision.decision === "rate_limited") {
+            accessDecision = await policyService.decide({ ...decisionInput, consumeRateLimit: false },
+              { rateLimitTokens: storedToolInvocationRateLimitTokens(recorded.invocation) });
+          }
           const reviewedReceipt = recorded.invocation.status === "succeeded" && recorded.invocation.approvalState === "approved";
           if (!accessDecision.allowed && !(accessDecision.decision === "require_approval" && reviewedReceipt)) {
             if (session.workflowRunId && accessDecision.decision === "require_approval" && recorded.invocation.status === "awaiting_approval") {
@@ -13373,8 +13403,7 @@ export function createToolGatewayService(
                 interactionId: review.interactionId, issueId: session.issueId, toolName: tool.name,
                 argumentsHash: review.canonicalArgumentsHash });
             }
-            throw new ToolGatewayHttpError(policyErrorStatus(accessDecision),
-            accessDecision.explanation, accessDecision.reasonCode, { invocationId });
+            throw policyRefusalError(accessDecision, { invocationId, tool: tool.name });
           }
           if ((session.workflowRunId || scopedContext) && recorded.invocation.status !== "succeeded") throw new ToolGatewayHttpError(409,
             "The original tool operation is pending or failed; its effects cannot be repeated",
