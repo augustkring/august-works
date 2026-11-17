@@ -4521,7 +4521,7 @@
         },
         {
           "path": "server/src/services/tool-gateway.ts",
-          "sha256": "184065edc0f7ba1e93918933d94c5a243d193d27c32edfba9c663eeeb204b5e4"
+          "sha256": "a763da7bbd0b32d8e9e0e2566992c230ba7dc6d29e8399dc011db2c76889cf7f"
         }
       ],
       "kind": "safe_change_record",
@@ -5959,7 +5959,7 @@
         },
         {
           "path": "server/src/services/tool-gateway.ts",
-          "sha256": "184065edc0f7ba1e93918933d94c5a243d193d27c32edfba9c663eeeb204b5e4"
+          "sha256": "a763da7bbd0b32d8e9e0e2566992c230ba7dc6d29e8399dc011db2c76889cf7f"
         },
         {
           "path": "server/src/services/workflows/workflow-executor.ts",
@@ -6379,7 +6379,7 @@
         },
         {
           "path": "server/src/services/tool-gateway.ts",
-          "sha256": "184065edc0f7ba1e93918933d94c5a243d193d27c32edfba9c663eeeb204b5e4"
+          "sha256": "a763da7bbd0b32d8e9e0e2566992c230ba7dc6d29e8399dc011db2c76889cf7f"
         },
         {
           "path": "server/src/services/workflows/workflow-capability-resolver.ts",
@@ -10329,7 +10329,7 @@
         },
         {
           "path": "server/src/services/execution-sandbox/sandbox-service.ts",
-          "sha256": "039c6cb6b2cfb081945a8803f21107aa1573ff27cfb6175567c0f39a2114b71d"
+          "sha256": "6fe77dc673589b8b24b92ca1f78d181c218a24804b10cb648745e2815b510ebb"
         },
         {
           "path": "server/src/services/heartbeat.ts",
@@ -10393,7 +10393,7 @@
         },
         {
           "path": "server/src/services/tool-gateway.ts",
-          "sha256": "184065edc0f7ba1e93918933d94c5a243d193d27c32edfba9c663eeeb204b5e4"
+          "sha256": "a763da7bbd0b32d8e9e0e2566992c230ba7dc6d29e8399dc011db2c76889cf7f"
         },
         {
           "path": "server/src/services/workflows/workflow-capability-resolver.ts",
@@ -25170,7 +25170,7 @@
         },
         {
           "path": "server/src/services/native-runtime/native-review-participant.ts",
-          "sha256": "eecbaf1629957e6e0dc2c7eb4d79b2e6083014f44a1ce72bff9b5648eefbc4f1"
+          "sha256": "5abf6bae32881e43f55a90a987dc48596dedbdc20a0fd134ad30f77e6dce4c0c"
         },
         {
           "path": "server/src/services/native-runtime/native-run-finalizer.ts",
@@ -25310,7 +25310,7 @@
         },
         {
           "path": "server/src/services/runtime/control.ts",
-          "sha256": "1caf20471b6186819bc48cca2e1c7444c4988350ac042d1564de218604c31e48"
+          "sha256": "3f6bbbe3fdeb88669c4d63694287a77a4329715243f08597756888702ce05068"
         },
         {
           "path": "server/src/services/runtime/fleet.ts",
@@ -32085,7 +32085,7 @@
         },
         {
           "path": "server/src/__tests__/helpers/managed-native-conversation-sandbox-host.ts",
-          "sha256": "182fedff89bb3e8bf5295f56534b526d0ff3b6e1f74200e50f69d079256ca96a"
+          "sha256": "e99fada35fe03177d5f3011c7fdee0f82ca65269ad18c1cbd420dcc25901e66c"
         },
         {
           "path": "server/src/__tests__/helpers/managed-native-infrastructure-cleanup.test.ts",
@@ -47096,7 +47096,7 @@
       "id": "source:server/src/services/tool-gateway.ts",
       "kind": "current_source_owner",
       "path": "server/src/services/tool-gateway.ts",
-      "sha256": "184065edc0f7ba1e93918933d94c5a243d193d27c32edfba9c663eeeb204b5e4",
+      "sha256": "a763da7bbd0b32d8e9e0e2566992c230ba7dc6d29e8399dc011db2c76889cf7f",
       "changeIds": [
         "SCR-V10-HOTSPOT-01",
         "SCR-V10-HOTSPOT-02",
@@ -51441,7 +51441,7 @@
       "id": "source:server/src/services/execution-sandbox/sandbox-service.ts",
       "kind": "current_source_owner",
       "path": "server/src/services/execution-sandbox/sandbox-service.ts",
-      "sha256": "039c6cb6b2cfb081945a8803f21107aa1573ff27cfb6175567c0f39a2114b71d",
+      "sha256": "6fe77dc673589b8b24b92ca1f78d181c218a24804b10cb648745e2815b510ebb",
       "changeIds": [
         "SCR-V10-HOTSPOT-07"
       ],
@@ -64273,7 +64273,7 @@
       "id": "source:server/src/services/native-runtime/native-review-participant.ts",
       "kind": "current_source_owner",
       "path": "server/src/services/native-runtime/native-review-participant.ts",
-      "sha256": "eecbaf1629957e6e0dc2c7eb4d79b2e6083014f44a1ce72bff9b5648eefbc4f1",
+      "sha256": "5abf6bae32881e43f55a90a987dc48596dedbdc20a0fd134ad30f77e6dce4c0c",
       "changeIds": [
         "SCR-V10-NATIVE-RUNTIME-AND-AUTHORITY"
       ],
@@ -64798,7 +64798,7 @@
       "id": "source:server/src/services/runtime/control.ts",
       "kind": "current_source_owner",
       "path": "server/src/services/runtime/control.ts",
-      "sha256": "1caf20471b6186819bc48cca2e1c7444c4988350ac042d1564de218604c31e48",
+      "sha256": "3f6bbbe3fdeb88669c4d63694287a77a4329715243f08597756888702ce05068",
       "changeIds": [
         "SCR-V10-NATIVE-RUNTIME-AND-AUTHORITY"
       ],
@@ -72375,7 +72375,7 @@
       "id": "source:server/src/__tests__/helpers/managed-native-conversation-sandbox-host.ts",
       "kind": "current_source_owner",
       "path": "server/src/__tests__/helpers/managed-native-conversation-sandbox-host.ts",
-      "sha256": "182fedff89bb3e8bf5295f56534b526d0ff3b6e1f74200e50f69d079256ca96a",
+      "sha256": "e99fada35fe03177d5f3011c7fdee0f82ca65269ad18c1cbd420dcc25901e66c",
       "changeIds": [
         "SCR-V10-PRODUCT-IDENTITY-HELP-LANGUAGE"
       ],
