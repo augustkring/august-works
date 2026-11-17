@@ -901,10 +901,10 @@
     {
       "source": "server/src/routes/issues.ts",
       "articleId": "help-and-human-support",
-      "sourceSha256": "8e8b905bf4cf340ce24f935b3b835a5f251ec3025e995644d8a7bd6e798b1859",
+      "sourceSha256": "48007810f052b69409cc0113e694d7f1b956f7f0bba77ab5e0e0d28c1968cdae",
       "articleSha256": "bec6b2b830586252df7700cc8b8f23018da446ede36284d98e53f8db2b049a1b",
       "decision": "no_change",
-      "rationale": "The source fix binds the complete owned upload set atomically to the first Human comment, and retains explicit Human continuation and unknown-charge ownership. The existing Help instructions for support, recovery, Stop, retention and deletion remain accurate."
+      "rationale": "Reviewed the complete English and Danish guidance. The source fix (D4) makes concurrent requests that replace an Agent Chat conversation whose sources became inaccessible return the one replacement conversation instead of a spurious not-found error, and returns it only for the same company, Agent and person. It adds no user action, retry, stop or support step, and the articles do not describe this flow, so the existing guidance remains accurate."
     },
     {
       "source": "server/src/routes/saas.ts",
@@ -1213,10 +1213,10 @@
     {
       "source": "server/src/routes/issues.ts",
       "articleId": "help-and-human-support-da",
-      "sourceSha256": "8e8b905bf4cf340ce24f935b3b835a5f251ec3025e995644d8a7bd6e798b1859",
+      "sourceSha256": "48007810f052b69409cc0113e694d7f1b956f7f0bba77ab5e0e0d28c1968cdae",
       "articleSha256": "2c92acfc98fc458e84cf4bf6fc421119816d6f471922dceee726e311804bf6b5",
       "decision": "no_change",
-      "rationale": "The source fix binds the complete owned upload set atomically to the first Human comment, and retains explicit Human continuation and unknown-charge ownership. The existing Help instructions for support, recovery, Stop, retention and deletion remain accurate."
+      "rationale": "Reviewed the complete English and Danish guidance. The source fix (D4) makes concurrent requests that replace an Agent Chat conversation whose sources became inaccessible return the one replacement conversation instead of a spurious not-found error, and returns it only for the same company, Agent and person. It adds no user action, retry, stop or support step, and the articles do not describe this flow, so the existing guidance remains accurate."
     },
     {
       "source": "server/src/routes/saas.ts",
@@ -1541,10 +1541,10 @@
     {
       "source": "server/src/routes/issues.ts",
       "articleId": "recovering-work",
-      "sourceSha256": "8e8b905bf4cf340ce24f935b3b835a5f251ec3025e995644d8a7bd6e798b1859",
+      "sourceSha256": "48007810f052b69409cc0113e694d7f1b956f7f0bba77ab5e0e0d28c1968cdae",
       "articleSha256": "0296c2c8ae18c613eef9c17ea9679b146e8afbcd3504451a5511a218d6d8b955",
       "decision": "no_change",
-      "rationale": "The source fix binds the complete owned upload set atomically to the first Human comment, and retains explicit Human continuation and unknown-charge ownership. The existing Help instructions for support, recovery, Stop, retention and deletion remain accurate."
+      "rationale": "Reviewed the complete English and Danish guidance. The source fix (D4) makes concurrent requests that replace an Agent Chat conversation whose sources became inaccessible return the one replacement conversation instead of a spurious not-found error, and returns it only for the same company, Agent and person. It adds no user action, retry, stop or support step, and the articles do not describe this flow, so the existing guidance remains accurate."
     },
     {
       "source": "server/src/services/execution-workspaces.ts",
@@ -1581,10 +1581,10 @@
     {
       "source": "server/src/services/issues.ts",
       "articleId": "recovering-work",
-      "sourceSha256": "8e9c18d331e14c55f24b3bf01a2532ad964758eef6673dc89d1fc47c701d6ee6",
+      "sourceSha256": "6c4388358d023019c3faaae421905fc94e80784941c1c95290c429974646b1d5",
       "articleSha256": "0296c2c8ae18c613eef9c17ea9679b146e8afbcd3504451a5511a218d6d8b955",
       "decision": "no_change",
-      "rationale": "Reviewed the complete English and Danish recovery guidance. The source fix only keeps a Run-authored caller\u2019s requested comment source protocol inside its own transaction, so a managed progress comment keeps its source seal; a direct Human input still decides its protocol from freshness. It adds no user action, retry, stop or support step, so the existing guidance remains accurate."
+      "rationale": "Reviewed the complete English and Danish guidance. The source fix (D4) makes concurrent requests that replace an Agent Chat conversation whose sources became inaccessible return the one replacement conversation instead of a spurious not-found error, and returns it only for the same company, Agent and person. It adds no user action, retry, stop or support step, and the articles do not describe this flow, so the existing guidance remains accurate."
     },
     {
       "source": "server/src/services/managed-repository-checkout.ts",
@@ -1645,10 +1645,10 @@
     {
       "source": "server/src/routes/issues.ts",
       "articleId": "recovering-work-da",
-      "sourceSha256": "8e8b905bf4cf340ce24f935b3b835a5f251ec3025e995644d8a7bd6e798b1859",
+      "sourceSha256": "48007810f052b69409cc0113e694d7f1b956f7f0bba77ab5e0e0d28c1968cdae",
       "articleSha256": "ce0a7beaa56a5db23963d81eed8c19687d2efc5405773ec33dfd635a377090bc",
       "decision": "no_change",
-      "rationale": "The source fix binds the complete owned upload set atomically to the first Human comment, and retains explicit Human continuation and unknown-charge ownership. The existing Help instructions for support, recovery, Stop, retention and deletion remain accurate."
+      "rationale": "Reviewed the complete English and Danish guidance. The source fix (D4) makes concurrent requests that replace an Agent Chat conversation whose sources became inaccessible return the one replacement conversation instead of a spurious not-found error, and returns it only for the same company, Agent and person. It adds no user action, retry, stop or support step, and the articles do not describe this flow, so the existing guidance remains accurate."
     },
     {
       "source": "server/src/services/execution-workspaces.ts",
@@ -1685,10 +1685,10 @@
     {
       "source": "server/src/services/issues.ts",
       "articleId": "recovering-work-da",
-      "sourceSha256": "8e9c18d331e14c55f24b3bf01a2532ad964758eef6673dc89d1fc47c701d6ee6",
+      "sourceSha256": "6c4388358d023019c3faaae421905fc94e80784941c1c95290c429974646b1d5",
       "articleSha256": "ce0a7beaa56a5db23963d81eed8c19687d2efc5405773ec33dfd635a377090bc",
       "decision": "no_change",
-      "rationale": "Reviewed the complete English and Danish recovery guidance. The source fix only keeps a Run-authored caller\u2019s requested comment source protocol inside its own transaction, so a managed progress comment keeps its source seal; a direct Human input still decides its protocol from freshness. It adds no user action, retry, stop or support step, so the existing guidance remains accurate."
+      "rationale": "Reviewed the complete English and Danish guidance. The source fix (D4) makes concurrent requests that replace an Agent Chat conversation whose sources became inaccessible return the one replacement conversation instead of a spurious not-found error, and returns it only for the same company, Agent and person. It adds no user action, retry, stop or support step, and the articles do not describe this flow, so the existing guidance remains accurate."
     },
     {
       "source": "server/src/services/managed-repository-checkout.ts",

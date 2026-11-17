@@ -4473,7 +4473,7 @@
         },
         {
           "path": "server/src/routes/issues.ts",
-          "sha256": "8e8b905bf4cf340ce24f935b3b835a5f251ec3025e995644d8a7bd6e798b1859"
+          "sha256": "48007810f052b69409cc0113e694d7f1b956f7f0bba77ab5e0e0d28c1968cdae"
         },
         {
           "path": "server/src/services/agent-runtime-fabric.ts",
@@ -5579,7 +5579,7 @@
         },
         {
           "path": "server/src/__tests__/analytical-context-privacy.integration.test.ts",
-          "sha256": "e10d5663ae82aded528b571b2a2f06eabc5a9281d78051a692e34d67f9f7ffa7"
+          "sha256": "46b9f67e02c82317add6922c84c9cbdba671e2407e55314a5e0f11b436432c94"
         },
         {
           "path": "server/src/__tests__/chat-channels.integration.test.ts",
@@ -5863,7 +5863,7 @@
         },
         {
           "path": "server/src/services/issues.ts",
-          "sha256": "8e9c18d331e14c55f24b3bf01a2532ad964758eef6673dc89d1fc47c701d6ee6"
+          "sha256": "6c4388358d023019c3faaae421905fc94e80784941c1c95290c429974646b1d5"
         },
         {
           "path": "server/src/services/native-execution-failure-log.test.ts",
@@ -7027,7 +7027,7 @@
         },
         {
           "path": "server/src/__tests__/analytical-context-privacy.integration.test.ts",
-          "sha256": "e10d5663ae82aded528b571b2a2f06eabc5a9281d78051a692e34d67f9f7ffa7"
+          "sha256": "46b9f67e02c82317add6922c84c9cbdba671e2407e55314a5e0f11b436432c94"
         },
         {
           "path": "server/src/__tests__/artifact-review-document-routes.test.ts",
@@ -7251,7 +7251,7 @@
         },
         {
           "path": "server/src/routes/issues.ts",
-          "sha256": "8e8b905bf4cf340ce24f935b3b835a5f251ec3025e995644d8a7bd6e798b1859"
+          "sha256": "48007810f052b69409cc0113e694d7f1b956f7f0bba77ab5e0e0d28c1968cdae"
         },
         {
           "path": "server/src/services/company-search.ts",
@@ -7598,7 +7598,7 @@
       "sources": [
         {
           "path": "server/src/__tests__/analytical-context-privacy.integration.test.ts",
-          "sha256": "e10d5663ae82aded528b571b2a2f06eabc5a9281d78051a692e34d67f9f7ffa7"
+          "sha256": "46b9f67e02c82317add6922c84c9cbdba671e2407e55314a5e0f11b436432c94"
         },
         {
           "path": "server/src/__tests__/environment-runtime.test.ts",
@@ -7642,7 +7642,7 @@
         },
         {
           "path": "server/src/routes/issues.ts",
-          "sha256": "8e8b905bf4cf340ce24f935b3b835a5f251ec3025e995644d8a7bd6e798b1859"
+          "sha256": "48007810f052b69409cc0113e694d7f1b956f7f0bba77ab5e0e0d28c1968cdae"
         },
         {
           "path": "server/src/services/chat-channels.ts",
@@ -8948,7 +8948,7 @@
         },
         {
           "path": "server/src/__tests__/analytical-context-privacy.integration.test.ts",
-          "sha256": "e10d5663ae82aded528b571b2a2f06eabc5a9281d78051a692e34d67f9f7ffa7"
+          "sha256": "46b9f67e02c82317add6922c84c9cbdba671e2407e55314a5e0f11b436432c94"
         },
         {
           "path": "server/src/__tests__/business-events.integration.test.ts",
@@ -9216,7 +9216,7 @@
         },
         {
           "path": "server/src/routes/issues.ts",
-          "sha256": "8e8b905bf4cf340ce24f935b3b835a5f251ec3025e995644d8a7bd6e798b1859"
+          "sha256": "48007810f052b69409cc0113e694d7f1b956f7f0bba77ab5e0e0d28c1968cdae"
         },
         {
           "path": "server/src/routes/pipelines.ts",
@@ -9276,7 +9276,7 @@
         },
         {
           "path": "server/src/services/issues.ts",
-          "sha256": "8e9c18d331e14c55f24b3bf01a2532ad964758eef6673dc89d1fc47c701d6ee6"
+          "sha256": "6c4388358d023019c3faaae421905fc94e80784941c1c95290c429974646b1d5"
         },
         {
           "path": "server/src/services/memory/memory-agent-tools.test.ts",
@@ -11389,7 +11389,7 @@
         },
         {
           "path": "server/src/__tests__/analytical-context-privacy.integration.test.ts",
-          "sha256": "e10d5663ae82aded528b571b2a2f06eabc5a9281d78051a692e34d67f9f7ffa7"
+          "sha256": "46b9f67e02c82317add6922c84c9cbdba671e2407e55314a5e0f11b436432c94"
         },
         {
           "path": "server/src/__tests__/company-skills-service.test.ts",
@@ -11808,7 +11808,7 @@
         },
         {
           "path": "server/src/services/issues.ts",
-          "sha256": "8e9c18d331e14c55f24b3bf01a2532ad964758eef6673dc89d1fc47c701d6ee6"
+          "sha256": "6c4388358d023019c3faaae421905fc94e80784941c1c95290c429974646b1d5"
         },
         {
           "path": "server/src/services/memory/memory-privacy.ts",
@@ -46893,7 +46893,7 @@
       "id": "source:server/src/routes/issues.ts",
       "kind": "current_source_owner",
       "path": "server/src/routes/issues.ts",
-      "sha256": "8e8b905bf4cf340ce24f935b3b835a5f251ec3025e995644d8a7bd6e798b1859",
+      "sha256": "48007810f052b69409cc0113e694d7f1b956f7f0bba77ab5e0e0d28c1968cdae",
       "changeIds": [
         "SCR-V10-HOTSPOT-01",
         "SCR-V10-HOTSPOT-04",
@@ -47259,7 +47259,7 @@
       "id": "source:server/src/__tests__/analytical-context-privacy.integration.test.ts",
       "kind": "current_source_owner",
       "path": "server/src/__tests__/analytical-context-privacy.integration.test.ts",
-      "sha256": "e10d5663ae82aded528b571b2a2f06eabc5a9281d78051a692e34d67f9f7ffa7",
+      "sha256": "46b9f67e02c82317add6922c84c9cbdba671e2407e55314a5e0f11b436432c94",
       "changeIds": [
         "SCR-V10-HOTSPOT-02",
         "SCR-V10-HOTSPOT-04",
@@ -48324,7 +48324,7 @@
       "id": "source:server/src/services/issues.ts",
       "kind": "current_source_owner",
       "path": "server/src/services/issues.ts",
-      "sha256": "8e9c18d331e14c55f24b3bf01a2532ad964758eef6673dc89d1fc47c701d6ee6",
+      "sha256": "6c4388358d023019c3faaae421905fc94e80784941c1c95290c429974646b1d5",
       "changeIds": [
         "SCR-V10-HOTSPOT-02",
         "SCR-V10-HOTSPOT-06",
