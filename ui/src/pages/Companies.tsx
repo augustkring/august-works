@@ -292,30 +292,41 @@ export function Companies() {
               {/* Delete confirmation */}
               {isConfirmingDelete && (
                 <div
-                  className="mt-4 flex items-center justify-between bg-destructive/5 border border-destructive/20 rounded-md px-4 py-3"
+                  className="mt-4 bg-destructive/5 border border-destructive/20 rounded-md px-4 py-3"
                   onClick={(e) => e.stopPropagation()}
                 >
-                  <p className="text-sm text-destructive font-medium">
-                    Delete this organization and all its data? This cannot be undone.
-                  </p>
-                  <div className="flex items-center gap-2 ml-4 shrink-0">
-                    <Button
-                      variant="ghost"
-                      size="sm"
-                      onClick={() => setConfirmDeleteId(null)}
-                      disabled={deleteMutation.isPending}
-                    >
-                      Cancel
-                    </Button>
-                    <Button
-                      variant="destructive"
-                      size="sm"
-                      onClick={() => deleteMutation.mutate(company.id)}
-                      disabled={deleteMutation.isPending}
-                    >
-                      {deleteMutation.isPending ? "Deleting…" : "Delete"}
-                    </Button>
+                  <div className="flex items-center justify-between">
+                    <p className="text-sm text-destructive font-medium">
+                      Delete this organization and all its data? This cannot be undone.
+                    </p>
+                    <div className="flex items-center gap-2 ml-4 shrink-0">
+                      <Button
+                        variant="ghost"
+                        size="sm"
+                        onClick={() => {
+                          deleteMutation.reset();
+                          setConfirmDeleteId(null);
+                        }}
+                        disabled={deleteMutation.isPending}
+                      >
+                        Cancel
+                      </Button>
+                      <Button
+                        variant="destructive"
+                        size="sm"
+                        onClick={() => deleteMutation.mutate(company.id)}
+                        disabled={deleteMutation.isPending}
+                      >
+                        {deleteMutation.isPending ? "Deleting…" : "Delete"}
+                      </Button>
+                    </div>
                   </div>
+                  {/* A refused removal (for example, a run is still active) deletes nothing; say why. */}
+                  {deleteMutation.isError && deleteMutation.variables === company.id && (
+                    <p role="alert" className="mt-2 text-sm text-destructive">
+                      {deleteMutation.error instanceof Error ? deleteMutation.error.message : "The organization could not be deleted."}
+                    </p>
+                  )}
                 </div>
               )}
             </Card>
