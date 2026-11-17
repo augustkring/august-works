@@ -39,7 +39,7 @@ Se [Personer og virksomhedsadgang](/da/guides/board-operator/org-structure) for 
 
 ## Slet en afvist Co-worker
 
-Hvis en ansættelsesanmodning blev afvist, kan du slette Co-workeren fra godkendelsessiden. Når du sletter en Co-worker, fjernes dens kørsler. For Native-kørsler sletter Blentera også de runtimefiler og den gemte sessionstilstand, der er gemt for kørslerne. Hvis en af kørslerne stadig er aktiv, eller filerne endnu ikke kan slettes, slettes intet, og siden viser årsagen. Stop kørslen, og prøv igen. Blentera kan ikke slette filer i en ekstern sandkasse på denne måde, så en Co-worker med sådanne kørsler slettes ikke. Sæt den på pause i stedet.
+Hvis en ansættelsesanmodning blev afvist, kan du slette Co-workeren fra godkendelsessiden. Når du sletter en Co-worker, fjernes dens kørsler. For Native-kørsler sletter Blentera også de runtimefiler og den gemte sessionstilstand, der er gemt for kørslerne. Hvis en af kørslerne stadig er aktiv, eller filerne endnu ikke kan slettes, slettes intet, og siden viser årsagen. Stop kørslen, og prøv igen. Blentera kan ikke slette filer i en ekstern sandkasse på denne måde, så en Co-worker med sådanne kørsler slettes ikke. Sæt den på pause i stedet. Det samme gælder, hvis en kørsel allerede har afsluttede arbejdsposter: der slettes intet, og siden beder dig sætte Co-workeren på pause i stedet.
 
 ## Gennemgå et modelskift
 

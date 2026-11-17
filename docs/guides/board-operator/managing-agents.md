@@ -39,7 +39,7 @@ For company members and their access, see [People and company access](/guides/bo
 
 ## Delete a disapproved Co-worker
 
-If a hire request was disapproved, you can delete that Co-worker from its approval page. Deleting a Co-worker removes its runs. For Native runs, Blentera also erases the runtime files and saved session state it kept for those runs. If one of those runs is still active, or the files cannot be erased yet, nothing is deleted and the page shows why. Stop the run and try again. Blentera cannot erase files in a remote sandbox this way, so a Co-worker with such runs is not deleted; pause it instead.
+If a hire request was disapproved, you can delete that Co-worker from its approval page. Deleting a Co-worker removes its runs. For Native runs, Blentera also erases the runtime files and saved session state it kept for those runs. If one of those runs is still active, or the files cannot be erased yet, nothing is deleted and the page shows why. Stop the run and try again. Blentera cannot erase files in a remote sandbox this way, so a Co-worker with such runs is not deleted; pause it instead. The same applies if a run already has finalized work records: nothing is deleted, and the page tells you to pause the Co-worker instead.
 
 ## Review a model change
 
