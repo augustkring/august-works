@@ -11,7 +11,7 @@ import { resolvePaperclipInstanceRoot } from "../../home-paths.js";
 import { memoryJobService } from "../memory/memory-jobs.js";
 import { removeRuntimeStorageTree } from "../runtime-skill-cache.js";
 import { purgeCompanyContent } from "../saas/company-purge.js";
-import { eraseNativeRuntimeAssets } from "./runtime-asset-retention.js";
+import { eraseNativeRuntimeAssets, nativeRuntimeAssetsRoot } from "./runtime-asset-retention.js";
 import { eraseCompanyNativeDurableSessions, nativeDurableSessionsRoot } from "./native-durable-session-erasure.js";
 
 // PRIV-R5. The controller's durable session folder of an erased session (its
@@ -214,8 +214,12 @@ const sha256 = (value: string) => createHash("sha256").update(value).digest("hex
     const s = await seedSession();
     // Another Task's Run of the same session: outside the carry cascade, inside the durable folder.
     const run3 = await insertRun({ ...s, issueId: s.liveIssueId, sessionId: s.sessionId, status: "running", createdAt: new Date() });
+    // The erased Run's generated runtime copies are still removed at once.
+    const generated = path.join(nativeRuntimeAssetsRoot({ companyId: s.companyId, runId: s.run1 }), "bundles", "AGENTS.md");
+    await writeFile(generated, "Run 1 runtime context");
     await expect(eraseNativeRuntimeAssets(db, { companyId: s.companyId, runId: s.run1 }, []))
       .rejects.toThrow("awaits every session Run's confirmed Native Stop");
+    expect(await exists(nativeRuntimeAssetsRoot({ companyId: s.companyId, runId: s.run1 }))).toBe(false);
     for (const target of [...s.erased, ...s.untouched]) expect(await exists(target)).toBe(true);
     // A terminal Run whose finalization is still leased is live state too.
     await stop({ id: run3, companyId: s.companyId, agentId: s.agentId, issueId: s.liveIssueId });
@@ -226,6 +230,10 @@ const sha256 = (value: string) => createHash("sha256").update(value).digest("hex
     for (const target of s.erased) expect(await exists(target)).toBe(true);
     await db.update(nativeRunFinalizations).set({ leaseOwner: null, leaseExpiresAt: null })
       .where(eq(nativeRunFinalizations.runId, run3));
+    // A warm owner of another session Run that did not close defers only this step.
+    await expect(eraseNativeRuntimeAssets(db, { companyId: s.companyId, runId: s.run1 }, [], { durableSessionOwnersPending: true }))
+      .rejects.toThrow("awaits a warm session Stop");
+    for (const target of s.erased) expect(await exists(target)).toBe(true);
     const result = await eraseNativeRuntimeAssets(db, { companyId: s.companyId, runId: s.run1 }, []);
     expect(result.durableSessionErasure?.removedEntryCount).toBe(s.erased.length);
     for (const target of s.erased) expect(await exists(target)).toBe(false);

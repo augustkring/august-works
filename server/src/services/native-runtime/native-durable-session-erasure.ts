@@ -322,9 +322,16 @@ export async function nativeDurableSessionTargetsForCompany(tx: Db, companyId: s
 export async function eraseNativeDurableSessionForRun(tx: Db, companyId: string, runId: string) {
   const targets = await nativeDurableSessionTargetsForRun(tx, companyId, runId);
   if (!targets) return null;
-  // Gate before inventory: an active Run may not have created its folder yet.
-  await assertNativeDurableSessionRunsStopped(tx, companyId, [...targets.values()].flatMap(ids => [...ids]));
-  return executeNativeDurableSessionErasure(await planNativeDurableSessionErasure({ companyId, targets }));
+  const owners = [...targets.values()].flatMap(ids => [...ids]);
+  // A Run bound to a native session gates before inventory: an active Run of
+  // the session may not have created its folder yet. A native Run that never
+  // received a session id never launched a runner, so it gates only when a
+  // folder is actually attributed to its fallback session key.
+  const bound = !targets.has(`session-${runId}`);
+  if (bound) await assertNativeDurableSessionRunsStopped(tx, companyId, owners);
+  const plan = await planNativeDurableSessionErasure({ companyId, targets });
+  if (!bound && plan.groups.length) await assertNativeDurableSessionRunsStopped(tx, companyId, owners);
+  return executeNativeDurableSessionErasure(plan);
 }
 
 /** Company purge: remove every durable folder of the company's sessions,

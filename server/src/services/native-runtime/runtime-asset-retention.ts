@@ -1271,7 +1271,9 @@ export async function enqueueCompanyRuntimeAssetErasure(tx: Db, companyId: strin
 export async function eraseNativeRuntimeAssets(db: Db, owner: NativeRuntimeAssetOwner, legacyDigests: string[],
   authorization?: { companyPurgeOperationId?: string; remoteAssetLocator?: RemoteRuntimeAssetLocator;
     remoteAssetReceipt?: RemoteRuntimeAssetRemovalReceipt;
-    remoteJobClaim?: { jobId: string; jobAttemptNumber: number; executionOwnerId: string } }) {
+    remoteJobClaim?: { jobId: string; jobAttemptNumber: number; executionOwnerId: string };
+    /** A warm owner opened by another Run of the session did not close. */
+    durableSessionOwnersPending?: boolean }) {
   if (![owner.companyId, owner.runId].every(id => uuidPattern.test(id)) || legacyDigests.length > 256 ||
     legacyDigests.some(digest => !digestPattern.test(digest)) ||
     (authorization?.companyPurgeOperationId !== undefined && !uuidPattern.test(authorization.companyPurgeOperationId)))
@@ -1388,11 +1390,6 @@ export async function eraseNativeRuntimeAssets(db: Db, owner: NativeRuntimeAsset
       await assertManagedOpenCodeCarryDescendantStopped(tx, descendant, homeExists);
       if (homeExists) carryHomes.push(home);
     }
-    // PRIV-R5 (CE-15). The controller's durable folder of this Run's session
-    // holds its committed control-plane events, runner/provider state and
-    // continuity-break archives for every Run of the session. It is removed
-    // only after every such Run has stopped; otherwise the job stays pending.
-    const durableSessionErasure = run ? await eraseNativeDurableSessionForRun(tx, owner.companyId, owner.runId) : null;
     try {
       await assertRuntimeStorageDirectories(runRoot, storageRoot);
       await removeRuntimeStorageTree(runRoot);
@@ -1410,6 +1407,15 @@ export async function eraseNativeRuntimeAssets(db: Db, owner: NativeRuntimeAsset
       if (erased === null)
         throw conflict("Native legacy runtime asset is still retained by a current Run profile");
     }
+    // PRIV-R5 (CE-15). The controller's durable folder of this Run's session
+    // holds its committed control-plane events, runner/provider state and
+    // continuity-break archives for every Run of the session. It is removed
+    // only after every such Run has stopped and its warm owners have closed;
+    // otherwise the job stays pending. It runs after the removals above so a
+    // live session never delays the erasure of this Run's generated copies.
+    if (run && authorization?.durableSessionOwnersPending)
+      throw new Error("Native durable session erasure awaits a warm session Stop");
+    const durableSessionErasure = run ? await eraseNativeDurableSessionForRun(tx, owner.companyId, owner.runId) : null;
     return { durableSessionErasure };
   });
 }
