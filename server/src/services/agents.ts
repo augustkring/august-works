@@ -1115,6 +1115,22 @@ export function agentService(db: Db) {
         await runFiles.execute(deletedRuns.map((run) => run.id));
         if (deleted) await notifyDeliveryWork(tx as unknown as Db, DELIVERY_QUEUES.pluginLifecycle);
         return deleted ? normalizeAgentRow(deleted) : null;
+      }).catch((error: unknown) => {
+        // Classification follows transaction rollback, so nothing was deleted.
+        // A Run that still has a finalization record (no-action FK) is governed
+        // data: refuse with a 409 instead of a 500, never delete the record, and
+        // expose no database details. Mirrors the company remove mapping.
+        let cause: unknown = error;
+        for (let depth = 0; depth < 3 && cause && typeof cause === "object"; depth++) {
+          const pg = cause as { code?: string; cause?: unknown };
+          if (pg.code === "23503")
+            throw conflict(
+              "This agent has runs with finalized work records, so it cannot be deleted. Pause it instead.",
+              { code: "agent_deletion_requires_governed_cleanup" },
+            );
+          cause = pg.cause;
+        }
+        throw error;
       });
     },
 

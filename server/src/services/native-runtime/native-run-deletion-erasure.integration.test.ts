@@ -4,7 +4,7 @@ import os from "node:os";
 import path from "node:path";
 import { eq } from "drizzle-orm";
 import { afterAll, afterEach, beforeAll, beforeEach, describe, expect, it } from "vitest";
-import { agents, companies, createDb, EMBEDDED_POSTGRES_TEST_TIMEOUT_MS, heartbeatRunEvents, heartbeatRuns, issues,
+import { agents, companies, createDb, EMBEDDED_POSTGRES_TEST_TIMEOUT_MS, heartbeatRunEvents, heartbeatRuns, issues, nativeRunFinalizations,
   type Db } from "@paperclipai/db";
 import { getEmbeddedPostgresTestSupport, startEmbeddedPostgresTestDatabase } from "../../__tests__/helpers/embedded-postgres.js";
 import { agentService } from "../agents.js";
@@ -222,6 +222,24 @@ const sha256 = (value: string) => createHash("sha256").update(value).digest("hex
       details: { code: "agent_deletion_remote_runtime_erasure_required" } });
     expect(await exists(root)).toBe(true);
     expect(await runIds(eq(heartbeatRuns.id, runId))).toEqual([runId]);
+  });
+
+  it("agent deletion returns a 409 and deletes nothing when a Run has a finalization record", async () => {
+    const owner = await agent(await company());
+    const runId = await insertRun(owner, { sessionId: randomUUID() });
+    await db.insert(nativeRunFinalizations).values({ runId, companyId: owner.companyId, issueId: owner.issueId,
+      phase: "committed", leaseOwner: null, leaseExpiresAt: null });
+    const root = await writeRunRoot(owner.companyId, runId);
+
+    await expect(agentService(db).remove(owner.agentId)).rejects.toMatchObject({ status: 409,
+      details: { code: "agent_deletion_requires_governed_cleanup" } });
+
+    expect(await db.select({ id: agents.id }).from(agents).where(eq(agents.id, owner.agentId))).toHaveLength(1);
+    expect(await runIds(eq(heartbeatRuns.id, runId))).toEqual([runId]);
+    expect(await db.select({ id: nativeRunFinalizations.runId }).from(nativeRunFinalizations)
+      .where(eq(nativeRunFinalizations.runId, runId))).toHaveLength(1);
+    expect(await db.select({ id: issues.id }).from(issues).where(eq(issues.id, owner.issueId))).toHaveLength(1);
+    expect(await exists(root)).toBe(true);
   });
 
   it("a Run that was not gated rolls the deletion's erasure back before any file is removed", async () => {

@@ -27429,7 +27429,7 @@
         },
         {
           "path": "server/src/services/agents.ts",
-          "sha256": "5e17a620ffad0f81c8081db17666ae44a5b13e7ddb914b6cb39dcf0cf635a48c"
+          "sha256": "887349871b2e1447dadbdd708c412d9755eb34eb2fdeb783289817ce8a795a58"
         },
         {
           "path": "server/src/services/ai-connections.ts",
@@ -66698,7 +66698,7 @@
       "id": "source:server/src/services/agents.ts",
       "kind": "current_source_owner",
       "path": "server/src/services/agents.ts",
-      "sha256": "5e17a620ffad0f81c8081db17666ae44a5b13e7ddb914b6cb39dcf0cf635a48c",
+      "sha256": "887349871b2e1447dadbdd708c412d9755eb34eb2fdeb783289817ce8a795a58",
       "changeIds": [
         "SCR-V10-UNCLASSIFIED-REGISTERED-OWNER"
       ],
