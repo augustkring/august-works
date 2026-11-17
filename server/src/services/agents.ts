@@ -1070,12 +1070,20 @@ export function agentService(db: Db) {
         });
       }
 
+      // PRIV-R7 (CE-15). The agent's Run rows are the only owners of their
+      // runtime files and durable session folders; erase those files with the
+      // deletion and refuse (409) while a Run is live or erasure is pending.
+      const runtimeErasure = await import("./native-runtime/native-run-deletion-erasure.js");
+      const runScope = { companyId: existing.companyId, agentId: id };
+      await runtimeErasure.closeWarmNativeOwnersBeforeRunDeletion(db, runScope);
       return db.transaction(async (tx) => {
+        await runtimeErasure.lockNativeRunDeletionPrivacy(tx as unknown as Db, existing.companyId);
         await tx
           .select({ id: agents.id })
           .from(agents)
           .where(eq(agents.id, id))
           .for("update");
+        const runFiles = await runtimeErasure.prepareNativeRunDeletionErasure(tx as unknown as Db, runScope);
         await issueThreadInteractionService(tx as unknown as Db)
           .cancelPendingForDeletedAddressee(existing.companyId, id);
         await tx.update(agents).set({ reportsTo: null }).where(eq(agents.reportsTo, id));
@@ -1093,7 +1101,7 @@ export function agentService(db: Db) {
         );
         await tx.delete(issueExecutionDecisions).where(eq(issueExecutionDecisions.actorAgentId, id));
         await tx.delete(issueComments).where(eq(issueComments.authorAgentId, id));
-        await tx.delete(heartbeatRuns).where(eq(heartbeatRuns.agentId, id));
+        const deletedRuns = await tx.delete(heartbeatRuns).where(eq(heartbeatRuns.agentId, id)).returning({ id: heartbeatRuns.id });
         await tx.delete(agentWakeupRequests).where(eq(agentWakeupRequests.agentId, id));
         await tx.delete(agentApiKeys).where(eq(agentApiKeys.agentId, id));
         await tx.delete(agentRuntimeState).where(eq(agentRuntimeState.agentId, id));
@@ -1102,6 +1110,9 @@ export function agentService(db: Db) {
           .where(eq(agents.id, id))
           .returning()
           .then((rows) => rows[0] ?? null);
+        // Files are erased only after every row deletion succeeded; an erasure
+        // failure rolls the deletion back.
+        await runFiles.execute(deletedRuns.map((run) => run.id));
         if (deleted) await notifyDeliveryWork(tx as unknown as Db, DELIVERY_QUEUES.pluginLifecycle);
         return deleted ? normalizeAgentRow(deleted) : null;
       });
