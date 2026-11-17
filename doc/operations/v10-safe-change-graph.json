@@ -5827,7 +5827,7 @@
         },
         {
           "path": "server/src/services/companies.ts",
-          "sha256": "4ddbd2bf2e89fdfb7c573c1e898bf9e15fa9a5c8f771afced9f8ab94d1a14785"
+          "sha256": "e1fdd23f4046a98b4c289aa47950082c7f7f13cecfb43cff9f9d90b4f521fbc5"
         },
         {
           "path": "server/src/services/company-skills.ts",
@@ -27429,7 +27429,7 @@
         },
         {
           "path": "server/src/services/agents.ts",
-          "sha256": "105a744ff385b3e34921f13331ae87bf10adeea163ed5d41e8b0b7ae4f743918"
+          "sha256": "5e17a620ffad0f81c8081db17666ae44a5b13e7ddb914b6cb39dcf0cf635a48c"
         },
         {
           "path": "server/src/services/ai-connections.ts",
@@ -32121,7 +32121,7 @@
         },
         {
           "path": "server/src/services/company-search-help.generated.ts",
-          "sha256": "e423b8453ccebebda942b281ef8f776f3497e8191360f89b96ec0d5b04c4b0df"
+          "sha256": "5881ca028f2788dcd6a0b06a8e6ec5d064d0cd32697f3d8b7b13819317aac191"
         },
         {
           "path": "server/src/services/task-search.ts",
@@ -48186,7 +48186,7 @@
       "id": "source:server/src/services/companies.ts",
       "kind": "current_source_owner",
       "path": "server/src/services/companies.ts",
-      "sha256": "4ddbd2bf2e89fdfb7c573c1e898bf9e15fa9a5c8f771afced9f8ab94d1a14785",
+      "sha256": "e1fdd23f4046a98b4c289aa47950082c7f7f13cecfb43cff9f9d90b4f521fbc5",
       "changeIds": [
         "SCR-V10-HOTSPOT-02"
       ],
@@ -66698,7 +66698,7 @@
       "id": "source:server/src/services/agents.ts",
       "kind": "current_source_owner",
       "path": "server/src/services/agents.ts",
-      "sha256": "105a744ff385b3e34921f13331ae87bf10adeea163ed5d41e8b0b7ae4f743918",
+      "sha256": "5e17a620ffad0f81c8081db17666ae44a5b13e7ddb914b6cb39dcf0cf635a48c",
       "changeIds": [
         "SCR-V10-UNCLASSIFIED-REGISTERED-OWNER"
       ],
@@ -72520,7 +72520,7 @@
       "id": "source:server/src/services/company-search-help.generated.ts",
       "kind": "current_source_owner",
       "path": "server/src/services/company-search-help.generated.ts",
-      "sha256": "e423b8453ccebebda942b281ef8f776f3497e8191360f89b96ec0d5b04c4b0df",
+      "sha256": "5881ca028f2788dcd6a0b06a8e6ec5d064d0cd32697f3d8b7b13819317aac191",
       "changeIds": [
         "SCR-V10-PRODUCT-IDENTITY-HELP-LANGUAGE"
       ],
