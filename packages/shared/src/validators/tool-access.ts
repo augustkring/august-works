@@ -1062,7 +1062,8 @@ export const toolPolicyTestRequestSchema = z.object({
     idempotencyKey: z.string().trim().min(1).max(512).optional().nullable(),
     sideEffecting: z.boolean().optional(),
   }),
-  consumeRateLimit: z.boolean().optional(),
+  // A policy test is a dry run: the server never consumes rate-limit tokens or
+  // records trust-rule hits for it, so the body has no control over either.
   writeAuditEvent: z.boolean().optional(),
 });
 

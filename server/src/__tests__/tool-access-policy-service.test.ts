@@ -1,5 +1,7 @@
 import { randomUUID } from "node:crypto";
 import { eq } from "drizzle-orm";
+import express from "express";
+import request from "supertest";
 import { afterAll, afterEach, beforeAll, describe, expect, it, vi } from "vitest";
 import {
   activityLog,
@@ -24,6 +26,7 @@ import {
   toolProfiles,
   toolRateLimitCounters,
 } from "@paperclipai/db";
+import { toolPolicyTestRequestSchema } from "@paperclipai/shared";
 import {
   getEmbeddedPostgresTestSupport,
   startEmbeddedPostgresTestDatabase,
@@ -35,6 +38,22 @@ import {
 } from "../services/tool-access-policy.js";
 import { toolAccessService } from "../services/tool-access.js";
 import { createToolGatewayService, ToolGatewayHttpError } from "../services/tool-gateway.js";
+import { toolAccessRoutes } from "../routes/tool-access.js";
+import { errorHandler } from "../middleware/index.js";
+
+// Lets one test stand in for a reviewed use case that requires a human
+// decision; every other test runs the real governance restriction.
+const governanceOverride = vi.hoisted(() => ({ requireHumanApproval: false }));
+vi.mock("../services/ai-governance/execution-gate.js", async (importOriginal) => {
+  const actual = await importOriginal<typeof import("../services/ai-governance/execution-gate.js")>();
+  return {
+    ...actual,
+    governanceToolRestriction: async (...args: Parameters<typeof actual.governanceToolRestriction>) =>
+      governanceOverride.requireHumanApproval
+        ? { denyReason: null, requireHumanApproval: true }
+        : actual.governanceToolRestriction(...args),
+  };
+});
 
 const embeddedPostgresSupport = await getEmbeddedPostgresTestSupport();
 const describeEmbeddedPostgres = embeddedPostgresSupport.supported ? describe : describe.skip;
@@ -1032,6 +1051,296 @@ describeEmbeddedPostgres("tool access policy service", () => {
     } finally {
       vi.useRealTimers();
     }
+  });
+
+  // GW2: a token is charged when a call is admitted to execute. A call parked
+  // for approval holds none; its approved execution takes exactly one, whatever
+  // the order of the rate-limit and require-approval policies.
+  it.each([
+    ["rate limit before review", -10, 10],
+    ["review before rate limit", 10, -10],
+  ] as const)("charges an approved execution exactly one rate-limit token when it runs: %s", async (_order, rateLimitPriority, reviewPriority) => {
+    const company = await createCompany(db);
+    const agent = await createAgent(db, company.id);
+    const { connection } = await createTool(db, company.id);
+    await db.insert(principalPermissionGrants).values({
+      companyId: company.id,
+      principalType: "agent",
+      principalId: agent.id,
+      permissionKey: "tools:use",
+      scope: { toolName: "send_email" },
+    });
+    await db.insert(toolPolicies).values([
+      {
+        companyId: company.id,
+        name: "Two sends per minute",
+        policyType: "rate_limit",
+        priority: rateLimitPriority,
+        selectors: { toolName: "send_email" },
+        config: { limit: 2, windowSeconds: 60, keyBy: ["agent", "tool"] },
+      },
+      {
+        companyId: company.id,
+        name: "Review sends",
+        policyType: "require_approval",
+        priority: reviewPriority,
+        selectors: { toolName: "send_email" },
+      },
+    ]);
+    const base = {
+      companyId: company.id,
+      actor: { actorType: "agent" as const, actorId: agent.id, agentId: agent.id },
+      request: { connectionId: connection.id, toolName: "send_email" },
+    };
+    const policy = toolAccessPolicyService(db);
+    const requestReview = () => policy.decide({ ...base, consumeRateLimit: true }, { rateLimitTokens: createToolRateLimitTokenLedger() });
+    const execute = (rateLimitTokens: ToolRateLimitTokenLedger) => policy.decide({ ...base, consumeRateLimit: true }, { rateLimitTokens });
+    const recheck = (rateLimitTokens: ToolRateLimitTokenLedger) => policy.decide({ ...base, consumeRateLimit: false }, { rateLimitTokens });
+    const approved = () => createToolRateLimitTokenLedger({ approvedExecution: true });
+    const pending = { allowed: false, decision: "require_approval", reasonCode: "requires_approval_policy" };
+    const limited = { allowed: false, decision: "rate_limited", reasonCode: "rate_limited" };
+    const counts = async () => (await db.select().from(toolRateLimitCounters))
+      .map((row) => ({ windowStartAt: row.windowStartAt.getTime(), count: row.limit - row.remaining }))
+      .sort((left, right) => left.windowStartAt - right.windowStartAt);
+
+    const windowInstant = new Date(); windowInstant.setUTCSeconds(10, 0);
+    const windowStartAt = windowInstant.getTime() - 10_000;
+    vi.useFakeTimers({ toFake: ["Date"] }); vi.setSystemTime(windowInstant);
+    try {
+      // Three requests in one window of limit 2: none is refused, because a
+      // call that waits for review uses no part of the window.
+      for (let index = 0; index < 3; index += 1) {
+        expect(await requestReview(), `request ${index + 1}`).toMatchObject(pending);
+      }
+      expect((await counts()).every((row) => row.count === 0)).toBe(true);
+
+      // Each approved execution takes one token when it is admitted and its
+      // own re-checks do not count that token against it.
+      const first = approved();
+      expect(await execute(first)).toMatchObject(pending);
+      expect(await counts()).toEqual([{ windowStartAt, count: 1 }]);
+      expect(await recheck(first)).toMatchObject(pending);
+      const second = approved();
+      expect(await execute(second)).toMatchObject(pending);
+      expect(await recheck(second)).toMatchObject(pending);
+      expect(await counts()).toEqual([{ windowStartAt, count: 2 }]);
+
+      // The window is full: a further approved execution is refused, takes no
+      // token, and an approval peek with no held token is refused too.
+      const third = approved();
+      expect(await execute(third)).toMatchObject(limited);
+      expect(await recheck(third)).toMatchObject(limited);
+      expect(await recheck(approved())).toMatchObject(limited);
+      expect(await counts()).toEqual([{ windowStartAt, count: 2 }]);
+
+      // Window rollover: a held token never offsets the next window, and the
+      // refused execution is charged once, in the window where it runs.
+      vi.setSystemTime(new Date(windowInstant.getTime() + 60_000));
+      expect(await recheck(second)).toMatchObject(pending);
+      expect(await execute(third)).toMatchObject(pending);
+      expect(await counts()).toEqual([{ windowStartAt, count: 2 }, { windowStartAt: windowStartAt + 60_000, count: 1 }]);
+    } finally {
+      vi.useRealTimers();
+    }
+  });
+
+  it.each([
+    ["rate limit before review", -10, 10],
+    ["review before rate limit", 10, -10],
+  ] as const)("admits exactly one of two concurrent approved executions at the last token: %s", async (_order, rateLimitPriority, reviewPriority) => {
+    const company = await createCompany(db);
+    const agent = await createAgent(db, company.id);
+    const { connection } = await createTool(db, company.id);
+    await db.insert(toolPolicies).values([
+      {
+        companyId: company.id,
+        name: "Two sends per hour",
+        policyType: "rate_limit",
+        priority: rateLimitPriority,
+        selectors: { toolName: "send_email" },
+        config: { limit: 2, windowSeconds: 3600, keyBy: ["agent", "tool"] },
+      },
+      {
+        companyId: company.id,
+        name: "Review sends",
+        policyType: "require_approval",
+        priority: reviewPriority,
+        selectors: { toolName: "send_email" },
+      },
+    ]);
+    const input = {
+      companyId: company.id,
+      actor: { actorType: "agent" as const, actorId: agent.id, agentId: agent.id },
+      request: { connectionId: connection.id, toolName: "send_email" },
+      consumeRateLimit: true,
+    };
+    const policy = toolAccessPolicyService(db);
+    const execute = () => policy.decide(input, { rateLimitTokens: createToolRateLimitTokenLedger({ approvedExecution: true }) });
+
+    const windowInstant = new Date(); windowInstant.setUTCMinutes(10, 0, 0);
+    vi.useFakeTimers({ toFake: ["Date"] }); vi.setSystemTime(windowInstant);
+    try {
+      expect(await execute()).toMatchObject({ decision: "require_approval" });
+      const decisions = await Promise.all([execute(), execute()]);
+      expect(decisions.filter((decision) => decision.decision === "require_approval")).toHaveLength(1);
+      expect(decisions.filter((decision) => decision.decision === "rate_limited")).toHaveLength(1);
+      const [counter] = await db.select().from(toolRateLimitCounters);
+      expect(counter).toMatchObject({ limit: 2, remaining: 0 });
+    } finally {
+      vi.useRealTimers();
+    }
+  });
+
+  it("releases a fresh admission's tokens on request and never an approved execution's", async () => {
+    const company = await createCompany(db);
+    const agent = await createAgent(db, company.id);
+    const { connection } = await createTool(db, company.id);
+    await db.insert(principalPermissionGrants).values({
+      companyId: company.id,
+      principalType: "agent",
+      principalId: agent.id,
+      permissionKey: "tools:use",
+      scope: { toolName: "send_email" },
+    });
+    await db.insert(toolPolicies).values({
+      companyId: company.id,
+      name: "One send per hour",
+      policyType: "rate_limit",
+      selectors: { toolName: "send_email" },
+      config: { limit: 1, windowSeconds: 3600, keyBy: ["agent", "tool"] },
+    });
+    const input = {
+      companyId: company.id,
+      actor: { actorType: "agent" as const, actorId: agent.id, agentId: agent.id },
+      request: { connectionId: connection.id, toolName: "send_email" },
+      consumeRateLimit: true,
+    };
+    const policy = toolAccessPolicyService(db);
+    const remaining = async () => (await db.select().from(toolRateLimitCounters))[0]?.remaining;
+
+    const windowInstant = new Date(); windowInstant.setUTCMinutes(10, 0, 0);
+    vi.useFakeTimers({ toFake: ["Date"] }); vi.setSystemTime(windowInstant);
+    try {
+      // The Tool Gateway parks some allowed calls for approval after decide
+      // returns; it then releases the fresh admission's token.
+      const fresh = createToolRateLimitTokenLedger();
+      expect(await policy.decide(input, { rateLimitTokens: fresh })).toMatchObject({ allowed: true });
+      expect(await remaining()).toBe(0);
+      await policy.releaseRateLimitTokens(fresh);
+      expect(await remaining()).toBe(1);
+      await policy.releaseRateLimitTokens(fresh);
+      expect(await remaining()).toBe(1);
+
+      // An approved execution's token is final, and a forged ledger is ignored.
+      const approvedExecution = createToolRateLimitTokenLedger({ approvedExecution: true });
+      expect(await policy.decide(input, { rateLimitTokens: approvedExecution })).toMatchObject({ allowed: true });
+      await policy.releaseRateLimitTokens(approvedExecution);
+      await policy.releaseRateLimitTokens({ heldIn: () => 1 });
+      expect(await remaining()).toBe(0);
+      expect(await policy.decide(input, { rateLimitTokens: createToolRateLimitTokenLedger() }))
+        .toMatchObject({ decision: "rate_limited" });
+    } finally {
+      vi.useRealTimers();
+    }
+  });
+
+  it("releases the token of an allowed call that governance parks for a human decision", async () => {
+    const company = await createCompany(db);
+    const agent = await createAgent(db, company.id);
+    const { connection } = await createTool(db, company.id);
+    await db.insert(principalPermissionGrants).values({
+      companyId: company.id,
+      principalType: "agent",
+      principalId: agent.id,
+      permissionKey: "tools:use",
+      scope: { toolName: "send_email" },
+    });
+    await db.insert(toolPolicies).values({
+      companyId: company.id,
+      name: "One send per hour",
+      policyType: "rate_limit",
+      selectors: { toolName: "send_email" },
+      config: { limit: 1, windowSeconds: 3600, keyBy: ["agent", "tool"] },
+    });
+    const input = {
+      companyId: company.id,
+      actor: { actorType: "agent" as const, actorId: agent.id, agentId: agent.id },
+      request: { connectionId: connection.id, toolName: "send_email" },
+      consumeRateLimit: true,
+    };
+    const policy = toolAccessPolicyService(db);
+    const counts = async () => (await db.select().from(toolRateLimitCounters)).map((row) => row.limit - row.remaining);
+
+    const windowInstant = new Date(); windowInstant.setUTCMinutes(10, 0, 0);
+    vi.useFakeTimers({ toFake: ["Date"] }); vi.setSystemTime(windowInstant);
+    governanceOverride.requireHumanApproval = true;
+    try {
+      const parked = { decision: "require_approval", reasonCode: "requires_approval_policy" };
+      expect(await policy.decide(input, { rateLimitTokens: createToolRateLimitTokenLedger() })).toMatchObject(parked);
+      expect(await policy.decide(input, { rateLimitTokens: createToolRateLimitTokenLedger() })).toMatchObject(parked);
+      expect(await counts()).toEqual([0]);
+      // Its approved execution is charged once, and then the window is full.
+      const approvedExecution = { rateLimitTokens: createToolRateLimitTokenLedger({ approvedExecution: true }) };
+      expect(await policy.decide(input, approvedExecution)).toMatchObject(parked);
+      expect(await counts()).toEqual([1]);
+      expect(await policy.decide(input, { rateLimitTokens: createToolRateLimitTokenLedger({ approvedExecution: true }) }))
+        .toMatchObject({ decision: "rate_limited" });
+    } finally {
+      governanceOverride.requireHumanApproval = false;
+      vi.useRealTimers();
+    }
+  });
+
+  // GW3: the policy test endpoint is a dry run. It must never burn production
+  // rate-limit tokens, whatever the request body says.
+  it("keeps the policy dry-run route from consuming rate-limit tokens", async () => {
+    const company = await createCompany(db);
+    const agent = await createAgent(db, company.id);
+    const { connection } = await createTool(db, company.id);
+    await db.insert(principalPermissionGrants).values({
+      companyId: company.id,
+      principalType: "agent",
+      principalId: agent.id,
+      permissionKey: "tools:use",
+      scope: { toolName: "send_email" },
+    });
+    await db.insert(toolPolicies).values({
+      companyId: company.id,
+      name: "One send per hour",
+      policyType: "rate_limit",
+      selectors: { toolName: "send_email" },
+      config: { limit: 1, windowSeconds: 3600, keyBy: ["agent", "tool"] },
+    });
+    const body = {
+      companyId: company.id,
+      actor: { actorType: "agent", actorId: agent.id, agentId: agent.id },
+      request: { connectionId: connection.id, toolName: "send_email" },
+      consumeRateLimit: true,
+    };
+    expect(toolPolicyTestRequestSchema.parse(body)).not.toHaveProperty("consumeRateLimit");
+
+    const app = express();
+    app.use(express.json());
+    app.use((req, _res, next) => {
+      req.actor = {
+        type: "board",
+        userId: "board-user",
+        userName: "Board User",
+        userEmail: null,
+        isInstanceAdmin: true,
+        source: "local_implicit",
+      };
+      next();
+    });
+    app.use("/api", toolAccessRoutes(db));
+    app.use(errorHandler);
+    for (let index = 0; index < 3; index += 1) {
+      const res = await request(app).post(`/api/companies/${company.id}/tools/policy/test`).send(body).expect(200);
+      expect(res.body.decision, `dry run ${index + 1}`).toMatchObject({ allowed: true, decision: "allow" });
+    }
+    expect(await db.select().from(toolRateLimitCounters)).toHaveLength(0);
+    expect(await toolAccessPolicyService(db).decide({ ...body, actor: { actorType: "agent" as const, actorId: agent.id, agentId: agent.id } }))
+      .toMatchObject({ allowed: true });
   });
 
   it("rejects unsupported policy semantics at create and update time", async () => {

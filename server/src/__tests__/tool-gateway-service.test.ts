@@ -1175,6 +1175,252 @@ describeEmbeddedPostgres("tool gateway service", () => {
     })).rejects.toMatchObject({ reasonCode: "action_not_approved" });
   });
 
+  // GW2: an approved call takes its rate-limit token when it runs, never when
+  // it is requested, and exactly once, whatever the order of the two policies.
+  describe.each([
+    ["rate limit before review", -10, 10],
+    ["review before rate limit", 10, -10],
+  ] as const)("approved execution rate limits: %s", (_order, rateLimitPriority, reviewPriority) => {
+    const noteTool = "mcp-remote-fixture:update_note";
+    const counts = async () => (await db.select().from(toolRateLimitCounters))
+      .map((row) => row.limit - row.remaining).sort();
+    async function policies(companyId: string, selectors: Record<string, unknown>, rateLimit: { limit: number; windowSeconds: number }) {
+      await db.insert(toolPolicies).values([
+        { companyId, name: "Rate limit", policyType: "rate_limit", priority: rateLimitPriority, selectors, config: { rateLimit } },
+        { companyId, name: "Review", policyType: "require_approval", priority: reviewPriority, selectors },
+      ]);
+    }
+    async function requestReviews(gateway: ReturnType<typeof createTestToolGatewayService>, sessionToken: string, bodies: string[]) {
+      const ids: string[] = [];
+      for (const body of bodies) {
+        await expect(gateway.executeTool({ sessionToken, tool: noteTool, parameters: { noteId: "n1", body } }))
+          .rejects.toMatchObject({ status: 409, reasonCode: "approval_required" });
+        const rows = await db.select().from(toolActionRequests);
+        ids.push(rows.find((row) => !ids.includes(row.id))!.id);
+      }
+      return ids;
+    }
+
+    it("charges execute-on-approve when the approved call runs and refuses it with 429 in a full window", async () => {
+      const { company, agent, issue, run } = await createRunFixture(db);
+      await initializeRunIdentity(db, { companyId: company.id, runId: run.id, issueId: issue.id,
+        responsibleUserId: null, cause: "company_default" });
+      await policies(company.id, { toolName: noteTool }, { limit: 1, windowSeconds: 60 });
+      const windowInstant = new Date(); windowInstant.setUTCSeconds(10, 0);
+      vi.useFakeTimers({ toFake: ["Date"] }); vi.setSystemTime(windowInstant);
+      try {
+        const gateway = createTestToolGatewayService(db);
+        const session = await gateway.createSession({ companyId: company.id, agentId: agent.id, runId: run.id });
+        // Waiting for review uses no part of the window, so a second request
+        // in a window of limit 1 is not refused.
+        const [first, second] = await requestReviews(gateway, session.token, ["first", "second"]);
+        expect((await counts()).every((count) => count === 0)).toBe(true);
+        const approve = (actionRequestId: string) => gateway.approveActionRequest({ companyId: company.id,
+          actionRequestId, actor: { userId: "reviewer" } });
+
+        await expect(approve(first!)).resolves.toMatchObject({ status: "executed" });
+        expect(await counts()).toEqual([1]);
+
+        // The window is full: approving the second call is refused like any
+        // other rate-limited call and it stays pending, unexecuted.
+        await expect(approve(second!)).rejects.toMatchObject({ status: 429, reasonCode: "rate_limited",
+          details: { decision: "rate_limited", rateLimitState: expect.objectContaining({ limit: 1 }) } });
+        const [waiting] = await db.select().from(toolActionRequests).where(eq(toolActionRequests.id, second!));
+        expect(waiting.status).toBe("pending");
+        const [waitingInvocation] = await db.select().from(toolInvocations).where(eq(toolInvocations.id, waiting.invocationId));
+        expect(waitingInvocation.status).toBe("awaiting_approval");
+        expect(await counts()).toEqual([1]);
+
+        // Next window: the same approval executes and is charged there, once.
+        vi.setSystemTime(new Date(windowInstant.getTime() + 60_000));
+        await expect(approve(second!)).resolves.toMatchObject({ status: "executed" });
+        expect(await counts()).toEqual([1, 1]);
+      } finally {
+        vi.useRealTimers();
+      }
+    });
+
+    it("admits exactly one of two concurrent approved retries at the last token", async () => {
+      const { company, agent, issue, run } = await createRunFixture(db);
+      await initializeRunIdentity(db, { companyId: company.id, runId: run.id, issueId: issue.id,
+        responsibleUserId: null, cause: "company_default" });
+      await policies(company.id, { toolName: noteTool }, { limit: 1, windowSeconds: 3600 });
+      const windowInstant = new Date(); windowInstant.setUTCMinutes(10, 0, 0);
+      vi.useFakeTimers({ toFake: ["Date"] }); vi.setSystemTime(windowInstant);
+      try {
+        const gateway = createTestToolGatewayService(db);
+        const session = await gateway.createSession({ companyId: company.id, agentId: agent.id, runId: run.id });
+        const ids = await requestReviews(gateway, session.token, ["a", "b"]);
+        await db.update(issueThreadInteractions).set({ status: "accepted", resolvedByUserId: "board-user",
+          resolvedAt: new Date(), updatedAt: new Date() }).where(eq(issueThreadInteractions.companyId, company.id));
+
+        const results = await Promise.allSettled(ids.map((approvedActionRequestId, index) => gateway.executeTool({
+          sessionToken: session.token, tool: noteTool, approvedActionRequestId,
+          parameters: { noteId: "n1", body: index === 0 ? "a" : "b" },
+        })));
+        const completed = results.filter((result) => result.status === "fulfilled");
+        const refused = results.filter((result): result is PromiseRejectedResult => result.status === "rejected");
+        expect(completed).toHaveLength(1);
+        expect(completed[0]).toMatchObject({ value: { status: "completed" } });
+        expect(refused).toHaveLength(1);
+        expect(refused[0]!.reason).toMatchObject({ status: 429, reasonCode: "rate_limited",
+          details: { decision: "rate_limited", invocationId: expect.any(String) } });
+        const requests = await db.select().from(toolActionRequests);
+        expect(requests.map((row) => row.status).sort()).toEqual(["executed", "failed"]);
+        const failed = requests.find((row) => row.status === "failed")!;
+        const [failedInvocation] = await db.select().from(toolInvocations).where(eq(toolInvocations.id, failed.invocationId));
+        expect(failedInvocation).toMatchObject({ status: "failed", errorCode: "rate_limited" });
+        expect(await counts()).toEqual([1]);
+      } finally {
+        vi.useRealTimers();
+      }
+    });
+
+    it("charges a decided approval when the agent repeats the call and refuses it with 429 in a full window", async () => {
+      const { company, agent, issue, run } = await createRunFixture(db);
+      await initializeRunIdentity(db, { companyId: company.id, runId: run.id, issueId: issue.id,
+        responsibleUserId: null, cause: "company_default" });
+      await policies(company.id, { toolName: noteTool }, { limit: 1, windowSeconds: 3600 });
+      const windowInstant = new Date(); windowInstant.setUTCMinutes(10, 0, 0);
+      vi.useFakeTimers({ toFake: ["Date"] }); vi.setSystemTime(windowInstant);
+      try {
+        const gateway = createTestToolGatewayService(db);
+        const session = await gateway.createSession({ companyId: company.id, agentId: agent.id, runId: run.id });
+        const ids = await requestReviews(gateway, session.token, ["a", "b"]);
+        // Decided outside execute-on-approve: the agent's repeated call runs it.
+        for (const actionRequestId of ids) {
+          await commitToolActionReview(db, { companyId: company.id, actionRequestId, decision: "approved", actor: { userId: "reviewer" } });
+        }
+        const repeat = (body: string) => gateway.executeTool({ sessionToken: session.token, tool: noteTool,
+          parameters: { noteId: "n1", body } });
+
+        await expect(repeat("a")).resolves.toMatchObject({ status: "replayed" });
+        expect(await counts()).toEqual([1]);
+        await expect(repeat("b")).rejects.toMatchObject({ status: 429, reasonCode: "rate_limited",
+          details: { decision: "rate_limited", invocationId: expect.any(String) } });
+        const [refused] = await db.select().from(toolActionRequests).where(eq(toolActionRequests.id, ids[1]!));
+        expect(refused.status).toBe("failed");
+        const [refusedInvocation] = await db.select().from(toolInvocations).where(eq(toolInvocations.id, refused.invocationId));
+        expect(refusedInvocation).toMatchObject({ status: "failed", errorCode: "rate_limited" });
+        expect(await counts()).toEqual([1]);
+      } finally {
+        vi.useRealTimers();
+      }
+    });
+
+    it("lets an approved remote call pass its own dispatch re-checks at the last token", async () => {
+      const { company, agent, issue, run } = await createRunFixture(db);
+      await initializeRunIdentity(db, { companyId: company.id, runId: run.id, issueId: issue.id,
+        responsibleUserId: null, cause: "company_default" });
+      const { connection } = await createRemoteMcpToolFixture(db, company.id, true);
+      await policies(company.id, { connectionId: connection.id }, { limit: 1, windowSeconds: 3600 });
+      let calls = 0;
+      const gateway = createTestToolGatewayService(db, { remoteHttpRequest: async (url) => {
+        expect(String(url)).toBe(RAILWAY_API_URL); calls++;
+        return Response.json({ data: { projects: { edges: [] } } });
+      } });
+      const windowInstant = new Date(); windowInstant.setUTCMinutes(10, 0, 0);
+      vi.useFakeTimers({ toFake: ["Date"] }); vi.setSystemTime(windowInstant);
+      try {
+        const session = await gateway.createSession({ companyId: company.id, agentId: agent.id, runId: run.id });
+        const tool = (await gateway.listToolsForSession(session.token)).find((candidate) => candidate.providerType === "mcp_remote_http")!;
+        await expect(gateway.executeTool({ sessionToken: session.token, tool: tool.name,
+          parameters: { workspaceId: randomUUID() } })).rejects.toMatchObject({ status: 409, reasonCode: "approval_required" });
+        const [actionRequest] = await db.select().from(toolActionRequests);
+        await expect(gateway.approveActionRequest({ companyId: company.id, actionRequestId: actionRequest.id,
+          actor: { userId: "reviewer" } })).resolves.toMatchObject({ status: "executed" });
+        expect(calls).toBe(1);
+        expect(await counts()).toEqual([1]);
+      } finally {
+        vi.useRealTimers();
+      }
+    });
+
+    it("charges an approved Test-tab call when it runs and records a full window as rate limited", async () => {
+      const { company, agent } = await createRunFixture(db);
+      await db.insert(companyMemberships).values({ companyId: company.id, principalType: "user",
+        principalId: "tester", membershipRole: "operator", status: "active" });
+      const { connection } = await createRemoteMcpToolFixture(db, company.id, true);
+      await policies(company.id, { connectionId: connection.id }, { limit: 1, windowSeconds: 3600 });
+      let calls = 0;
+      const gateway = createTestToolGatewayService(db, { remoteHttpRequest: async (url) => {
+        expect(String(url)).toBe(RAILWAY_API_URL); calls++;
+        return Response.json({ data: { projects: { edges: [] } } });
+      } });
+      const windowInstant = new Date(); windowInstant.setUTCMinutes(10, 0, 0);
+      vi.useFakeTimers({ toFake: ["Date"] }); vi.setSystemTime(windowInstant);
+      try {
+        const testCall = () => gateway.executeTestCall({ companyId: company.id, connectionId: connection.id,
+          agentId: agent.id, userId: "tester", toolName: "paperclip-railway-list-projects",
+          parameters: { workspaceId: randomUUID() } });
+        const first = await testCall();
+        const second = await testCall();
+        expect(first).toMatchObject({ decision: "ask_first" });
+        expect(second).toMatchObject({ decision: "ask_first" });
+        expect((await counts()).every((count) => count === 0)).toBe(true);
+        const approve = (actionRequestId: string) => gateway.approveActionRequest({ companyId: company.id,
+          actionRequestId, actor: { userId: "reviewer" } });
+
+        await approve((first as { actionRequestId: string }).actionRequestId);
+        expect(calls).toBe(1);
+        expect(await counts()).toEqual([1]);
+        const [done] = await db.select().from(toolInvocations).where(eq(toolInvocations.id, first.invocationId));
+        expect(done.status).toBe("succeeded");
+
+        await approve((second as { actionRequestId: string }).actionRequestId);
+        expect(calls).toBe(1);
+        expect(await counts()).toEqual([1]);
+        const [limited] = await db.select().from(toolInvocations).where(eq(toolInvocations.id, second.invocationId));
+        expect(limited).toMatchObject({ status: "rate_limited", errorCode: "rate_limited" });
+      } finally {
+        vi.useRealTimers();
+      }
+    });
+  });
+
+  // GW4: a rate limit found by a dispatch re-check is refused exactly like a
+  // rate limit found at admission: 429 with the same reason code and details.
+  it("refuses a rate limit found by the dispatch re-check with the admission 429 contract", async () => {
+    const { company, agent, issue, run } = await createRunFixture(db);
+    await initializeRunIdentity(db, { companyId: company.id, runId: run.id, issueId: issue.id,
+      responsibleUserId: null, cause: "company_default" });
+    const { connection } = await createRemoteMcpToolFixture(db, company.id, true);
+    const [rateLimit] = await db.insert(toolPolicies).values({ companyId: company.id, name: "Two calls per hour",
+      policyType: "rate_limit", priority: -10, selectors: { connectionId: connection.id },
+      config: { rateLimit: { limit: 2, windowSeconds: 3600 } } }).returning();
+    await db.insert(toolPolicies).values({ companyId: company.id, name: "Allow connector",
+      policyType: "allow", priority: 100, selectors: { connectionId: connection.id } });
+    let calls = 0;
+    const gateway = createTestToolGatewayService(db, { remoteHttpRequest: async (url) => {
+      expect(String(url)).toBe(RAILWAY_API_URL); calls++;
+      // While this call is in flight another call takes the last token and an
+      // operator lowers the limit, so this call's post-dispatch re-check finds
+      // the window over-subscribed even without counting its own token.
+      await db.update(toolRateLimitCounters).set({ remaining: 0 }).where(eq(toolRateLimitCounters.policyId, rateLimit!.id));
+      await db.update(toolPolicies).set({ config: { rateLimit: { limit: 1, windowSeconds: 3600 } } })
+        .where(eq(toolPolicies.id, rateLimit!.id));
+      return Response.json({ data: { projects: { edges: [] } } });
+    } });
+    const windowInstant = new Date(); windowInstant.setUTCMinutes(10, 0, 0);
+    vi.useFakeTimers({ toFake: ["Date"] }); vi.setSystemTime(windowInstant);
+    try {
+      const session = await gateway.createSession({ companyId: company.id, agentId: agent.id, runId: run.id });
+      const tool = (await gateway.listToolsForSession(session.token)).find((candidate) => candidate.providerType === "mcp_remote_http")!;
+      const refusal = await gateway.executeTool({ sessionToken: session.token, tool: tool.name,
+        parameters: { workspaceId: randomUUID() } }).then(() => null, (error: unknown) => error);
+      expect(calls).toBe(1);
+      expect(refusal).toBeInstanceOf(ToolGatewayHttpError);
+      expect(refusal).toMatchObject({ status: 429, reasonCode: "rate_limited", details: {
+        invocationId: expect.any(String), tool: tool.name, decision: "rate_limited", matchedPolicyIds: [rateLimit!.id],
+        rateLimitState: expect.objectContaining({ limited: true, limit: 1 }) } });
+      const [invocation] = await db.select().from(toolInvocations)
+        .where(eq(toolInvocations.id, (refusal as ToolGatewayHttpError).details.invocationId as string));
+      expect(invocation).toMatchObject({ status: "rate_limited", errorCode: "rate_limited" });
+    } finally {
+      vi.useRealTimers();
+    }
+  });
+
   it("approves a pending action request directly from the review queue and preserves signed arguments", async () => {
     const { company, agent, issue, run } = await createRunFixture(db);
     // Real runner calls carry immutable identity in their signed approval.

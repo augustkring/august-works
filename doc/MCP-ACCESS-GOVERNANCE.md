@@ -261,7 +261,9 @@ Order of evaluation:
 3. Policies in priority order. `block` short-circuits. `require_approval` short-circuits to an action request. `rate_limit` evaluates the counter.
 4. If no policy matched and the profile allowed the tool: `allow`.
 
-To dry-run a policy decision without making a real call. The dry-run endpoint takes a structured `{ companyId, actor, request, runContext? }` body and returns the decision under `.decision`:
+Rate limits and approvals: a call that is parked for approval holds no rate-limit token. If a `rate_limit` policy runs before the `require_approval` policy and its window is already full, the request is refused with `429` `rate_limited`; otherwise the call waits for review without using the window. When the approved call is executed, it takes one token from every matching `rate_limit` policy, including one ordered after the `require_approval` policy. If that window is full, the call is not executed: an approval that would execute it at once is refused with `429` `rate_limited` and the request stays pending, an approved execution that finds the window full when it starts is refused with `429` `rate_limited` and the request is marked failed with that reason, and an approved Test-tab call records `rate_limited` on the test call. Policy re-checks during dispatch return the same `429` `rate_limited` refusal as admission.
+
+To dry-run a policy decision without making a real call. The dry-run endpoint takes a structured `{ companyId, actor, request, runContext? }` body and returns the decision under `.decision`. It never consumes rate-limit tokens or records trust-rule hits:
 
 ```sh
 curl -fsS -X POST -H "Authorization: Bearer $BOARD_API_KEY" -H "Content-Type: application/json" \
@@ -416,7 +418,7 @@ These are intentional gaps as of the MCP Access Governance v1 launch. Track or w
 | Bindings | `POST /api/companies/:companyId/tools/profiles/:id/bind` and `…/unbind` | Targets: `company`, `agent`, `project`, `routine`, `issue`. |
 | Effective profile | `GET /api/companies/:companyId/tools/profiles/effective/agents/:agentId` | Use for QA proofs and debugging selector misses. |
 | Policies | `GET\|POST /api/companies/:companyId/tools/policies`, `PATCH\|DELETE /api/companies/:companyId/tools/policies/:id` | Types: `allow`, `block`, `require_approval`, `rate_limit`, `trust_rule`. |
-| Policy dry-run | `POST /api/companies/:companyId/tools/policy/test` | Structured `{ companyId, actor, request, runContext? }` body; decision returned under `.decision`. |
+| Policy dry-run | `POST /api/companies/:companyId/tools/policy/test` | Structured `{ companyId, actor, request, runContext? }` body; decision returned under `.decision`. Never consumes rate-limit tokens. |
 | Gateway sessions | `POST /api/tool-gateway/sessions`, `POST /api/tool-gateway/sessions/:sessionId/revoke` | Board callers must supply `companyId`, `agentId`, `runId` to create and `companyId` to revoke; agent JWTs auto-fill from the token. Revocation invalidates the session immediately and emits `tool_gateway.session_revoked` without logging the raw session token. |
 | Gateway calls | `POST /api/tool-gateway/tools/call` | `X-Paperclip-Tool-Gateway-Token` header; body uses `tool` + `parameters`. Approval-required calls respond `409` with `reasonCode: approval_required` and an `actionRequestId`; the agent retries with `approvedActionRequestId`. |
 | Action requests | `POST /api/tool-gateway/action-requests/:id/approve` | Requires `companyId` (body or query). Listing is via the audit log: filter for `tool_gateway.approval_requested`. |

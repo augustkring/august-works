@@ -1,6 +1,6 @@
 import { notificationChannelDelivery } from "../services/notifications/channel-delivery.js";
 import { notificationChannelPolicy } from "../services/notifications/channel-policy.js";
-import { toolActionRequests, toolInvocations, EMBEDDED_POSTGRES_TEST_TIMEOUT_MS } from "@paperclipai/db";
+import { toolActionRequests, toolInvocations, toolPolicies, toolRateLimitCounters, EMBEDDED_POSTGRES_TEST_TIMEOUT_MS } from "@paperclipai/db";
 import { GitHubPublicationLeaseLost, withGitHubPublicationLease } from "../services/chat-github-publication-lease.js";
 import { githubChatManagementService } from "../services/chat-github-management.js";
 import { githubChatReviewService } from "../services/chat-github-reviews.js";
@@ -4821,14 +4821,22 @@ describeEmbeddedPostgres("chat channel control-plane integration", () => {
     await executeConnectorTool(db, binding, "slack_post_message", uncertain);
     expect(postFetch.mock.calls).toHaveLength(countBefore);
     await expect(executeSlackTool(db, binding, "slack_delivery", { actionId: uncertainAction.id }, postFetch as typeof fetch)).resolves.toMatchObject({ state: "delivered", receipt: { reconciled: true } });
+    // GW2: an allowed Slack approval tool is parked after decide returns, so
+    // it holds no rate-limit token until its approved execution runs.
+    await db.insert(toolPolicies).values({ companyId: fixture.companyId, name: "One Slack channel per hour", policyType: "rate_limit",
+      priority: -1000, selectors: { toolName: "slack_create_channel" }, config: { rateLimit: { limit: 1, windowSeconds: 3600 } } });
+    const channelTokens = async () => (await db.select().from(toolRateLimitCounters)
+      .where(eq(toolRateLimitCounters.companyId, fixture.companyId))).map(row => row.limit - row.remaining);
     await expect(executeConnectorTool(db, binding, "slack_create_channel", { name: "approval-required", is_private: true, idempotencyKey: randomUUID() })).rejects.toMatchObject({ reasonCode: expect.stringMatching(/approval/) });
     expect(postFetch.mock.calls.some(call => String(call[0]).endsWith("/conversations.create"))).toBe(false);
+    expect((await channelTokens()).every(count => count === 0)).toBe(true);
     const [approval] = await db.select().from(toolActionRequests).where(eq(toolActionRequests.companyId, fixture.companyId));
     await db.update(heartbeatRuns).set({ status: "succeeded" }).where(eq(heartbeatRuns.id, runId));
     const { createToolGatewayService } = await import("../services/tool-gateway.js");
     await createToolGatewayService(db).approveActionRequest({ companyId: fixture.companyId, actionRequestId: approval.id, actor: { userId: "owner-user" } });
     const [invocation] = await db.select().from(toolInvocations).where(eq(toolInvocations.id, approval.invocationId));
     expect(invocation, invocation.errorMessage ?? undefined).toMatchObject({ status: "succeeded", approvalState: "approved" });
+    expect(await channelTokens()).toEqual([1]);
     expect(postFetch.mock.calls.filter(call => String(call[0]).endsWith("/conversations.create"))).toHaveLength(1);
     expect(await service.listResources(endpoint.id)).toEqual(expect.arrayContaining([
       expect.objectContaining({ providerResourceId: "CNEWCHANNEL", enabled: false }),

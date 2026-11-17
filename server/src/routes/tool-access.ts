@@ -2722,7 +2722,9 @@ function connectorEnrollmentPrincipal(req: Request): string {
     assertBoard(req);
     const companyId = req.params.companyId as string;
     assertCompanyAccess(req, companyId);
-    const input = { ...req.body, companyId };
+    // Dry run: never consume production rate-limit tokens or record trust-rule
+    // hits, whatever the body says.
+    const input = { ...req.body, companyId, consumeRateLimit: false };
     const decision = await policySvc.decide(input);
     let auditEvent = null;
     if (input.writeAuditEvent === true) {
