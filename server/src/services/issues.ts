@@ -2138,6 +2138,38 @@ export async function isCurrentUnsealedConversationShell(
     (membership === "member" || membership === "instance_admin");
 }
 
+/**
+ * The current conversation that replaced exactly `retiredConversationId` for
+ * this company, agent and user, or null. Retirement and its replacement commit
+ * together under the conversation identity lock, and the replacement's
+ * `issue.conversation_opened` row names the conversation it replaced, so a
+ * concurrent recovery request that lost the race can return the winner's
+ * replacement instead of failing on the row the winner retired.
+ */
+export async function findConversationReplacement(
+  executor: Db | DbTransaction,
+  companyId: string,
+  agentId: string,
+  userId: string,
+  retiredConversationId: string,
+) {
+  const [retired] = await executor.select({ id: issues.id }).from(issues).where(and(
+    eq(issues.companyId, companyId), eq(issues.id, retiredConversationId), isNotNull(issues.conversationRetiredAt),
+  ));
+  if (!retired) return null;
+  const [replacement] = await executor.select().from(issues).where(and(
+    eq(issues.companyId, companyId), eq(issues.conversationAgentId, agentId), eq(issues.conversationUserId, userId),
+    isNull(issues.conversationRetiredAt),
+    sql`not aw_workflow_memory_erased(${companyId}::uuid, null, ${issues.id})`,
+    sql`exists (select 1 from ${activityLog} where ${activityLog.companyId} = ${companyId}
+      and ${activityLog.actorType} = 'user' and ${activityLog.actorId} = ${userId}
+      and ${activityLog.action} = 'issue.conversation_opened' and ${activityLog.entityType} = 'issue'
+      and ${activityLog.entityId} = ${issues.id}::text and ${activityLog.details}->>'agentId' = ${agentId}
+      and ${activityLog.details}->>'replacedConversationId' = ${retiredConversationId})`,
+  ));
+  return replacement ?? null;
+}
+
 export async function lockIssuePrivacyTree(tx: DbTransaction, companyId: string, mode: "read" | "write" = "write") {
   await lockBusinessEventCompany(tx, companyId, mode);
   await lockMemoryPrivacy(tx as unknown as Db, companyId, mode);
@@ -10528,6 +10560,12 @@ export function issueService(db: Db) {
               throw error;
             }
             if (!source?.erased && retireConversationId !== existing.id) {
+              // Re-read under the identity lock: a concurrent recovery request
+              // already retired the conversation this request named. Return its
+              // replacement only when it replaced exactly that conversation.
+              if (retireConversationId && (await findConversationReplacement(tx, companyId,
+                issueData.conversationAgentId, issueData.conversationUserId, retireConversationId))?.id !== existing.id)
+                throw conflict("The current conversation does not require source recovery");
               const [enriched] = await withIssueLabels(tx, [existing]);
               const [withRelations] = await withIssueRelationSummaries(companyId, [enriched], tx);
               return finishManualInput(withRelations);

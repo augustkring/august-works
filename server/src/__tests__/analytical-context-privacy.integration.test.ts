@@ -36,6 +36,7 @@ import {analyticalLiveEventForReader} from "../services/analytical-live-events.j
 import {appendHeartbeatRunEvent} from "../services/heartbeat-run-events.js";
 import type {LiveEvent} from "@paperclipai/shared";
 import {and,eq,sql} from "drizzle-orm";
+import {activityLog} from "@paperclipai/db";
 import {agents,authSessions,authUsers,companies,companyMemberships,heartbeatRuns,heartbeatRunEvents,issues,issuePrivacySources,issueComments,businessMetrics,businessMetricVersions,businessMetricPublications,businessMetricObservations,governanceObligations,analyticalLineageManifests,analyticalContextRoots,analyticalContextDependencies,memoryRecords,contextManifestMemoryRoots,providerTraceRecords,memoryJobs,nativeRunFinalizations,createDb} from "@paperclipai/db";
 import {afterAll,beforeAll,beforeEach,describe,expect,it,vi} from "vitest";
 import {instanceSettingsService} from "../services/instance-settings.js";
@@ -844,6 +845,53 @@ describe.skipIf(!support.supported)("Native analytical Context retention on Post
   expect((await db.select().from(businessMetricVersions).where(eq(businessMetricVersions.id,f.query.versionId)))[0]!.id).toBe(f.query.versionId);
   expect(await heartbeatMemoryPayloadRetained(db,companyId,runId)).toBe(false);
   expect((await db.select().from(memoryRecords).where(eq(memoryRecords.companyId,companyId))).every(r=>r.deletedAt&&r.content==="")).toBe(true);
+ });
+
+ it("returns the winner's replacement to a concurrent recovery request that read the source conversation before the winner retired it",async()=>{
+  await instanceSettingsService(db).updateExperimental({enableAgentChat:true});
+  const f=await fixture();await f.capture();await copied();
+  await db.update(issues).set({hiddenAt:new Date()}).where(eq(issues.id,f.sourceId));
+  // A loser sees the shared database through a gate: its first transaction
+  // (the owner-shell check right after its unlocked conversation read) waits
+  // until the test releases it, after the winner committed the replacement.
+  const gate=()=>{let reached!:()=>void,release!:()=>void,armed=true;
+   const atGate=new Promise<void>(r=>{reached=r;}),released=new Promise<void>(r=>{release=r;});
+   const gated=new Proxy(db,{get(target,prop){const value=Reflect.get(target,prop,target);
+    if(prop==="transaction"&&typeof value==="function")return async(...args:unknown[])=>{if(armed){armed=false;reached();await released;}return (value as (...a:unknown[])=>unknown).apply(target,args);};
+    return typeof value==="function"?(value as (...a:unknown[])=>unknown).bind(target):value;}}) as typeof db;
+   return {gated,atGate,release:()=>release()};};
+  const routesFor=(routeDb:typeof db)=>{const app=express();app.use(express.json());app.use((req,_res,next)=>{req.actor=reader;next();});app.use("/api",issueRoutes(routeDb));app.use(errorHandler);return app;};
+  const chatPath=`/api/companies/${companyId}/chats/${agentId}`,input={replaceInaccessibleIssueId:issueId};
+  const unlinked=gate(),linked=gate();
+  const unlinkedLoser=request(routesFor(unlinked.gated)).post(chatPath).send(input).then(r=>r);
+  const linkedLoser=request(routesFor(linked.gated)).post(chatPath).send(input).then(r=>r);
+  await Promise.all([unlinked.atGate,linked.atGate]);
+  const winner=await request(routesFor(db)).post(chatPath).send(input);
+  expect(winner.status).toBe(200);const nextId=winner.body.id;expect(nextId).not.toBe(issueId);
+  expect((await db.select().from(issues).where(eq(issues.id,issueId)))[0]!.conversationRetiredAt).toBeInstanceOf(Date);
+  const openedRows=()=>db.select().from(activityLog).where(and(eq(activityLog.companyId,companyId),eq(activityLog.action,"issue.conversation_opened")));
+  const [opened]=await openedRows();expect(opened).toMatchObject({entityId:nextId,actorId:userId,details:{agentId,replacedConversationId:issueId}});
+  // Fails closed when the current conversation does not record that it
+  // replaced exactly the conversation the loser named.
+  await db.update(activityLog).set({details:{agentId}}).where(eq(activityLog.id,opened!.id));
+  unlinked.release();
+  const unlinkedResponse=await unlinkedLoser;expect(unlinkedResponse.status).toBe(404);expect(unlinkedResponse.body.id).toBeUndefined();
+  const svc=issueService(db),createInput={privateWorkAdmission:"closed" as const,title:"Chat with Native analytical reader",assigneeAgentId:agentId,
+   conversationAgentId:agentId,conversationUserId:userId,conversationState:"waiting" as const,status:"in_review" as const,createdByUserId:userId,
+   retireConversationId:issueId,payloadSourceProtocolVersion:1};
+  // The same rule holds for a loser that re-reads under the identity lock.
+  await expect(db.transaction(tx=>svc.create(companyId,createInput,tx,[]))).rejects.toMatchObject({status:409});
+  await db.update(activityLog).set({details:opened!.details}).where(eq(activityLog.id,opened!.id));
+  expect((await db.transaction(tx=>svc.create(companyId,createInput,tx,[]))).id).toBe(nextId);
+  linked.release();
+  const linkedResponse=await linkedLoser;expect(linkedResponse.status).toBe(200);expect(linkedResponse.body.id).toBe(nextId);
+  // Exactly one retirement, one replacement and one opened record.
+  const current=await db.select({id:issues.id}).from(issues).where(and(eq(issues.companyId,companyId),eq(issues.conversationAgentId,agentId),eq(issues.conversationUserId,userId)));
+  expect(current.map(r=>r.id)).toEqual([nextId]);
+  const retired=await db.select({id:issues.id}).from(issues).where(and(eq(issues.companyId,companyId),sql`${issues.conversationRetiredAt} is not null`));
+  expect(retired.map(r=>r.id)).toEqual([issueId]);
+  expect(await openedRows()).toHaveLength(1);
+  const replay=await request(routesFor(db)).post(chatPath).send(input);expect(replay.status).toBe(200);expect(replay.body.id).toBe(nextId);
  });
 
  it("erases both original trace sidecars through the native outbox with rollout off and keeps the cleanup after actual company purge",async()=>{

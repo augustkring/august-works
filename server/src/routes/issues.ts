@@ -291,6 +291,7 @@ import {
   ISSUE_WAKE_DIAGNOSTICS_MAX_ACTIVITY_RECORDS,
   ISSUE_WAKE_DIAGNOSTICS_MAX_WAKE_REQUESTS,
   currentConversationAttachmentBootstrap,
+  findConversationReplacement,
   isCurrentUnsealedConversationShell,
   isManualRelatedPayloadInput,
   readAcceptedPlanConfirmationTarget,
@@ -5088,16 +5089,23 @@ export function issueRoutes(
     return false as const;
   }
 
+  /** Like assertIssueReadAllowed, but leaves the denial response to the caller. */
+  async function issueReadAllowed(
+    req: Request,
+    issue: Parameters<typeof decideIssueAccess>[1],
+  ) {
+    const decision = await decideIssueAccess(req, issue, "issue:read");
+    if (!decision.allowed) return false;
+    await assertAnalyticalContextPayloadAccess(db,issue.companyId,req.actor,{issueId:issue.id},undefined,{privacyLockMode:req.method==="GET"||req.method==="HEAD"?"read":"write"});
+    return true;
+  }
+
   async function assertIssueReadAllowed(
     req: Request,
     res: Response,
     issue: Parameters<typeof decideIssueAccess>[1],
   ) {
-    const decision = await decideIssueAccess(req, issue, "issue:read");
-    if (decision.allowed) {
-      await assertAnalyticalContextPayloadAccess(db,issue.companyId,req.actor,{issueId:issue.id},undefined,{privacyLockMode:req.method==="GET"||req.method==="HEAD"?"read":"write"});
-      return true;
-    }
+    if (await issueReadAllowed(req, issue)) return true;
     res
       .status(404)
       .json({ error: "Issue not found" });
@@ -17810,16 +17818,32 @@ export function issueRoutes(
       if (!resolved.agent) throw notFound("Agent not found");
       const agent = resolved.agent;
       const input = method === "post" ? agentChatOpenSchema.parse(req.body ?? {}) : {};
-      const existing = await svc.getConversation(companyId, agent.id, req.actor.userId);
+      const userId = req.actor.userId;
+      let existing = await svc.getConversation(companyId, agent.id, userId);
       let retireConversationId: string | undefined;
       if (existing) {
-        const ownerShell = await db.transaction((tx) => isCurrentUnsealedConversationShell(tx,
-          { ...req.actor, userId: req.actor.userId ?? undefined }, existing, "issue:read"));
-        try { if (!ownerShell && !(await assertIssueReadAllowed(req,res,existing))) return; }
-        catch (error) {
-          if (!(error instanceof HttpError) || (error.details as {code?:unknown}|undefined)?.code !== "analytical_source_access_lost") throw error;
+        const readConversation = async (conversation: NonNullable<typeof existing>) => {
+          const ownerShell = await db.transaction((tx) => isCurrentUnsealedConversationShell(tx,
+            { ...req.actor, userId }, conversation, "issue:read"));
+          try { return ownerShell || await issueReadAllowed(req, conversation) ? "allowed" as const : "denied" as const; }
+          catch (error) {
+            if (!(error instanceof HttpError) || (error.details as {code?:unknown}|undefined)?.code !== "analytical_source_access_lost") throw error;
+            return error;
+          }
+        };
+        let read = await readConversation(existing);
+        // This conversation was read without the identity lock. A concurrent
+        // recovery request may have retired it since, so its checks now fail.
+        // Return that request's replacement only when it replaced exactly the
+        // conversation this request named, for the same company, agent and user.
+        if (read !== "allowed" && method === "post" && input.replaceInaccessibleIssueId === existing.id) {
+          const replacement = await findConversationReplacement(db, companyId, agent.id, userId, existing.id);
+          if (replacement) { existing = replacement; read = await readConversation(replacement); }
+        }
+        if (read === "denied") { res.status(404).json({ error: "Issue not found" }); return; }
+        if (read !== "allowed") {
           if (method === "post" && input.replaceInaccessibleIssueId === existing.id) retireConversationId=existing.id;
-          else throw new HttpError(error.status,error.message,{code:"analytical_source_access_lost",conversationIssueId:existing.id});
+          else throw new HttpError(read.status,read.message,{code:"analytical_source_access_lost",conversationIssueId:existing.id});
         }
         if (input.replaceInaccessibleIssueId === existing.id && !retireConversationId) throw conflict("The current conversation does not require source recovery");
       }
@@ -17843,7 +17867,7 @@ export function issueRoutes(
         )).limit(1);
         if (!opened) await logActivity(tx as unknown as Db, { companyId, actorType: "user", actorId: req.actor.userId!,
           action: "issue.conversation_opened", entityType: "issue", entityId: created.id,
-          details: { agentId: agent.id } }, publications);
+          details: { agentId: agent.id, ...(retireConversationId ? { replacedConversationId: retireConversationId } : {}) } }, publications);
         return created;
       });
       for (const publication of publications) publishActivity(publication);
