@@ -7654,7 +7654,7 @@
         },
         {
           "path": "server/src/services/memory/memory-jobs.ts",
-          "sha256": "a81e334aeb8ecfd9c6b918cddd9b3554de80cbdb340cd7365e3684d57353ba89"
+          "sha256": "8beffcf65e4879f904bb70bef7d395906a02647c6f7c2db30eae14173ffec58c"
         },
         {
           "path": "server/src/services/native-local-process-stop.ts",
@@ -16346,7 +16346,7 @@
         },
         {
           "path": "server/src/services/saas/offboarding.ts",
-          "sha256": "c8e81010a5a43b1243c861205babbdebc587be5d7c01f37de5bf26e95ca12f98"
+          "sha256": "636d22d603aa666c613d4726bf6370c7fab165e9b85cd17ffb65ae2cb522fcf0"
         },
         {
           "path": "server/src/services/slack-board-authority.ts",
@@ -21412,7 +21412,7 @@
         },
         {
           "path": "server/src/services/saas/company-purge.ts",
-          "sha256": "6c524acb82cdde868b36f9a8ba9589273e485bd9d93545bbb4911477ab3582b8"
+          "sha256": "8e4b23a432b5448b44543ff3b776bb3fe595c4ec7396dbc238a1f2914c6172bd"
         },
         {
           "path": "server/src/services/saas/object-erasure.ts",
@@ -25242,7 +25242,7 @@
         },
         {
           "path": "server/src/services/native-runtime/runtime-asset-retention.ts",
-          "sha256": "e47769ff85aa62ec6143b3169729d6827e4ec965ddabb3b31db406bed96b52a0"
+          "sha256": "5eb4e556827828fc74a6fcb68dc389d38e1021f52b6f5e7dbf5a31a68586f220"
         },
         {
           "path": "server/src/services/native-runtime/runtime-context.test-fixture.ts",
@@ -49756,7 +49756,7 @@
       "id": "source:server/src/services/memory/memory-jobs.ts",
       "kind": "current_source_owner",
       "path": "server/src/services/memory/memory-jobs.ts",
-      "sha256": "a81e334aeb8ecfd9c6b918cddd9b3554de80cbdb340cd7365e3684d57353ba89",
+      "sha256": "8beffcf65e4879f904bb70bef7d395906a02647c6f7c2db30eae14173ffec58c",
       "changeIds": [
         "SCR-V10-HOTSPOT-05"
       ],
@@ -55786,7 +55786,7 @@
       "id": "source:server/src/services/saas/offboarding.ts",
       "kind": "current_source_owner",
       "path": "server/src/services/saas/offboarding.ts",
-      "sha256": "c8e81010a5a43b1243c861205babbdebc587be5d7c01f37de5bf26e95ca12f98",
+      "sha256": "636d22d603aa666c613d4726bf6370c7fab165e9b85cd17ffb65ae2cb522fcf0",
       "changeIds": [
         "SCR-V10-AUTH-IDENTITY"
       ],
@@ -60380,7 +60380,7 @@
       "id": "source:server/src/services/saas/company-purge.ts",
       "kind": "current_source_owner",
       "path": "server/src/services/saas/company-purge.ts",
-      "sha256": "6c524acb82cdde868b36f9a8ba9589273e485bd9d93545bbb4911477ab3582b8",
+      "sha256": "8e4b23a432b5448b44543ff3b776bb3fe595c4ec7396dbc238a1f2914c6172bd",
       "changeIds": [
         "SCR-V10-PRIVATE-DATA-ERASURE"
       ],
@@ -64553,7 +64553,7 @@
       "id": "source:server/src/services/native-runtime/runtime-asset-retention.ts",
       "kind": "current_source_owner",
       "path": "server/src/services/native-runtime/runtime-asset-retention.ts",
-      "sha256": "e47769ff85aa62ec6143b3169729d6827e4ec965ddabb3b31db406bed96b52a0",
+      "sha256": "5eb4e556827828fc74a6fcb68dc389d38e1021f52b6f5e7dbf5a31a68586f220",
       "changeIds": [
         "SCR-V10-NATIVE-RUNTIME-AND-AUTHORITY"
       ],
