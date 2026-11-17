@@ -23,8 +23,8 @@
   "qualificationBoundary": "Source hashes identify current candidate bytes and exact base comparisons. Requirement edges are source links, not closure. The inventory does not prove full behavior review, compatibility, rollback, Human approval, provider/hosted behavior, or release acceptance. Unknown owners and external facts remain open.",
   "migrationJournal": {
     "path": "packages/db/src/migrations/meta/_journal.json",
-    "sha256": "6001afdac3a7a6f5fd0a48691ac25fb411d3dd3f3c09845eaa2f93392aba461e",
-    "entryCount": 580,
+    "sha256": "35b6dbe90185272d03d3873ec00f7452a279a4c71e1b0d38e665197b8a28d45a",
+    "entryCount": 581,
     "qualification": "journal order and current SQL source hashes only; not migration phase, mixed-version safety, rollback, or operator approval"
   },
   "sourceInputs": [
@@ -20064,7 +20064,7 @@
         },
         {
           "path": "packages/db/src/migrations/meta/_journal.json",
-          "sha256": "6001afdac3a7a6f5fd0a48691ac25fb411d3dd3f3c09845eaa2f93392aba461e"
+          "sha256": "35b6dbe90185272d03d3873ec00f7452a279a4c71e1b0d38e665197b8a28d45a"
         },
         {
           "path": "packages/db/src/native-input-source-protocol.test.ts",
@@ -46191,6 +46191,16 @@
       "qualification": "journal_order_and_current_sql_hash_only"
     },
     {
+      "id": "0582_sandbox_native_reviewer_policy",
+      "kind": "journaled_migration_source",
+      "path": "packages/db/src/migrations/0582_sandbox_native_reviewer_policy.sql",
+      "sha256": "5e04cad9bc3b83c1ee8d259db069871e5e73cea79f992a6abe060f85d72314bd",
+      "journalPosition": 580,
+      "journalIndex": 582,
+      "createdAt": 1794891051137,
+      "qualification": "journal_order_and_current_sql_hash_only"
+    },
+    {
       "id": "deleted:server/src/__tests__/heartbeat-workspace-finalize-branch.test.ts",
       "kind": "deleted_source_delta",
       "path": "server/src/__tests__/heartbeat-workspace-finalize-branch.test.ts",
@@ -58675,7 +58685,7 @@
       "id": "source:packages/db/src/migrations/meta/_journal.json",
       "kind": "current_source_owner",
       "path": "packages/db/src/migrations/meta/_journal.json",
-      "sha256": "6001afdac3a7a6f5fd0a48691ac25fb411d3dd3f3c09845eaa2f93392aba461e",
+      "sha256": "35b6dbe90185272d03d3873ec00f7452a279a4c71e1b0d38e665197b8a28d45a",
       "changeIds": [
         "SCR-V10-DATABASE-SCHEMA-AND-MIGRATIONS"
       ],
@@ -83132,6 +83142,11 @@
     {
       "from": "0580_aberrant_karma",
       "to": "0581_white_tigra",
+      "relation": "drizzle_journal_order_only"
+    },
+    {
+      "from": "0581_white_tigra",
+      "to": "0582_sandbox_native_reviewer_policy",
       "relation": "drizzle_journal_order_only"
     },
     {
