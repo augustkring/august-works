@@ -4517,7 +4517,7 @@
         },
         {
           "path": "server/src/services/orchestration/worker-model-gateway.ts",
-          "sha256": "744a4a8488f54bfa44452526d5c51b2a73b7a5a4a94d0a660cb492374f06aa1e"
+          "sha256": "aa0f22db3c6419a932ce3f98097ae325108a512ca99b18727ded188fc365c6b9"
         },
         {
           "path": "server/src/services/tool-gateway.ts",
@@ -10377,7 +10377,7 @@
         },
         {
           "path": "server/src/services/orchestration/worker-model-gateway.ts",
-          "sha256": "744a4a8488f54bfa44452526d5c51b2a73b7a5a4a94d0a660cb492374f06aa1e"
+          "sha256": "aa0f22db3c6419a932ce3f98097ae325108a512ca99b18727ded188fc365c6b9"
         },
         {
           "path": "server/src/services/platform-skill-admission.ts",
@@ -25310,7 +25310,7 @@
         },
         {
           "path": "server/src/services/runtime/control.ts",
-          "sha256": "3f6bbbe3fdeb88669c4d63694287a77a4329715243f08597756888702ce05068"
+          "sha256": "0fce295d32608924ec033085d0e7a2df878bcd809cc0f26eea67413a67c6432c"
         },
         {
           "path": "server/src/services/runtime/fleet.ts",
@@ -47090,7 +47090,7 @@
       "id": "source:server/src/services/orchestration/worker-model-gateway.ts",
       "kind": "current_source_owner",
       "path": "server/src/services/orchestration/worker-model-gateway.ts",
-      "sha256": "744a4a8488f54bfa44452526d5c51b2a73b7a5a4a94d0a660cb492374f06aa1e",
+      "sha256": "aa0f22db3c6419a932ce3f98097ae325108a512ca99b18727ded188fc365c6b9",
       "changeIds": [
         "SCR-V10-HOTSPOT-01",
         "SCR-V10-HOTSPOT-07"
@@ -64808,7 +64808,7 @@
       "id": "source:server/src/services/runtime/control.ts",
       "kind": "current_source_owner",
       "path": "server/src/services/runtime/control.ts",
-      "sha256": "3f6bbbe3fdeb88669c4d63694287a77a4329715243f08597756888702ce05068",
+      "sha256": "0fce295d32608924ec033085d0e7a2df878bcd809cc0f26eea67413a67c6432c",
       "changeIds": [
         "SCR-V10-NATIVE-RUNTIME-AND-AUTHORITY"
       ],
