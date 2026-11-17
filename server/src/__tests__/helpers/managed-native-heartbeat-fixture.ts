@@ -9,6 +9,7 @@ import { fileURLToPath } from "node:url";
 import { createServer as createHttpServer, request as httpRequest } from "node:http";
 import { createConnection, Socket } from "node:net";
 import { createManagedModelTunnelAssociations, type ModelChannel, type ManagedModelTunnel } from "./managed-native-model-transport.js";
+import { collectRetainedConformanceObservations, type NativeConformanceRetainedObservations } from "./managed-native-conformance-observations.js";
 import { createServer as createHttpsServer } from "node:https";
 import { connect as connectTls } from "node:tls";
 import { execFile, execFileSync } from "node:child_process";
@@ -881,6 +882,7 @@ export async function withManagedNativeHeartbeatFixture<T>(input: Omit<FrameInpu
       manifestHash: string; leaseId: string; workspaceRoot: string; creationReceipt: string;
     }) => Promise<unknown>;
     closeManagedAgentHostForRun?: (runId: string) => Promise<void>;
+    conformanceObservations?: () => NativeConformanceRetainedObservations;
   };
   const hostsByAgent = new Map<string, ConfiguredHost>();
   const closedAgentHostIds = new Set<string>();
@@ -1044,7 +1046,10 @@ export async function withManagedNativeHeartbeatFixture<T>(input: Omit<FrameInpu
       },
       facts: () => ({ mode: "controlled_two_agent_signed_host_relay",
         agents: [...hostsByAgent].map(([agentId, host]) => ({ agentId, closed: closedAgentHostIds.has(agentId), facts: host.facts?.() ?? null })),
-        closedAgentHosts: [...closedAgentHostIds] }),
+        closedAgentHosts: [...closedAgentHostIds],
+        // Both presences' per-probe Hosts, including retired ones, so the
+        // six-probe owner can check every recorded start tuple exactly.
+        ...(input.managedOpenCodeConformance ? collectRetainedConformanceObservations(hostsByAgent.values()) : {}) }),
       close: async () => {
         for (const [agent, host] of hostsByAgent) {
           if (closedAgentHostIds.has(agent)) continue;
