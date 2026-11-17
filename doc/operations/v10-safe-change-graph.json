@@ -24682,11 +24682,11 @@
         },
         {
           "path": "packages/paperclip-runner/src/drivers/opencode/opencode-server-driver.test.ts",
-          "sha256": "fd17fa9c828b883e7b3761a85b489d2a6e257f9f7940070b524250fe16520456"
+          "sha256": "3091c8d388fe4abd3770ff897c3a95ec9709ff4c0d4621a76c753ce4e5b68f38"
         },
         {
           "path": "packages/paperclip-runner/src/drivers/opencode/opencode-server-driver.ts",
-          "sha256": "d7962bbdcf1a515087ac865f7e1d99498ab401f9a21296209be0dd41b48cdf31"
+          "sha256": "b32f8bb585a63339ad15fe6cff924350f9f8d99942bcfd518a34a35b4881800d"
         },
         {
           "path": "packages/paperclip-runner/src/index.ts",
@@ -62495,7 +62495,7 @@
       "id": "source:packages/paperclip-runner/src/drivers/opencode/opencode-server-driver.test.ts",
       "kind": "current_source_owner",
       "path": "packages/paperclip-runner/src/drivers/opencode/opencode-server-driver.test.ts",
-      "sha256": "fd17fa9c828b883e7b3761a85b489d2a6e257f9f7940070b524250fe16520456",
+      "sha256": "3091c8d388fe4abd3770ff897c3a95ec9709ff4c0d4621a76c753ce4e5b68f38",
       "changeIds": [
         "SCR-V10-NATIVE-RUNTIME-AND-AUTHORITY"
       ],
@@ -62510,7 +62510,7 @@
       "id": "source:packages/paperclip-runner/src/drivers/opencode/opencode-server-driver.ts",
       "kind": "current_source_owner",
       "path": "packages/paperclip-runner/src/drivers/opencode/opencode-server-driver.ts",
-      "sha256": "d7962bbdcf1a515087ac865f7e1d99498ab401f9a21296209be0dd41b48cdf31",
+      "sha256": "b32f8bb585a63339ad15fe6cff924350f9f8d99942bcfd518a34a35b4881800d",
       "changeIds": [
         "SCR-V10-NATIVE-RUNTIME-AND-AUTHORITY"
       ],
