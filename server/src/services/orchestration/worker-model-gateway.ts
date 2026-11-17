@@ -2048,9 +2048,13 @@ export function workerModelGateway(db: Db, options: Options) {
   }
   /** Current completion Reviewer authority, deliberately independent from the source writer attempt.
    * `preNativeAdmission` is set only by the same-transaction manifest admission
-   * preflight (qualifyReviewInTransaction); see the MS1e note below. */
+   * preflight (qualifyReviewInTransaction); see the MS1e note below.
+   * `runGate` "caller_transaction" is set only by currentReviewBinding (MS1h4):
+   * the caller's transaction already passed the run write gate for this exact
+   * Run, so this read keeps the read-only policy gate and performs no write. */
   async function currentReview(tx: Db, claims: ReviewClaims, requireInputReceipt = true, preNativeIssueId?: string,
-    preNativeReviewerContract?: { id: string; sha256: string }, preNativeAdmission = false) {
+    preNativeReviewerContract?: { id: string; sha256: string }, preNativeAdmission = false,
+    runGate: "write" | "caller_transaction" = "write") {
     const b = claims.review_model, now = new Date();
     if (claims.scope !== "review_model" || claims.exp * 1000 <= now.getTime() || b.reviewerAgentId !== claims.sub || b.reviewerRunId !== claims.run_id)
       throw forbidden("Current run-scoped assigned Reviewer model capability required");
@@ -2182,7 +2186,13 @@ export function workerModelGateway(db: Db, options: Options) {
     // not-yet-started runtime cell to be HEALTHY. RuntimeControl's commercial
     // admission still precedes any start effect, and token issuance, dispatch
     // and every later stage keep the commercial write gate.
-    if (preNativeAdmissionRun) await assertAgentRunPolicyAllowed(tx, claims.company_id, { agentId: claims.sub, runId: claims.run_id });
+    // MS1h4. The sandbox-exec review-credential read (currentReviewBinding)
+    // runs inside RuntimeControl's transaction, which already passed
+    // assertAgentRunWriteAllowed for this exact company, Agent and Run
+    // (assertTaskExecutionContext). Repeating that gate here upserts the
+    // company's entitlement snapshot; the read keeps the read-only policy gate.
+    if (preNativeAdmissionRun || runGate === "caller_transaction")
+      await assertAgentRunPolicyAllowed(tx, claims.company_id, { agentId: claims.sub, runId: claims.run_id });
     else await assertAgentRunWriteAllowed(tx, claims.company_id, { agentId: claims.sub, runId: claims.run_id });
     if (requireInputReceipt && (run.nativeInputSourceProtocolVersion !== 1 ||
       !nativeRunInputSourceReceiptSchema.safeParse(managedRecord(run.runnerProfileJson).nativeInputSourceReceipt).success))
@@ -2210,6 +2220,51 @@ export function workerModelGateway(db: Db, options: Options) {
       credentialVersion: qualified.credentialVersion });
     return { profile: qualified.profile, qualification: qualified, selection: qualified.selection,
       credentialSha256: qualified.credentialSha256, authorityHash, actor, plan, binding, run, assignment };
+  }
+
+  /** The exact current assigned completion review binding of a Reviewer Run,
+   * read through `reader` without writing or minting. issueForReviewRun mints
+   * from it on the gateway connection; currentReviewBinding (MS1h4) compares a
+   * presented binding with it inside the caller's transaction. No review IDs
+   * come from the caller. */
+  async function deriveReviewRunBinding(reader: Db, input: { companyId: string; agentId: string; runId: string;
+    responsibleUserId: string; issueId?: string; preNativeBinding?: boolean }) {
+    const [run] = await reader.select().from(heartbeatRuns).where(and(eq(heartbeatRuns.companyId, input.companyId),
+      eq(heartbeatRuns.agentId, input.agentId), eq(heartbeatRuns.id, input.runId)));
+    const issueId = input.issueId ?? run?.nativeIssueId;
+    const context = readNativeReviewAssignmentContext(run?.contextSnapshot);
+    const contextIssueId = managedRecord(run?.contextSnapshot).issueId ?? managedRecord(run?.contextSnapshot).nativeIssueId;
+    if (!issueId || (input.preNativeBinding && (run?.nativeIssueId !== null || contextIssueId !== issueId)) ||
+      (!input.preNativeBinding && run?.nativeIssueId !== issueId))
+      throw forbidden("The persisted Native review wake must bind this exact Task");
+    const assignment = issueId && run && context ? await getNativeReviewAssignment(reader, { companyId: input.companyId,
+      issueId, agentId: input.agentId, contextSnapshot: context,
+      ...(!input.preNativeBinding ? { actingRunId: run.id } : {}) }) : null;
+    const sourceRows = assignment ? await reader.select({ attempt: orchestrationWorkerAttempts, worker: orchestrationWorkers, plan: orchestrationPlans })
+      .from(orchestrationWorkerAttempts).innerJoin(orchestrationWorkers, and(
+        eq(orchestrationWorkers.companyId, orchestrationWorkerAttempts.companyId), eq(orchestrationWorkers.id, orchestrationWorkerAttempts.workerId)))
+      .innerJoin(orchestrationPlans, and(eq(orchestrationPlans.companyId, orchestrationWorkerAttempts.companyId),
+        eq(orchestrationPlans.id, orchestrationWorkerAttempts.planId)))
+      .where(and(eq(orchestrationWorkerAttempts.companyId, input.companyId), eq(orchestrationWorkerAttempts.runId, assignment.sourceRun.id),
+        eq(orchestrationWorkerAttempts.agentId, assignment.sourceRun.agentId), eq(orchestrationWorkers.issueId, issueId!))).limit(2) : [];
+    const source = sourceRows.length === 1 ? sourceRows[0] : null;
+    const [manifest] = run ? await reader.select().from(agentExecutionManifests).where(and(eq(agentExecutionManifests.companyId, input.companyId),
+      eq(agentExecutionManifests.agentId, input.agentId), eq(agentExecutionManifests.runId, run.id))) : [];
+    if (!run || !assignment || !source || !manifest || run.responsibleUserId !== input.responsibleUserId ||
+      assignment.sourceRun.status !== "succeeded" || assignment.sourceRun.nativePhase !== "committed" || !source.attempt.executionManifestId ||
+      !run.completionContractId || !run.completionContractSha256)
+      throw forbidden("One exact current assigned completion review and committed source are required");
+    const witness = await captureNativeReviewWakeWitness(reader, { companyId: input.companyId, issueId: issueId!, reviewerRunId: run.id,
+      reviewerAgentId: input.agentId, responsibleUserId: input.responsibleUserId,
+      reviewerCompletionContract: { id: run.completionContractId, sha256: run.completionContractSha256 }, assignment });
+    if (!witness) throw forbidden("The current committed Native review witness is unavailable");
+    const binding = reviewModelBindingSchema.parse({ planId: source.plan.id, issueId: issueId!, interactionId: assignment.interaction.id,
+      decisionId: assignment.sourceDecision.id, sourceRunId: assignment.sourceRun.id, sourceWorkerId: source.worker.id, sourceResultId: witness.sourceResultId,
+      sourceAgentId: source.attempt.agentId, sourceAttemptId: source.attempt.id,
+      sourceReceiptDigest: witness.sourceReceiptDigest, sourceResultCanonicalSha256: witness.sourceResultCanonicalSha256,
+      reviewerAgentId: input.agentId, reviewerRunId: run.id, executionManifestId: manifest.id,
+      expectedPlanVersion: source.plan.version });
+    return { binding, issueId: issueId! };
   }
 
   /** Same-transaction preflight qualification. It issues no token and can see
@@ -3073,46 +3128,43 @@ export function workerModelGateway(db: Db, options: Options) {
     /** Host-only issuance from the exact current assigned completion review; no review IDs come from the caller. */
     async issueForReviewRun(input: { companyId: string; agentId: string; runId: string; responsibleUserId: string;
       issueId?: string; preNativeBinding?: boolean }) {
-      const [run] = await db.select().from(heartbeatRuns).where(and(eq(heartbeatRuns.companyId, input.companyId),
-        eq(heartbeatRuns.agentId, input.agentId), eq(heartbeatRuns.id, input.runId)));
-      const issueId = input.issueId ?? run?.nativeIssueId;
-      const context = readNativeReviewAssignmentContext(run?.contextSnapshot);
-      const contextIssueId = managedRecord(run?.contextSnapshot).issueId ?? managedRecord(run?.contextSnapshot).nativeIssueId;
-      if (!issueId || (input.preNativeBinding && (run?.nativeIssueId !== null || contextIssueId !== issueId)) ||
-        (!input.preNativeBinding && run?.nativeIssueId !== issueId))
-        throw forbidden("The persisted Native review wake must bind this exact Task");
-      const assignment = issueId && run && context ? await getNativeReviewAssignment(db, { companyId: input.companyId,
-        issueId, agentId: input.agentId, contextSnapshot: context,
-        ...(!input.preNativeBinding ? { actingRunId: run.id } : {}) }) : null;
-      const sourceRows = assignment ? await db.select({ attempt: orchestrationWorkerAttempts, worker: orchestrationWorkers, plan: orchestrationPlans })
-        .from(orchestrationWorkerAttempts).innerJoin(orchestrationWorkers, and(
-          eq(orchestrationWorkers.companyId, orchestrationWorkerAttempts.companyId), eq(orchestrationWorkers.id, orchestrationWorkerAttempts.workerId)))
-        .innerJoin(orchestrationPlans, and(eq(orchestrationPlans.companyId, orchestrationWorkerAttempts.companyId),
-          eq(orchestrationPlans.id, orchestrationWorkerAttempts.planId)))
-        .where(and(eq(orchestrationWorkerAttempts.companyId, input.companyId), eq(orchestrationWorkerAttempts.runId, assignment.sourceRun.id),
-          eq(orchestrationWorkerAttempts.agentId, assignment.sourceRun.agentId), eq(orchestrationWorkers.issueId, issueId!))).limit(2) : [];
-      const source = sourceRows.length === 1 ? sourceRows[0] : null;
-      const [manifest] = run ? await db.select().from(agentExecutionManifests).where(and(eq(agentExecutionManifests.companyId, input.companyId),
-        eq(agentExecutionManifests.agentId, input.agentId), eq(agentExecutionManifests.runId, run.id))) : [];
-      if (!run || !assignment || !source || !manifest || run.responsibleUserId !== input.responsibleUserId ||
-        assignment.sourceRun.status !== "succeeded" || assignment.sourceRun.nativePhase !== "committed" || !source.attempt.executionManifestId ||
-        !run.completionContractId || !run.completionContractSha256)
-        throw forbidden("One exact current assigned completion review and committed source are required");
-      const witness = await captureNativeReviewWakeWitness(db, { companyId: input.companyId, issueId: issueId!, reviewerRunId: run.id,
-        reviewerAgentId: input.agentId, responsibleUserId: input.responsibleUserId,
-        reviewerCompletionContract: { id: run.completionContractId, sha256: run.completionContractSha256 }, assignment });
-      if (!witness) throw forbidden("The current committed Native review witness is unavailable");
-      const binding = reviewModelBindingSchema.parse({ planId: source.plan.id, issueId: issueId!, interactionId: assignment.interaction.id,
-        decisionId: assignment.sourceDecision.id, sourceRunId: assignment.sourceRun.id, sourceWorkerId: source.worker.id, sourceResultId: witness.sourceResultId,
-        sourceAgentId: source.attempt.agentId, sourceAttemptId: source.attempt.id,
-        sourceReceiptDigest: witness.sourceReceiptDigest, sourceResultCanonicalSha256: witness.sourceResultCanonicalSha256,
-        reviewerAgentId: input.agentId, reviewerRunId: run.id, executionManifestId: manifest.id,
-        expectedPlanVersion: source.plan.version });
+      const { binding, issueId } = await deriveReviewRunBinding(db, input);
       const minted = createRuntimeToolsToken({ ...input, reviewModelBinding: binding, scope: "review_model" });
       const claims = minted && verifyRuntimeToolsToken(minted.token, "review_model");
       if (!claims?.review_model) throw forbidden("Assigned Reviewer capability signing is unavailable");
       const state = await currentReview(db, claims as ReviewClaims, false, input.preNativeBinding ? issueId : undefined);
       return { ...minted!, inputTokensUpperBound: state.profile.inputTokensUpperBound, maxOutputTokens: state.profile.maxOutputTokens };
+    },
+    /** MS1h4. RuntimeControl's sandbox-exec check of a presented Reviewer model
+     * capability, read inside the caller's transaction. It mints nothing and
+     * writes nothing. It used to re-mint through issueForReviewRun on the
+     * gateway's own connection, whose run write gate upserts the company's
+     * entitlement snapshot while the caller's transaction (which upserted the
+     * same row in assertTaskExecutionContext) waits on it: an application-level
+     * deadlock Postgres cannot detect.
+     *
+     * The same facts are read, through `tx`: the exact current binding
+     * issueForReviewRun would mint (deriveReviewRunBinding) must equal the
+     * presented one, and currentReview must accept the presented claims. Only
+     * the run gate differs: the caller states, in `writeGate`, the exact Run its
+     * transaction already passed assertAgentRunWriteAllowed for (commercial
+     * capacity, package, governance, plan and cancellation); this read repeats
+     * the read-only assertAgentRunPolicyAllowed on `tx` and not the commercial
+     * entitlement upsert. Returns null when the presented binding is not the
+     * current one; throws, as issuance does, when the review is not current. */
+    async currentReviewBinding(tx: Db, claims: RuntimeToolsTokenClaims,
+      writeGate: { companyId: string; agentId: string; runId: string }) {
+      if (claims.scope !== "review_model" || !claims.review_model)
+        throw forbidden("Current run-scoped assigned Reviewer model capability required");
+      if (writeGate.companyId !== claims.company_id || writeGate.agentId !== claims.sub || writeGate.runId !== claims.run_id)
+        throw forbidden("The caller's run write gate must cover this exact Reviewer Run");
+      const { binding } = await deriveReviewRunBinding(tx, { companyId: claims.company_id, agentId: claims.sub,
+        runId: claims.run_id, responsibleUserId: claims.responsible_user_id });
+      if (nativeSha256(binding) !== nativeSha256(claims.review_model)) return null;
+      const state = await currentReview(tx, claims as ReviewClaims, false, undefined, undefined, false, "caller_transaction");
+      if (nativeSha256(state.binding) !== nativeSha256(claims.review_model)) return null;
+      return { binding: state.binding, inputTokensUpperBound: state.profile.inputTokensUpperBound,
+        maxOutputTokens: state.profile.maxOutputTokens };
     },
     /** Private dispatch-time capability for an authenticated Native chat. It
      * may be minted before the executor records its initial input receipt;
