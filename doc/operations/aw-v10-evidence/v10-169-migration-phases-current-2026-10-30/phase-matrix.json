@@ -17,8 +17,8 @@
   "sourceBaseCommit": "81d3445b98b1cd80ff400ede6bd44ea71d88d735",
   "officialMigrationInterval": {
     "first": 502,
-    "last": 581,
-    "latestOfficialMigration": "0581_white_tigra",
+    "last": 582,
+    "latestOfficialMigration": "0582_sandbox_native_reviewer_policy",
     "latestOfficialMigrationCommit": null,
     "journalSource": "packages/db/src/migrations/meta/_journal.json"
   },
@@ -567,9 +567,10 @@
       "migrations": [
         567,
         568,
-        572
+        572,
+        582
       ],
-      "purpose": "Preserve all19 protected-host qualification and current stopped-cell controls; permit only exact zero-tool hidden Native OpenCode conformance policies with current Human, manifest, Plan, Run, lease and private workspace bindings.",
+      "purpose": "Preserve all19 protected-host qualification and current stopped-cell controls; permit only exact zero-tool hidden Native OpenCode conformance policies with current Human, manifest, Plan, Run, lease and private workspace bindings. Migration 0582 keeps every assignee clause and admits, as the one alternative, the exact current Native completion Reviewer of the policy's own Run and manifest on a visible Task.",
       "authority": "Original sandbox binding/policy guards use current runtime cell generation, protected qualification report, capability expiry and actual execution manifest/Run/Task identity. Neither container lifecycle nor this index establishes physical host enforcement.",
       "durableState": [
         "runtime_sandbox_bindings capability and qualification target snapshots",
@@ -584,13 +585,15 @@
         "server/src/services/execution-sandbox/sandbox-service.ts",
         "server/src/services/execution-sandbox/qualification.ts",
         "server/src/services/execution-sandbox/policy-compiler.ts",
-        "packages/db/src/migrations/0572_sandbox_hidden_conformance_policy.sql"
+        "packages/db/src/migrations/0572_sandbox_hidden_conformance_policy.sql",
+        "packages/db/src/migrations/0582_sandbox_native_reviewer_policy.sql"
       ],
       "tests": [
         "server/src/__tests__/v7-sandbox.integration.test.ts",
         "server/src/__tests__/v7-sandbox-qualification-faults.test.ts",
         "server/src/__tests__/v7-sandbox-policy.test.ts",
-        "server/src/__tests__/v7-sandbox-host-bridge.integration.test.ts"
+        "server/src/__tests__/v7-sandbox-host-bridge.integration.test.ts",
+        "server/src/services/native-runtime/native-reviewer-sandbox-owner.test.ts"
       ],
       "recovery": "Stop/revoke remains original sandbox owner; stale capabilities cannot revive admission. No physical sandbox target, privileged provider, fleet rollback or deployed restore qualification is inferred.",
       "qualificationScope": "Source inventory and controlled PostgreSQL policy-contract coverage only. The actual six-probe managed conformance and protected physical-host qualification remain open."
@@ -1177,7 +1180,7 @@
     },
     {
       "path": "packages/db/src/migrations/meta/_journal.json",
-      "sha256": "6001afdac3a7a6f5fd0a48691ac25fb411d3dd3f3c09845eaa2f93392aba461e"
+      "sha256": "35b6dbe90185272d03d3873ec00f7452a279a4c71e1b0d38e665197b8a28d45a"
     },
     {
       "path": "packages/db/src/native-input-source-protocol.test.ts",
@@ -1604,6 +1607,18 @@
       "sha256": "3663f293410b3364295ec39560547b7244e7a7751818b1c171b6a812f2783092"
     },
     {
+      "path": "packages/db/src/migrations/0582_sandbox_native_reviewer_policy.sql",
+      "sha256": "5e04cad9bc3b83c1ee8d259db069871e5e73cea79f992a6abe060f85d72314bd"
+    },
+    {
+      "path": "packages/db/src/migrations/meta/0582_snapshot.json",
+      "sha256": "5c56dc7409b20b1924eefbe3d5250ec7a856bb7c38eecaac51d979f3f8fd02ff"
+    },
+    {
+      "path": "server/src/services/native-runtime/native-reviewer-sandbox-owner.test.ts",
+      "sha256": "2cbbd9e61ce3c86a227c0b8f7ff4410df7be4be0dd18b8880296039144301813"
+    },
+    {
       "path": "packages/db/src/schema/company_transfer_runs.ts",
       "sha256": "6d8b07578bb745bd0b8bef1d59fb41d6875e647197b29af22520a55d46b5384c"
     },
@@ -1625,13 +1640,13 @@
     "baseCommit": "81d3445b98b1cd80ff400ede6bd44ea71d88d735",
     "command": "git diff --name-status 81d3445b98b1cd80ff400ede6bd44ea71d88d735 -- packages/db/src/migrations",
     "selection": "Union of added/modified/renamed-destination migration SQL files in the source-base git diff and all current journal entries absent from the source-base journal; this catches published journal entries whose SQL payload is still untracked.",
-    "currentAffectedCount": 80,
+    "currentAffectedCount": 81,
     "currentAffectedFirst": "0502_swift_maria_hill",
-    "currentAffectedLast": "0581_white_tigra"
+    "currentAffectedLast": "0582_sandbox_native_reviewer_policy"
   },
   "sourcePinFinality": "Exact current source hashes after R622 actual PostgreSQL and R623 full typecheck/build; software scope only, no historical status promotion.",
   "latestMigrationPublication": {
-    "migration": "0581_white_tigra",
+    "migration": "0582_sandbox_native_reviewer_policy",
     "sourceCommit": null,
     "sourceState": "Official generated source with exact current pins and local software receipts.",
     "qualificationScope": "Does not establish fleet cutover, deployed rollback/restore, provider/Host or Human qualification."
@@ -1655,7 +1670,8 @@
     "0578": "Adds a company/endpoint/stable GitHub repository-scoped old-to-new coordinate receipt in the same transaction as repository rename and conversation/origin rebinding; no backfill or guessed aliases.",
     "0579": "Adds an optional unique lowercase SHA256 receipt-key hash to the original personal account deletion operation. It supports only the exact accepted personal request status after session revocation; historical NULL rows gain no receipt, and the schema does not grant account or company authority.",
     "0580": "Extends existing shared durable-execution policy/admission to export claims and uncertain allocated writes, preserving original Native cleanup predicates, configured limits and Stop/settlement bypass. Adds only a partial active-liability index; no new queue or invented quota.",
-    "0581": "Replaces only the review_source_result_canonical_sha256 pattern in orchestration_model_reservation_scope_ck so a review-model reservation accepts the stored Native result hash verbatim in either form (ControlPlanePort plain hex or durable-coordinator sha256: prefix). No backfill; the previous CHECK admitted no plain-hex rows, so no existing row can violate the new one."
+    "0581": "Replaces only the review_source_result_canonical_sha256 pattern in orchestration_model_reservation_scope_ck so a review-model reservation accepts the stored Native result hash verbatim in either form (ControlPlanePort plain hex or durable-coordinator sha256: prefix). No backfill; the previous CHECK admitted no plain-hex rows, so no existing row can violate the new one.",
+    "0582": "Replaces aw_v7_sandbox_policy_guard with every original clause intact and one alternative to the Task assignee: aw_v10_current_native_reviewer_run, the SQL mirror of currentNativeReviewerRun (pending native completion review addressed to the policy's Agent with this acting Run, Task in review with this execution Run, running Native Run and manifest with the same Human, invokable Reviewer, committed source Run with cleanup done), on a visible Task only. Company-scoped reads; no backfill, no credential or connection authority; a Reviewer policy still carries no credential binding (the broker owner refuses one)."
   },
   "revisionDate": "2026-11-12",
   "sourceHead": "884dbba4a78603a791b65471e41fe950a23e2e4f",
@@ -1722,6 +1738,12 @@
       "migration": "0581_white_tigra",
       "sourceCommit": null,
       "sourceState": "Official Drizzle generation with exact SQL/snapshot/journal; shared validator regression tests and local migration apply/drift checks.",
+      "phaseBoundary": "Source inventory and selected software qualification only; prior phase statuses remain unchanged."
+    },
+    {
+      "migration": "0582_sandbox_native_reviewer_policy",
+      "sourceCommit": null,
+      "sourceState": "Trigger-only SQL with journal entry and unchanged schema snapshot; PostgreSQL trigger and TypeScript/SQL parity regression tests and local migration apply/drift checks.",
       "phaseBoundary": "Source inventory and selected software qualification only; prior phase statuses remain unchanged."
     }
   ],

@@ -1,11 +1,13 @@
 import { randomUUID } from "node:crypto";
-import { and, eq } from "drizzle-orm";
+import { and, eq, sql } from "drizzle-orm";
 import { afterAll, beforeAll, describe, expect, it, vi } from "vitest";
 import {
   agentExecutionManifests,
   agentPresenceRuntimeBindings,
   agentProviderBindings,
   agents,
+  billingAccountCompanies,
+  billingAccounts,
   companies,
   completionContracts,
   contextManifests,
@@ -17,6 +19,11 @@ import {
   issueThreadInteractions,
   issues,
   nativeRunResults,
+  runtimeCapacityProfiles,
+  runtimeCells,
+  runtimePolicySnapshots,
+  runtimeSandboxBindings,
+  runtimeVersionCatalog,
   statusDecisions,
   workAssessments,
 } from "@paperclipai/db";
@@ -60,6 +67,8 @@ import { executionSandboxService } from "../execution-sandbox/sandbox-service.js
 import { currentWorkerNativePreparationRoot } from "../runtime/control.js";
 import { parseNativeExecutionInput } from "../../vendor/paperclip-runner/index.js";
 import { nativeSha256 } from "./canonical.js";
+import { instanceSettingsService } from "../instance-settings.js";
+import { policyFixture } from "../../__tests__/helpers/sandbox-fixture.js";
 
 const support = await getEmbeddedPostgresTestSupport();
 const describeDb = support.supported ? describe : describe.skip;
@@ -108,10 +117,14 @@ describeDb("current Native completion Reviewer sandbox owner (MS1h2)", () => {
    * decision, the pending native completion review addressed to the Reviewer,
    * and the Reviewer's running Native Run holding the execution lease. The Run
    * source binding and manifests are immutable, so their variants are seeded. */
-  async function seed(variant: { reviewerRunIssue?: "other"; manifest?: "none" | "other_human" } = {}) {
+  async function seed(variant: { reviewerRunIssue?: "other"; manifest?: "none" | "other_human"; reviewIdVersion7?: true;
+    decisionIdVersion7?: true } = {}) {
+    const interactionId = randomUUID(), decisionId = randomUUID();
     const ids = { company: randomUUID(), otherCompany: randomUUID(), executor: randomUUID(), reviewer: randomUUID(),
       outsider: randomUUID(), issue: randomUUID(), otherIssue: randomUUID(), sourceRun: randomUUID(), reviewerRun: randomUUID(),
-      decision: randomUUID(), interaction: randomUUID(), contract: randomUUID(), result: randomUUID(), assessment: randomUUID(),
+      decision: variant.decisionIdVersion7 ? `${decisionId.slice(0, 14)}7${decisionId.slice(15)}` : decisionId,
+      // The persisted wake accepts only RFC 4122 versions 1-5 (readNativeReviewAssignmentContext).
+      interaction: variant.reviewIdVersion7 ? `${interactionId.slice(0, 14)}7${interactionId.slice(15)}` : interactionId, contract: randomUUID(), result: randomUUID(), assessment: randomUUID(),
       user: `user-${randomUUID()}`, manifest: randomUUID(), contextManifest: randomUUID() };
     const prefix = (id: string) => `R${id.replace(/-/g, "").slice(0, 7).toUpperCase()}`;
     await db.insert(companies).values([
@@ -180,6 +193,21 @@ describeDb("current Native completion Reviewer sandbox owner (MS1h2)", () => {
     manifestId: string }> = {}) => currentNativeReviewerRun(db as never, { companyId: ids.company, agentId: ids.reviewer,
     runId: ids.reviewerRun, issueId: ids.issue, manifestId: ids.manifest, ...overrides });
 
+  /** MS1h3. The SQL mirror (`aw_v10_current_native_reviewer_run`, migration
+   * 0582) that the sandbox policy guard uses, asked about the same Run. */
+  const sqlPredicate = async (ids: Ids, overrides: Partial<{ companyId: string; agentId: string; runId: string;
+    issueId: string; manifestId: string }> = {}) => {
+    const asked = { companyId: ids.company, agentId: ids.reviewer, runId: ids.reviewerRun, issueId: ids.issue, ...overrides };
+    const manifestId = overrides.manifestId ?? (await db.select({ id: agentExecutionManifests.id }).from(agentExecutionManifests)
+      .where(eq(agentExecutionManifests.runId, asked.runId)))[0]?.id ?? randomUUID();
+    const rows = await db.execute(sql`select aw_v10_current_native_reviewer_run(${asked.companyId}::uuid, ${asked.agentId}::uuid,
+      ${asked.runId}::uuid, ${asked.issueId}::uuid, ${manifestId}::uuid) as admitted`);
+    return (rows as unknown as Array<{ admitted: boolean }>)[0]?.admitted === true;
+  };
+  /** The TypeScript predicate and its SQL mirror must agree on every case. */
+  const both = async (ids: Ids, overrides: Parameters<typeof sqlPredicate>[1] = {}) =>
+    ({ ts: await predicate(ids, overrides), sql: await sqlPredicate(ids, overrides) });
+
   /** A second running Native Run of `agentId` on the same Task, carrying the
    * same persisted review wake, with its own manifest. */
   async function addRun(ids: Ids, agentId: string) {
@@ -225,17 +253,18 @@ describeDb("current Native completion Reviewer sandbox owner (MS1h2)", () => {
   describe("currentNativeReviewerRun", () => {
     it("admits the exact current Reviewer Run and nobody else on the Task", async () => {
       const ids = await seed();
-      await expect(predicate(ids)).resolves.toBe(true);
+      expect(await both(ids)).toEqual({ ts: true, sql: true });
       // The manifest is optional for callers that do not hold one; when given it must be this Run's.
       await expect(predicate(ids, { manifestId: undefined })).resolves.toBe(true);
       // The assignee is never the Reviewer: owners admit it through the assignee branch only.
-      await expect(predicate(ids, { agentId: ids.executor, runId: ids.sourceRun })).resolves.toBe(false);
+      expect(await both(ids, { agentId: ids.executor, runId: ids.sourceRun })).toEqual({ ts: false, sql: false });
     });
 
     it.each(refusalCases)("refuses %s", async (_name, arrange) => {
       const ids = await seed();
       const asked = await arrange(ids);
       await expect(predicate(ids, { ...asked, manifestId: undefined })).resolves.toBe(false);
+      await expect(sqlPredicate(ids, asked)).resolves.toBe(false);
     });
 
     // Each condition of the predicate, violated alone.
@@ -271,26 +300,133 @@ describeDb("current Native completion Reviewer sandbox owner (MS1h2)", () => {
     ];
     it.each(conditions)("refuses when %s", async (_name, violate) => {
       const ids = await seed();
-      await expect(predicate(ids)).resolves.toBe(true);
+      expect(await both(ids)).toEqual({ ts: true, sql: true });
       await violate(ids);
-      await expect(predicate(ids)).resolves.toBe(false);
+      expect(await both(ids)).toEqual({ ts: false, sql: false });
     });
 
-    // Immutable facts: the Run's Task binding and its manifest, seeded violated.
+    // The review-assignment facts (getNativeReviewAssignment) the SQL mirror
+    // re-implements, each violated alone; both forms must refuse.
+    const assignmentFacts: Array<[string, (ids: Ids) => Promise<unknown>]> = [
+      ["the Reviewer reports to a terminated manager", async ids => {
+        const manager = randomUUID();
+        await db.insert(agents).values({ id: manager, companyId: ids.company, name: "Former manager", adapterType: "paperclip_runner",
+          status: "terminated" });
+        await db.update(agents).set({ reportsTo: manager }).where(eq(agents.id, ids.reviewer));
+      }],
+      ["the Reviewer's reporting chain has a cycle", async ids => {
+        const manager = randomUUID();
+        await db.insert(agents).values({ id: manager, companyId: ids.company, name: "Cycle manager", adapterType: "paperclip_runner",
+          status: "idle", reportsTo: ids.reviewer });
+        await db.update(agents).set({ reportsTo: manager }).where(eq(agents.id, ids.reviewer));
+      }],
+      ["the review is resolvable only by a Human", ids => db.update(issueThreadInteractions)
+        .set({ effectiveResolverPolicy: "human_only" }).where(eq(issueThreadInteractions.id, ids.interaction))],
+      ["the review also names a Human addressee", ids => db.update(issueThreadInteractions)
+        .set({ addresseeUserId: `user-${randomUUID()}` }).where(eq(issueThreadInteractions.id, ids.interaction))],
+      ["the review carries a tool action", ids => db.update(issueThreadInteractions).set({ payload: { version: 1, prompt: "Review",
+        toolAction: { kind: "fixture" }, target: { type: "custom", key: "native_completion_review", revisionId: ids.decision } } as never })
+        .where(eq(issueThreadInteractions.id, ids.interaction))],
+      ["the review targets another revision", ids => db.update(issueThreadInteractions).set({ payload: { version: 1, prompt: "Review",
+        target: { type: "custom", key: "native_completion_review", revisionId: randomUUID() } } as never })
+        .where(eq(issueThreadInteractions.id, ids.interaction))],
+      ["the interaction is not a confirmation request", ids => db.update(issueThreadInteractions).set({ kind: "ask_user_questions" })
+        .where(eq(issueThreadInteractions.id, ids.interaction))],
+      ["the wake names another Task", async ids => {
+        const [run] = await db.select().from(heartbeatRuns).where(eq(heartbeatRuns.id, ids.reviewerRun));
+        await db.update(heartbeatRuns).set({ contextSnapshot: { ...run!.contextSnapshot, issueId: ids.otherIssue } })
+          .where(eq(heartbeatRuns.id, ids.reviewerRun));
+      }],
+      ["the wake names another source Run", async ids => {
+        const [run] = await db.select().from(heartbeatRuns).where(eq(heartbeatRuns.id, ids.reviewerRun));
+        await db.update(heartbeatRuns).set({ contextSnapshot: { ...run!.contextSnapshot, sourceRunId: randomUUID() } })
+          .where(eq(heartbeatRuns.id, ids.reviewerRun));
+      }],
+      ["the wake names another revision", async ids => {
+        const [run] = await db.select().from(heartbeatRuns).where(eq(heartbeatRuns.id, ids.reviewerRun));
+        await db.update(heartbeatRuns).set({ contextSnapshot: { ...run!.contextSnapshot, revisionId: randomUUID() } })
+          .where(eq(heartbeatRuns.id, ids.reviewerRun));
+      }],
+      ["the Reviewer reports to a manager outside its company", async ids => {
+        const manager = randomUUID();
+        await db.insert(agents).values({ id: manager, companyId: ids.otherCompany, name: "Other company manager",
+          adapterType: "paperclip_runner", status: "idle" });
+        await db.update(agents).set({ reportsTo: manager }).where(eq(agents.id, ids.reviewer));
+      }],
+      ["the review carries a secret proposal", ids => db.update(issueThreadInteractions).set({ payload: { version: 1,
+        prompt: "Review", secretProposal: { name: "fixture" },
+        target: { type: "custom", key: "native_completion_review", revisionId: ids.decision } } as never })
+        .where(eq(issueThreadInteractions.id, ids.interaction))],
+      ["the review target is not a native completion review", ids => db.update(issueThreadInteractions).set({ payload: { version: 1,
+        prompt: "Review", target: { type: "custom", key: "plan_review", revisionId: ids.decision } } as never })
+        .where(eq(issueThreadInteractions.id, ids.interaction))],
+      ["the review names another source Run", ids => db.update(issueThreadInteractions).set({ sourceRunId: ids.reviewerRun })
+        .where(eq(issueThreadInteractions.id, ids.interaction))],
+      ["the source decision is not applied", ids => db.update(statusDecisions).set({ applicationState: "proposed" })
+        .where(eq(statusDecisions.id, ids.decision))],
+      ["the review target is not a custom target", ids => db.update(issueThreadInteractions).set({ payload: { version: 1,
+        prompt: "Review", target: { type: "document", key: "native_completion_review", revisionId: ids.decision } } as never })
+        .where(eq(issueThreadInteractions.id, ids.interaction))],
+      ["the Task is reassigned away from the source Agent", ids => db.update(issues).set({ assigneeAgentId: ids.outsider })
+        .where(eq(issues.id, ids.issue))],
+    ];
+
+    it("refuses in both forms a review addressed to the source Agent's own Run", async () => {
+      const ids = await seed();
+      const executorRun = await addRun(ids, ids.executor);
+      await db.update(issueThreadInteractions).set({ addresseeAgentId: ids.executor })
+        .where(eq(issueThreadInteractions.id, ids.interaction));
+      await db.update(issues).set({ executionRunId: executorRun.runId }).where(eq(issues.id, ids.issue));
+      expect(await both(ids, { agentId: ids.executor, runId: executorRun.runId, manifestId: executorRun.manifestId }))
+        .toEqual({ ts: false, sql: false });
+    });
+
+    it("keeps the SQL mirror stricter than JavaScript number coercion of the projected status version", async () => {
+      const ids = await seed();
+      // The committer writes a number. The TypeScript check coerces with
+      // Number(), so it would accept the string "1"; the SQL mirror refuses it.
+      const [decision] = await db.select().from(statusDecisions).where(eq(statusDecisions.id, ids.decision));
+      await db.update(statusDecisions).set({ decisionJson: { ...decision!.decisionJson, projectedStatusVersion: "1" } })
+        .where(eq(statusDecisions.id, ids.decision));
+      expect(await both(ids)).toEqual({ ts: true, sql: false });
+    });
+    it.each(assignmentFacts)("refuses in both forms when %s", async (_name, violate) => {
+      const ids = await seed();
+      expect(await both(ids)).toEqual({ ts: true, sql: true });
+      await violate(ids);
+      expect(await both(ids)).toEqual({ ts: false, sql: false });
+    });
+
+    it("agrees on the falsy tool action, the legacy agent policy and a wake without optional fields", async () => {
+      const ids = await seed();
+      // A legacy stored alias the schema type no longer names; it canonicalizes to "anyone".
+      await db.update(issueThreadInteractions).set({ effectiveResolverPolicy: "board_or_agents" as never, payload: { version: 1,
+        prompt: "Review", toolAction: false, secretProposal: null,
+        target: { type: "custom", key: "native_completion_review", revisionId: ids.decision } } as never })
+        .where(eq(issueThreadInteractions.id, ids.interaction));
+      await db.update(heartbeatRuns).set({ contextSnapshot: { nativeReviewInteractionId: ids.interaction,
+        nativeReviewDecisionId: ids.decision } }).where(eq(heartbeatRuns.id, ids.reviewerRun));
+      expect(await both(ids)).toEqual({ ts: true, sql: true });
+    });
+
+    // Immutable facts: the Run's Task binding, its manifest and the review id, seeded violated.
     it.each([
       ["the Run is bound to another Task", { reviewerRunIssue: "other" as const }],
       ["the Run has no manifest", { manifest: "none" as const }],
       ["the manifest names another Human", { manifest: "other_human" as const }],
+      ["the review id is outside the persisted wake's UUID versions", { reviewIdVersion7: true as const }],
+      ["the decision id is outside the persisted wake's UUID versions", { decisionIdVersion7: true as const }],
     ])("refuses when %s", async (_name, variant) => {
       const ids = await seed(variant);
       await expect(predicate(ids, { manifestId: undefined })).resolves.toBe(false);
+      await expect(sqlPredicate(ids, { manifestId: ids.manifest })).resolves.toBe(false);
     });
 
     it("refuses another manifest id, another Task id and another Agent id for the same Run", async () => {
       const ids = await seed();
-      await expect(predicate(ids, { manifestId: randomUUID() })).resolves.toBe(false);
-      await expect(predicate(ids, { issueId: ids.otherIssue })).resolves.toBe(false);
-      await expect(predicate(ids, { agentId: ids.outsider })).resolves.toBe(false);
+      expect(await both(ids, { manifestId: randomUUID() })).toEqual({ ts: false, sql: false });
+      expect(await both(ids, { issueId: ids.otherIssue })).toEqual({ ts: false, sql: false });
+      expect(await both(ids, { agentId: ids.outsider })).toEqual({ ts: false, sql: false });
     });
   });
 
@@ -437,6 +573,113 @@ describeDb("current Native completion Reviewer sandbox owner (MS1h2)", () => {
       const ids = await seed();
       const asked = await arrange(ids);
       await expect(prepare(await source(ids, asked))).rejects.toThrow(ownerRefusal);
+    });
+  });
+  describe("sandbox policy guard trigger (migration 0582)", () => {
+    const image = "fixture.invalid/reviewer-policy@sha256:" + "b".repeat(64);
+    let runtimeCatalogReady = false;
+    /** A stopped company cell with a stopped OpenShell binding and an
+     * unexpired capability snapshot: the state in which a qualified policy
+     * snapshot may be written. The guard's other clauses are unchanged. */
+    async function policyRuntime(ids: Ids) {
+      if (!runtimeCatalogReady) {
+        await db.insert(runtimeVersionCatalog).values({ imageDigest: image, providerVersion: "fixture", stateFormat: "v1",
+          hostAgentMinimumVersion: "6.0.0", conformance: { fixtureOnly: true }, status: "approved" }).onConflictDoNothing();
+        await db.insert(runtimeCapacityProfiles).values({ key: "reviewer-policy-fixture", cpuMillis: 1000, memoryBytes: 1073741824n,
+          diskBytes: 10737418240n, pidsLimit: 128, qualified: false }).onConflictDoNothing();
+        await instanceSettingsService(db as never).updateExperimental({ sandbox_abstraction_v7: true });
+        runtimeCatalogReady = true;
+      }
+      const [account] = await db.insert(billingAccounts).values({ displayName: "Reviewer policy", payerUserId: ids.user }).returning();
+      await db.insert(billingAccountCompanies).values({ companyId: ids.company, billingAccountId: account!.id });
+      const [cell] = await db.insert(runtimeCells).values({ companyId: ids.company, billingAccountId: account!.id,
+        capacityProfile: "reviewer-policy-fixture", desiredImageDigest: image, status: "STOPPED", isolationMode: "company_cell" }).returning();
+      const capabilitySnapshot = { fixture: "reviewer-policy", expiresAt: new Date(Date.now() + 3_600_000).toISOString() };
+      const boundaryPolicy = policyFixture();
+      const [binding] = await db.insert(runtimeSandboxBindings).values({ companyId: ids.company, runtimeCellId: cell!.id,
+        cellGeneration: cell!.generation.toString(), backend: "openshell", profile: "development", boundaryPolicy,
+        boundaryPolicyHash: nativeSha256(boundaryPolicy), capabilitySnapshot: capabilitySnapshot as never,
+        capabilitySnapshotHash: nativeSha256(capabilitySnapshot), status: "stopped", createdByUserId: ids.user }).returning();
+      let version = 0;
+      /** Write one qualified policy snapshot for `asked`'s manifest. */
+      const qualify = (asked: { companyId: string; agentId: string; manifestId: string }) => db.insert(runtimePolicySnapshots).values({
+        companyId: asked.companyId, bindingId: binding!.id, runtimeCellId: cell!.id, agentId: asked.agentId,
+        executionManifestId: asked.manifestId, policyVersion: ++version, policyHash: "f".repeat(64),
+        capabilitySnapshotHash: binding!.capabilitySnapshotHash, compilation: { proverResult: "pass",
+          compiledPolicy: { riskClass: "C2", credentials: { mode: "none", bindings: [] } } } as never,
+        authorityHash: "a".repeat(64), sourcePolicyRefs: [], status: "qualified",
+        expiresAt: new Date(Date.now() + 600_000) }).returning().then(rows => rows[0]!.id, (error: { cause?: { code?: string; message?: string } }) =>
+          ({ code: error.cause?.code, message: error.cause?.message }));
+      return { qualify };
+    }
+    const reviewer = (ids: Ids) => ({ companyId: ids.company, agentId: ids.reviewer, manifestId: ids.manifest });
+    const refused = { code: "23514", message: expect.stringContaining("sandbox_policy_current_execution_required") };
+
+    it("admits the exact current Native completion Reviewer", async () => {
+      const ids = await seed();
+      const { qualify } = await policyRuntime(ids);
+      await expect(qualify(reviewer(ids))).resolves.toEqual(expect.any(String));
+    });
+
+    it("keeps the assignee path unchanged, with or without a pending review", async () => {
+      const ids = await seed();
+      const { qualify } = await policyRuntime(ids);
+      const executorRun = await addRun(ids, ids.executor);
+      const assignee = { companyId: ids.company, agentId: ids.executor, manifestId: executorRun.manifestId };
+      await expect(qualify(assignee)).resolves.toEqual(expect.any(String));
+      await db.update(issueThreadInteractions).set({ status: "accepted", resolvedByAgentId: ids.reviewer,
+        resolvedByRunId: ids.reviewerRun, resolvedAt: new Date() }).where(eq(issueThreadInteractions.id, ids.interaction));
+      await expect(qualify(assignee)).resolves.toEqual(expect.any(String));
+      // The assignee's Human binding is unchanged.
+      await db.update(heartbeatRuns).set({ responsibleUserId: `user-${randomUUID()}` }).where(eq(heartbeatRuns.id, executorRun.runId));
+      await expect(qualify(assignee)).resolves.toEqual(refused);
+    });
+
+    // Each refusal is shown against a guard that admitted the Reviewer first.
+    const triggerRefusals: Array<[string, (ids: Ids) => Promise<{ companyId: string; agentId: string; manifestId: string }>]> = [
+      ["an unrelated Agent", async ids => {
+        const outsider = await addRun(ids, ids.outsider);
+        await db.update(issues).set({ executionRunId: outsider.runId }).where(eq(issues.id, ids.issue));
+        return { companyId: ids.company, agentId: ids.outsider, manifestId: outsider.manifestId };
+      }],
+      ["a stale review", async ids => {
+        await db.update(issues).set({ statusVersion: 2 }).where(eq(issues.id, ids.issue));
+        return reviewer(ids);
+      }],
+      ["a resolved review", async ids => {
+        await db.update(issueThreadInteractions).set({ status: "accepted", resolvedByAgentId: ids.reviewer,
+          resolvedByRunId: ids.reviewerRun, resolvedAt: new Date() }).where(eq(issueThreadInteractions.id, ids.interaction));
+        return reviewer(ids);
+      }],
+      ["a different Run of the Reviewer", async ids => {
+        const other = await addRun(ids, ids.reviewer);
+        return { companyId: ids.company, agentId: ids.reviewer, manifestId: other.manifestId };
+      }],
+      ["a different company", async ids => ({ ...reviewer(ids), companyId: ids.otherCompany })],
+      ["a Task that is not in review", async ids => {
+        await db.update(issues).set({ status: "in_progress" }).where(eq(issues.id, ids.issue));
+        await db.update(issues).set({ statusVersion: 1 }).where(eq(issues.id, ids.issue));
+        return reviewer(ids);
+      }],
+      ["a source Run that is not committed", async ids => {
+        await db.update(heartbeatRuns).set({ nativePhase: "observed" }).where(eq(heartbeatRuns.id, ids.sourceRun));
+        return reviewer(ids);
+      }],
+      ["a source Run whose cleanup is pending", async ids => {
+        await projectSourceCleanup(ids.company, ids.executor, ids.sourceRun, "native.process_start_requested", 2);
+        return reviewer(ids);
+      }],
+      ["a hidden Task", async ids => {
+        await db.update(issues).set({ hiddenAt: new Date() }).where(eq(issues.id, ids.issue));
+        return reviewer(ids);
+      }],
+    ];
+    it.each(triggerRefusals)("refuses %s", async (_name, arrange) => {
+      const ids = await seed();
+      const { qualify } = await policyRuntime(ids);
+      await expect(qualify(reviewer(ids))).resolves.toEqual(expect.any(String));
+      const asked = await arrange(ids);
+      await expect(qualify(asked)).resolves.toEqual(refused);
     });
   });
 });

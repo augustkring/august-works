@@ -4061,6 +4061,13 @@
       "when": 1794665716012,
       "tag": "0581_white_tigra",
       "breakpoints": true
+    },
+    {
+      "idx": 582,
+      "version": "7",
+      "when": 1794891051137,
+      "tag": "0582_sandbox_native_reviewer_policy",
+      "breakpoints": true
     }
   ]
 }
