@@ -2677,18 +2677,18 @@
     {
       "source": "server/src/services/tool-gateway.ts",
       "articleId": "apps-and-connections",
-      "sourceSha256": "4dcae8324b52b93e1ff906bee532743b151265d21927950345f8bbc10042d662",
+      "sourceSha256": "b74fffebeff6603a75117d06bece667e41ec605eaef4dabd504b7cbad5dc640f",
       "articleSha256": "731cc171b5c7b6b7d1563e8d2476c1c51f32f3f6c3fa3f4adb7aa0fc365836f9",
       "decision": "no_change",
-      "rationale": "2026-11-17 GW2-GW4 review: an approved tool call now takes its rate-limit token when its approved execution is admitted instead of at request time, whatever the order of the rate-limit and require-approval policies; a full window refuses that approval or execution with 429 rate_limited, and dispatch re-checks refuse a rate limit with the same 429 as admission instead of 403. Connection setup, provider authorization, permissions, reconnect and Test behavior described in the article are unchanged, and the article does not describe rate limits or approval mechanics, so it stays accurate."
+      "rationale": "2026-11-17 GW6-GW7 review: an exact replay of a tool invocation (the same idempotency key, or a repeated call matching an executed action request) now takes no rate-limit token; it is re-checked with the token its original admission stored on the invocation, gets no credit after that window ends, and a full window refuses it with 429 rate_limited and the admission details. The article does not describe rate limits, replays or approval mechanics, so no reader-facing text changes."
     },
     {
       "source": "server/src/services/tool-gateway.ts",
       "articleId": "apps-and-connections-da",
-      "sourceSha256": "4dcae8324b52b93e1ff906bee532743b151265d21927950345f8bbc10042d662",
+      "sourceSha256": "b74fffebeff6603a75117d06bece667e41ec605eaef4dabd504b7cbad5dc640f",
       "articleSha256": "cff4bf06d20200c2b5785c92f7f41b197d730d85b0c3f6f1deca43b744906738",
       "decision": "no_change",
-      "rationale": "2026-11-17 GW2-GW4-gennemgang: et godkendt v\u00e6rkt\u00f8jskald bruger nu sit rate-limit-token, n\u00e5r den godkendte udf\u00f8relse tillades, i stedet for n\u00e5r der anmodes om kaldet, uanset r\u00e6kkef\u00f8lgen af rate-limit- og godkendelsespolitikkerne; et fuldt vindue afviser godkendelsen eller udf\u00f8relsen med 429 rate_limited, og kontrollerne under afsendelse afviser nu en rate limit med samme 429 som ved tilladelsen i stedet for 403. Ops\u00e6tning af forbindelser, udbydergodkendelse, tilladelser, genoprettelse og test som beskrevet i artiklen er u\u00e6ndret, og artiklen beskriver ikke rate limits eller godkendelsesforl\u00f8b, s\u00e5 den er fortsat korrekt."
+      "rationale": "2026-11-17 GW6-GW7-gennemgang: en n\u00f8jagtig gentagelse af et v\u00e6rkt\u00f8jskald (samme idempotensn\u00f8gle eller et gentaget kald, der matcher en udf\u00f8rt handlingsanmodning) bruger nu intet rate-limit-token; den kontrolleres igen med det token, som det oprindelige kald gemte, f\u00e5r ingen kredit efter det vindue, og et fuldt vindue afviser den med 429 rate_limited og de samme detaljer som ved tilladelse. Artiklen beskriver ikke rate-limits, gentagelser eller godkendelser, s\u00e5 ingen tekst for l\u00e6seren \u00e6ndres."
     },
     {
       "source": "server/src/services/workflows/workflow-http-request.ts",
