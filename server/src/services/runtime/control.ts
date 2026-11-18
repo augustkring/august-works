@@ -5030,6 +5030,21 @@ export function runtimeControlService(
       if ((providerArtifactPreparation || nativeHarnessState || nativeWorkspacePrepare || nativeRuntimeContextPrepare || nativeRuntimeAssetErasureProbe) &&
         (credentials.mode !== "none" || credentials.bindings.length !== 0 || managedModelPlaceholder))
         throw conflict("Provider artifact preparation cannot receive workload credentials");
+      // C2d: like a Worker start above, a conversation Run (web or linked-Human
+      // channel) may start its Native session only with the exact signed launch
+      // command for its persisted execution input and private Task root. Refuse
+      // anything else here, before a Host command claim exists.
+      if (nativeSessionStart && hasConversationIdentity) {
+        const execution = conversationExecution;
+        if (!execution || !conversationTaskRoot || execution.workspace.cwd !== conversationTaskRoot ||
+          execution.binding.companyId !== input.companyId || execution.binding.runId !== initialSource.run.id ||
+          execution.binding.agentId !== initialSource.run.agentId || execution.binding.issueId !== task.id ||
+          !initialSource.run.nativeSessionId || execution.session.normalizedSessionId !== initialSource.run.nativeSessionId ||
+          !exactNativeSessionLaunchCommand({ request: { argv, cwd, stdinBase64: stdinBytes.toString("base64") },
+            taskRoot: conversationTaskRoot, execution }))
+          throw conflict("Native conversation session start is outside its exact signed launch command",
+            { code: "native_conversation_session_start_not_exact_launch" });
+      }
     }
     if (runnerProfile?.provider === "opencode" && modelBrokerSessionPhase !== "stop" &&
       (!nativePreparationPurpose || nativeSessionStart || (nativeHarnessState && modelBrokerSessionPhase === "refresh"))) {

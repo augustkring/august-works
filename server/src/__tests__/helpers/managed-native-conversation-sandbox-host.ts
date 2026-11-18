@@ -4755,15 +4755,31 @@ async function configureManagedSandboxRun(input: ManagedSandboxHostInput,
       }
     } finally { rmSync(outsideCwd, { recursive: true, force: true }); }
     const execCountBeforeStartProbes = execFacts.length;
+    const sessionStartClaims = async () => (await db.select({ id: runtimeHostCommands.id }).from(runtimeHostCommands).where(and(
+      eq(runtimeHostCommands.companyId, companyId), eq(runtimeHostCommands.commandType, "sandbox_exec"),
+      sql`${runtimeHostCommands.payload}->>'runId' = ${runId}`,
+      sql`${runtimeHostCommands.payload}->>'nativePreparationPurpose' = 'native_session_start'`))).length;
+    const sessionStartClaimsBeforeProbes = await sessionStartClaims();
     preparationStage="negative_session_command";
-    const wrongSessionStartCommandDenied = await expectDenied(runtime.executeSandboxTask({ companyId, runId, leaseId: lease.id,
+    // C2d: a conversation Run's non-launch session start is refused with its
+    // typed code before any Host command claim exists (Workers keep their own refusal).
+    let wrongSessionStartCommandCode: unknown = null;
+    const wrongSessionStartCommandDenied = await runtime.executeSandboxTask({ companyId, runId, leaseId: lease.id,
       command: "sh", args: ["-c", "exit 0", "paperclip-not-runner-launch"], cwd: taskRoot, timeoutMs: 1000,
-      nativePreparationPurpose: "native_session_start" }));
+      nativePreparationPurpose: "native_session_start" }).then(() => false, error => {
+        const details = error && typeof error === "object" && "details" in error ? error.details : null;
+        wrongSessionStartCommandCode = details && typeof details === "object" && "code" in details ? details.code : null;
+        return true;
+      });
+    if (!ordinaryWorkerMode && !nativeConformanceMode &&
+        wrongSessionStartCommandCode !== "native_conversation_session_start_not_exact_launch")
+      throw new Error("conversation_software_host_session_start_probe_not_refused_before_claim");
     preparationStage="negative_session_root";
     const wrongSessionStartRootDenied = await expectDenied(runtime.executeSandboxTask({ companyId, runId, leaseId: lease.id,
       command: "sh", args: ["-c", "exit 0", "paperclip-runner-launch"], cwd: `${taskRoot}/outside`, timeoutMs: 1000,
       nativePreparationPurpose: "native_session_start" }));
-    const wrongSessionStartExecuted = execFacts.length !== execCountBeforeStartProbes;
+    const wrongSessionStartExecuted = execFacts.length !== execCountBeforeStartProbes ||
+      await sessionStartClaims() !== sessionStartClaimsBeforeProbes;
     const broadened = structuredClone(candidate);
     broadened.filesystem.writePaths = ["/"];
     const wrongPolicy = compileSandboxPolicy({ boundary, candidate: broadened, capabilities: capabilities() as any,
