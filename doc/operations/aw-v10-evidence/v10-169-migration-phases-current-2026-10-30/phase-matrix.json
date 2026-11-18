@@ -17,8 +17,8 @@
   "sourceBaseCommit": "81d3445b98b1cd80ff400ede6bd44ea71d88d735",
   "officialMigrationInterval": {
     "first": 502,
-    "last": 582,
-    "latestOfficialMigration": "0582_sandbox_native_reviewer_policy",
+    "last": 583,
+    "latestOfficialMigration": "0583_native_durable_session_scope_retention",
     "latestOfficialMigrationCommit": null,
     "journalSource": "packages/db/src/migrations/meta/_journal.json"
   },
@@ -646,6 +646,29 @@
         "server/src/__tests__/v6-account-deletion.integration.test.ts"
       ],
       "qualificationScope": "Source inventory and exact Root-supplied local PG/UI receipts only. Does not qualify arbitrary browser recovery, hosted/fleet compatibility, provider erasure, production rollout, rollback, restore, Human acceptance or complete V10 readiness."
+    },
+    {
+      "id": "native-durable-session-scope-retention",
+      "migrations": [
+        583
+      ],
+      "purpose": "PRIV-R8. Keep the content-free controller durable session folder record (runner_profile_json.nativeDurableSessionScope: scope digests and the server-generated session id) when Source erasure scrubs a Run profile, so runtime asset erasure, company purge, offboarding and Run deletion can find a folder that a crash left without a runner identity.",
+      "authority": "The Native executor writes the record under the Run row lock before it migrates, renames or creates the folder. The record grants nothing: erasure only uses it to attribute a folder to its own Run's company and to leave another owner's folder alone.",
+      "durableState": [
+        "heartbeat_runs.runner_profile_json.nativeDurableSessionScope {schema, normalizedSessionId, scopeSha256[]} retained through aw_erase_workflow_agent_payload; every other scrubbed column and key is unchanged"
+      ],
+      "compatibility": "Trigger-only replacement of aw_erase_workflow_agent_payload with one changed assignment; no column, index or backfill. Runs from before the change have no record and stay on the fail-closed unattributed-folder path (pending while recent, instance-orphan erasure after 24 hours).",
+      "recovery": "Rolling back restores the previous scrub (the record is nulled with the profile); erasure then treats affected folders as unattributed and still never reports false success. Re-applying the migration is idempotent (CREATE OR REPLACE).",
+      "owners": [
+        "packages/db/src/migrations/0583_native_durable_session_scope_retention.sql",
+        "server/src/services/native-runtime/native-durable-session-scope.ts",
+        "server/src/services/native-runtime/native-durable-session-erasure.ts",
+        "server/src/services/memory/memory-privacy.ts"
+      ],
+      "tests": [
+        "server/src/services/native-runtime/native-durable-session-erasure.integration.test.ts"
+      ],
+      "qualificationScope": "Source inventory and local embedded PostgreSQL integration receipts only. Does not qualify fleet cutover, deployed rollback/restore, Host or provider erasure, or Human acceptance."
     }
   ],
   "phaseCases": [
@@ -1180,7 +1203,7 @@
     },
     {
       "path": "packages/db/src/migrations/meta/_journal.json",
-      "sha256": "35b6dbe90185272d03d3873ec00f7452a279a4c71e1b0d38e665197b8a28d45a"
+      "sha256": "c0662ab3cc45026a672156906c5cc04082330fd479e9cba80b0063836c3cee87"
     },
     {
       "path": "packages/db/src/native-input-source-protocol.test.ts",
@@ -1508,7 +1531,7 @@
     },
     {
       "path": "server/src/services/memory/memory-privacy.ts",
-      "sha256": "c09dacae33bf32c28aa2df01730e1de72c6bdd926fb1abc6c72f72771cff6673"
+      "sha256": "73b794e43d02cda32e53b2f38eda0380f4e56d55ab92047bb907a16841c00659"
     },
     {
       "path": "server/src/services/native-runtime/native-model-input-dispatch.integration.test.ts",
@@ -1516,7 +1539,7 @@
     },
     {
       "path": "server/src/services/native-runtime/native-session-executor.ts",
-      "sha256": "1fc77d13059ca2be5b32af57823e797a330c4df7ec35dd30cde0fc72e5813263"
+      "sha256": "dc45593ad1adeb5864b2f50711f5e42d6cf846bb69499568d98be0dad576f20e"
     },
     {
       "path": "server/src/services/native-stage-task-body-source.test.ts",
@@ -1633,6 +1656,26 @@
     {
       "path": "server/src/services/company-transfer-runs.ts",
       "sha256": "deb5aa0edb43606ba15b36e5ed1f844f53645f3d33de6f015ca6ac0e4206646b"
+    },
+    {
+      "path": "packages/db/src/migrations/0583_native_durable_session_scope_retention.sql",
+      "sha256": "a60247cd7e72e08b98ef55a6f0265865c7b6fcc91a15f3affc9a78022df9c298"
+    },
+    {
+      "path": "server/src/services/native-runtime/native-durable-session-scope.ts",
+      "sha256": "33e16ef85d2f718c6631e9e3458831cbb5ac166b5404ae30ab0eb20a5c8382b4"
+    },
+    {
+      "path": "server/src/services/native-runtime/native-durable-session-erasure.ts",
+      "sha256": "446b760856ea6bfa8f73d6df3e40f8de9fb789972942b06eeaefcefed901e390"
+    },
+    {
+      "path": "server/src/services/native-runtime/native-durable-session-erasure.integration.test.ts",
+      "sha256": "992a45cbbaafa70887772186df69c65331696566f476139ba508ec942baecaad"
+    },
+    {
+      "path": "packages/db/src/migrations/meta/0583_snapshot.json",
+      "sha256": "fcc60ab584f743482dfbd1ce8232c98f8703171bf4a7afd1877883c60e418f71"
     }
   ],
   "sourcePinBasis": "Exact private composed source inventory anchored at sourceHead b1, not equality with its unchanged tree. Only two individually approved code/test pins and two own-documentation pins change from the recovered b1 index; original changed/retired pin history remains preserved. Hash equality is not behavioral or release qualification.",
@@ -1640,13 +1683,13 @@
     "baseCommit": "81d3445b98b1cd80ff400ede6bd44ea71d88d735",
     "command": "git diff --name-status 81d3445b98b1cd80ff400ede6bd44ea71d88d735 -- packages/db/src/migrations",
     "selection": "Union of added/modified/renamed-destination migration SQL files in the source-base git diff and all current journal entries absent from the source-base journal; this catches published journal entries whose SQL payload is still untracked.",
-    "currentAffectedCount": 81,
+    "currentAffectedCount": 82,
     "currentAffectedFirst": "0502_swift_maria_hill",
-    "currentAffectedLast": "0582_sandbox_native_reviewer_policy"
+    "currentAffectedLast": "0583_native_durable_session_scope_retention"
   },
   "sourcePinFinality": "Exact current source hashes after R622 actual PostgreSQL and R623 full typecheck/build; software scope only, no historical status promotion.",
   "latestMigrationPublication": {
-    "migration": "0582_sandbox_native_reviewer_policy",
+    "migration": "0583_native_durable_session_scope_retention",
     "sourceCommit": null,
     "sourceState": "Official generated source with exact current pins and local software receipts.",
     "qualificationScope": "Does not establish fleet cutover, deployed rollback/restore, provider/Host or Human qualification."
@@ -1671,7 +1714,8 @@
     "0579": "Adds an optional unique lowercase SHA256 receipt-key hash to the original personal account deletion operation. It supports only the exact accepted personal request status after session revocation; historical NULL rows gain no receipt, and the schema does not grant account or company authority.",
     "0580": "Extends existing shared durable-execution policy/admission to export claims and uncertain allocated writes, preserving original Native cleanup predicates, configured limits and Stop/settlement bypass. Adds only a partial active-liability index; no new queue or invented quota.",
     "0581": "Replaces only the review_source_result_canonical_sha256 pattern in orchestration_model_reservation_scope_ck so a review-model reservation accepts the stored Native result hash verbatim in either form (ControlPlanePort plain hex or durable-coordinator sha256: prefix). No backfill; the previous CHECK admitted no plain-hex rows, so no existing row can violate the new one.",
-    "0582": "Replaces aw_v7_sandbox_policy_guard with every original clause intact and one alternative to the Task assignee: aw_v10_current_native_reviewer_run, the SQL mirror of currentNativeReviewerRun (pending native completion review addressed to the policy's Agent with this acting Run, Task in review with this execution Run, running Native Run and manifest with the same Human, invokable Reviewer, committed source Run with cleanup done), on a visible Task only. Company-scoped reads; no backfill, no credential or connection authority; a Reviewer policy still carries no credential binding (the broker owner refuses one)."
+    "0582": "Replaces aw_v7_sandbox_policy_guard with every original clause intact and one alternative to the Task assignee: aw_v10_current_native_reviewer_run, the SQL mirror of currentNativeReviewerRun (pending native completion review addressed to the policy's Agent with this acting Run, Task in review with this execution Run, running Native Run and manifest with the same Human, invokable Reviewer, committed source Run with cleanup done), on a visible Task only. Company-scoped reads; no backfill, no credential or connection authority; a Reviewer policy still carries no credential binding (the broker owner refuses one).",
+    "0583": "Replaces aw_erase_workflow_agent_payload from 0488 with every scrub intact except that a heartbeat_runs profile keeps only its content-free nativeDurableSessionScope record instead of becoming NULL. No schema change, no backfill."
   },
   "revisionDate": "2026-11-12",
   "sourceHead": "884dbba4a78603a791b65471e41fe950a23e2e4f",
@@ -1744,6 +1788,12 @@
       "migration": "0582_sandbox_native_reviewer_policy",
       "sourceCommit": null,
       "sourceState": "Trigger-only SQL with journal entry and unchanged schema snapshot; PostgreSQL trigger and TypeScript/SQL parity regression tests and local migration apply/drift checks.",
+      "phaseBoundary": "Source inventory and selected software qualification only; prior phase statuses remain unchanged."
+    },
+    {
+      "migration": "0583_native_durable_session_scope_retention",
+      "sourceCommit": null,
+      "sourceState": "Trigger-only SQL (drizzle-kit custom) with journal entry and unchanged schema snapshot; embedded PostgreSQL integration regression tests and local migration apply.",
       "phaseBoundary": "Source inventory and selected software qualification only; prior phase statuses remain unchanged."
     }
   ],

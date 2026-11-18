@@ -4068,6 +4068,13 @@
       "when": 1794891051137,
       "tag": "0582_sandbox_native_reviewer_policy",
       "breakpoints": true
+    },
+    {
+      "idx": 583,
+      "version": "7",
+      "when": 1794966768371,
+      "tag": "0583_native_durable_session_scope_retention",
+      "breakpoints": true
     }
   ]
 }

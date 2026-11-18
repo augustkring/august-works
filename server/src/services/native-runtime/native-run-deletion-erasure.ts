@@ -13,6 +13,7 @@ import { managedOpenCodeRuntimeDirectory, nativeRuntimeAssetsRoot } from "./runt
 import {
   assertNativeDurableSessionRunsStopped,
   executeNativeDurableSessionErasure,
+  loadNativeDurableSessionScopes,
   planNativeDurableSessionErasure,
   type NativeDurableSessionErasureReceipt,
   type NativeDurableSessionTargets,
@@ -249,8 +250,10 @@ export async function prepareNativeRunDeletionErasure(tx: Db, scope: Scope) {
       if (!await hasNativeLocalProcessStop(tx, scope.companyId, root.runId))
         throw conflict("Managed OpenCode data erasure awaits Native Stop receipt");
     }
-    const plan = await planNativeDurableSessionErasure({ companyId: scope.companyId, targets });
-    return { deleted, roots, targets, plan };
+    // Read the folders' scope records before the rows (and records) are deleted.
+    const scopes = await loadNativeDurableSessionScopes(tx, scope.companyId, targets);
+    const plan = await planNativeDurableSessionErasure(tx, { companyId: scope.companyId, targets, scopes });
+    return { deleted, roots, targets, scopes, plan };
   });
 
   return {
@@ -281,7 +284,8 @@ export async function prepareNativeRunDeletionErasure(tx: Db, scope: Scope) {
         });
       }
       const durableSessions = await executeNativeDurableSessionErasure(prepared.plan);
-      if ((await planNativeDurableSessionErasure({ companyId: scope.companyId, targets: prepared.targets })).groups.length)
+      if ((await planNativeDurableSessionErasure(tx, { companyId: scope.companyId, targets: prepared.targets,
+        scopes: prepared.scopes })).groups.length)
         throw conflict("Native durable session state remains after deletion");
       return {
         schema: "paperclip.native-run-deletion-erasure.v1",

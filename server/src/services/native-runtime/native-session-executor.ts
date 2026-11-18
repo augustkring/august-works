@@ -2,6 +2,7 @@ import { assertNativeModelOutputCaptureCurrent, nativeManagedProgressCommentSour
   NATIVE_BLOCKED_INTERACTION_READ_TOOLS } from "../native-direct-input.js";
 import { assertNativeConversationToolNoPlanScope } from "../orchestration/native-tool-boundary.js";
 import { runnerApiOperation } from "./runner-api-catalog.js";
+import { recordNativeDurableSessionScope } from "./native-durable-session-scope.js";
 import { nativeStageCommentApiCallSchema, nativeStageCommentApiEligible, nativeStageCommentApiDecisionCurrent, nativeStageCommentApiToolDefinition, readNativeManagedStageCommentCapture, type NativeManagedStageCommentCapture } from "../native-stage-comment-api.js";
 import { configuredNativeProviderPackInstallRoot, NATIVE_FIXED_ARTIFACT_CHECKSUM_SCRIPT, NATIVE_SELECTED_PROVIDER_PACK_DISCOVERY_SCRIPT } from "./native-artifact-preparation.js";
 import { REMOTE_PROVIDER_PACK_SCHEMA, REMOTE_PROVIDER_PACK_PINS, REMOTE_PROVIDER_PACK_PROFILE_DIGESTS, REMOTE_PROVIDER_PACK_ARTIFACT_PATHS } from "./native-artifact-preparation.js";
@@ -2002,6 +2003,18 @@ function runnerdStateBase(): string {
 /** The session scope digest a failover backup stamp records. */
 export function nativeSessionScopeSha256(execution: NativeExecutionInput): string {
   return createHash("sha256").update(nativeSessionScopeKey(execution)).digest("hex");
+}
+
+/** PRIV-R8: record the folder's scope on its Run before the folder can be
+ * created, renamed into place or written. Erasure finds the folder from this
+ * record even when a crash left no runner identity in it. */
+async function recordRunnerdStateRootOwner(db: Db, execution: NativeExecutionInput): Promise<void> {
+  await recordNativeDurableSessionScope(db, {
+    companyId: execution.binding.companyId,
+    runId: execution.binding.runId,
+    normalizedSessionId: nativeSessionKey(execution),
+    scopeSha256: nativeSessionScopeSha256(execution),
+  });
 }
 
 function scopedRunnerdStateRoot(execution: NativeExecutionInput): string {
@@ -4971,6 +4984,7 @@ async function migrateRunnerdStateRootForExecution(input: {
   restartRecovery?: NativeRestartRecoveryClaim;
   runnerExecutionTarget?: AdapterExecutionTarget | null;
 }): Promise<VerifiedWarmTransitionBinding | undefined> {
+  await recordRunnerdStateRootOwner(input.db, input.execution);
   const scoped = scopedRunnerdStateRoot(input.execution);
   // A crash can leave a source archive intent before/after its rename. Until
   // that exact maintenance is settled, absence of a canonical root is not
@@ -15751,6 +15765,7 @@ async function createRunnerdBackendWithinSessionClaim(
   } else if (input.prepareManagedWorkspace) {
     throw new Error("native_workspace_preparation_requires_model_authority");
   }
+  await recordRunnerdStateRootOwner(input.db, input.execution);
   const root = runnerdStateRoot(input.execution);
   const durableIdentity = readRunnerdDurableIdentity(root);
   // CONF15 W: the Worker lane stages runtime context into a fresh per-Run

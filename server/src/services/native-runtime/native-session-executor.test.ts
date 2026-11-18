@@ -254,6 +254,15 @@ vi.mock("./paperclip-runner-tool-authority.js", async importOriginal => ({
   },
 }));
 
+// PRIV-R8: the folder owner record is a database write; the erasure
+// integration test covers it against Postgres. Here it is observed only.
+const durableSessionScope = vi.hoisted(() => ({
+  record: vi.fn(async (_db: unknown, _input: { companyId: string; runId: string; normalizedSessionId: string; scopeSha256: string }) => undefined),
+}));
+vi.mock("./native-durable-session-scope.js", () => ({
+  recordNativeDurableSessionScope: durableSessionScope.record,
+}));
+
 vi.mock("./assigned-mcp-tools.js", () => ({
   createAssignedMcpTools: state.createAssignedMcpTools,
   getAssignedMcpGateway: () => ({}),
@@ -350,6 +359,7 @@ import {
   nativeManagedOpenCodeRequiredToolNames,
   nativeManagedCallApiOperationIds,
   canonicalManagedOpenCodeContinuationTurn,
+  nativeSessionScopeSha256,
 } from "./native-session-executor.js";
 
 const assignedMcpCurrentHumanDbSupport = await getEmbeddedPostgresTestSupport();
@@ -597,6 +607,44 @@ describe("remote controller restart adoption", () => {
       }),
     ).rejects.toThrow("runner_remote_recovery_identity_mismatch");
     expect(execute).toHaveBeenCalledTimes(1);
+  });
+  it("records the durable session folder's owner before the folder exists, and creates none when that fails (PRIV-R8)", async () => {
+    const stateBase = await mkdtemp(join(tmpdir(), "paperclip-durable-owner-"));
+    const previous = process.env.PAPERCLIP_RUNNER_STATE_DIR;
+    process.env.PAPERCLIP_RUNNER_STATE_DIR = stateBase;
+    const current = {
+      ...execution,
+      binding: { ...execution.binding, runId: "run-owner" },
+      session: { ...execution.session, normalizedSessionId: "session-owner" },
+    };
+    const root = join(stateBase, nativeSessionScopeSha256(current));
+    try {
+      durableSessionScope.record.mockClear();
+      durableSessionScope.record.mockImplementationOnce(async () => {
+        throw new Error("native_durable_session_scope_owner_missing");
+      });
+      await expect(createRunnerdBackend({ db: leaseDb(current), execution: current, runnerInstanceId: "runner" }))
+        .rejects.toThrow("native_durable_session_scope_owner_missing");
+      expect(await readdir(stateBase)).toEqual([]);
+      const seen: boolean[] = [];
+      durableSessionScope.record.mockClear();
+      durableSessionScope.record.mockImplementation(async () => {
+        seen.push(await access(root).then(() => true, () => false));
+      });
+      await createRunnerdBackend({ db: leaseDb(current), execution: current, runnerInstanceId: "runner" });
+      expect(durableSessionScope.record).toHaveBeenCalled();
+      for (const call of durableSessionScope.record.mock.calls)
+        expect(call[1]).toEqual({ companyId: current.binding.companyId, runId: "run-owner",
+          normalizedSessionId: "session-owner", scopeSha256: nativeSessionScopeSha256(current) });
+      expect(seen[0]).toBe(false);
+      expect(await readdir(stateBase)).toEqual([nativeSessionScopeSha256(current)]);
+    } finally {
+      durableSessionScope.record.mockReset();
+      durableSessionScope.record.mockImplementation(async () => undefined);
+      if (previous === undefined) delete process.env.PAPERCLIP_RUNNER_STATE_DIR;
+      else process.env.PAPERCLIP_RUNNER_STATE_DIR = previous;
+      await rm(stateBase, { recursive: true, force: true });
+    }
   });
   it("wires remote adoption when only controller state survived on the host", async () => {
     const stateBase = await mkdtemp(
