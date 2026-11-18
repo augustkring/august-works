@@ -15023,7 +15023,7 @@
         },
         {
           "path": "ui/src/components/MandatoryProductNotices.test.tsx",
-          "sha256": "c26784d11cd1aa85f10c5ab2418328a6a5c0847779ba635c46d1480aa6e1e777"
+          "sha256": "a125f6183a7fd7887d40f62e136476096dda369cc584d1b9f3608fcb51875cdd"
         },
         {
           "path": "ui/src/components/MandatoryProductNotices.tsx",
@@ -54531,7 +54531,7 @@
       "id": "source:ui/src/components/MandatoryProductNotices.test.tsx",
       "kind": "current_source_owner",
       "path": "ui/src/components/MandatoryProductNotices.test.tsx",
-      "sha256": "c26784d11cd1aa85f10c5ab2418328a6a5c0847779ba635c46d1480aa6e1e777",
+      "sha256": "a125f6183a7fd7887d40f62e136476096dda369cc584d1b9f3608fcb51875cdd",
       "changeIds": [
         "SCR-V10-SUPPORT-STATUS-TRUST-NOTICES"
       ],

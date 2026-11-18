@@ -112,6 +112,9 @@ describe("mandatory product notices", () => {
     const button = container.querySelector("button")!;
     expect(button.textContent).toContain("announcement.mandatory.markRead");
     expect(api.complete).not.toHaveBeenCalled();
+    // The action is enabled only once the exact content has rendered; clicking a
+    // still-disabled button is a no-op, which raced on slow CI runners.
+    await act(async () => { await vi.waitFor(() => expect((button as HTMLButtonElement).disabled).toBe(false)); });
     await act(async () => button.click());
     expect(api.complete).toHaveBeenCalledWith(readNotice, "alice");
 
