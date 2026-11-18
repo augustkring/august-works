@@ -23,8 +23,8 @@
   "qualificationBoundary": "Source hashes identify current candidate bytes and exact base comparisons. Requirement edges are source links, not closure. The inventory does not prove full behavior review, compatibility, rollback, Human approval, provider/hosted behavior, or release acceptance. Unknown owners and external facts remain open.",
   "migrationJournal": {
     "path": "packages/db/src/migrations/meta/_journal.json",
-    "sha256": "c0662ab3cc45026a672156906c5cc04082330fd479e9cba80b0063836c3cee87",
-    "entryCount": 582,
+    "sha256": "585b915c7a0f0a5758568fbb189829242c03d5413599ed0a6d0e22fed4c4e90c",
+    "entryCount": 583,
     "qualification": "journal order and current SQL source hashes only; not migration phase, mixed-version safety, rollback, or operator approval"
   },
   "sourceInputs": [
@@ -20064,7 +20064,7 @@
         },
         {
           "path": "packages/db/src/migrations/meta/_journal.json",
-          "sha256": "c0662ab3cc45026a672156906c5cc04082330fd479e9cba80b0063836c3cee87"
+          "sha256": "585b915c7a0f0a5758568fbb189829242c03d5413599ed0a6d0e22fed4c4e90c"
         },
         {
           "path": "packages/db/src/native-input-source-protocol.test.ts",
@@ -22040,7 +22040,7 @@
         },
         {
           "path": "server/src/services/orchestration/model-reservations.ts",
-          "sha256": "1adfdb69d421a919db106ab65eada0b5abb661b799bdcf92478ce41587b3c4d6"
+          "sha256": "273816228660e576f99a9abbebc6454996738129b9a449642c00bffeff2c4a66"
         },
         {
           "path": "server/src/services/orchestration/openai-responses-model-transport.test.ts",
@@ -46211,6 +46211,16 @@
       "qualification": "journal_order_and_current_sql_hash_only"
     },
     {
+      "id": "0584_review_model_wire_receipt_call_id",
+      "kind": "journaled_migration_source",
+      "path": "packages/db/src/migrations/0584_review_model_wire_receipt_call_id.sql",
+      "sha256": "07bd1cd03a65e128599aebfcc00d07fb27fc2d531a86b6547702ddfd04174dfb",
+      "journalPosition": 582,
+      "journalIndex": 584,
+      "createdAt": 1795008918707,
+      "qualification": "journal_order_and_current_sql_hash_only"
+    },
+    {
       "id": "deleted:server/src/__tests__/heartbeat-workspace-finalize-branch.test.ts",
       "kind": "deleted_source_delta",
       "path": "server/src/__tests__/heartbeat-workspace-finalize-branch.test.ts",
@@ -58695,7 +58705,7 @@
       "id": "source:packages/db/src/migrations/meta/_journal.json",
       "kind": "current_source_owner",
       "path": "packages/db/src/migrations/meta/_journal.json",
-      "sha256": "c0662ab3cc45026a672156906c5cc04082330fd479e9cba80b0063836c3cee87",
+      "sha256": "585b915c7a0f0a5758568fbb189829242c03d5413599ed0a6d0e22fed4c4e90c",
       "changeIds": [
         "SCR-V10-DATABASE-SCHEMA-AND-MIGRATIONS"
       ],
@@ -61080,7 +61090,7 @@
       "id": "source:server/src/services/orchestration/model-reservations.ts",
       "kind": "current_source_owner",
       "path": "server/src/services/orchestration/model-reservations.ts",
-      "sha256": "1adfdb69d421a919db106ab65eada0b5abb661b799bdcf92478ce41587b3c4d6",
+      "sha256": "273816228660e576f99a9abbebc6454996738129b9a449642c00bffeff2c4a66",
       "changeIds": [
         "SCR-V10-MODEL-PROVIDER-AND-MIGRATION-MONITOR"
       ],
@@ -83162,6 +83172,11 @@
     {
       "from": "0582_sandbox_native_reviewer_policy",
       "to": "0583_native_durable_session_scope_retention",
+      "relation": "drizzle_journal_order_only"
+    },
+    {
+      "from": "0583_native_durable_session_scope_retention",
+      "to": "0584_review_model_wire_receipt_call_id",
       "relation": "drizzle_journal_order_only"
     },
     {
