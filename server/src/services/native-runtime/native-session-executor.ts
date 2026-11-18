@@ -1736,8 +1736,11 @@ class SessionToolAuthorityEpoch {
       if (call.turnId && assignedMcpSearch.value)
         await this.onManagedOpenCodeToolResult?.({ tool: call.tool, callId: call.callId, turnId: call.turnId,
           argumentsHash, result, assignedMcpSearch: assignedMcpSearch.value });
+      // MS1h15. resolve_review's plan invocation receipt is captured like the
+      // other plan tool results, so the next managed request can bind it.
       if (call.turnId && (call.tool === "read_document" || call.tool === "write_document" || call.tool === "report_progress" ||
         call.tool === "create_task" || call.tool === "self_remember" || call.tool === "request_human_input" || call.tool === "read_context" || call.tool === "list_project_repositories" ||
+        call.tool === "resolve_review" ||
 
         call.tool === "get_task_context" || call.tool === "get_task_history" || call.tool === "read_chat_attachment" || call.tool === "query_business_metric")) {
         if (toolResultDiagnostics && call.tool === "create_task")

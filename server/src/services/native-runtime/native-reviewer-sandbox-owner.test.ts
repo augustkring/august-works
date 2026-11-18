@@ -1163,6 +1163,12 @@ describeDb("current Native completion Reviewer sandbox owner (MS1h2)", () => {
       expect(after.invocations).toEqual([expect.objectContaining({ runId: ids.reviewerRun, agentId: ids.reviewer,
         issueId: ids.issue, status: "succeeded", idempotencyKey: `aw-native-tool:${ids.reviewerRun}:resolve-admitted` })]);
       expect(after.charges).toEqual([after.invocations[0]!.id]);
+      // MS1h15. The receipt binds the exact provider arguments, as plan tool
+      // receipts do; the request hash (naming the interaction) stays the
+      // idempotency identity.
+      expect(after.invocations[0]!.argumentsHash).toBe(nativeSha256({ decision: "accept" }));
+      expect(after.invocations[0]!.idempotencyRequestHash).toBe(nativeSha256({ interactionId: ids.interaction,
+        decision: "accept", reason: "" }));
       expect(fetchCalls).toEqual([`http://127.0.0.1:9/api/issues/${ids.issue}/interactions/${ids.interaction}/accept`]);
     });
 
