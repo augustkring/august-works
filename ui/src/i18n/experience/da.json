@@ -928,6 +928,9 @@
     "cancelled": "Annulleret",
     "blocked": "Afventer hjælp"
   },
+  "taskActivity": {
+    "reviewAwaitingPlanVerification": "Gennemgangen er godkendt. Opgaven forbliver til gennemgang, indtil en person har verificeret dens plan."
+  },
   "mobileNavigation": "Mobilnavigation",
   "openNavigation": "Åbn navigation",
   "commands": {

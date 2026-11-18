@@ -1,6 +1,6 @@
 import type { Agent } from "@paperclipai/shared";
 import { describe, expect, it } from "vitest";
-import { formatActivityVerb, formatIssueActivityAction } from "./activity-format";
+import { activityReviewAwaitsPlanVerification, formatActivityVerb, formatIssueActivityAction } from "./activity-format";
 
 describe("activity formatting", () => {
   const agentMap = new Map<string, Agent>([
@@ -160,5 +160,15 @@ describe("activity formatting", () => {
     expect(formatIssueActivityAction("issue.successful_run_handoff_escalated")).toBe(
       "Run finished without a next step - recovery escalated",
     );
+  });
+  it("marks an accepted completion review that awaits its plan's verification (MS1h14)", () => {
+    const held = { interactionKind: "request_confirmation", taskCompletion: "awaiting_plan_verification", planId: "plan-1" };
+    expect(activityReviewAwaitsPlanVerification("issue.thread_interaction_accepted", held)).toBe(true);
+    // The activity line keeps its existing wording; the note is shown beside it.
+    expect(formatIssueActivityAction("issue.thread_interaction_accepted", held)).toBe("approved the request");
+    expect(activityReviewAwaitsPlanVerification("issue.thread_interaction_accepted", { interactionKind: "request_confirmation" }))
+      .toBe(false);
+    expect(activityReviewAwaitsPlanVerification("issue.thread_interaction_rejected", held)).toBe(false);
+    expect(activityReviewAwaitsPlanVerification("issue.thread_interaction_accepted", null)).toBe(false);
   });
 });

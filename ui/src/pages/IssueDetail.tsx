@@ -297,7 +297,7 @@ import {
   DialogTitle,
 } from "@/components/ui/dialog";
 import { Textarea } from "@/components/ui/textarea";
-import { formatIssueActivityAction } from "@/lib/activity-format";
+import { activityReviewAwaitsPlanVerification, formatIssueActivityAction } from "@/lib/activity-format";
 import { copyTextToClipboard } from "../lib/clipboard";
 import { buildIssuePropertiesPanelKey } from "../lib/issue-properties-panel-key";
 import { openSkillPanelState, shouldSuppressTaskPanelUntilPlan } from "../lib/task-side-panel-state";
@@ -2535,6 +2535,7 @@ function IssueDetailActivityTab({
   handoffFocusSignal = 0,
   externalReferences,
 }: IssueDetailActivityTabProps) {
+  const { t } = useTranslation("experience");
   const { data: activity, isLoading: activityLoading } = useQuery({
     queryKey: queryKeys.issues.activity(issueId),
     queryFn: () => activityApi.forIssue(issueId),
@@ -2786,6 +2787,11 @@ function IssueDetailActivityTab({
                   </span>
                 </div>
                 <IssueReferenceActivitySummary event={evt} />
+                {activityReviewAwaitsPlanVerification(evt.action, evt.details) ? (
+                  <p className="text-xs text-muted-foreground" data-testid="issue-review-awaiting-plan-verification">
+                    {t("taskActivity.reviewAwaitingPlanVerification")}
+                  </p>
+                ) : null}
                 {/* Field-level who/what/why receipt for agent and board edits alike. */}
                 <IssueFieldChangeReceipt
                   event={evt}
