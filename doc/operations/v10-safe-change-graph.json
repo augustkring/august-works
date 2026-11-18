@@ -9156,7 +9156,7 @@
         },
         {
           "path": "server/src/__tests__/v7-orchestration.integration.test.ts",
-          "sha256": "2f398451a2af006d4ba8875d420cfbb657047fdc160f5008e3835de39ae1432f"
+          "sha256": "1084b2a778fd6c6405f7acdbcb9e379794e2f78b0983019dee4766803d656d3a"
         },
         {
           "path": "server/src/__tests__/v7-portability.integration.test.ts",
@@ -9420,7 +9420,7 @@
         },
         {
           "path": "server/src/services/supervision/verification-service.ts",
-          "sha256": "9dc9445cb6186101fc7689801528791d749b2d66f8cae997f0b4af705689f47f"
+          "sha256": "3b47fc88c86a71741d97f48c1e3472ae5adc066226c3e4858081c9e7eb49a026"
         },
         {
           "path": "server/src/services/workflows/workflow-direct-agent.test.ts",
@@ -11780,7 +11780,7 @@
         },
         {
           "path": "server/src/__tests__/v7-orchestration.integration.test.ts",
-          "sha256": "2f398451a2af006d4ba8875d420cfbb657047fdc160f5008e3835de39ae1432f"
+          "sha256": "1084b2a778fd6c6405f7acdbcb9e379794e2f78b0983019dee4766803d656d3a"
         },
         {
           "path": "server/src/__tests__/v9-workflow-authoring-sources.integration.test.ts",
@@ -32121,7 +32121,7 @@
         },
         {
           "path": "server/src/services/company-search-help.generated.ts",
-          "sha256": "e729523b427573c5f445bf0122cfdd88194a4073b26eba8e66ade9e21571c99c"
+          "sha256": "d7d59fc7eea42b9bd7f87b1e2be48e774d89bce77c66759d92c14d49283143e5"
         },
         {
           "path": "server/src/services/task-search.ts",
@@ -50429,7 +50429,7 @@
       "id": "source:server/src/__tests__/v7-orchestration.integration.test.ts",
       "kind": "current_source_owner",
       "path": "server/src/__tests__/v7-orchestration.integration.test.ts",
-      "sha256": "2f398451a2af006d4ba8875d420cfbb657047fdc160f5008e3835de39ae1432f",
+      "sha256": "1084b2a778fd6c6405f7acdbcb9e379794e2f78b0983019dee4766803d656d3a",
       "changeIds": [
         "SCR-V10-HOTSPOT-06",
         "SCR-V10-HOTSPOT-12"
@@ -51121,7 +51121,7 @@
       "id": "source:server/src/services/supervision/verification-service.ts",
       "kind": "current_source_owner",
       "path": "server/src/services/supervision/verification-service.ts",
-      "sha256": "9dc9445cb6186101fc7689801528791d749b2d66f8cae997f0b4af705689f47f",
+      "sha256": "3b47fc88c86a71741d97f48c1e3472ae5adc066226c3e4858081c9e7eb49a026",
       "changeIds": [
         "SCR-V10-HOTSPOT-06"
       ],
@@ -72540,7 +72540,7 @@
       "id": "source:server/src/services/company-search-help.generated.ts",
       "kind": "current_source_owner",
       "path": "server/src/services/company-search-help.generated.ts",
-      "sha256": "e729523b427573c5f445bf0122cfdd88194a4073b26eba8e66ade9e21571c99c",
+      "sha256": "d7d59fc7eea42b9bd7f87b1e2be48e774d89bce77c66759d92c14d49283143e5",
       "changeIds": [
         "SCR-V10-PRODUCT-IDENTITY-HELP-LANGUAGE"
       ],
