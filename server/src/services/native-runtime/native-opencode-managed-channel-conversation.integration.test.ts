@@ -175,6 +175,9 @@ describe("managed Native channel conversation", () => {
           const [identityLink] = await db.insert(chatIdentityLinks).values({ companyId, endpointId: endpoint.id,
             principalId: principal.id, paperclipUserId: actor.userId, status: "linked", confirmedAt: new Date() }).returning();
           if (!identityLink) throw new Error("managed_channel_conversation_identity_link_missing");
+          // A canonical Native channel conversation requires an active endpoint
+          // (C2c): finish Slack setup through the real activation path.
+          await service.finishSlackSetup(endpoint.id, actor.userId);
           const callback = callbacks?.onMessage;
           if (!callback) throw new Error("managed_channel_conversation_callback_missing");
           const send = (id: string, text: string) => callback({ endpointId: endpoint.id, provider: "slack",

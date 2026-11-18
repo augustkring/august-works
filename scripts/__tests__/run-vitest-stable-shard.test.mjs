@@ -362,6 +362,7 @@ const nativeRunnerSuitePath =
   "server/src/services/native-runtime/native-codex-runner.integration.test.ts";
 
 const managedNativeSuitePaths = [
+  "server/src/__tests__/durable-chat-wakeup.test.ts",
   "server/src/__tests__/heartbeat-comment-wake-batching-managed-positive.integration.test.ts",
   "server/src/__tests__/heartbeat-managed-chat-dispatch-boundaries.integration.test.ts",
   "server/src/__tests__/heartbeat-managed-chat-workspace-root.integration.test.ts",

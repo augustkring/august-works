@@ -105,6 +105,7 @@ const nativeRunnerSuite =
 // per-file processes. PR jobs select one file per shard; other callers retain
 // the complete existing server coverage even if a workflow is renamed.
 const managedNativeSuites = [
+  "server/src/__tests__/durable-chat-wakeup.test.ts",
   "server/src/__tests__/heartbeat-comment-wake-batching-managed-positive.integration.test.ts",
   "server/src/__tests__/heartbeat-managed-chat-dispatch-boundaries.integration.test.ts",
   "server/src/__tests__/heartbeat-managed-chat-workspace-root.integration.test.ts",

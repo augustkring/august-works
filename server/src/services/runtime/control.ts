@@ -94,7 +94,8 @@ import { resolvePaperclipRunnerProviderProfile } from "../native-runtime/provide
 import type { workerModelGateway } from "../orchestration/worker-model-gateway.js";
 import { verifyRuntimeToolsToken, type RuntimeToolsTokenClaims } from "../../runtime-tools-token.js";
 import { findNativeChatWorkspaceScope, nativeChatWorkspaceCwd } from "../native-runtime/native-chat-workspace.js";
-import { readRuntimeChannelConversationScope, runtimeConversationGeneration, runtimeConversationOwnerExact } from "./runtime-conversation-owner.js";
+import { readRuntimeChannelConversationScope, runtimeConversationGeneration, runtimeConversationOwnerExact,
+  runtimeConversationTaskCommentFacets } from "./runtime-conversation-owner.js";
 import { assertNativePayloadSourceSetCurrent, assertNativeTaskSourceOwnerCurrent, assertNativeWorkspaceMetadataSourcesCurrent } from "../native-direct-input.js";
 import { lockAnalyticalCompany } from "../analytical-privacy.js";
 import { lockMemoryPrivacy } from "../memory/memory-privacy.js";
@@ -4310,8 +4311,6 @@ export function runtimeControlService(
         const filesystem = source.policy.compilation.compiledPolicy.filesystem;
         const readRoots = Array.isArray(filesystem?.readPaths) ? filesystem.readPaths : [];
         const writeRoots = Array.isArray(filesystem?.writePaths) ? filesystem.writePaths : [];
-        const snapshotComment = taskSnapshot.success && taskSnapshot.data.inputs.length === 1
-          ? nativePayloadSourceInputSchema.safeParse(taskSnapshot.data.inputs[0]) : null;
         const commentId = capturedComment?.success && capturedComment.data.kind === "comment"
           ? capturedComment.data.commentId : null;
         const renderedMarkdownLength = typeof markdownMap.renderedMarkdownLength === "number" &&
@@ -4332,16 +4331,15 @@ export function runtimeControlService(
           source.run.runtimeMode === "native" && source.run.scopeKind === "issue" && source.run.nativeIssueId === task.id &&
           contextSnapshot.conversationSessionGeneration === generation && source.manifest.runId === source.run.id &&
           source.manifest.agentId === source.run.agentId && source.manifest.manifest.responsibleUserId === source.run.responsibleUserId;
+        const taskCommentFacets = runtimeConversationTaskCommentFacets({
+          task, run: source.run, channelScope, requestCommentId: commentId,
+          taskSnapshotInputs: taskSnapshot.success ? taskSnapshot.data.inputs : null,
+        });
         const currentCommentFacets = {
-          taskSnapshotSingleInput: taskSnapshot.success && taskSnapshot.data.inputs.length === 1,
-          snapshotInputComment: snapshotComment?.success === true && snapshotComment.data.kind === "comment",
-          snapshotInputIssueBound: snapshotComment?.success === true && snapshotComment.data.kind === "comment" &&
-            snapshotComment.data.issueId === task.id,
+          ...taskCommentFacets,
           requestInputComment: capturedComment?.success === true && capturedComment.data.kind === "comment",
           requestInputIssueBound: capturedComment?.success === true && capturedComment.data.kind === "comment" &&
             capturedComment.data.issueId === task.id,
-          snapshotAndRequestCommentMatch: snapshotComment?.success === true && snapshotComment.data.kind === "comment" &&
-            commentId === snapshotComment.data.commentId,
           wakeCommentIdMatches: commentId !== null && contextSnapshot.wakeCommentId === commentId,
           markdownMapVersion: markdownMap.version === 1,
           markdownDigestValid: typeof markdownMap.renderedMarkdownDigest === "string" &&
@@ -5032,6 +5030,21 @@ export function runtimeControlService(
       if ((providerArtifactPreparation || nativeHarnessState || nativeWorkspacePrepare || nativeRuntimeContextPrepare || nativeRuntimeAssetErasureProbe) &&
         (credentials.mode !== "none" || credentials.bindings.length !== 0 || managedModelPlaceholder))
         throw conflict("Provider artifact preparation cannot receive workload credentials");
+      // C2d: like a Worker start above, a conversation Run (web or linked-Human
+      // channel) may start its Native session only with the exact signed launch
+      // command for its persisted execution input and private Task root. Refuse
+      // anything else here, before a Host command claim exists.
+      if (nativeSessionStart && hasConversationIdentity) {
+        const execution = conversationExecution;
+        if (!execution || !conversationTaskRoot || execution.workspace.cwd !== conversationTaskRoot ||
+          execution.binding.companyId !== input.companyId || execution.binding.runId !== initialSource.run.id ||
+          execution.binding.agentId !== initialSource.run.agentId || execution.binding.issueId !== task.id ||
+          !initialSource.run.nativeSessionId || execution.session.normalizedSessionId !== initialSource.run.nativeSessionId ||
+          !exactNativeSessionLaunchCommand({ request: { argv, cwd, stdinBase64: stdinBytes.toString("base64") },
+            taskRoot: conversationTaskRoot, execution }))
+          throw conflict("Native conversation session start is outside its exact signed launch command",
+            { code: "native_conversation_session_start_not_exact_launch" });
+      }
     }
     if (runnerProfile?.provider === "opencode" && modelBrokerSessionPhase !== "stop" &&
       (!nativePreparationPurpose || nativeSessionStart || (nativeHarnessState && modelBrokerSessionPhase === "refresh"))) {

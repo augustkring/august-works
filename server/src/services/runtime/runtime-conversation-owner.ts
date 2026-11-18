@@ -1,4 +1,5 @@
 import type { Db, heartbeatRuns, issues } from "@paperclipai/db";
+import { nativePayloadSourceInputSchema } from "@paperclipai/shared";
 import {
   readNativeChannelConversationScope,
   type NativeChannelConversationScope,
@@ -73,4 +74,43 @@ export function runtimeConversationGeneration(
   channelScope: NativeChannelConversationScope | null,
 ): number {
   return channelScope ? channelScope.sessionGeneration : task.conversationSessionGeneration;
+}
+
+/**
+ * How a pre-receipt Native conversation command proves its current Human
+ * comment belongs to this Task. Facet names are diagnostic codes.
+ *
+ * Web conversation: the Task's closed source snapshot is exactly the Human
+ * comment that opened it, and the command carries that comment.
+ * Channel conversation: the platform opened the Task from the inbound
+ * message, so its closed snapshot has no inputs; the comment is owned by the
+ * linked Human's current inbound wake for this exact Task and Run
+ * (`channelScope`, read from persisted rows only). A scope never relaxes the
+ * web rule: without one the web facets apply unchanged.
+ */
+export function runtimeConversationTaskCommentFacets(input: {
+  task: Pick<RuntimeConversationTask, "id">;
+  run: Pick<RuntimeConversationRun, "id">;
+  channelScope: NativeChannelConversationScope | null;
+  /** Inputs of the Task's parsed closed snapshot; null when it is not valid. */
+  taskSnapshotInputs: readonly unknown[] | null;
+  requestCommentId: string | null;
+}): Record<string, boolean> {
+  const { task, run, channelScope, taskSnapshotInputs, requestCommentId } = input;
+  if (channelScope) {
+    return {
+      channelTaskSnapshotNoInputs: taskSnapshotInputs !== null && taskSnapshotInputs.length === 0,
+      channelOwnerCommentMatches: requestCommentId !== null && channelScope.sourceCommentId === requestCommentId &&
+        channelScope.issueId === task.id && channelScope.runId === run.id,
+    };
+  }
+  const snapshotComment = taskSnapshotInputs !== null && taskSnapshotInputs.length === 1
+    ? nativePayloadSourceInputSchema.safeParse(taskSnapshotInputs[0]) : null;
+  const comment = snapshotComment?.success === true && snapshotComment.data.kind === "comment" ? snapshotComment.data : null;
+  return {
+    taskSnapshotSingleInput: taskSnapshotInputs !== null && taskSnapshotInputs.length === 1,
+    snapshotInputComment: comment !== null,
+    snapshotInputIssueBound: comment !== null && comment.issueId === task.id,
+    snapshotAndRequestCommentMatch: comment !== null && requestCommentId === comment.commentId,
+  };
 }
