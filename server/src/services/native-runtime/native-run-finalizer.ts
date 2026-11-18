@@ -32,6 +32,8 @@ import {
   type NativeGovernanceGate,
 } from "./status-arbiter.js";
 import { recordNativeWorkAssessment } from "./work-assessments.js";
+import { nativeExecutionStageHandoffAvailable } from "./native-stage-handoff.js";
+import { V7_COMPLETION_SCHEMA } from "../orchestration/orchestration-contracts.js";
 import {
   commitNativeStatusDecision,
   NativeStatusRaceError,
@@ -1216,7 +1218,20 @@ export async function finalizeNativeRun(input: {
         readonlyDependencyInteraction = true;
       }
     }
-    const proposedDecision = resolveNativeFinalizerStatus({
+    // MS1f decision 1. A planned executor's claim may hand off to the Task's
+    // declared execution-policy stage: V7 server-arbiter contract, a covering
+    // plan, and a dry run of its `done` transition entering a pending stage.
+    // The arbiter's earlier branches own failed runs, review Runs and pending
+    // gates; conversation turns never commit a handoff (conversationNativeDecision).
+    const executionStageHandoffAvailable =
+      contractRow.schemaVersion === V7_COMPLETION_SCHEMA &&
+      contractRow.completionAuthority === "server_arbiter" &&
+      (await nativeExecutionStageHandoffAvailable(input.db, {
+        companyId: run.companyId,
+        issue: authoritativeIssue,
+        agentId: run.agentId,
+      }));
+    const arbiterInput: Parameters<typeof resolveNativeFinalizerStatus>[0] = {
       ...(reviewContext ? { nativeReviewOutcome: nativeReview
         ? nativeReview.interaction.status === "pending" ? "pending" as const : "resolved" as const
         : "stale" as const } : {}),
@@ -1241,6 +1256,10 @@ export async function finalizeNativeRun(input: {
         null,
       agentId: run.agentId,
       priorIssueStatus: authoritativeStatus(authoritativeIssue.status),
+    };
+    const proposedDecision = resolveNativeFinalizerStatus({
+      ...arbiterInput,
+      executionStageHandoffAvailable,
     });
     const decision = conversationNativeDecision({
       conversation: isConversation(authoritativeIssue), terminalState,
@@ -1301,6 +1320,10 @@ export async function finalizeNativeRun(input: {
           decision.reasonCode === "external_chat_response_waiting"
             ? { agentId: run.agentId }
             : undefined,
+        stageHandoffFallback:
+          decision.reasonCode === "execution_policy_stage_handoff"
+            ? resolveNativeFinalizerStatus(arbiterInput)
+            : undefined,
         reviewResponsePresentation:
           decision.reasonCode === "governed_response_waiting" &&
           governanceGate?.kind === "interaction" &&
@@ -1314,7 +1337,12 @@ export async function finalizeNativeRun(input: {
         failpoint: input.failpoint,
       });
       const now = new Date();
-      const finalizationFailed = decision.effects.some(
+      // A stage handoff commits as the stage-pending decision or its fallback.
+      const appliedDecision =
+        decision.reasonCode === "execution_policy_stage_handoff"
+          ? committed.effectiveDecision
+          : decision;
+      const finalizationFailed = appliedDecision.effects.some(
         (effect) => effect.kind === "record_finalization_error",
       );
       const finalizationPhase = finalizationFailed
@@ -1324,7 +1352,7 @@ export async function finalizeNativeRun(input: {
       // Its "cancel_continuations" effect (status-decision-committer.ts) writes a
       // terminal status to this same run and emits for it. Skip the emit here in
       // that case so one run reaching a terminal state emits exactly one event.
-      const alreadyEmittedByCommittedDecision = decision.effects.some(
+      const alreadyEmittedByCommittedDecision = appliedDecision.effects.some(
         (effect) => effect.kind === "cancel_continuations",
       );
       const [updatedRun] = await input.db

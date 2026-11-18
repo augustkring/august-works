@@ -1,7 +1,7 @@
 import { createHash } from "node:crypto";
 import { isDeepStrictEqual } from "node:util";
 import { and, desc, eq, inArray } from "drizzle-orm";
-import { agentExecutionManifests, analyticalContextRoots, completionContracts, contextManifestMemoryRoots, documentRevisions, documents, heartbeatRuns, issueDocuments, issueExecutionDecisions, issues, orchestrationPlans, orchestrationWorkers, orchestrationWorkerAttempts, orchestrationToolCharges, supervisionSignals, toolInvocations, verificationRuns, type Db } from "@paperclipai/db";
+import { agentExecutionManifests, analyticalContextRoots, completionContracts, contextManifestMemoryRoots, heartbeatRuns, issueExecutionDecisions, issues, orchestrationPlans, orchestrationWorkers, orchestrationWorkerAttempts, orchestrationToolCharges, supervisionSignals, toolInvocations, verificationRuns, type Db } from "@paperclipai/db";
 import { nativePayloadSourceInputSchema, nativePayloadSourcePolicySchema, orchestrationCompletionSchema, verificationReviewSchema, trajectoryReviewSchema, type TrajectoryReviewInput, type VerificationPacket, type VerificationEvidenceRef, type VerificationReviewInput } from "@paperclipai/shared";
 import type { AuthorizationActor } from "../authorization.js";
 import { assertV7Authorization, assertV7Enabled, v7HumanActorId } from "../v7-authorization.js";
@@ -15,7 +15,7 @@ import { nativeSha256 } from "../native-runtime/canonical.js";
 import { assertNativeManagedProjectCreateReceiptCurrentInTransaction, managedNativeProjectResultDto, type NativeProjectCreateReceipt } from "../native-project-output.js";
 import type { NativeModelOutputCapture, NativePayloadSourceSet } from "../native-runtime/native-execution-input.js";
 import { projectService } from "../projects.js";
-import { validateWorkflowOutput } from "../workflows/workflow-output-schema.js";
+import { checkTaskDocumentOutput, readTaskDocumentOutputs } from "./task-document-output.js";
 import { reconcileOrchestrationAttempts } from "../orchestration/orchestration-admission.js";
 import { orchestrationService, assertOrchestrationSources } from "../orchestration/orchestration-service.js";
 import { issueService, executeIssuePostCommitActions, type IssuePostCommitAction } from "../issues.js";
@@ -54,7 +54,7 @@ export function verificationService(db: Db) {
     if (liveAttempts) failures.push("worker_attempt_still_running");
     for (const subject of subjectWorkers) if (subjectAttempts.find(a => a.workerId === subject.id)?.status !== "succeeded") failures.push(`worker_attempt_not_successful:${subject.workerKey}`);
     if (!worker && plan.mode === "planned_parallel" && workers.some(w => w.status !== "completed")) failures.push("worker_joins_incomplete");
-    const outputRows = await tx.select({ key: issueDocuments.key, doc: documents }).from(issueDocuments).innerJoin(documents,and(eq(documents.companyId,issueDocuments.companyId),eq(documents.id,issueDocuments.documentId))).where(and(eq(issueDocuments.companyId,companyId),eq(issueDocuments.issueId,issueId))).for("share",{ of: documents });
+    const outputRows = await readTaskDocumentOutputs(tx,{ companyId,issueId,lock: true });
     for (const required of contract.requiredOutputs) {
       if (required.kind === "private_project") {
         const candidates: Array<{ run: typeof heartbeatRuns.$inferSelect; receipt: NativeProjectCreateReceipt;
@@ -124,15 +124,12 @@ export function verificationService(db: Db) {
           sourceVersion: candidate.receipt.projectSource.sourceVersion, hash: candidate.receipt.resultDigest });
         continue;
       }
-      const output = outputRows.find(o => o.key === required.key);
-      if (!output?.doc.latestBody.trim() || !output.doc.latestRevisionId) { failures.push(`output_missing:${required.key}`); continue; }
-      const [revision] = await tx.select().from(documentRevisions).where(and(eq(documentRevisions.companyId,companyId),eq(documentRevisions.documentId,output.doc.id),eq(documentRevisions.id,output.doc.latestRevisionId))).for("share");
-      if (!revision || revision.body !== output.doc.latestBody || revision.revisionNumber !== output.doc.latestRevisionNumber) failures.push(`output_revision_mismatch:${required.key}`);
-      if (required.jsonSchema) {
-        try { if (Buffer.byteLength(output.doc.latestBody,"utf8")>256000) throw new Error("bounded_output_limit"); validateWorkflowOutput(required.jsonSchema,JSON.parse(output.doc.latestBody)); }
-        catch { failures.push(`output_schema_mismatch:${required.key}`); }
-      }
-      evidence.push({ ref: `document:${output.doc.id}:${output.doc.latestRevisionId}`,type: "task_document",sourceId: output.doc.id,sourceVersion: output.doc.latestRevisionId,hash: nativeSha256(output.doc.latestBody) });
+      // One check with the Native evidence classifier's document evidence (MS1f decision 2).
+      const output = await checkTaskDocumentOutput(tx,{ companyId,output: outputRows.find(o => o.key === required.key),jsonSchema: required.jsonSchema,lock: true });
+      if (output.status === "missing") { failures.push(`output_missing:${required.key}`); continue; }
+      if (!output.revisionCurrent) failures.push(`output_revision_mismatch:${required.key}`);
+      if (output.schemaValid === false) failures.push(`output_schema_mismatch:${required.key}`);
+      evidence.push(output.evidence);
     }
     const receipts = await tx.select({ receipt: toolInvocations }).from(orchestrationToolCharges).innerJoin(toolInvocations,and(eq(toolInvocations.companyId,orchestrationToolCharges.companyId),eq(toolInvocations.id,orchestrationToolCharges.invocationId))).where(and(eq(orchestrationToolCharges.companyId,companyId),eq(orchestrationToolCharges.planId,id))).orderBy(desc(toolInvocations.createdAt)).limit(1000);
     for (const [index,condition] of contract.requiredPostconditions.entries()) {

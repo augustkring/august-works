@@ -18,10 +18,17 @@ import {
   issueRecoveryActions,
   issueWorkProducts,
   issues,
+  documentRevisions,
+  documents,
+  issueDocuments,
   nativeRunFinalizations,
   nativeRunResults,
+  orchestrationPlans,
+  orchestrationToolCharges,
+  orchestrationWorkers,
   statusDecisionEffects,
   statusDecisions,
+  toolInvocations,
   workAssessments,
   workspaceOperations,
 } from "@paperclipai/db";
@@ -73,6 +80,8 @@ import { issueService } from "../services/issues.js";
 import { normalizeIssueExecutionPolicy } from "../services/issue-execution-policy.js";
 import { issueThreadInteractionService } from "../services/issue-thread-interactions.js";
 import { startEmbeddedPostgresTestDatabase } from "./helpers/embedded-postgres.js";
+import { nativeSha256 } from "../services/native-runtime/canonical.js";
+import * as nativeStageHandoff from "../services/native-runtime/native-stage-handoff.js";
 
 type Fixture = {
   id: string;
@@ -2147,6 +2156,122 @@ describe("P6-31 Section 18.13 executable status-authority corpus", () => {
     const [issue] = await db.select().from(issues).where(eq(issues.id, seeded.issueId));
     expect(issue!.status).toBe("done");
     expect(issue!.executionState).toMatchObject({ status: "completed", completedStageIds: [policy.stages[0]!.id] });
+  }, 30_000);
+
+  /** MS1f decision 1: a planned executor's claim, its declared result
+   * document written by this Run through a charged write_document, the
+   * Reviewer's later decision reported unknown. */
+  async function seedPlannedStageHandoff(options: { plan?: boolean; stage?: boolean; v7Schema?: boolean;
+    completionAuthority?: string; incompleteContinuationUsed?: boolean } = {}) {
+    const fixture = corpus.fixtures.find((candidate) => candidate.id === "native-mechanical-completion")!;
+    const seeded = await seedFixture({ ...fixture, id: `native-stage-handoff-${randomUUID()}` });
+    const v7 = { objective: "Write the declared result document for the stage review",
+      requiredOutputs: [{ kind: "task_document", key: "result", jsonSchema: null }],
+      businessInvariants: ["The assigned Reviewer records the stage decision"],
+      evidenceRequirements: [], prohibitedOutcomes: [], requiredPostconditions: [] };
+    await db.update(completionContracts).set({ schemaVersion: options.v7Schema === false ? "paperclip.completion-contract.v1" : "aw.completion-contract.v7",
+      policyVersion: "aw-orchestration-v7.1", completionAuthority: options.completionAuthority ?? "server_arbiter",
+      contractJson: { revision: "corpus-v1", objective: v7.objective, criteria: [
+        { id: "output_result", requirement: "Save the required result document on this canonical Task" },
+        { id: "invariant_0", requirement: v7.businessInvariants[0]! }], v7 } })
+      .where(eq(completionContracts.id, seeded.contractId!));
+    const policy = normalizeIssueExecutionPolicy({ stages: [{ id: randomUUID(), type: "review",
+      participants: [{ id: randomUUID(), type: "agent", agentId: delegateAgentId }] }] })!;
+    if (options.stage !== false) await db.update(issues).set({ executionPolicy: policy }).where(eq(issues.id, seeded.issueId));
+    const planId = randomUUID();
+    await db.insert(orchestrationPlans).values({ id: planId, companyId, issueId: seeded.issueId, completionContractId: seeded.contractId!,
+      mode: "single_worker", actionClass: "internal_draft", riskClass: "C0", supervisionMode: "none", verificationMode: "deterministic",
+      humanOversightMode: "human_review", createdBy: "status-corpus-board", budgets: { maxWorkerCount: 1, maxParallelWorkers: 1,
+        maxDelegationDepth: 0, maxRetries: 0, maxWallClockSeconds: 3600, maxToolActions: 5, maxModelCostMinor: 1000 } });
+    await db.insert(orchestrationWorkers).values({ companyId, planId, issueId: seeded.issueId, agentId, completionContractId: seeded.contractId!,
+      workerKey: "writer", dependsOn: [], status: "running", attemptCount: 1 });
+    await db.update(orchestrationPlans).set({ status: "running", startedAt: new Date(), version: 2,
+      executionPrincipal: { type: "user", userId: "status-corpus-board" } }).where(eq(orchestrationPlans.id, planId));
+    if (options.plan === false) await db.update(orchestrationPlans).set({ status: "cancelled", completedAt: new Date(), version: 3 })
+      .where(eq(orchestrationPlans.id, planId));
+    const body = "The result the stage Reviewer will check";
+    const [doc] = await db.insert(documents).values({ companyId, title: "Result", latestBody: body, createdByAgentId: agentId }).returning();
+    const [revision] = await db.insert(documentRevisions).values({ companyId, documentId: doc!.id, revisionNumber: 1, body,
+      createdByAgentId: agentId, createdByRunId: seeded.runId }).returning();
+    await db.update(documents).set({ latestRevisionId: revision!.id }).where(eq(documents.id, doc!.id));
+    await db.insert(issueDocuments).values({ companyId, issueId: seeded.issueId, documentId: doc!.id, key: "result" });
+    const args = { idempotencyKey: "write-result", key: "result", title: "Result", body };
+    const [invocation] = await db.insert(toolInvocations).values({ companyId, runId: seeded.runId, issueId: seeded.issueId, agentId,
+      actorType: "agent", actorId: agentId, idempotencyKey: `aw-native-tool:${seeded.runId}:call-write`, toolName: "write_document",
+      argumentsHash: nativeSha256(args), riskLevel: "low", policyDecision: "allow", approvalState: "not_required", status: "succeeded" }).returning();
+    await db.insert(orchestrationToolCharges).values({ invocationId: invocation!.id, companyId, planId });
+    await db.update(heartbeatRuns).set({ resultJson: { semanticToolReceipts: { [args.idempotencyKey]: { operationId: "write_document",
+      input: args, result: { disposition: "applied", created: true, document: { id: doc!.id, key: "result", latestRevisionId: revision!.id } } } } } })
+      .where(eq(heartbeatRuns.id, seeded.runId));
+    const [stored] = await db.select().from(nativeRunResults).where(eq(nativeRunResults.id, seeded.resultId!));
+    await db.update(nativeRunResults).set({ resultJson: { ...stored!.resultJson, result: {
+      ...(stored!.resultJson.result as Record<string, unknown>),
+      completionClaim: { contractRevision: "corpus-v1", objectiveSatisfied: true, remainingWork: [], criteria: [
+        { criterionId: "output_result", status: "satisfied", evidenceRefs: [`document:${doc!.id}:${revision!.id}`] },
+        { criterionId: "invariant_0", status: "unknown", evidenceRefs: [] }] },
+      verification: [] } } }).where(eq(nativeRunResults.id, seeded.resultId!));
+    await db.insert(workspaceOperations).values({ companyId, heartbeatRunId: seeded.runId, issueId: seeded.issueId,
+      phase: "workspace_finalize", status: "succeeded", exitCode: 0, cwd: process.cwd(), finishedAt: new Date() });
+    if (options.incompleteContinuationUsed) {
+      const [wake] = await db.insert(agentWakeupRequests).values({ companyId, agentId, source: "automation", triggerDetail: "system",
+        reason: "issue_status_changed", status: "consumed", payload: { continuationIdempotencyKey: "native-completion-incomplete" } }).returning();
+      await db.update(heartbeatRuns).set({ wakeupRequestId: wake!.id }).where(eq(heartbeatRuns.id, seeded.runId));
+    }
+    return { ...seeded, policy };
+  }
+
+  it("hands a planned executor's evidenced claim to the declared review stage without completing the Task (MS1f)", async () => {
+    const seeded = await seedPlannedStageHandoff();
+    const finalized = await finalizeNativeRun({ db, runId: seeded.runId, workspaceFinalizeStatus: "succeeded" });
+    const [issue] = await db.select().from(issues).where(eq(issues.id, seeded.issueId));
+    const decisions = await db.select().from(statusDecisions).where(eq(statusDecisions.issueId, seeded.issueId));
+    const [assessment] = await db.select().from(workAssessments).where(eq(workAssessments.id, decisions[0]!.assessmentId!));
+    expect(finalized).toMatchObject({ phase: "committed" });
+    expect(decisions.map(({ toStatus, reasonCode }) => ({ toStatus, reasonCode })))
+      .toEqual([{ toStatus: "in_review", reasonCode: "execution_policy_stage_pending" }]);
+    expect(issue).toMatchObject({ status: "in_review", assigneeAgentId: delegateAgentId, executionRunId: null,
+      executionState: expect.objectContaining({ status: "pending", currentStageId: seeded.policy.stages[0]!.id }) });
+    expect((assessment!.assessmentJson as Record<string, unknown>).criterionAssessments).toEqual([
+      expect.objectContaining({ criterionId: "output_result", outcome: "accepted" }),
+      expect.objectContaining({ criterionId: "invariant_0", claimStatus: "unknown" }),
+    ]);
+    const wakes = await db.select().from(agentWakeupRequests).where(eq(agentWakeupRequests.agentId, delegateAgentId));
+    expect(wakes.filter((wake) => wake.idempotencyKey === `issue.execution_stage:${seeded.issueId}:${decisions[0]!.id}`)).toHaveLength(1);
+  }, 30_000);
+
+  it.each([
+    ["no plan covers the Task", { plan: false }],
+    ["the Task declares no stage", { stage: false }],
+    ["the contract is not a V7 contract", { v7Schema: false }],
+    ["the contract is not server-arbitrated", { completionAuthority: "agent_claim_policy" }],
+  ] as const)("keeps the claim incomplete when %s (MS1f)", async (_name, options) => {
+    const seeded = await seedPlannedStageHandoff(options);
+    await finalizeNativeRun({ db, runId: seeded.runId, workspaceFinalizeStatus: "succeeded" });
+    const [issue] = await db.select().from(issues).where(eq(issues.id, seeded.issueId));
+    const decisions = await db.select().from(statusDecisions).where(eq(statusDecisions.issueId, seeded.issueId));
+    expect(decisions.map(({ toStatus, reasonCode }) => ({ toStatus, reasonCode })))
+      .toEqual([{ toStatus: "in_progress", reasonCode: "completion_evidence_incomplete" }]);
+    expect(issue).toMatchObject({ status: "in_progress", assigneeAgentId: agentId });
+  }, 30_000);
+
+  it.each([
+    ["commits the incomplete continuation", false, "completion_evidence_incomplete", "in_progress", "committed"],
+    ["records the used continuation as a retryable failure", true, "prior_status_preserved_no_live_path", "in_progress", "retryable_failure"],
+  ] as const)("falls back when the stage is gone at commit: %s (MS1f)", async (_name, incompleteContinuationUsed, reasonCode, status, phase) => {
+    // The dry run saw a stage; the policy was edited before the commit.
+    const seeded = await seedPlannedStageHandoff({ stage: false, incompleteContinuationUsed });
+    const dryRun = vi.spyOn(nativeStageHandoff, "nativeExecutionStageHandoffAvailable").mockResolvedValueOnce(true);
+    try {
+      const finalized = await finalizeNativeRun({ db, runId: seeded.runId, workspaceFinalizeStatus: "succeeded" });
+      expect(dryRun).toHaveBeenCalledTimes(1);
+      const [issue] = await db.select().from(issues).where(eq(issues.id, seeded.issueId));
+      const decisions = await db.select().from(statusDecisions).where(eq(statusDecisions.issueId, seeded.issueId));
+      expect(decisions.map(({ toStatus, reasonCode }) => ({ toStatus, reasonCode }))).toEqual([{ toStatus: status, reasonCode }]);
+      expect(issue).toMatchObject({ status, assigneeAgentId: agentId });
+      expect(finalized).toMatchObject({ phase });
+    } finally {
+      dryRun.mockRestore();
+    }
   }, 30_000);
 
   async function seedAutomaticReview() {

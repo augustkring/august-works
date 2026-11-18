@@ -1,14 +1,20 @@
-import { and, eq, or } from "drizzle-orm";
+import { and, eq, inArray, or } from "drizzle-orm";
 import type { Db } from "@paperclipai/db";
 import {
   approvals,
   agents,
   heartbeatRunEvents,
+  heartbeatRuns,
   issueApprovals,
   issueAttachments,
   issueThreadInteractions,
   issueWorkProducts,
+  orchestrationToolCharges,
+  toolInvocations,
 } from "@paperclipai/db";
+import { orchestrationCompletionSchema } from "@paperclipai/shared";
+import { nativeSha256 } from "./canonical.js";
+import { checkTaskDocumentOutput, readTaskDocumentOutputs } from "../supervision/task-document-output.js";
 import {
   normalizePrpResultSignals,
   type PrpIgnoredAttentionRequest,
@@ -20,10 +26,12 @@ export type NativeEvidenceOutcome = "accepted" | "missing" | "rejected" | "unver
 
 export interface NativeEvidenceRefAssessment {
   ref: string;
-  kind: "event" | "work_product" | "approval" | "interaction" | "attachment" | "unknown";
+  kind: "event" | "work_product" | "approval" | "interaction" | "attachment" | "document" | "unknown";
   outcome: NativeEvidenceOutcome;
   reasonCode: string;
   durableRecordId: string | null;
+  /** Task document evidence only: the declared required-output key of the accepted document. */
+  outputKey?: string;
 }
 
 export interface NativeEvidenceAssessment {
@@ -100,12 +108,92 @@ function uuidRef(ref: string, prefixes: string[]): string | null {
   return null;
 }
 
+const UUID_PATTERN = "[0-9a-f]{8}-[0-9a-f]{4}-[1-8][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}";
+/** The ref plan verification emits for a Task document output (`document:<docId>:<revisionId>`). */
+const TASK_DOCUMENT_REF = new RegExp(`^document:(${UUID_PATTERN}):(${UUID_PATTERN})(?=$|[^0-9a-f-])`, "i");
+
+/**
+ * MS1f decision 2. A Task document is evidence that this Run produced the
+ * current declared output, not that its content is good. Accepted only if all
+ * hold: the document is linked to this Task under a required-output key the
+ * contract declares; the cited revision is its latest revision and matches its
+ * latest body (the check plan verification uses); the declared JSON schema, if
+ * any, validates; this Run created the revision; and this Run has a succeeded,
+ * plan-charged `write_document` invocation that wrote exactly this revision
+ * under that key.
+ */
+async function classifyTaskDocumentRef(input: {
+  db: Db;
+  companyId: string;
+  issueId: string;
+  runId: string;
+  ref: string;
+  contract: Record<string, unknown>;
+  documentId: string;
+  revisionId: string;
+}): Promise<NativeEvidenceRefAssessment> {
+  const assessment = (outcome: NativeEvidenceOutcome, reasonCode: string, durableRecordId: string | null,
+    outputKey?: string): NativeEvidenceRefAssessment =>
+    ({ ref: input.ref, kind: "document", outcome, reasonCode, durableRecordId, ...(outputKey ? { outputKey } : {}) });
+  const [output] = await readTaskDocumentOutputs(input.db, {
+    companyId: input.companyId, issueId: input.issueId, documentId: input.documentId, lock: false,
+  });
+  if (!output) return assessment("missing", "document_missing", null);
+  const declared = orchestrationCompletionSchema.safeParse(input.contract.v7);
+  const required = declared.success
+    ? declared.data.requiredOutputs.find((entry) => entry.kind === "task_document" && entry.key === output.key)
+    : undefined;
+  if (!required) return assessment("unverifiable", "document_output_not_declared", output.doc.id);
+  const check = await checkTaskDocumentOutput(input.db, {
+    companyId: input.companyId, output, jsonSchema: required.jsonSchema, lock: false,
+  });
+  if (check.status === "missing") return assessment("missing", "document_output_missing", output.doc.id);
+  if (output.doc.latestRevisionId !== input.revisionId) return assessment("rejected", "document_revision_not_latest", input.revisionId);
+  if (!check.revisionCurrent) return assessment("rejected", "document_revision_not_current", input.revisionId);
+  if (check.schemaValid === false) return assessment("rejected", "document_schema_mismatch", input.revisionId);
+  if (check.revision?.createdByRunId !== input.runId) return assessment("unverifiable", "document_revision_not_from_run", input.revisionId);
+  // The Run's server-written semantic receipt names the key and revision the
+  // write produced (a revision belongs to one document); its input hashes to
+  // the tool invocation's arguments hash, as for the other Native output receipts.
+  const [run] = await input.db.select({ resultJson: heartbeatRuns.resultJson }).from(heartbeatRuns)
+    .where(and(eq(heartbeatRuns.companyId, input.companyId), eq(heartbeatRuns.id, input.runId))).limit(1);
+  const receiptArgumentHashes = [...new Set(Object.values(record(record(run?.resultJson).semanticToolReceipts)).map(record)
+    .filter((receipt) => {
+      const written = record(record(receipt.result).document);
+      return receipt.operationId === "write_document" && written.key === output.key &&
+        written.latestRevisionId === input.revisionId;
+    })
+    .map((receipt) => nativeSha256(receipt.input)))];
+  const charged = receiptArgumentHashes.length === 0 ? [] : await input.db.select({ id: toolInvocations.id }).from(toolInvocations)
+    .innerJoin(orchestrationToolCharges, and(
+      eq(orchestrationToolCharges.companyId, toolInvocations.companyId),
+      eq(orchestrationToolCharges.invocationId, toolInvocations.id),
+    ))
+    .where(and(
+      eq(toolInvocations.companyId, input.companyId),
+      eq(toolInvocations.runId, input.runId),
+      eq(toolInvocations.issueId, input.issueId),
+      eq(toolInvocations.toolName, "write_document"),
+      eq(toolInvocations.status, "succeeded"),
+      inArray(toolInvocations.argumentsHash, receiptArgumentHashes),
+    )).limit(1);
+  if (charged.length === 0) return assessment("unverifiable", "document_write_not_charged", input.revisionId);
+  return assessment("accepted", "task_document_output_current", input.revisionId, output.key);
+}
+
+/** Task document evidence is evidence for its own output criterion only. */
+function taskDocumentEvidenceForCriterion(entry: NativeEvidenceRefAssessment, criterionId: string): NativeEvidenceRefAssessment {
+  if (entry.kind !== "document" || entry.outcome !== "accepted" || criterionId === `output_${entry.outputKey}`) return entry;
+  return { ...entry, outcome: "unverifiable", reasonCode: "document_evidence_other_criterion" };
+}
+
 async function classifyEvidenceRef(input: {
   db: Db;
   companyId: string;
   issueId: string;
   runId: string;
   ref: string;
+  contract: Record<string, unknown>;
 }): Promise<NativeEvidenceRefAssessment> {
   const eventMatch = /^event:(\d+)$/.exec(input.ref);
   if (eventMatch) {
@@ -141,6 +229,13 @@ async function classifyEvidenceRef(input: {
         : "run_event_has_no_authoritative_evidence_verdict",
       durableRecordId: String(event.id),
     };
+  }
+
+  const documentMatch = TASK_DOCUMENT_REF.exec(input.ref);
+  if (documentMatch) {
+    return classifyTaskDocumentRef({
+      ...input, documentId: documentMatch[1]!.toLowerCase(), revisionId: documentMatch[2]!.toLowerCase(),
+    });
   }
 
   const workProductId = uuidRef(input.ref, ["work_product", "work-product", "artifact"]);
@@ -277,7 +372,8 @@ export async function classifyNativeEvidence(input: {
     const refs = claimed && Array.isArray(claimed.evidenceRefs)
       ? claimed.evidenceRefs.flatMap((value) => text(value) ? [text(value)!] : [])
       : [];
-    const evidenceRefs = await Promise.all(refs.map(resolveRef));
+    const evidenceRefs = (await Promise.all(refs.map(resolveRef)))
+      .map((entry) => taskDocumentEvidenceForCriterion(entry, criterionId));
     let outcome: NativeEvidenceOutcome;
     let reasonCode: string;
     if (!contractRevisionMatches) {
@@ -315,7 +411,11 @@ export async function classifyNativeEvidence(input: {
     const commandOrCheck = entry.commandOrCheck;
     const claimStatus = entry.status;
     const ref = entry.artifactRef;
-    const evidenceRef = ref ? await resolveRef(ref) : null;
+    const resolvedRef = ref ? await resolveRef(ref) : null;
+    // A current Task document proves who produced an output, not that a check passed.
+    const evidenceRef: NativeEvidenceRefAssessment | null = resolvedRef?.kind === "document" && resolvedRef.outcome === "accepted"
+      ? { ...resolvedRef, outcome: "unverifiable", reasonCode: "document_evidence_not_verification" }
+      : resolvedRef;
     const common = { commandOrCheck, claimStatus, evidenceRef, reportedReasonCode: entry.reasonCode, detail: entry.detail };
     if (claimStatus === "failed") return { ...common, outcome: "rejected" as const, reasonCode: "verification_reported_failed" };
     if (claimStatus === "not_run") return { ...common, outcome: "missing" as const, reasonCode: "verification_not_run" };
