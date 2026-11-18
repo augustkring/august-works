@@ -184,6 +184,9 @@ export async function withManagedChannelCloseSource(input: {
         if (!principal) throw new Error("managed_close_source_principal_missing");
         await db.insert(chatIdentityLinks).values({ companyId, endpointId: endpoint.id, principalId: principal.id,
           paperclipUserId: actor.userId, status: "linked", confirmedAt: new Date() });
+        // A canonical Native channel conversation requires an active endpoint
+        // (C2c): finish Slack setup through the real activation path.
+        await service.finishSlackSetup(endpoint.id, actor.userId);
         const currentCallbacks = (() => callbacks as { onMessage?: (input: unknown) => Promise<unknown> } | null)();
         if (!currentCallbacks?.onMessage) throw new Error("managed_close_source_callback_missing");
         const onMessage = currentCallbacks.onMessage;

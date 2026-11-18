@@ -238,7 +238,7 @@ import {
 import { documentService, type DocumentRevisionSourceCapture } from "./documents.js";
 import { getTaskPlanContext } from "./task-plan-context.js";
 import { selectNativeHeartbeatBackend } from "./orchestration/native-draft-runtime.js";
-import { buildNativeBootstrapSourceSet, captureNativeTaskWakeSource, exactNativeTaskContinuation, type NativeBootstrapSourceClosure,
+import { buildNativeBootstrapSourceSet, captureNativeTaskWakeSource, exactNativeTaskContinuation, nativeTaskWakeTaskProjection, type NativeBootstrapSourceClosure,
   prepareNativeTurnWithContext, type NativePreparedSourceCandidate, type NativeRenderedSourceReference } from "./native-runtime/native-execution-input.js";
 import { managedAgentProfileService } from "./managed-agent-profiles.js";
 import { remoteAgentProfileService } from "./remote-agent-profiles.js";
@@ -24685,9 +24685,11 @@ export function heartbeatService(
                 nativeReviewWitness: nativeReviewWakeWitness, continuationCapture: closedTaskContinuation, ordinaryPlanRead,
                 persistedWakeReason: readNonEmptyString(parseObject(run.contextSnapshot).wakeReason),
                 checkoutRunId: issueContext?.checkoutRunId ?? null,
-                task: { id: issueRef.id, identifier: issueRef.identifier, title: issueRef.title,
+                // A conversation wake (web or linked-Human channel) never renders
+                // the Task description, so its exact projection has none.
+                task: nativeTaskWakeTaskProjection({ id: issueRef.id, identifier: issueRef.identifier, title: issueRef.title,
                   description: issueContext?.description ?? null, status: issueRef.status,
-                  priority: issueRef.priority, workMode: issueRef.workMode },
+                  priority: issueRef.priority, workMode: issueRef.workMode }, isConversationExecutionScope(issueContext)),
                 commentSources: inlineWakeCommentSourceCaptures.map(capture => capture.input), payload: context.paperclipWake,
                 ...(nativeLivenessTrigger ? { livenessTrigger: nativeLivenessTrigger } : {}),
                 ...(process.env.PAPERCLIP_NATIVE_SOURCE_CLOSURE_DIAGNOSTICS === "1"

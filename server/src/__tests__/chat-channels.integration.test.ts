@@ -131,6 +131,7 @@ import {
   readRuntimeChannelConversationScope,
   runtimeConversationGeneration,
   runtimeConversationOwnerExact,
+  runtimeConversationTaskCommentFacets,
 } from "../services/runtime/runtime-conversation-owner.js";
 import { admitMockedLegacyDispatch, resetMockedLegacyDispatch } from "./helpers/mocked-legacy-paid-dispatch.js";
 import type { AuthorizationActor } from "../services/authorization.js";
@@ -54251,6 +54252,35 @@ describeEmbeddedPostgres("chat channel control-plane integration", () => {
         sessionGeneration: conversation.sessionGeneration, endpointId: endpoint.id, provider: "slack" });
       expect(runtimeConversationOwnerExact(current.task, current.run, current.scope)).toBe(true);
       expect(runtimeConversationGeneration(current.task, current.scope)).toBe(conversation.sessionGeneration);
+      // C2c: the platform opened this Task from the inbound message, so its
+      // closed snapshot has no inputs. The pre-receipt gate proves the turn's
+      // comment through the current channel owner, not the web opening comment.
+      const taskInputs = (current.task.payloadSourceSnapshot as { inputs?: unknown[] } | null)?.inputs ?? null;
+      expect(taskInputs).toEqual([]);
+      const turnCommentId = current.scope!.sourceCommentId;
+      expect(turnCommentId).toBe((current.run.contextSnapshot as Record<string, unknown>).wakeCommentId);
+      const commentFacets = (scope: typeof current.scope, inputs: readonly unknown[] | null = taskInputs,
+        requestCommentId: string | null = turnCommentId) => Object.values(runtimeConversationTaskCommentFacets({
+        task: current.task, run: current.run, channelScope: scope, taskSnapshotInputs: inputs, requestCommentId,
+      })).every(Boolean);
+      expect(commentFacets(current.scope)).toBe(true);
+      // The web rule (Task bound to its one opening Human comment) refused every channel turn.
+      expect(commentFacets(null)).toBe(false);
+      // Negative: another or missing comment, an invalid or non-empty snapshot,
+      // a scope for another Run or Task.
+      const webComment = { kind: "comment", issueId: current.task.id, commentId: turnCommentId,
+        sourceVersion: "1", contentHash: "a".repeat(64) };
+      expect(commentFacets(current.scope, taskInputs, randomUUID())).toBe(false);
+      expect(commentFacets(current.scope, taskInputs, null)).toBe(false);
+      expect(commentFacets(current.scope, null)).toBe(false);
+      expect(commentFacets(current.scope, [webComment])).toBe(false);
+      expect(commentFacets({ ...current.scope!, runId: randomUUID() })).toBe(false);
+      expect(commentFacets({ ...current.scope!, issueId: randomUUID() })).toBe(false);
+      expect(commentFacets({ ...current.scope!, sourceCommentId: randomUUID() })).toBe(false);
+      // Without a scope the web rule is unchanged.
+      expect(commentFacets(null, [webComment])).toBe(true);
+      expect(commentFacets(null, [webComment], randomUUID())).toBe(false);
+      expect(commentFacets(null, [{ ...webComment, issueId: randomUUID() }])).toBe(false);
       // A scope never transfers to another Agent, Human or Run.
       expect(runtimeConversationOwnerExact(current.task, { ...current.run, agentId: fixture.replacementAgentId }, current.scope)).toBe(false);
       expect(runtimeConversationOwnerExact(current.task, { ...current.run, responsibleUserId: "other-user" }, current.scope)).toBe(false);

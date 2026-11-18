@@ -188,7 +188,8 @@ function safeNativePreReceiptFailedChecks(error: unknown): string[] {
     "comment_source_snapshotAndRequestCommentMatch", "comment_source_wakeCommentIdMatches", "comment_source_markdownMapVersion",
     "comment_source_markdownDigestValid", "comment_source_markdownLengthValid", "comment_source_executionPromptAvailable",
     "comment_source_promptContainsMarkdownLength", "comment_source_promptMarkdownSuffixMatches",
-    "comment_source_taskReferencePresent", "comment_source_commentReferencePresent"]);
+    "comment_source_taskReferencePresent", "comment_source_commentReferencePresent",
+    "comment_source_channelTaskSnapshotNoInputs", "comment_source_channelOwnerCommentMatches"]);
   return message.slice(prefix.length).split(",").filter((value, index, all) => all.indexOf(value) === index && allowed.has(value)).slice(0, 16);
 }
 

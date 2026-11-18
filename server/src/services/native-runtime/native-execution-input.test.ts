@@ -5,7 +5,7 @@ import type { ExecutionContinuationEnvelope, AskUserQuestionsInteraction } from 
 import { formatDurableQuestionResponseSummary } from "../question-response-delivery.js";
 import { buildNativeCompletionContract } from "./completion-contracts.js";
 import { renderPaperclipWakePrompt } from "@paperclipai/adapter-utils/server-utils";
-import { buildNativeBootstrapSourceSet, buildNativeExecutionInput, captureNativeTaskWakeSource, nativeTaskWakeGuidanceSourceMatches,
+import { buildNativeBootstrapSourceSet, buildNativeExecutionInput, captureNativeTaskWakeSource, nativeTaskWakeGuidanceSourceMatches, nativeTaskWakeTaskProjection,
   nativeAnsweredQuestionContinuationSource, exactNativeInitialTaskContinuation, exactNativeTaskContinuation } from "./native-execution-input.js";
 import type { NativeRenderedSourceReference } from "./native-execution-input.js";
 import type { NativeInteractionResponseEnvelope } from "../../vendor/paperclip-runner/index.js";
@@ -576,6 +576,45 @@ describe("native bootstrap rendered-source closure", () => {
       responsibleUserId: humanId } as unknown as Parameters<typeof captureNativeTaskWakeSource>[0]["nativeReviewWitness"] })).toBeNull();
     // Any change in the admitted record changes the source identity.
     expect(wake({ livenessTrigger: { ...trigger, sourceSessionId: "session-other" } })?.contentHash).not.toBe(source?.contentHash);
+  });
+
+  // C2c: a Slack channel Task has a server description ("Started from Slack: …")
+  // that a conversation wake never renders. The expected projection must match
+  // the rendered wake, or the channel turn has no source closure.
+  it("binds a conversation wake to the Task projection it renders, without the description", () => {
+    const companyId = randomUUID(), runId = randomUUID(), issueId = randomUUID();
+    const task = { id: issueId, identifier: "SLK-1", title: "answer in this conversation",
+      description: "Started from Slack: durable-retry", status: "in_progress", priority: "medium", workMode: "standard" };
+    const payload = (description: string | null) => ({ reason: "on_demand", executionContinuation: null,
+      attachmentOmissions: [], externalChatProvider: null, recovery: null,
+      issue: { id: issueId, identifier: task.identifier, title: task.title, description, descriptionTruncated: false,
+        status: task.status, priority: task.priority, workMode: task.workMode },
+      agentMessage: null, childIssueSummaries: [], childIssueSummaryTruncated: false, dispositionRepair: null,
+      livenessContinuation: null, interactionKind: null, interactionStatus: null, interactionId: null, sourceRunId: null,
+      externalChatQuestionResponse: null, externalInteractionContinuation: false, checkboxSelection: null,
+      checkedOutByHarness: false, externalChatExecutionBound: false, simplifiedEnglishInteractions: false,
+      dependencyBlockedInteraction: false, treeHoldInteraction: false, activeTreeHold: {}, unresolvedBlockerIssueIds: [],
+      unresolvedBlockerSummaries: [], executionStage: null, taskWatchdog: null, skillTest: null, continuationSummary: null,
+      commentIds: [], latestCommentId: null, comments: [], annotationDeltas: [], planReviewContext: null,
+      documentReviewContext: null, commentWindow: { requestedCount: 0, includedCount: 0, missingCount: 0 },
+      truncated: false, fallbackFetchNeeded: false });
+    const capture = (conversation: boolean, rendered: string | null) => {
+      const diagnostics: string[] = [];
+      const source = captureNativeTaskWakeSource({ companyId, runId, issueId, sourceVersion: "1",
+        persistedWakeReason: "on_demand", task: nativeTaskWakeTaskProjection(task, conversation), payload: payload(rendered),
+        onDiagnostic: reason => diagnostics.push(reason) });
+      return { source, diagnostics };
+    };
+    // A conversation wake renders no description and is bound to that projection.
+    expect(nativeTaskWakeTaskProjection(task, true)).toEqual({ ...task, description: null });
+    expect(capture(true, null).source).toMatchObject({ kind: "native_task_wake", runId, issueId });
+    // Pre-fix behaviour: the capture kept the server description and refused the wake.
+    expect(capture(false, null)).toEqual({ source: null, diagnostics: ["task_projection"] });
+    // A conversation wake may not smuggle the description back in.
+    expect(capture(true, task.description)).toEqual({ source: null, diagnostics: ["task_projection"] });
+    // An ordinary Task wake still binds its exact description.
+    expect(capture(false, task.description).source).toMatchObject({ kind: "native_task_wake" });
+    expect(capture(false, "Another description").source).toBeNull();
   });
 
   it("keeps later readable Human history distinct from the admitted trigger author", () => {

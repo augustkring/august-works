@@ -94,7 +94,8 @@ import { resolvePaperclipRunnerProviderProfile } from "../native-runtime/provide
 import type { workerModelGateway } from "../orchestration/worker-model-gateway.js";
 import { verifyRuntimeToolsToken, type RuntimeToolsTokenClaims } from "../../runtime-tools-token.js";
 import { findNativeChatWorkspaceScope, nativeChatWorkspaceCwd } from "../native-runtime/native-chat-workspace.js";
-import { readRuntimeChannelConversationScope, runtimeConversationGeneration, runtimeConversationOwnerExact } from "./runtime-conversation-owner.js";
+import { readRuntimeChannelConversationScope, runtimeConversationGeneration, runtimeConversationOwnerExact,
+  runtimeConversationTaskCommentFacets } from "./runtime-conversation-owner.js";
 import { assertNativePayloadSourceSetCurrent, assertNativeTaskSourceOwnerCurrent, assertNativeWorkspaceMetadataSourcesCurrent } from "../native-direct-input.js";
 import { lockAnalyticalCompany } from "../analytical-privacy.js";
 import { lockMemoryPrivacy } from "../memory/memory-privacy.js";
@@ -4310,8 +4311,6 @@ export function runtimeControlService(
         const filesystem = source.policy.compilation.compiledPolicy.filesystem;
         const readRoots = Array.isArray(filesystem?.readPaths) ? filesystem.readPaths : [];
         const writeRoots = Array.isArray(filesystem?.writePaths) ? filesystem.writePaths : [];
-        const snapshotComment = taskSnapshot.success && taskSnapshot.data.inputs.length === 1
-          ? nativePayloadSourceInputSchema.safeParse(taskSnapshot.data.inputs[0]) : null;
         const commentId = capturedComment?.success && capturedComment.data.kind === "comment"
           ? capturedComment.data.commentId : null;
         const renderedMarkdownLength = typeof markdownMap.renderedMarkdownLength === "number" &&
@@ -4332,16 +4331,15 @@ export function runtimeControlService(
           source.run.runtimeMode === "native" && source.run.scopeKind === "issue" && source.run.nativeIssueId === task.id &&
           contextSnapshot.conversationSessionGeneration === generation && source.manifest.runId === source.run.id &&
           source.manifest.agentId === source.run.agentId && source.manifest.manifest.responsibleUserId === source.run.responsibleUserId;
+        const taskCommentFacets = runtimeConversationTaskCommentFacets({
+          task, run: source.run, channelScope, requestCommentId: commentId,
+          taskSnapshotInputs: taskSnapshot.success ? taskSnapshot.data.inputs : null,
+        });
         const currentCommentFacets = {
-          taskSnapshotSingleInput: taskSnapshot.success && taskSnapshot.data.inputs.length === 1,
-          snapshotInputComment: snapshotComment?.success === true && snapshotComment.data.kind === "comment",
-          snapshotInputIssueBound: snapshotComment?.success === true && snapshotComment.data.kind === "comment" &&
-            snapshotComment.data.issueId === task.id,
+          ...taskCommentFacets,
           requestInputComment: capturedComment?.success === true && capturedComment.data.kind === "comment",
           requestInputIssueBound: capturedComment?.success === true && capturedComment.data.kind === "comment" &&
             capturedComment.data.issueId === task.id,
-          snapshotAndRequestCommentMatch: snapshotComment?.success === true && snapshotComment.data.kind === "comment" &&
-            commentId === snapshotComment.data.commentId,
           wakeCommentIdMatches: commentId !== null && contextSnapshot.wakeCommentId === commentId,
           markdownMapVersion: markdownMap.version === 1,
           markdownDigestValid: typeof markdownMap.renderedMarkdownDigest === "string" &&

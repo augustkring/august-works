@@ -926,6 +926,17 @@ export function exactNativeOrdinaryPlanContext(input: {
       commentCount: 0, includedCommentCount: 0, omittedCommentCount: 0 }, limits: { ...PLAN_REVIEW_CONTEXT_LIMITS }, truncated: false });
 }
 
+/** The server Task projection a Native wake must render exactly. A
+ * conversation wake (web Task columns or a current linked-Human channel owner)
+ * never renders the Task description (`buildPaperclipWakePayload`), so its
+ * expected description is null. `conversation` must come from server state. */
+export function nativeTaskWakeTaskProjection(task: { id: string; identifier: string | null; title: string;
+  description: string | null; status: string; priority: string; workMode: string }, conversation: boolean) {
+  return { id: task.id, identifier: task.identifier, title: task.title,
+    description: conversation ? null : task.description, status: task.status, priority: task.priority,
+    workMode: task.workMode };
+}
+
 export function captureNativeTaskWakeSource(input: {
   companyId: string;
   runId: string;
