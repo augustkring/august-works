@@ -11,7 +11,7 @@ import { createConnection, Socket } from "node:net";
 import { createManagedModelTunnelAssociations, type ModelChannel, type ManagedModelTunnel } from "./managed-native-model-transport.js";
 import { collectRetainedConformanceObservations, type NativeConformanceRetainedObservations } from "./managed-native-conformance-observations.js";
 import { createServer as createHttpsServer } from "node:https";
-import { connect as connectTls } from "node:tls";
+import { connect as connectTls, getCACertificates, setDefaultCACertificates } from "node:tls";
 import { execFile, execFileSync } from "node:child_process";
 import express, { type Express as ExpressApp, type Request as ExpressRequest } from "express";
 import { and, desc, eq, inArray, sql } from "drizzle-orm";
@@ -666,6 +666,15 @@ export async function withManagedNativeHeartbeatFixture<T>(input: Omit<FrameInpu
     next();
   });
   brokerApp.use(runtimeConnectionIntentRoutes(db, gateway));
+  // Production serves the runtime-tools routes and the product API (/api) from
+  // one origin, PAPERCLIP_API_URL, and server-side Native tools such as
+  // resolve_review call that origin's existing routes. The broker is that
+  // origin here, so it hands /api to the fixture's product API app (set below).
+  let productApi: ExpressApp | null = null;
+  brokerApp.use((req, res, next) => {
+    if (!productApi || !req.path.startsWith("/api/")) { next(); return; }
+    productApi(req, res, next);
+  });
   brokerApp.use((error: unknown, req: express.Request, _res: express.Response, next: express.NextFunction) => {
     const fact = brokerRequestByObject.get(req);
     const diagnostic = error && typeof error === "object" ? error as Error & {
@@ -860,6 +869,11 @@ export async function withManagedNativeHeartbeatFixture<T>(input: Omit<FrameInpu
     } finally { clearTimeout(timeout); tls?.destroy(); raw.destroy(); }
   }
   process.env.NODE_EXTRA_CA_CERTS = certBundlePath;
+  // NODE_EXTRA_CA_CERTS is read only when a process starts, so this test
+  // process's own calls to PAPERCLIP_API_URL (the broker) trust the fixture CA
+  // through its default CA list until teardown restores it.
+  const priorDefaultCaCertificates = getCACertificates("default");
+  setDefaultCACertificates([...priorDefaultCaCertificates, await readFile(caCertPath, "utf8")]);
   if (input.sandboxRelay) {
     const runnerPublicUrl = new URL(origin);
     runnerPublicUrl.protocol = "wss:";
@@ -1257,6 +1271,7 @@ export async function withManagedNativeHeartbeatFixture<T>(input: Omit<FrameInpu
   });
   app.use(errorHandler);
   const humanApi = { app, humanCookie };
+  productApi = app;
   let managedSignoff: { app: ExpressApp; humanCookie: string;
     agentApiTokens: { executor: string; reviewer: string } } | null = null;
   if (managedAgentIds) {
@@ -1449,6 +1464,7 @@ export async function withManagedNativeHeartbeatFixture<T>(input: Omit<FrameInpu
     else process.env.PAPERCLIP_MANAGED_MODEL_BROKER_ORIGIN = prevBroker;
     if (prevJwt === undefined) delete process.env.PAPERCLIP_AGENT_JWT_SECRET; else process.env.PAPERCLIP_AGENT_JWT_SECRET = prevJwt;
     if (prevCa === undefined) delete process.env.NODE_EXTRA_CA_CERTS; else process.env.NODE_EXTRA_CA_CERTS = prevCa;
+    setDefaultCACertificates(priorDefaultCaCertificates);
     if (prevRunnerPublicUrl === undefined) delete process.env.PAPERCLIP_RUNNER_PUBLIC_URL; else process.env.PAPERCLIP_RUNNER_PUBLIC_URL = prevRunnerPublicUrl;
     if (prevRunnerCaBundlePath === undefined) delete process.env.PAPERCLIP_RUNNER_CA_BUNDLE_PATH;
     else process.env.PAPERCLIP_RUNNER_CA_BUNDLE_PATH = prevRunnerCaBundlePath;
