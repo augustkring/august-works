@@ -5,6 +5,7 @@ import {
   nativeRunFinalizations,
   statusDecisionEffects,
   nativeRunResults,
+  orchestrationWorkerAttempts,
   workAssessments,
   issueThreadInteractions,
   issues,
@@ -296,6 +297,31 @@ export async function currentNativeReviewerRun(db: Db, input: {
   // 4. The reviewed source Run is committed and its process cleanup is done.
   return assignment.sourceRun.status === "succeeded" && assignment.sourceRun.nativePhase === "committed" &&
     assignment.sourceRun.nativeProcessCleanupPending === false;
+}
+
+/** MS1h7, MS1h12. The reviewer lane of a Native Run, the one definition used
+ * by the managed model-session owner (`nativeModelSessionOwnerLane`) and by
+ * the Native tool boundary (`withOrchestrationNativeTool`, `resolve_review`
+ * only): the Run's persisted context carries a Native review wake
+ * (`readNativeReviewAssignmentContext`), the Run has no plan worker attempt
+ * row, and it is the current Native completion Reviewer of this exact Run,
+ * Agent, Task and manifest (`currentNativeReviewerRun`). Every fact is read on
+ * `db`, which is the caller's transaction where it has one. Grants nothing by
+ * itself. */
+export async function nativeReviewerLaneRun(db: Db, input: {
+  companyId: string;
+  agentId: string | null;
+  runId: string;
+  issueId: string;
+  manifestId: string;
+  contextSnapshot: unknown;
+}): Promise<boolean> {
+  if (!input.agentId || !readNativeReviewAssignmentContext(input.contextSnapshot)) return false;
+  const [attempt] = await db.select({ id: orchestrationWorkerAttempts.id }).from(orchestrationWorkerAttempts).where(and(
+    eq(orchestrationWorkerAttempts.companyId, input.companyId), eq(orchestrationWorkerAttempts.runId, input.runId))).limit(1);
+  if (attempt) return false;
+  return currentNativeReviewerRun(db, { companyId: input.companyId, agentId: input.agentId, runId: input.runId,
+    issueId: input.issueId, manifestId: input.manifestId });
 }
 
 /** Resolve an already-captured review's immutable owner rows without applying

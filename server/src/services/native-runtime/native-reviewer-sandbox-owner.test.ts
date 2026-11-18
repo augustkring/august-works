@@ -20,6 +20,7 @@ import {
   issueThreadInteractions,
   issues,
   nativeRunResults,
+  orchestrationModelReservations,
   orchestrationPlans,
   orchestrationWorkerAttempts,
   orchestrationWorkers,
@@ -29,6 +30,7 @@ import {
   runtimeSandboxBindings,
   runtimeVersionCatalog,
   statusDecisions,
+  toolInvocations,
   workAssessments,
 } from "@paperclipai/db";
 import { getEmbeddedPostgresTestSupport, startEmbeddedPostgresTestDatabase } from "../../__tests__/helpers/embedded-postgres.js";
@@ -65,7 +67,7 @@ vi.mock("../native-direct-input.js", async importOriginal => ({
   assertNativeWorkspaceMetadataSourcesCurrent: async () => undefined,
 }));
 
-import { currentNativeReviewerRun } from "./native-review-participant.js";
+import { currentNativeReviewerRun, nativeReviewerLaneRun } from "./native-review-participant.js";
 import { createToolGatewayService } from "../tool-gateway.js";
 import { executionSandboxService } from "../execution-sandbox/sandbox-service.js";
 import { currentWorkerNativePreparationRoot, nativeManagedModelIssuer, nativeModelSessionOwnerLane,
@@ -125,7 +127,7 @@ describeDb("current Native completion Reviewer sandbox owner (MS1h2)", () => {
    * and the Reviewer's running Native Run holding the execution lease. The Run
    * source binding and manifests are immutable, so their variants are seeded. */
   async function seed(variant: { reviewerRunIssue?: "other"; manifest?: "none" | "other_human"; reviewIdVersion7?: true;
-    decisionIdVersion7?: true } = {}) {
+    decisionIdVersion7?: true; resultCanonicalSha256?: string } = {}) {
     const interactionId = randomUUID(), decisionId = randomUUID();
     const ids = { company: randomUUID(), otherCompany: randomUUID(), executor: randomUUID(), reviewer: randomUUID(),
       outsider: randomUUID(), issue: randomUUID(), otherIssue: randomUUID(), sourceRun: randomUUID(), reviewerRun: randomUUID(),
@@ -168,7 +170,7 @@ describeDb("current Native completion Reviewer sandbox owner (MS1h2)", () => {
     await db.update(heartbeatRuns).set({ completionContractId: ids.contract }).where(eq(heartbeatRuns.id, ids.sourceRun));
     await db.insert(nativeRunResults).values({ id: ids.result, companyId: ids.company, issueId: ids.issue, runId: ids.sourceRun,
       completionContractId: ids.contract, serverFingerprint: randomUUID(), schemaStatus: "valid", resultJson: {},
-      canonicalSha256: randomUUID() });
+      canonicalSha256: variant.resultCanonicalSha256 ?? randomUUID() });
     await db.insert(workAssessments).values({ id: ids.assessment, companyId: ids.company, issueId: ids.issue, runId: ids.sourceRun,
       contractId: ids.contract, resultId: ids.result, triggerKind: "test", triggerActorCompanyId: ids.company,
       priorIssueStatus: "in_progress", priorStatusVersion: 0, policyVersion: "test", assessmentJson: {}, inputDigest: randomUUID() });
@@ -1038,6 +1040,206 @@ describeDb("current Native completion Reviewer sandbox owner (MS1h2)", () => {
       await expect(qualify(reviewer(ids))).resolves.toEqual(expect.any(String));
       const asked = await arrange(ids);
       await expect(qualify(asked)).resolves.toEqual(refused);
+    });
+  });
+  describe("Native tool boundary: the completion Reviewer's resolve_review under the reviewed plan (MS1h12)", () => {
+    // The path under test (tool boundary, resolve_review, the 0576 tool-charge
+    // trigger) uses none of the gates this file mocks.
+    const sourceCanonical = "a".repeat(64);
+    const fetchCalls: string[] = [];
+    let priorSecret: string | undefined;
+    // Loaded here, not statically, so the module graph (and the mocks) of the
+    // owner tests above stay exactly as they were.
+    let PaperclipRunnerToolAuthority!: typeof import("./paperclip-runner-tool-authority.js").PaperclipRunnerToolAuthority;
+    let withOrchestrationNativeTool!: typeof import("../orchestration/native-tool-boundary.js").withOrchestrationNativeTool;
+    let lockAnalyticalCompany!: typeof import("../analytical-privacy.js").lockAnalyticalCompany;
+    beforeAll(async () => {
+      ({ PaperclipRunnerToolAuthority } = await import("./paperclip-runner-tool-authority.js"));
+      ({ withOrchestrationNativeTool } = await import("../orchestration/native-tool-boundary.js"));
+      ({ lockAnalyticalCompany } = await import("../analytical-privacy.js"));
+      priorSecret = process.env.PAPERCLIP_AGENT_JWT_SECRET;
+      process.env.PAPERCLIP_AGENT_JWT_SECRET = `ms1h12-${randomUUID()}`;
+      vi.stubGlobal("fetch", vi.fn(async (url: string | URL) => {
+        fetchCalls.push(String(url));
+        return new Response("{}", { status: 200 });
+      }));
+      // The flags aw_v7_orchestration_tool_charge requires before it charges a plan.
+      await instanceSettingsService(db as never).getExperimental();
+      await db.execute(sql`update instance_settings set experimental = coalesce(experimental, '{}'::jsonb) ||
+        '{"orchestration_v7":true,"readiness_engine_v7":true,"enableWorkflowsV1":true,"enableFoundationV1":true,"enableContextEngineV1":true,"agent_runtime_fabric_v5":true,"agent_identities_v5":true,"agent_provider_bindings_v5":true}'::jsonb
+        where singleton_key = 'default'`);
+    });
+    afterAll(() => {
+      vi.unstubAllGlobals();
+      if (priorSecret === undefined) delete process.env.PAPERCLIP_AGENT_JWT_SECRET;
+      else process.env.PAPERCLIP_AGENT_JWT_SECRET = priorSecret;
+    });
+
+    /** The reviewed plan: running, the executor's worker on the Task, the
+     * source Run's succeeded attempt, and (unless `none`) the Reviewer Run's
+     * `review_model` reservation in the given state. */
+    async function reviewedPlan(ids: Ids, reservation: "completed" | "dispatched" | "none" = "completed",
+      options: { reviewerWorkerAttempt?: true } = {}) {
+      const plan = randomUUID(), worker = randomUUID(), attempt = randomUUID();
+      await db.insert(orchestrationPlans).values({ id: plan, companyId: ids.company, issueId: ids.issue,
+        completionContractId: ids.contract, mode: "single_worker", actionClass: "internal_draft", riskClass: "C0",
+        supervisionMode: "none", verificationMode: "deterministic", humanOversightMode: "human_review", createdBy: ids.user,
+        budgets: { maxWorkerCount: 2, maxParallelWorkers: 2, maxDelegationDepth: 1, maxRetries: 0, maxWallClockSeconds: 3600,
+          maxToolActions: 5, maxModelCostMinor: 1000 } });
+      await db.insert(orchestrationWorkers).values({ id: worker, companyId: ids.company, planId: plan, issueId: ids.issue,
+        agentId: ids.executor, completionContractId: ids.contract, workerKey: "writer", dependsOn: [],
+        status: "running", attemptCount: 1 });
+      // One worker per plan Task: the Reviewer's worker is on the other Task.
+      const reviewerWorker = randomUUID(), reviewerContract = randomUUID();
+      if (options.reviewerWorkerAttempt) {
+        await db.insert(completionContracts).values({ id: reviewerContract, companyId: ids.company, issueId: ids.otherIssue,
+          revision: 1, schemaVersion: "1", policyVersion: "test", risk: "low", completionAuthority: "agent_claim_policy",
+          incompleteCriteriaPolicy: "block", contractJson: {}, canonicalSha256: randomUUID(), createdByActorType: "agent",
+          createdByActorId: ids.executor });
+        await db.insert(orchestrationWorkers).values({ id: reviewerWorker, companyId: ids.company, planId: plan,
+          issueId: ids.otherIssue, agentId: ids.reviewer, completionContractId: reviewerContract, workerKey: "reviewer-worker",
+          dependsOn: [], status: "running", attemptCount: 1 });
+      }
+      await db.update(orchestrationPlans).set({ status: "running", startedAt: new Date(), version: 2,
+        executionPrincipal: { type: "user", userId: ids.user } }).where(eq(orchestrationPlans.id, plan));
+      await db.insert(orchestrationWorkerAttempts).values({ id: attempt, companyId: ids.company, planId: plan, workerId: worker,
+        agentId: ids.executor, runId: ids.sourceRun, attempt: 1, status: "succeeded", finishedAt: new Date() });
+      // A plan worker attempt that is the Reviewer's own Run.
+      if (options.reviewerWorkerAttempt) await db.insert(orchestrationWorkerAttempts).values({ id: randomUUID(),
+        companyId: ids.company, planId: plan, workerId: reviewerWorker, agentId: ids.reviewer, runId: ids.reviewerRun,
+        attempt: 1, status: "running", executionManifestId: ids.manifest });
+      if (reservation === "none") return { plan, worker, attempt, reservation: null };
+      const expiresAt = new Date(Date.now() + 240_000);
+      const [row] = await db.insert(orchestrationModelReservations).values({ companyId: ids.company, planId: plan,
+        purpose: "review_model", principalUserId: ids.user, idempotencyKey: `review-${randomUUID()}`,
+        requestHash: "1".repeat(64), inputHash: "2".repeat(64), authorityHash: "3".repeat(64), maximumMinor: 10,
+        quote: { version: 1, currency: "USD", provider: "anthropic", model: "fixture-model", maximumMinor: 10,
+          inputTokensUpperBound: 100, maxOutputTokens: 100, sourceSha: "4".repeat(40), tariffHash: "5".repeat(64),
+          qualificationHash: "6".repeat(64), expiresAt: new Date(Date.now() + 300_000).toISOString() } as never,
+        expiresAt, reviewIssueId: ids.issue, reviewInteractionId: ids.interaction, reviewDecisionId: ids.decision,
+        reviewSourceRunId: ids.sourceRun, reviewSourceResultId: ids.result, reviewSourceWorkerId: worker,
+        reviewSourceAgentId: ids.executor, reviewSourceAttemptId: attempt, reviewSourceReceiptDigest: "7".repeat(64),
+        reviewSourceResultCanonicalSha256: sourceCanonical, reviewAgentId: ids.reviewer, reviewRunId: ids.reviewerRun,
+        reviewExecutionManifestId: ids.manifest, reviewPlanVersion: 2 }).returning();
+      await db.update(orchestrationModelReservations).set({ status: "dispatched", dispatchedAt: new Date() })
+        .where(eq(orchestrationModelReservations.id, row!.id));
+      await db.update(orchestrationModelReservations).set({ providerWireReceipt: { version: 1, reservationId: row!.id,
+        requestHash: "1".repeat(64), method: "POST", endpoint: "https://api.anthropic.com/v1/messages",
+        bodySha256: "8".repeat(64), callId: "messages:fixture" } }).where(eq(orchestrationModelReservations.id, row!.id));
+      if (reservation === "completed") await db.update(orchestrationModelReservations).set({ status: "completed",
+        completedAt: new Date(), providerResponseHash: "9".repeat(64), usage: { inputTokens: 1, outputTokens: 1 } })
+        .where(eq(orchestrationModelReservations.id, row!.id));
+      return { plan, worker, attempt, reservation: row!.id };
+    }
+    const authority = (ids: Ids, asked: { companyId: string; agentId: string; runId: string } =
+      { companyId: ids.company, agentId: ids.reviewer, runId: ids.reviewerRun }) =>
+      new PaperclipRunnerToolAuthority(db as never, { ...asked, issueId: ids.issue, apiUrl: "http://127.0.0.1:9",
+        nativeReview: { nativeReviewInteractionId: ids.interaction, nativeReviewDecisionId: ids.decision } as never });
+    const resolve = (ids: Ids, asked?: { companyId: string; agentId: string; runId: string }, callId = `resolve-${randomUUID()}`) =>
+      authority(ids, asked).execute({ tool: "resolve_review", callId, arguments: { decision: "accept" } });
+    /** What the action left behind: plan tool actions, charges and review invocations. */
+    async function ledger(ids: Ids, plan: string) {
+      const [row] = await db.select({ used: orchestrationPlans.toolActionsUsed }).from(orchestrationPlans)
+        .where(eq(orchestrationPlans.id, plan));
+      const charges = await db.execute(sql`select invocation_id from orchestration_tool_charges where plan_id = ${plan}`);
+      const invocations = await db.select().from(toolInvocations).where(and(eq(toolInvocations.companyId, ids.company),
+        eq(toolInvocations.toolName, "resolve_review")));
+      return { used: row!.used, charges: (charges as unknown as Array<{ invocation_id: string }>).map(value => value.invocation_id),
+        invocations };
+    }
+    const reviewerAsked = (ids: Ids) => ({ companyId: ids.company, agentId: ids.reviewer, runId: ids.reviewerRun });
+    const unadmitted = "Native tools require the plan's admitted worker attempt";
+
+    it("admits the current Reviewer's resolve_review and the plan is charged one tool action", async () => {
+      const ids = await seed({ resultCanonicalSha256: sourceCanonical });
+      const { plan } = await reviewedPlan(ids);
+      fetchCalls.length = 0;
+      await expect(resolve(ids, undefined, "resolve-admitted")).resolves.toEqual({ interactionId: ids.interaction, status: "accepted" });
+      const after = await ledger(ids, plan);
+      expect(after.used).toBe(1);
+      expect(after.invocations).toEqual([expect.objectContaining({ runId: ids.reviewerRun, agentId: ids.reviewer,
+        issueId: ids.issue, status: "succeeded", idempotencyKey: `aw-native-tool:${ids.reviewerRun}:resolve-admitted` })]);
+      expect(after.charges).toEqual([after.invocations[0]!.id]);
+      expect(fetchCalls).toEqual([`http://127.0.0.1:9/api/issues/${ids.issue}/interactions/${ids.interaction}/accept`]);
+    });
+
+    it("re-checks the reviewer lane inside the action's transaction", async () => {
+      const ids = await seed({ resultCanonicalSha256: sourceCanonical });
+      const { plan } = await reviewedPlan(ids);
+      const other = await addRun(ids, ids.reviewer);
+      fetchCalls.length = 0;
+      // Hold the shared analytical lock so the action waits inside its
+      // transaction after every earlier check passed, then move the Task's
+      // execution Run (a fact the tool-charge trigger does not read).
+      const { outcome } = await db.transaction(async tx => {
+        await lockAnalyticalCompany(tx as never, ids.company);
+        const pending = resolve(ids).then(() => "resolved", (error: Error) => error.message);
+        for (let i = 0; i < 400; i++) {
+          const waiting = await db.execute(sql`select count(*)::int as n from pg_locks where locktype = 'advisory' and not granted`);
+          if ((waiting as unknown as Array<{ n: number }>)[0]!.n > 0) break;
+          await new Promise(resolve => setTimeout(resolve, 25));
+        }
+        await tx.update(issues).set({ executionRunId: other.runId }).where(eq(issues.id, ids.issue));
+        // Returned in an object so the holder commits before the action continues.
+        return { outcome: pending };
+      });
+      await expect(outcome).resolves.toBe("The Native completion review action is no longer current for this Reviewer Run");
+      expect(await ledger(ids, plan)).toMatchObject({ used: 0, charges: [], invocations: [] });
+      expect(fetchCalls).toEqual([]);
+    });
+
+    it("keeps every other tool of the Reviewer refused under the plan", async () => {
+      const ids = await seed({ resultCanonicalSha256: sourceCanonical });
+      const { plan } = await reviewedPlan(ids);
+      for (const tool of ["read_document", "get_task_context", "list_documents"])
+        await expect(authority(ids).execute({ tool, callId: `${tool}-${randomUUID()}`, arguments: {} })).rejects.toThrow(unadmitted);
+      // The boundary hands its re-check to resolve_review only.
+      const effect = vi.fn(async () => "effect-ran");
+      await expect(withOrchestrationNativeTool(db as never, { companyId: ids.company, issueId: ids.issue, agentId: ids.reviewer,
+        runId: ids.reviewerRun }, { tool: "read_document", callId: "read", arguments: {} }, effect)).rejects.toThrow(unadmitted);
+      expect(effect).not.toHaveBeenCalled();
+      expect(await ledger(ids, plan)).toMatchObject({ used: 0, charges: [], invocations: [] });
+    });
+
+    it.each(refusalCases)("refuses resolve_review from %s", async (_name, arrange) => {
+      const ids = await seed({ resultCanonicalSha256: sourceCanonical });
+      const { plan } = await reviewedPlan(ids);
+      const asked = await arrange(ids);
+      fetchCalls.length = 0;
+      await expect(resolve(ids, asked)).rejects.toThrow();
+      expect(await ledger(ids, plan)).toMatchObject({ used: 0, charges: [], invocations: [] });
+      expect(fetchCalls).toEqual([]);
+    });
+
+    it("refuses resolve_review from a Reviewer Run whose manifest is bound to another Human", async () => {
+      const ids = await seed({ resultCanonicalSha256: sourceCanonical, manifest: "other_human" });
+      const { plan } = await reviewedPlan(ids, "none");
+      await expect(resolve(ids)).rejects.toThrow(unadmitted);
+      expect(await ledger(ids, plan)).toMatchObject({ used: 0, charges: [], invocations: [] });
+      // The shared lane predicate asked about another manifest of this Run.
+      const ids2 = await seed();
+      const [run] = await db.select().from(heartbeatRuns).where(eq(heartbeatRuns.id, ids2.reviewerRun));
+      const lane = (manifestId: string) => nativeReviewerLaneRun(db as never, { companyId: ids2.company, agentId: ids2.reviewer,
+        runId: ids2.reviewerRun, issueId: ids2.issue, manifestId, contextSnapshot: run!.contextSnapshot });
+      await expect(lane(ids2.manifest)).resolves.toBe(true);
+      await expect(lane(randomUUID())).resolves.toBe(false);
+    });
+
+    it("keeps a Reviewer Run with a plan worker attempt on the worker path", async () => {
+      const ids = await seed({ resultCanonicalSha256: sourceCanonical });
+      const { plan } = await reviewedPlan(ids, "completed", { reviewerWorkerAttempt: true });
+      await expect(resolve(ids)).rejects.toThrow("This native tool has no bounded plan action qualification");
+      expect(await ledger(ids, plan)).toMatchObject({ used: 0, charges: [], invocations: [] });
+    });
+
+    it("surfaces the tool-charge refusal without a completed review_model reservation as a typed conflict", async () => {
+      const ids = await seed({ resultCanonicalSha256: sourceCanonical });
+      const { plan } = await reviewedPlan(ids, "dispatched");
+      fetchCalls.length = 0;
+      await expect(resolve(ids)).rejects.toMatchObject({ status: 409,
+        message: "The completion review action has no completed review model reservation under the reviewed plan" });
+      expect(await ledger(ids, plan)).toMatchObject({ used: 0, charges: [], invocations: [] });
+      expect(fetchCalls).toEqual([]);
     });
   });
 });

@@ -1,5 +1,5 @@
 import { exactNativeManagedArtifactCommand } from "../native-runtime/native-artifact-preparation.js";
-import { currentNativeReviewerRun, readNativeReviewAssignmentContext } from "../native-runtime/native-review-participant.js";
+import { currentNativeReviewerRun, nativeReviewerLaneRun, readNativeReviewAssignmentContext } from "../native-runtime/native-review-participant.js";
 import { NATIVE_ATTACHMENT_CLEANUP_PREPARATION_PURPOSE, NATIVE_ATTACHMENT_STAGE_PREPARATION_PURPOSE, parseNativeRemoteAttachmentStageCommand } from "../native-runtime/native-attachment-remote-stage.js";
 import { captureNativeRemoteAttachmentReadbackOwner, captureNativeRemoteAttachmentStageOwner } from "../native-runtime/native-attachment-remote-stage-owner.js";
 import { buildRemoteRunnerFileStageScript, NATIVE_RUNNER_TRUST_BUNDLE_MAX_BYTES, NATIVE_RUNNER_TRUST_BUNDLE_MODE,
@@ -794,7 +794,8 @@ type NativeModelSessionOwnerSource = {
  *   (`readNativeReviewAssignmentContext`) and no plan worker attempt row, that
  *   is the current Native completion Reviewer of this exact Run and manifest
  *   (`currentNativeReviewerRun`). The attempt row and every predicate fact
- *   are read in the caller's transaction.
+ *   are read in the caller's transaction (`nativeReviewerLaneRun`, which the
+ *   Native tool boundary also uses for `resolve_review`, MS1h12).
  * Anything else is null, and every caller refuses it. The Reviewer's call is
  * not plan-less (brief RT-03): its only model capability is `review_model`
  * from `issueForReviewRun`, whose binding names the reviewed plan, plan
@@ -807,12 +808,8 @@ export async function nativeModelSessionOwnerLane(tx: Db, source: NativeModelSes
   if (source.attempt) return source.attempt.runId === source.run.id && source.attempt.status === "running" ? "worker" : null;
   if (source.providerConformanceBootstrap) return "conformance";
   const { run, manifest } = source;
-  if (!run.agentId || !readNativeReviewAssignmentContext(run.contextSnapshot)) return null;
-  const [attempt] = await tx.select({ id: orchestrationWorkerAttempts.id }).from(orchestrationWorkerAttempts).where(and(
-    eq(orchestrationWorkerAttempts.companyId, run.companyId), eq(orchestrationWorkerAttempts.runId, run.id))).limit(1);
-  if (attempt) return null;
-  return await currentNativeReviewerRun(tx, { companyId: run.companyId, agentId: run.agentId, runId: run.id,
-    issueId: source.source.task.id, manifestId: manifest.id }) ? "reviewer" : null;
+  return await nativeReviewerLaneRun(tx, { companyId: run.companyId, agentId: run.agentId, runId: run.id,
+    issueId: source.source.task.id, manifestId: manifest.id, contextSnapshot: run.contextSnapshot }) ? "reviewer" : null;
 }
 
 /** MS1h7. On the `reviewer` lane the Host claim admits only a `review_model`

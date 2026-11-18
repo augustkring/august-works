@@ -17,8 +17,8 @@
   "sourceBaseCommit": "81d3445b98b1cd80ff400ede6bd44ea71d88d735",
   "officialMigrationInterval": {
     "first": 502,
-    "last": 583,
-    "latestOfficialMigration": "0583_native_durable_session_scope_retention",
+    "last": 584,
+    "latestOfficialMigration": "0584_review_model_wire_receipt_call_id",
     "latestOfficialMigrationCommit": null,
     "journalSource": "packages/db/src/migrations/meta/_journal.json"
   },
@@ -246,9 +246,10 @@
         553,
         576,
         580,
-        581
+        581,
+        584
       ],
-      "purpose": "Memory sharing publication provenance; workflow duration width; company-purpose budgets/reservations, package pinning, sandbox claim, durable plugin lifecycle and provider wire receipt immutability; native conversation reservation binding. Migration 0580 extends existing configured durable-execution admission and occupancy to original company export work and unknown allocated writes. Migration 0581 lets the review-model reservation CHECK accept both stored Native result hash forms (plain and sha256:-prefixed).",
+      "purpose": "Memory sharing publication provenance; workflow duration width; company-purpose budgets/reservations, package pinning, sandbox claim, durable plugin lifecycle and provider wire receipt immutability; native conversation reservation binding. Migration 0580 extends existing configured durable-execution admission and occupancy to original company export work and unknown allocated writes. Migration 0581 lets the review-model reservation CHECK accept both stored Native result hash forms (plain and sha256:-prefixed). Migration 0584 adds review_model to the purposes whose provider wire receipt must carry a string call id (aw_v10_provider_wire_receipt_guard from 0553), matching recordWireDispatch.",
       "authority": "Budget/reservation owner and durable provider receipts are authoritative before dispatch; plugin lifecycle rows control admitted runtime state; Memory share publication is explicit and scoped.",
       "durableState": [
         "memory_private_share_publications target binding/source owner",
@@ -274,6 +275,7 @@
         "packages/db/src/migrations/0576_native_review_model_reservations.sql",
         "packages/db/src/migrations/0580_aberrant_karma.sql",
         "packages/db/src/migrations/0581_white_tigra.sql",
+        "packages/db/src/migrations/0584_review_model_wire_receipt_call_id.sql",
         "packages/db/src/schema/company_transfer_runs.ts",
         "server/src/services/company-export-transfers.ts",
         "server/src/services/company-transfer-runs.ts",
@@ -283,6 +285,7 @@
         "server/src/__tests__/company-transfer-runs.test.ts",
         "server/src/__tests__/first-party-support-model-gateway.test.ts",
         "server/src/__tests__/memory-private-share-publication.integration.test.ts",
+        "server/src/__tests__/model-reservation-wire-call-id.integration.test.ts",
         "server/src/__tests__/native-budget-queue-source-binding.integration.test.ts",
         "server/src/__tests__/resource-governance.integration.test.ts"
       ],
@@ -1204,7 +1207,7 @@
     },
     {
       "path": "packages/db/src/migrations/meta/_journal.json",
-      "sha256": "c0662ab3cc45026a672156906c5cc04082330fd479e9cba80b0063836c3cee87"
+      "sha256": "585b915c7a0f0a5758568fbb189829242c03d5413599ed0a6d0e22fed4c4e90c"
     },
     {
       "path": "packages/db/src/native-input-source-protocol.test.ts",
@@ -1640,7 +1643,7 @@
     },
     {
       "path": "server/src/services/native-runtime/native-reviewer-sandbox-owner.test.ts",
-      "sha256": "c88f6d5dcca7879ff211e462f9d0cf2a9ac769667e5e20f8faa4782d159df1df"
+      "sha256": "2d7eea18f13b91708e15ebd4e156d4663b95c83134ba9f612284a36a5eabf66e"
     },
     {
       "path": "packages/db/src/schema/company_transfer_runs.ts",
@@ -1677,6 +1680,18 @@
     {
       "path": "packages/db/src/migrations/meta/0583_snapshot.json",
       "sha256": "fcc60ab584f743482dfbd1ce8232c98f8703171bf4a7afd1877883c60e418f71"
+    },
+    {
+      "path": "packages/db/src/migrations/0584_review_model_wire_receipt_call_id.sql",
+      "sha256": "07bd1cd03a65e128599aebfcc00d07fb27fc2d531a86b6547702ddfd04174dfb"
+    },
+    {
+      "path": "server/src/__tests__/model-reservation-wire-call-id.integration.test.ts",
+      "sha256": "d88fee5e68d088ce26a81c23c5f11d6134fd55f5fe16492a98eb40256e7772f8"
+    },
+    {
+      "path": "packages/db/src/migrations/meta/0584_snapshot.json",
+      "sha256": "745530e204e6a61f20b5b2ad711a368f807f56a6d409d808b5b3b1ceb65ca62f"
     }
   ],
   "sourcePinBasis": "Exact private composed source inventory anchored at sourceHead b1, not equality with its unchanged tree. Only two individually approved code/test pins and two own-documentation pins change from the recovered b1 index; original changed/retired pin history remains preserved. Hash equality is not behavioral or release qualification.",
@@ -1684,13 +1699,13 @@
     "baseCommit": "81d3445b98b1cd80ff400ede6bd44ea71d88d735",
     "command": "git diff --name-status 81d3445b98b1cd80ff400ede6bd44ea71d88d735 -- packages/db/src/migrations",
     "selection": "Union of added/modified/renamed-destination migration SQL files in the source-base git diff and all current journal entries absent from the source-base journal; this catches published journal entries whose SQL payload is still untracked.",
-    "currentAffectedCount": 82,
+    "currentAffectedCount": 83,
     "currentAffectedFirst": "0502_swift_maria_hill",
-    "currentAffectedLast": "0583_native_durable_session_scope_retention"
+    "currentAffectedLast": "0584_review_model_wire_receipt_call_id"
   },
   "sourcePinFinality": "Exact current source hashes after R622 actual PostgreSQL and R623 full typecheck/build; software scope only, no historical status promotion.",
   "latestMigrationPublication": {
-    "migration": "0583_native_durable_session_scope_retention",
+    "migration": "0584_review_model_wire_receipt_call_id",
     "sourceCommit": null,
     "sourceState": "Official generated source with exact current pins and local software receipts.",
     "qualificationScope": "Does not establish fleet cutover, deployed rollback/restore, provider/Host or Human qualification."
@@ -1716,7 +1731,8 @@
     "0580": "Extends existing shared durable-execution policy/admission to export claims and uncertain allocated writes, preserving original Native cleanup predicates, configured limits and Stop/settlement bypass. Adds only a partial active-liability index; no new queue or invented quota.",
     "0581": "Replaces only the review_source_result_canonical_sha256 pattern in orchestration_model_reservation_scope_ck so a review-model reservation accepts the stored Native result hash verbatim in either form (ControlPlanePort plain hex or durable-coordinator sha256: prefix). No backfill; the previous CHECK admitted no plain-hex rows, so no existing row can violate the new one.",
     "0582": "Replaces aw_v7_sandbox_policy_guard with every original clause intact and one alternative to the Task assignee: aw_v10_current_native_reviewer_run, the SQL mirror of currentNativeReviewerRun (pending native completion review addressed to the policy's Agent with this acting Run, Task in review with this execution Run, running Native Run and manifest with the same Human, invokable Reviewer, committed source Run with cleanup done), on a visible Task only. Company-scoped reads; no backfill, no credential or connection authority; a Reviewer policy still carries no credential binding (the broker owner refuses one).",
-    "0583": "Adds aw_native_durable_session_scope_only and replaces aw_erase_workflow_agent_payload (0488) and aw_native_run_input_source_receipt_binding (0545) with every check intact, except that an erased heartbeat_runs profile keeps only a well-formed content-free nativeDurableSessionScope record (instead of NULL) and the receipt guard accepts that record as a cleared profile. No schema change, no backfill."
+    "0583": "Adds aw_native_durable_session_scope_only and replaces aw_erase_workflow_agent_payload (0488) and aw_native_run_input_source_receipt_binding (0545) with every check intact, except that an erased heartbeat_runs profile keeps only a well-formed content-free nativeDurableSessionScope record (instead of NULL) and the receipt guard accepts that record as a cleared profile. No schema change, no backfill.",
+    "0584": "Replaces aw_v10_provider_wire_receipt_guard (0553) with its original definition plus review_model in the expected_call_id purposes, so a review_model wire receipt must carry its exact string provider call id, as recordWireDispatch already requires; endpoint rules, key count, the company-purpose table and every other purpose are unchanged. Function-only; no schema change, no backfill. The guard checks only new receipt writes, and no review_model receipt could be stored before (TypeScript required a string call id and the old guard refused one)."
   },
   "revisionDate": "2026-11-12",
   "sourceHead": "884dbba4a78603a791b65471e41fe950a23e2e4f",
@@ -1795,6 +1811,12 @@
       "migration": "0583_native_durable_session_scope_retention",
       "sourceCommit": null,
       "sourceState": "Trigger-only SQL (drizzle-kit custom) with journal entry and unchanged schema snapshot; embedded PostgreSQL integration regression tests and local migration apply.",
+      "phaseBoundary": "Source inventory and selected software qualification only; prior phase statuses remain unchanged."
+    },
+    {
+      "migration": "0584_review_model_wire_receipt_call_id",
+      "sourceCommit": null,
+      "sourceState": "Trigger-function-only SQL (drizzle-kit custom) with journal entry and unchanged schema snapshot; TypeScript/SQL call-id parity integration test and local migration apply/drift checks.",
       "phaseBoundary": "Source inventory and selected software qualification only; prior phase statuses remain unchanged."
     }
   ],
