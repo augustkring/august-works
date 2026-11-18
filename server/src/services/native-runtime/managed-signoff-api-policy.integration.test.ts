@@ -5,7 +5,7 @@ import { join } from "node:path";
 import request from "supertest";
 import { and, eq, or, sql } from "drizzle-orm";
 import { afterAll, beforeAll, expect, it, vi } from "vitest";
-import { createDb, agentExecutionManifests, agentWakeupRequests, agents, environmentLeases, heartbeatRuns, issues,
+import { createDb, agentExecutionManifests, agentWakeupRequests, agents, environmentLeases, heartbeatRunEvents, heartbeatRuns, issues,
   statusDecisions, statusDecisionEffects, issueThreadInteractions, workAssessments, activityLog, companyMemberships,
   orchestrationModelReservations, orchestrationPlans, toolInvocations } from "@paperclipai/db";
 import { nativePayloadSourceSnapshotSchema, nativeRunInputSourceReceiptSchema, type NativePayloadSourceInput } from "@paperclipai/shared";
@@ -745,7 +745,25 @@ it("captures the exact native completion review source for a real managed Review
       const sourceRun = runs.find(run => run.agentId === executorId)!;
       const reviewerRun = runs.find(run => run.agentId === reviewerId)!;
       expect(sourceRun).toMatchObject({ status: "succeeded", nativePhase: "committed", nativeProcessCleanupPending: false });
-      expect(reviewerRun).toMatchObject({ status: "succeeded", nativePhase: "committed", nativeProcessCleanupPending: false });
+      expect(reviewerRun).toMatchObject({ status: "succeeded", nativePhase: "committed" });
+      // MS1h18. The Reviewer's sandbox is discarded, never checkpointed: its
+      // stop receipt comes only from the controller's destroy release after the
+      // Run's terminal status, so read its cleanup after the drain above.
+      const [settledReviewerRun] = await db.select().from(heartbeatRuns).where(and(eq(heartbeatRuns.companyId, companyId),
+        eq(heartbeatRuns.id, reviewerRun.id))).limit(1);
+      expect(settledReviewerRun).toMatchObject({ status: "succeeded", nativePhase: "committed", nativeProcessCleanupPending: false });
+      const reviewerLeases = await db.select().from(environmentLeases)
+        .where(and(eq(environmentLeases.companyId, companyId), eq(environmentLeases.heartbeatRunId, reviewerRun.id)));
+      expect(reviewerLeases).toHaveLength(1);
+      expect(reviewerLeases[0]).toMatchObject({ status: "expired", cleanupStatus: "success",
+        failureReason: "paperclip_runner_destroy_after_turn" });
+      expect(await verifyNativeCleanupRuntimeState(db, { companyId, runId: reviewerRun.id, leaseId: reviewerLeases[0]!.id },
+        reviewerLeases[0]!.metadata?.remoteExecutionTermination)).toMatchObject({ runId: reviewerRun.id, state: "stopped" });
+      const reviewerEvents = await db.select().from(heartbeatRunEvents).where(and(eq(heartbeatRunEvents.companyId, companyId),
+        eq(heartbeatRunEvents.runId, reviewerRun.id)));
+      expect(reviewerEvents.some(event => event.eventType === "native.remote_workload_stopped")).toBe(true);
+      expect(reviewerEvents.some(event => event.eventType === "lifecycle" &&
+        (event.payload as Record<string, unknown> | null)?.reason === "native_reviewer_workspace_discarded")).toBe(true);
       const [completedReviewPlan] = await db.select().from(orchestrationPlans).where(and(
         eq(orchestrationPlans.companyId, companyId), eq(orchestrationPlans.id, plan.id))).limit(1);
       expect(completedReviewPlan?.status).toBe("running");
