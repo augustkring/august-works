@@ -138,6 +138,20 @@ function reviewBindingFromReservation(row: Reservation): ReviewModelBinding | un
   if (!parsed.success) throw forbidden("Persisted review model reservation binding is incomplete");
   return parsed.data;
 }
+/** Purposes whose provider wire receipt must carry the exact provider call ID.
+ * Every other purpose must record a null call ID. The database mirror is the
+ * expected_call_id list in aw_v10_provider_wire_receipt_guard (migration 0584);
+ * model-reservation-wire-call-id.integration.test.ts keeps the two equal. */
+export const MODEL_RESERVATION_CALL_ID_PURPOSES: ReadonlySet<Reservation["purpose"]> = new Set([
+  "worker_model", "review_model", "conversation_model",
+]);
+export function assertModelReservationWireCallId(purpose: Reservation["purpose"], callId: string | null | undefined): void {
+  if (MODEL_RESERVATION_CALL_ID_PURPOSES.has(purpose)) {
+    if (typeof callId !== "string") throw forbidden("Managed model dispatch requires its exact provider call ID");
+  } else if (callId !== undefined && callId !== null) {
+    throw forbidden("Non-tool model dispatch cannot attach a provider tool call ID");
+  }
+}
 type CompanyPurposeRequest = z.infer<typeof companyPurposeReservationInputSchema>;
 type CompanyPurposeReservation = typeof orchestrationCompanyPurposeReservations.$inferSelect;
 type CompanyPurposeDispatchClaim = {
@@ -1226,11 +1240,7 @@ export function modelReservationService(
             throw conflict("Model tariff or reservation scope changed before provider dispatch");
         }
 
-        if (initial.purpose === "worker_model" || initial.purpose === "review_model" || initial.purpose === "conversation_model") {
-          if (typeof observed.callId !== "string") throw forbidden("Managed model dispatch requires its exact provider call ID");
-        } else if (observed.callId !== undefined && observed.callId !== null) {
-          throw forbidden("Non-tool model dispatch cannot attach a provider tool call ID");
-        }
+        assertModelReservationWireCallId(initial.purpose, observed.callId);
         const expectedEndpoint = initial.purpose === "decision_shadow"
           ? initial.quote.provider === "openrouter" ? "https://openrouter.ai/api/alpha/decisions" : null
           : initial.quote.provider === "anthropic" ? "https://api.anthropic.com/v1/messages" : null;
