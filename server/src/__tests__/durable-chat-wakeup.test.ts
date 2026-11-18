@@ -1300,7 +1300,12 @@ describe("durable inbound chat scheduler receipts", () => {
             .replace(/[A-Za-z0-9_-]{24,}/g, "[opaque]").slice(0, 240),
           nextAction: run?.nextAction, livenessReason: run?.livenessReason,
           sourceProcessCleanupPending: f.sourceRun.nativeProcessCleanupPending, occupied: occupancy?.occupied })).toBe(2);
-        expect(f.providerCallCount()).toBe(revoked ? 0 : 3);
+        // C2e: write_document, then paperclip_finish. Once the server accepts the
+        // terminal semantic result, runnerd's OpenCode driver interrupts the turn
+        // ("Semantic completion accepted.", see managed-opencode-terminal-tools.ts),
+        // so no third model call is made. The earlier 3 counted the reply
+        // fixture's unused end_turn fallback; this path never ran before C2c.
+        expect(f.providerCallCount()).toBe(revoked ? 0 : 2);
         expect(run).toMatchObject({ status: revoked ? "failed" : "succeeded", retryOfRunId: f.sourceRun.id,
           runtimeMode: "native" });
         if (revoked) expect(run.errorCode).toBe("chat_failed_run_retry_not_authorized");

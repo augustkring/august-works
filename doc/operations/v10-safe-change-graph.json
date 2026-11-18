@@ -5587,7 +5587,7 @@
         },
         {
           "path": "server/src/__tests__/durable-chat-wakeup.test.ts",
-          "sha256": "f2ca185278fd6404a33761c5cdc68469ad05b0aba6428e6fcbda5892c3fb22da"
+          "sha256": "8ace0d33dd0f646d084b159a825d67a4d6203f09bf1972a7fd7eba3a6c2a40d2"
         },
         {
           "path": "server/src/__tests__/environment-runtime.test.ts",
@@ -47298,7 +47298,7 @@
       "id": "source:server/src/__tests__/durable-chat-wakeup.test.ts",
       "kind": "current_source_owner",
       "path": "server/src/__tests__/durable-chat-wakeup.test.ts",
-      "sha256": "f2ca185278fd6404a33761c5cdc68469ad05b0aba6428e6fcbda5892c3fb22da",
+      "sha256": "8ace0d33dd0f646d084b159a825d67a4d6203f09bf1972a7fd7eba3a6c2a40d2",
       "changeIds": [
         "SCR-V10-HOTSPOT-02"
       ],
