@@ -76,7 +76,7 @@ describe("PaperclipRunnerToolAuthority", () => {
   async function seedDocumentReader(payloadSourceProtocolVersion = 0) {
     const companyId = randomUUID(), agentId = randomUUID(), runId = randomUUID();
     let issueId: string = randomUUID();
-    const issuePrefix = `RDR${companyId.slice(0, 4).toUpperCase()}`;
+    const issuePrefix = `RDR${companyId.replaceAll("-", "").toUpperCase()}`;
     await db.insert(companies).values({ id: companyId, name: "Document source reader", issuePrefix });
     const currentHuman = await seedCurrentHumanSourceActor(db, [companyId], userId);
     await db.insert(agents).values({ id: agentId, companyId, name: "Document source reader", adapterType: "paperclip_runner", status: "active" });
