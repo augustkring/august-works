@@ -4473,7 +4473,7 @@
         },
         {
           "path": "server/src/routes/issues.ts",
-          "sha256": "48007810f052b69409cc0113e694d7f1b956f7f0bba77ab5e0e0d28c1968cdae"
+          "sha256": "8854fada3e3654cb915c1cb076a9678142cea268889fa72dd624123b0ccd0eb8"
         },
         {
           "path": "server/src/services/agent-runtime-fabric.ts",
@@ -7251,7 +7251,7 @@
         },
         {
           "path": "server/src/routes/issues.ts",
-          "sha256": "48007810f052b69409cc0113e694d7f1b956f7f0bba77ab5e0e0d28c1968cdae"
+          "sha256": "8854fada3e3654cb915c1cb076a9678142cea268889fa72dd624123b0ccd0eb8"
         },
         {
           "path": "server/src/services/company-search.ts",
@@ -7642,7 +7642,7 @@
         },
         {
           "path": "server/src/routes/issues.ts",
-          "sha256": "48007810f052b69409cc0113e694d7f1b956f7f0bba77ab5e0e0d28c1968cdae"
+          "sha256": "8854fada3e3654cb915c1cb076a9678142cea268889fa72dd624123b0ccd0eb8"
         },
         {
           "path": "server/src/services/chat-channels.ts",
@@ -7686,7 +7686,7 @@
         },
         {
           "path": "server/src/services/native-runtime/native-session-executor.ts",
-          "sha256": "22c03f7db7533bf267a51e3a0fb6101c76eae21eaecee039b625b6e03c88169b"
+          "sha256": "38b24933ba0fc0e6fc40c031a3f050ea1055f43701f48df6f0a8fd53bf5c9ff7"
         },
         {
           "path": "server/src/services/native-runtime/native-session-resume.test.ts",
@@ -9216,7 +9216,7 @@
         },
         {
           "path": "server/src/routes/issues.ts",
-          "sha256": "48007810f052b69409cc0113e694d7f1b956f7f0bba77ab5e0e0d28c1968cdae"
+          "sha256": "8854fada3e3654cb915c1cb076a9678142cea268889fa72dd624123b0ccd0eb8"
         },
         {
           "path": "server/src/routes/pipelines.ts",
@@ -9272,7 +9272,7 @@
         },
         {
           "path": "server/src/services/issue-thread-interactions.ts",
-          "sha256": "fa0cdd76b25ddc4ed98b10a217efe6dc407a9bea44daab6fe99ecb632f387cd5"
+          "sha256": "8bbd279090a259197c24c9bb8194242b998caf4b562a053b1ebaf02ad283c021"
         },
         {
           "path": "server/src/services/issues.ts",
@@ -9364,7 +9364,7 @@
         },
         {
           "path": "server/src/services/native-runtime/native-session-executor.ts",
-          "sha256": "22c03f7db7533bf267a51e3a0fb6101c76eae21eaecee039b625b6e03c88169b"
+          "sha256": "38b24933ba0fc0e6fc40c031a3f050ea1055f43701f48df6f0a8fd53bf5c9ff7"
         },
         {
           "path": "server/src/services/native-runtime/native-tool-task-privacy.integration.test.ts",
@@ -9376,7 +9376,7 @@
         },
         {
           "path": "server/src/services/native-runtime/paperclip-runner-tool-authority.ts",
-          "sha256": "aa61910d1b6fd391a7cdc34e1d0cae1c56dd986e054ef6b045c449f8e7854608"
+          "sha256": "e883c3df7073d0e134902941237d393d7f5711eaa2bc20c4274d9909104450e3"
         },
         {
           "path": "server/src/services/native-runtime/status-decision-committer.ts",
@@ -10365,7 +10365,7 @@
         },
         {
           "path": "server/src/services/native-runtime/paperclip-runner-tool-authority.ts",
-          "sha256": "aa61910d1b6fd391a7cdc34e1d0cae1c56dd986e054ef6b045c449f8e7854608"
+          "sha256": "e883c3df7073d0e134902941237d393d7f5711eaa2bc20c4274d9909104450e3"
         },
         {
           "path": "server/src/services/native-runtime/task-reassignment.test.ts",
@@ -10929,7 +10929,7 @@
         },
         {
           "path": "ui/src/pages/IssueDetail.tsx",
-          "sha256": "c0235b4c85888b1317df8dd43e68cdeb4596d649d7a4c45868c45d90600505a3"
+          "sha256": "2fa0c7388af830553a6d1a259c22824c35ccde9487d4c4a0228cbbba132717ce"
         }
       ],
       "kind": "safe_change_record",
@@ -12341,7 +12341,7 @@
         },
         {
           "path": "ui/src/pages/IssueDetail.tsx",
-          "sha256": "c0235b4c85888b1317df8dd43e68cdeb4596d649d7a4c45868c45d90600505a3"
+          "sha256": "2fa0c7388af830553a6d1a259c22824c35ccde9487d4c4a0228cbbba132717ce"
         },
         {
           "path": "ui/src/pages/Pipelines.tsx",
@@ -32121,7 +32121,7 @@
         },
         {
           "path": "server/src/services/company-search-help.generated.ts",
-          "sha256": "2a30caa9da9db1286dbfa4dbae46e2dd8a5ea106b68ed1b5cb963c54c3c1a7b1"
+          "sha256": "17a94e5270a8778e793deef94c0bd79d3bca44ce69ec6630a92f5718ec92f333"
         },
         {
           "path": "server/src/services/task-search.ts",
@@ -32185,11 +32185,11 @@
         },
         {
           "path": "ui/src/i18n/experience/da.json",
-          "sha256": "5f03983c0914f0ae8898914ae7b4dac13aef9488b9668b6782ad4317eed3d939"
+          "sha256": "228aa7e60a1b5d40bdd314badc7a17dabaffe3a97e5093453997f8f5515df2b1"
         },
         {
           "path": "ui/src/i18n/experience/en.json",
-          "sha256": "27a83349d14bb33a2970a47cf6f6cd6cb56dbf87f09a24acb725234bfa4ca0c4"
+          "sha256": "34fe43a721fc99bf145665c5f772c6677ff123b19e1b7b78ecc9d1e14b64923b"
         },
         {
           "path": "ui/src/i18n/index.ts",
@@ -46923,7 +46923,7 @@
       "id": "source:server/src/routes/issues.ts",
       "kind": "current_source_owner",
       "path": "server/src/routes/issues.ts",
-      "sha256": "48007810f052b69409cc0113e694d7f1b956f7f0bba77ab5e0e0d28c1968cdae",
+      "sha256": "8854fada3e3654cb915c1cb076a9678142cea268889fa72dd624123b0ccd0eb8",
       "changeIds": [
         "SCR-V10-HOTSPOT-01",
         "SCR-V10-HOTSPOT-04",
@@ -49837,7 +49837,7 @@
       "id": "source:server/src/services/native-runtime/native-session-executor.ts",
       "kind": "current_source_owner",
       "path": "server/src/services/native-runtime/native-session-executor.ts",
-      "sha256": "22c03f7db7533bf267a51e3a0fb6101c76eae21eaecee039b625b6e03c88169b",
+      "sha256": "38b24933ba0fc0e6fc40c031a3f050ea1055f43701f48df6f0a8fd53bf5c9ff7",
       "changeIds": [
         "SCR-V10-HOTSPOT-05",
         "SCR-V10-HOTSPOT-06"
@@ -50755,7 +50755,7 @@
       "id": "source:server/src/services/issue-thread-interactions.ts",
       "kind": "current_source_owner",
       "path": "server/src/services/issue-thread-interactions.ts",
-      "sha256": "fa0cdd76b25ddc4ed98b10a217efe6dc407a9bea44daab6fe99ecb632f387cd5",
+      "sha256": "8bbd279090a259197c24c9bb8194242b998caf4b562a053b1ebaf02ad283c021",
       "changeIds": [
         "SCR-V10-HOTSPOT-06"
       ],
@@ -50982,7 +50982,7 @@
       "id": "source:server/src/services/native-runtime/paperclip-runner-tool-authority.ts",
       "kind": "current_source_owner",
       "path": "server/src/services/native-runtime/paperclip-runner-tool-authority.ts",
-      "sha256": "aa61910d1b6fd391a7cdc34e1d0cae1c56dd986e054ef6b045c449f8e7854608",
+      "sha256": "e883c3df7073d0e134902941237d393d7f5711eaa2bc20c4274d9909104450e3",
       "changeIds": [
         "SCR-V10-HOTSPOT-06",
         "SCR-V10-HOTSPOT-07"
@@ -51792,7 +51792,7 @@
       "id": "source:ui/src/pages/IssueDetail.tsx",
       "kind": "current_source_owner",
       "path": "ui/src/pages/IssueDetail.tsx",
-      "sha256": "c0235b4c85888b1317df8dd43e68cdeb4596d649d7a4c45868c45d90600505a3",
+      "sha256": "2fa0c7388af830553a6d1a259c22824c35ccde9487d4c4a0228cbbba132717ce",
       "changeIds": [
         "SCR-V10-HOTSPOT-10",
         "SCR-V10-HOTSPOT-16"
@@ -72540,7 +72540,7 @@
       "id": "source:server/src/services/company-search-help.generated.ts",
       "kind": "current_source_owner",
       "path": "server/src/services/company-search-help.generated.ts",
-      "sha256": "2a30caa9da9db1286dbfa4dbae46e2dd8a5ea106b68ed1b5cb963c54c3c1a7b1",
+      "sha256": "17a94e5270a8778e793deef94c0bd79d3bca44ce69ec6630a92f5718ec92f333",
       "changeIds": [
         "SCR-V10-PRODUCT-IDENTITY-HELP-LANGUAGE"
       ],
@@ -72780,7 +72780,7 @@
       "id": "source:ui/src/i18n/experience/da.json",
       "kind": "current_source_owner",
       "path": "ui/src/i18n/experience/da.json",
-      "sha256": "5f03983c0914f0ae8898914ae7b4dac13aef9488b9668b6782ad4317eed3d939",
+      "sha256": "228aa7e60a1b5d40bdd314badc7a17dabaffe3a97e5093453997f8f5515df2b1",
       "changeIds": [
         "SCR-V10-PRODUCT-IDENTITY-HELP-LANGUAGE"
       ],
@@ -72795,7 +72795,7 @@
       "id": "source:ui/src/i18n/experience/en.json",
       "kind": "current_source_owner",
       "path": "ui/src/i18n/experience/en.json",
-      "sha256": "27a83349d14bb33a2970a47cf6f6cd6cb56dbf87f09a24acb725234bfa4ca0c4",
+      "sha256": "34fe43a721fc99bf145665c5f772c6677ff123b19e1b7b78ecc9d1e14b64923b",
       "changeIds": [
         "SCR-V10-PRODUCT-IDENTITY-HELP-LANGUAGE"
       ],

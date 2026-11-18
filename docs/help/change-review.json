@@ -21,10 +21,10 @@
     {
       "source": "ui/src/pages/IssueDetail.tsx",
       "articleId": "approvals-and-stop",
-      "sourceSha256": "c0235b4c85888b1317df8dd43e68cdeb4596d649d7a4c45868c45d90600505a3",
+      "sourceSha256": "2fa0c7388af830553a6d1a259c22824c35ccde9487d4c4a0228cbbba132717ce",
       "articleSha256": "601860635ecfdbef65d0703b3966a9af6429ec84d78d857ab85ac9863b77ba60",
       "decision": "no_change",
-      "rationale": "The current Task page still gates pause and resume actions on the current run and session. Descendant resume eligibility changed, but the article directs operators to the current task action and status, so its instructions remain accurate."
+      "rationale": "2026-11-18 MS1h14 review: the Task activity adds one note under an accepted completion review that awaits its plan\u2019s verification (EN/DA); approval, stop, recovery, retry and workflow controls on the Task page are unchanged, so this article stays accurate. The current Task page still gates pause and resume actions on the current run and session. Descendant resume eligibility changed, but the article directs operators to the current task action and status, so its instructions remain accurate."
     },
     {
       "source": "ui/src/pages/ApprovalDetail.tsx",
@@ -45,10 +45,10 @@
     {
       "source": "ui/src/pages/IssueDetail.tsx",
       "articleId": "approvals-and-stop-da",
-      "sourceSha256": "c0235b4c85888b1317df8dd43e68cdeb4596d649d7a4c45868c45d90600505a3",
+      "sourceSha256": "2fa0c7388af830553a6d1a259c22824c35ccde9487d4c4a0228cbbba132717ce",
       "articleSha256": "b9ef02341c31fea40d5b41c881d1cc60efe7e709a12b3942092001b7b91a91b6",
       "decision": "no_change",
-      "rationale": "Den aktuelle opgaveside kr\u00e6ver fortsat den aktuelle k\u00f8rsel og session for pause- og genoptagelseshandlinger. Kriterierne for genoptagelse af underopgaver er \u00e6ndret, men artiklen henviser til handlingen og status for den aktuelle opgave, s\u00e5 vejledningen er fortsat korrekt."
+      "rationale": "2026-11-18 MS1h14-gennemgang: Opgavens aktivitet viser nu en note under en godkendt gennemgang, der afventer verifikation af planen (EN/DA); godkendelse, stop, genoptagelse, nyt fors\u00f8g og workflow-handlinger p\u00e5 opgavesiden er u\u00e6ndrede, s\u00e5 artiklen er stadig korrekt. Den aktuelle opgaveside kr\u00e6ver fortsat den aktuelle k\u00f8rsel og session for pause- og genoptagelseshandlinger. Kriterierne for genoptagelse af underopgaver er \u00e6ndret, men artiklen henviser til handlingen og status for den aktuelle opgave, s\u00e5 vejledningen er fortsat korrekt."
     },
     {
       "source": "packages/shared/src/app-definitions/slack.json",
@@ -582,33 +582,33 @@
       "source": "ui/src/pages/ExperienceWork.tsx",
       "articleId": "create-and-track-work",
       "sourceSha256": "2d0092d35f217b44b0ef9ec9b0d38a22887ddf31e7dc7b4846f9e0c5b0d3829b",
-      "articleSha256": "d689db2dabb61c675518460fb12bfeec898665ce74e9a4b5a920c8301a1d46d9",
+      "articleSha256": "5a286896eed2c84ac31dfa850780aeb94e85ce102e35c0a247d320d64aa7c4df",
       "decision": "updated",
       "rationale": "The Task article now covers approved chat-plan handoff into Backlog, separate Human review and activation of each bounded plan, and moving Tasks to To do to queue work, alongside existing chat-confirmation and access guidance."
     },
     {
       "source": "ui/src/pages/IssueDetail.tsx",
       "articleId": "create-and-track-work",
-      "sourceSha256": "c0235b4c85888b1317df8dd43e68cdeb4596d649d7a4c45868c45d90600505a3",
-      "articleSha256": "d689db2dabb61c675518460fb12bfeec898665ce74e9a4b5a920c8301a1d46d9",
-      "decision": "no_change",
-      "rationale": "The current Task page still gates pause and resume actions on the current run and session. Descendant resume eligibility changed, but the article directs operators to the current task action and status, so its instructions remain accurate."
+      "sourceSha256": "2fa0c7388af830553a6d1a259c22824c35ccde9487d4c4a0228cbbba132717ce",
+      "articleSha256": "5a286896eed2c84ac31dfa850780aeb94e85ce102e35c0a247d320d64aa7c4df",
+      "decision": "updated",
+      "rationale": "2026-11-18 MS1h14 review: when a bounded Orchestration plan that is not finished covers the Task, a Co-worker\u2019s accepted completion review is now recorded without completing the Task; the Task stays In review until a person verifies the plan, and the Task activity says so (EN/DA). The article now states this in the In review paragraph. The current Task page still gates pause and resume actions on the current run and session. Descendant resume eligibility changed, but the article directs operators to the current task action and status, so its instructions remain accurate."
     },
     {
       "source": "ui/src/pages/ExperienceWork.tsx",
       "articleId": "create-and-track-work-da",
       "sourceSha256": "2d0092d35f217b44b0ef9ec9b0d38a22887ddf31e7dc7b4846f9e0c5b0d3829b",
-      "articleSha256": "9b7915956fb5c4a86f119627dea10499795af2e387d3c7e7f3a110723894831f",
+      "articleSha256": "4eb86fa86fa9bdfeed2abfb6c0b48f226a30b107d8362e87fdae77bc73f54337",
       "decision": "updated",
       "rationale": "Artiklen beskriver nu overdragelse fra godkendt chatplan til Backlog, separat Human-gennemgang og aktivering af hver afgr\u00e6nset plan samt flytning til Klar til start for at s\u00e6tte arbejdet i k\u00f8. Den eksisterende vejledning om chatbekr\u00e6ftelser og adgang er bevaret."
     },
     {
       "source": "ui/src/pages/IssueDetail.tsx",
       "articleId": "create-and-track-work-da",
-      "sourceSha256": "c0235b4c85888b1317df8dd43e68cdeb4596d649d7a4c45868c45d90600505a3",
-      "articleSha256": "9b7915956fb5c4a86f119627dea10499795af2e387d3c7e7f3a110723894831f",
-      "decision": "no_change",
-      "rationale": "Den aktuelle opgaveside kr\u00e6ver fortsat den aktuelle k\u00f8rsel og session for pause- og genoptagelseshandlinger. Kriterierne for genoptagelse af underopgaver er \u00e6ndret, men artiklen henviser til handlingen og status for den aktuelle opgave, s\u00e5 vejledningen er fortsat korrekt."
+      "sourceSha256": "2fa0c7388af830553a6d1a259c22824c35ccde9487d4c4a0228cbbba132717ce",
+      "articleSha256": "4eb86fa86fa9bdfeed2abfb6c0b48f226a30b107d8362e87fdae77bc73f54337",
+      "decision": "updated",
+      "rationale": "2026-11-18 MS1h14-gennemgang: N\u00e5r en afgr\u00e6nset Orchestration-plan, der ikke er afsluttet, d\u00e6kker opgaven, registreres en Co-workers godkendte gennemgang uden at fuldf\u00f8re opgaven; opgaven forbliver Til gennemgang, indtil en person har verificeret planen, og opgavens aktivitet viser det (EN/DA). Artiklen siger nu dette i afsnittet om Til gennemgang. Den aktuelle opgaveside kr\u00e6ver fortsat den aktuelle k\u00f8rsel og session for pause- og genoptagelseshandlinger. Kriterierne for genoptagelse af underopgaver er \u00e6ndret, men artiklen henviser til handlingen og status for den aktuelle opgave, s\u00e5 vejledningen er fortsat korrekt."
     },
     {
       "source": "cli/src/index.ts",
@@ -901,10 +901,10 @@
     {
       "source": "server/src/routes/issues.ts",
       "articleId": "help-and-human-support",
-      "sourceSha256": "48007810f052b69409cc0113e694d7f1b956f7f0bba77ab5e0e0d28c1968cdae",
+      "sourceSha256": "8854fada3e3654cb915c1cb076a9678142cea268889fa72dd624123b0ccd0eb8",
       "articleSha256": "bec6b2b830586252df7700cc8b8f23018da446ede36284d98e53f8db2b049a1b",
       "decision": "no_change",
-      "rationale": "Reviewed the complete English and Danish guidance. The source fix (D4) makes concurrent requests that replace an Agent Chat conversation whose sources became inaccessible return the one replacement conversation instead of a spurious not-found error, and returns it only for the same company, Agent and person. It adds no user action, retry, stop or support step, and the articles do not describe this flow, so the existing guidance remains accurate."
+      "rationale": "2026-11-18 MS1h14 review: the review accept route now records taskCompletion awaiting_plan_verification and the plan id in the accept activity when an unfinished plan keeps the Task in review; support intake, contacts, recovery actions and Help navigation are unchanged. Reviewed the complete English and Danish guidance. The source fix (D4) makes concurrent requests that replace an Agent Chat conversation whose sources became inaccessible return the one replacement conversation instead of a spurious not-found error, and returns it only for the same company, Agent and person. It adds no user action, retry, stop or support step, and the articles do not describe this flow, so the existing guidance remains accurate."
     },
     {
       "source": "server/src/routes/saas.ts",
@@ -949,10 +949,10 @@
     {
       "source": "server/src/services/company-search-help.generated.ts",
       "articleId": "help-and-human-support",
-      "sourceSha256": "2a30caa9da9db1286dbfa4dbae46e2dd8a5ea106b68ed1b5cb963c54c3c1a7b1",
+      "sourceSha256": "17a94e5270a8778e793deef94c0bd79d3bca44ce69ec6630a92f5718ec92f333",
       "articleSha256": "bec6b2b830586252df7700cc8b8f23018da446ede36284d98e53f8db2b049a1b",
       "decision": "no_change",
-      "rationale": "Regenerated the Help search catalog for the updated export-and-delete text; this article is unchanged."
+      "rationale": "2026-11-18 MS1h14 review: regenerated search entries only pick up the Create and track work guide sentence about plan-covered completion reviews; Help search, support intake and contacts are unchanged. Regenerated the Help search catalog for the updated export-and-delete text; this article is unchanged."
     },
     {
       "source": "server/src/services/company-search.ts",
@@ -1213,10 +1213,10 @@
     {
       "source": "server/src/routes/issues.ts",
       "articleId": "help-and-human-support-da",
-      "sourceSha256": "48007810f052b69409cc0113e694d7f1b956f7f0bba77ab5e0e0d28c1968cdae",
+      "sourceSha256": "8854fada3e3654cb915c1cb076a9678142cea268889fa72dd624123b0ccd0eb8",
       "articleSha256": "2c92acfc98fc458e84cf4bf6fc421119816d6f471922dceee726e311804bf6b5",
       "decision": "no_change",
-      "rationale": "Reviewed the complete English and Danish guidance. The source fix (D4) makes concurrent requests that replace an Agent Chat conversation whose sources became inaccessible return the one replacement conversation instead of a spurious not-found error, and returns it only for the same company, Agent and person. It adds no user action, retry, stop or support step, and the articles do not describe this flow, so the existing guidance remains accurate."
+      "rationale": "2026-11-18 MS1h14 review: the review accept route now records taskCompletion awaiting_plan_verification and the plan id in the accept activity when an unfinished plan keeps the Task in review; support intake, contacts, recovery actions and Help navigation are unchanged. Reviewed the complete English and Danish guidance. The source fix (D4) makes concurrent requests that replace an Agent Chat conversation whose sources became inaccessible return the one replacement conversation instead of a spurious not-found error, and returns it only for the same company, Agent and person. It adds no user action, retry, stop or support step, and the articles do not describe this flow, so the existing guidance remains accurate."
     },
     {
       "source": "server/src/routes/saas.ts",
@@ -1261,10 +1261,10 @@
     {
       "source": "server/src/services/company-search-help.generated.ts",
       "articleId": "help-and-human-support-da",
-      "sourceSha256": "2a30caa9da9db1286dbfa4dbae46e2dd8a5ea106b68ed1b5cb963c54c3c1a7b1",
+      "sourceSha256": "17a94e5270a8778e793deef94c0bd79d3bca44ce69ec6630a92f5718ec92f333",
       "articleSha256": "2c92acfc98fc458e84cf4bf6fc421119816d6f471922dceee726e311804bf6b5",
       "decision": "no_change",
-      "rationale": "Regenerated the Help search catalog for the updated export-and-delete text; this article is unchanged."
+      "rationale": "2026-11-18 MS1h14 review: regenerated search entries only pick up the Create and track work guide sentence about plan-covered completion reviews; Help search, support intake and contacts are unchanged. Regenerated the Help search catalog for the updated export-and-delete text; this article is unchanged."
     },
     {
       "source": "server/src/services/company-search.ts",
@@ -1541,10 +1541,10 @@
     {
       "source": "server/src/routes/issues.ts",
       "articleId": "recovering-work",
-      "sourceSha256": "48007810f052b69409cc0113e694d7f1b956f7f0bba77ab5e0e0d28c1968cdae",
+      "sourceSha256": "8854fada3e3654cb915c1cb076a9678142cea268889fa72dd624123b0ccd0eb8",
       "articleSha256": "0296c2c8ae18c613eef9c17ea9679b146e8afbcd3504451a5511a218d6d8b955",
       "decision": "no_change",
-      "rationale": "Reviewed the complete English and Danish guidance. The source fix (D4) makes concurrent requests that replace an Agent Chat conversation whose sources became inaccessible return the one replacement conversation instead of a spurious not-found error, and returns it only for the same company, Agent and person. It adds no user action, retry, stop or support step, and the articles do not describe this flow, so the existing guidance remains accurate."
+      "rationale": "2026-11-18 MS1h14 review: the review accept route now records taskCompletion awaiting_plan_verification and the plan id in the accept activity when an unfinished plan keeps the Task in review; support intake, contacts, recovery actions and Help navigation are unchanged. Reviewed the complete English and Danish guidance. The source fix (D4) makes concurrent requests that replace an Agent Chat conversation whose sources became inaccessible return the one replacement conversation instead of a spurious not-found error, and returns it only for the same company, Agent and person. It adds no user action, retry, stop or support step, and the articles do not describe this flow, so the existing guidance remains accurate."
     },
     {
       "source": "server/src/services/execution-workspaces.ts",
@@ -1637,18 +1637,18 @@
     {
       "source": "ui/src/pages/IssueDetail.tsx",
       "articleId": "recovering-work",
-      "sourceSha256": "c0235b4c85888b1317df8dd43e68cdeb4596d649d7a4c45868c45d90600505a3",
+      "sourceSha256": "2fa0c7388af830553a6d1a259c22824c35ccde9487d4c4a0228cbbba132717ce",
       "articleSha256": "0296c2c8ae18c613eef9c17ea9679b146e8afbcd3504451a5511a218d6d8b955",
       "decision": "no_change",
-      "rationale": "The current Task page still gates pause and resume actions on the current run and session. Descendant resume eligibility changed, but the article directs operators to the current task action and status, so its instructions remain accurate."
+      "rationale": "2026-11-18 MS1h14 review: the Task activity adds one note under an accepted completion review that awaits its plan\u2019s verification (EN/DA); approval, stop, recovery, retry and workflow controls on the Task page are unchanged, so this article stays accurate. The current Task page still gates pause and resume actions on the current run and session. Descendant resume eligibility changed, but the article directs operators to the current task action and status, so its instructions remain accurate."
     },
     {
       "source": "server/src/routes/issues.ts",
       "articleId": "recovering-work-da",
-      "sourceSha256": "48007810f052b69409cc0113e694d7f1b956f7f0bba77ab5e0e0d28c1968cdae",
+      "sourceSha256": "8854fada3e3654cb915c1cb076a9678142cea268889fa72dd624123b0ccd0eb8",
       "articleSha256": "ce0a7beaa56a5db23963d81eed8c19687d2efc5405773ec33dfd635a377090bc",
       "decision": "no_change",
-      "rationale": "Reviewed the complete English and Danish guidance. The source fix (D4) makes concurrent requests that replace an Agent Chat conversation whose sources became inaccessible return the one replacement conversation instead of a spurious not-found error, and returns it only for the same company, Agent and person. It adds no user action, retry, stop or support step, and the articles do not describe this flow, so the existing guidance remains accurate."
+      "rationale": "2026-11-18 MS1h14 review: the review accept route now records taskCompletion awaiting_plan_verification and the plan id in the accept activity when an unfinished plan keeps the Task in review; support intake, contacts, recovery actions and Help navigation are unchanged. Reviewed the complete English and Danish guidance. The source fix (D4) makes concurrent requests that replace an Agent Chat conversation whose sources became inaccessible return the one replacement conversation instead of a spurious not-found error, and returns it only for the same company, Agent and person. It adds no user action, retry, stop or support step, and the articles do not describe this flow, so the existing guidance remains accurate."
     },
     {
       "source": "server/src/services/execution-workspaces.ts",
@@ -1741,10 +1741,10 @@
     {
       "source": "ui/src/pages/IssueDetail.tsx",
       "articleId": "recovering-work-da",
-      "sourceSha256": "c0235b4c85888b1317df8dd43e68cdeb4596d649d7a4c45868c45d90600505a3",
+      "sourceSha256": "2fa0c7388af830553a6d1a259c22824c35ccde9487d4c4a0228cbbba132717ce",
       "articleSha256": "ce0a7beaa56a5db23963d81eed8c19687d2efc5405773ec33dfd635a377090bc",
       "decision": "no_change",
-      "rationale": "Den aktuelle opgaveside kr\u00e6ver fortsat den aktuelle k\u00f8rsel og session for pause- og genoptagelseshandlinger. Kriterierne for genoptagelse af underopgaver er \u00e6ndret, men artiklen henviser til handlingen og status for den aktuelle opgave, s\u00e5 vejledningen er fortsat korrekt."
+      "rationale": "2026-11-18 MS1h14-gennemgang: Opgavens aktivitet viser nu en note under en godkendt gennemgang, der afventer verifikation af planen (EN/DA); godkendelse, stop, genoptagelse, nyt fors\u00f8g og workflow-handlinger p\u00e5 opgavesiden er u\u00e6ndrede, s\u00e5 artiklen er stadig korrekt. Den aktuelle opgaveside kr\u00e6ver fortsat den aktuelle k\u00f8rsel og session for pause- og genoptagelseshandlinger. Kriterierne for genoptagelse af underopgaver er \u00e6ndret, men artiklen henviser til handlingen og status for den aktuelle opgave, s\u00e5 vejledningen er fortsat korrekt."
     },
     {
       "source": "server/src/services/saas/activation-first-task.ts",
@@ -2477,10 +2477,10 @@
     {
       "source": "ui/src/pages/IssueDetail.tsx",
       "articleId": "workflows-preview",
-      "sourceSha256": "c0235b4c85888b1317df8dd43e68cdeb4596d649d7a4c45868c45d90600505a3",
+      "sourceSha256": "2fa0c7388af830553a6d1a259c22824c35ccde9487d4c4a0228cbbba132717ce",
       "articleSha256": "e1c5c2d77645ce6fd9586ca6d9185c4396adec71f7e850e059748261c062fd89",
       "decision": "no_change",
-      "rationale": "The current Task page still gates pause and resume actions on the current run and session. Descendant resume eligibility changed, but the article directs operators to the current task action and status, so its instructions remain accurate."
+      "rationale": "2026-11-18 MS1h14 review: the Task activity adds one note under an accepted completion review that awaits its plan\u2019s verification (EN/DA); approval, stop, recovery, retry and workflow controls on the Task page are unchanged, so this article stays accurate. The current Task page still gates pause and resume actions on the current run and session. Descendant resume eligibility changed, but the article directs operators to the current task action and status, so its instructions remain accurate."
     },
     {
       "source": "server/src/routes/access.ts",
@@ -2533,10 +2533,10 @@
     {
       "source": "ui/src/pages/IssueDetail.tsx",
       "articleId": "workflows-preview-da",
-      "sourceSha256": "c0235b4c85888b1317df8dd43e68cdeb4596d649d7a4c45868c45d90600505a3",
+      "sourceSha256": "2fa0c7388af830553a6d1a259c22824c35ccde9487d4c4a0228cbbba132717ce",
       "articleSha256": "ef133efd581756186bf271221a91b494ea14cfac3c00fb8f3d816f9e741177d0",
       "decision": "no_change",
-      "rationale": "Den aktuelle opgaveside kr\u00e6ver fortsat den aktuelle k\u00f8rsel og session for pause- og genoptagelseshandlinger. Kriterierne for genoptagelse af underopgaver er \u00e6ndret, men artiklen henviser til handlingen og status for den aktuelle opgave, s\u00e5 vejledningen er fortsat korrekt."
+      "rationale": "2026-11-18 MS1h14-gennemgang: Opgavens aktivitet viser nu en note under en godkendt gennemgang, der afventer verifikation af planen (EN/DA); godkendelse, stop, genoptagelse, nyt fors\u00f8g og workflow-handlinger p\u00e5 opgavesiden er u\u00e6ndrede, s\u00e5 artiklen er stadig korrekt. Den aktuelle opgaveside kr\u00e6ver fortsat den aktuelle k\u00f8rsel og session for pause- og genoptagelseshandlinger. Kriterierne for genoptagelse af underopgaver er \u00e6ndret, men artiklen henviser til handlingen og status for den aktuelle opgave, s\u00e5 vejledningen er fortsat korrekt."
     },
     {
       "source": "server/src/routes/access.ts",
@@ -2774,7 +2774,7 @@
       "source": "server/src/services/agent-conversations.ts",
       "articleId": "create-and-track-work",
       "sourceSha256": "b20ae01f1974dd72d1b402f61938b74d4e5e496b1c2281fa4e555145d2f3d8f9",
-      "articleSha256": "d689db2dabb61c675518460fb12bfeec898665ce74e9a4b5a920c8301a1d46d9",
+      "articleSha256": "5a286896eed2c84ac31dfa850780aeb94e85ce102e35c0a247d320d64aa7c4df",
       "decision": "updated",
       "rationale": "The chat directive now says approval authorizes handoff only: ordinary assigned Tasks are created in Backlog with relevant approved plan content, while the Human reviews and starts the separate bounded execution plan."
     },
@@ -2782,7 +2782,7 @@
       "source": "server/src/services/agent-conversations.ts",
       "articleId": "create-and-track-work-da",
       "sourceSha256": "b20ae01f1974dd72d1b402f61938b74d4e5e496b1c2281fa4e555145d2f3d8f9",
-      "articleSha256": "9b7915956fb5c4a86f119627dea10499795af2e387d3c7e7f3a110723894831f",
+      "articleSha256": "4eb86fa86fa9bdfeed2abfb6c0b48f226a30b107d8362e87fdae77bc73f54337",
       "decision": "updated",
       "rationale": "The chat directive now says approval authorizes handoff only: ordinary assigned Tasks are created in Backlog with relevant approved plan content, while the Human reviews and starts the separate bounded execution plan."
     },
@@ -2790,7 +2790,7 @@
       "source": "server/src/services/heartbeat.ts",
       "articleId": "create-and-track-work",
       "sourceSha256": "c701aabfbb8d156541b1465c360c5d0216fef39175f52b05b13bcfc5e54cbcfb",
-      "articleSha256": "d689db2dabb61c675518460fb12bfeec898665ce74e9a4b5a920c8301a1d46d9",
+      "articleSha256": "5a286896eed2c84ac31dfa850780aeb94e85ce102e35c0a247d320d64aa7c4df",
       "decision": "no_change",
       "rationale": "2026-11-18 MS1h8 review: a Native completion Reviewer\u2019s first-input wake source now takes its wake reason from the exactly bound status-review request when its delivered wake was deferred and promoted (internal Native input construction only; an unbound request is refused before any model call). Task status, retry, stop, continuation, recovery, export and deletion behavior shown to people is unchanged; no article change needed. 2026-11-18 C2c review: a Native conversation wake (web or linked-Human Slack channel) is now matched against the Task fields it actually shows, without the Task description, so a current Slack channel turn gets its source record (internal Native input construction only). Task status, retry, stop, continuation, recovery, export and deletion behavior shown to people is unchanged; no article change needed. 2026-11-17 MS1h review: a Native completion Reviewer\u2019s wake payload no longer carries the Task assignee\u2019s issue continuation summary (internal Native input construction only; the Reviewer\u2019s prompt is its review request). Ordinary task runs, task status, retry, stop, continuation, recovery, export and deletion behavior are unchanged, so the article stays accurate. 2026-11-16 CONF15-W9R follow-up review: a verified retained resume now applies its empty delivered baseline to every copy of the continuation record (internal Native input construction only); every other run builds its continuation as before CONF15-W9. Task status, retry, stop, continuation, recovery, export and deletion behaviour shown to people is unchanged; no article change needed."
     },
@@ -2798,7 +2798,7 @@
       "source": "server/src/services/heartbeat.ts",
       "articleId": "create-and-track-work-da",
       "sourceSha256": "c701aabfbb8d156541b1465c360c5d0216fef39175f52b05b13bcfc5e54cbcfb",
-      "articleSha256": "9b7915956fb5c4a86f119627dea10499795af2e387d3c7e7f3a110723894831f",
+      "articleSha256": "4eb86fa86fa9bdfeed2abfb6c0b48f226a30b107d8362e87fdae77bc73f54337",
       "decision": "no_change",
       "rationale": "2026-11-18 MS1h8 review: a Native completion Reviewer\u2019s first-input wake source now takes its wake reason from the exactly bound status-review request when its delivered wake was deferred and promoted (internal Native input construction only; an unbound request is refused before any model call). Task status, retry, stop, continuation, recovery, export and deletion behavior shown to people is unchanged; no article change needed. 2026-11-18 C2c review: a Native conversation wake (web or linked-Human Slack channel) is now matched against the Task fields it actually shows, without the Task description, so a current Slack channel turn gets its source record (internal Native input construction only). Task status, retry, stop, continuation, recovery, export and deletion behavior shown to people is unchanged; no article change needed. 2026-11-17 MS1h review: a Native completion Reviewer\u2019s wake payload no longer carries the Task assignee\u2019s issue continuation summary (internal Native input construction only; the Reviewer\u2019s prompt is its review request). Ordinary task runs, task status, retry, stop, continuation, recovery, export and deletion behavior are unchanged, so the article stays accurate. 2026-11-16 CONF15-W9R follow-up review: a verified retained resume now applies its empty delivered baseline to every copy of the continuation record (internal Native input construction only); every other run builds its continuation as before CONF15-W9. Task status, retry, stop, continuation, recovery, export and deletion behaviour shown to people is unchanged; no article change needed."
     },
@@ -2806,7 +2806,7 @@
       "source": "ui/src/pages/Orchestration.tsx",
       "articleId": "create-and-track-work",
       "sourceSha256": "2c092e1b0beba303adbae2e26ef837b67401b6b08d91d377e98c45e3dc58bc12",
-      "articleSha256": "d689db2dabb61c675518460fb12bfeec898665ce74e9a4b5a920c8301a1d46d9",
+      "articleSha256": "5a286896eed2c84ac31dfa850780aeb94e85ce102e35c0a247d320d64aa7c4df",
       "decision": "updated",
       "rationale": "The Orchestration page captures the maximum model-cost limit and explains that Backlog tasks stay idle until a bounded plan is started and the Task is moved to To do; the paired article documents those controls."
     },
@@ -2814,25 +2814,25 @@
       "source": "ui/src/pages/Orchestration.tsx",
       "articleId": "create-and-track-work-da",
       "sourceSha256": "2c092e1b0beba303adbae2e26ef837b67401b6b08d91d377e98c45e3dc58bc12",
-      "articleSha256": "9b7915956fb5c4a86f119627dea10499795af2e387d3c7e7f3a110723894831f",
+      "articleSha256": "4eb86fa86fa9bdfeed2abfb6c0b48f226a30b107d8362e87fdae77bc73f54337",
       "decision": "updated",
       "rationale": "The Orchestration page captures the maximum model-cost limit and explains that Backlog tasks stay idle until a bounded plan is started and the Task is moved to To do; the paired article documents those controls."
     },
     {
       "source": "ui/src/i18n/experience/en.json",
       "articleId": "create-and-track-work",
-      "sourceSha256": "27a83349d14bb33a2970a47cf6f6cd6cb56dbf87f09a24acb725234bfa4ca0c4",
-      "articleSha256": "d689db2dabb61c675518460fb12bfeec898665ce74e9a4b5a920c8301a1d46d9",
+      "sourceSha256": "34fe43a721fc99bf145665c5f772c6677ff123b19e1b7b78ecc9d1e14b64923b",
+      "articleSha256": "5a286896eed2c84ac31dfa850780aeb94e85ce102e35c0a247d320d64aa7c4df",
       "decision": "updated",
-      "rationale": "Reviewed additive internal durable export routes, OpenAPI, original authority and storage-erasure handling plus the isolated organizationDeletion storage-namespace EN/DA reason. Existing synchronous UI/CLI export, billing, developer references, Task copy and customer Help/support behavior described by this article remain unchanged; these internal routes add no public integration or customer authorization."
+      "rationale": "2026-11-18 MS1h14 review: when a bounded Orchestration plan that is not finished covers the Task, a Co-worker\u2019s accepted completion review is now recorded without completing the Task; the Task stays In review until a person verifies the plan, and the Task activity says so (EN/DA). The article now states this in the In review paragraph. Reviewed additive internal durable export routes, OpenAPI, original authority and storage-erasure handling plus the isolated organizationDeletion storage-namespace EN/DA reason. Existing synchronous UI/CLI export, billing, developer references, Task copy and customer Help/support behavior described by this article remain unchanged; these internal routes add no public integration or customer authorization."
     },
     {
       "source": "ui/src/i18n/experience/da.json",
       "articleId": "create-and-track-work-da",
-      "sourceSha256": "5f03983c0914f0ae8898914ae7b4dac13aef9488b9668b6782ad4317eed3d939",
-      "articleSha256": "9b7915956fb5c4a86f119627dea10499795af2e387d3c7e7f3a110723894831f",
+      "sourceSha256": "228aa7e60a1b5d40bdd314badc7a17dabaffe3a97e5093453997f8f5515df2b1",
+      "articleSha256": "4eb86fa86fa9bdfeed2abfb6c0b48f226a30b107d8362e87fdae77bc73f54337",
       "decision": "updated",
-      "rationale": "Reviewed additive internal durable export routes, OpenAPI, original authority and storage-erasure handling plus the isolated organizationDeletion storage-namespace EN/DA reason. Existing synchronous UI/CLI export, billing, developer references, Task copy and customer Help/support behavior described by this article remain unchanged; these internal routes add no public integration or customer authorization."
+      "rationale": "2026-11-18 MS1h14-gennemgang: N\u00e5r en afgr\u00e6nset Orchestration-plan, der ikke er afsluttet, d\u00e6kker opgaven, registreres en Co-workers godkendte gennemgang uden at fuldf\u00f8re opgaven; opgaven forbliver Til gennemgang, indtil en person har verificeret planen, og opgavens aktivitet viser det (EN/DA). Artiklen siger nu dette i afsnittet om Til gennemgang. Reviewed additive internal durable export routes, OpenAPI, original authority and storage-erasure handling plus the isolated organizationDeletion storage-namespace EN/DA reason. Existing synchronous UI/CLI export, billing, developer references, Task copy and customer Help/support behavior described by this article remain unchanged; these internal routes add no public integration or customer authorization."
     },
     {
       "source": "ui/src/pages/Auth.tsx",
