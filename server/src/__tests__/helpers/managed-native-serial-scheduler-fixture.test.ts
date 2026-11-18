@@ -89,4 +89,40 @@ describe("managed serial scheduler fixture controls", () => {
       .send({ runId: runA }).expect(403);
     expect(providerEffects).toBe(0);
   });
+
+  it("admits a completion Reviewer's review_model credential like a worker credential, and no other family (MS1h8)", async () => {
+    vi.stubEnv("PAPERCLIP_AGENT_JWT_SECRET", "serial-fixture-unit-secret");
+    const companyId = randomUUID(), agentId = randomUUID(), runA = randomUUID(), runB = randomUUID();
+    const user = randomUUID(), manifest = randomUUID();
+    const token = (minted: { token: string } | null) => { if (!minted) throw new Error("unit_token_setup_failed"); return minted.token; };
+    const review = (runId: string, reviewer = agentId) => token(createRuntimeToolsToken({ companyId, agentId: reviewer, runId,
+      responsibleUserId: user, scope: "review_model", reviewModelBinding: { planId: randomUUID(), issueId: randomUUID(),
+        interactionId: randomUUID(), decisionId: randomUUID(), sourceRunId: randomUUID(), sourceWorkerId: randomUUID(),
+        sourceAgentId: randomUUID(), sourceAttemptId: randomUUID(), sourceResultId: randomUUID(), sourceReceiptDigest: "a".repeat(64),
+        sourceResultCanonicalSha256: "b".repeat(64), reviewerAgentId: reviewer, reviewerRunId: runId, executionManifestId: manifest,
+        expectedPlanVersion: 2 } }));
+    const worker = (runId: string) => token(createRuntimeToolsToken({ companyId, agentId, runId, responsibleUserId: user,
+      scope: "worker_model", workerModelBinding: { planId: randomUUID(), workerId: randomUUID(), workerAttemptId: randomUUID(),
+        executionManifestId: manifest, expectedPlanVersion: 1 } }));
+    const conversation = (runId: string) => token(createRuntimeToolsToken({ companyId, agentId, runId, responsibleUserId: user,
+      scope: "conversation_model", conversationModelBinding: { issueId: randomUUID(), conversationSessionGeneration: 0,
+        executionManifestId: manifest, executionManifestHash: "c".repeat(64) } }));
+    const call = (credential: string, runId: string, capabilityToken: string, closed = false) => {
+      const admissions = new Map([[runId, { closed, host: { runId, capabilityToken } }]]);
+      try {
+        const { host } = controls.serialModelAdmission(`Bearer ${credential}`, { companyId, agentId }, admissions);
+        return controls.authenticateSerialModelRequest(`Bearer ${credential}`, { companyId, agentId, ...host }).claims.scope;
+      } catch { return "refused"; }
+    };
+    const reviewB = review(runB), workerB = worker(runB), conversationB = conversation(runB);
+    expect(call(reviewB, runB, reviewB)).toBe("review_model");
+    expect(call(workerB, runB, workerB)).toBe("worker_model");
+    expect(call(conversationB, runB, conversationB)).toBe("refused");
+    const otherReviewer = review(runB, randomUUID());
+    expect(call(otherReviewer, runB, otherReviewer)).toBe("refused");
+    const reviewA = review(runA);
+    expect(call(reviewA, runA, reviewA, true)).toBe("refused");
+    // The attached provider credential must be the presented one.
+    expect(call(reviewB, runB, review(runB))).toBe("refused");
+  });
 });

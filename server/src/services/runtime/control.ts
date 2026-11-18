@@ -776,6 +776,71 @@ export async function currentWorkerNativePreparationRoot(tx: Db, source: Current
   return root;
 }
 
+type NativeModelSessionOwnerSource = {
+  run: Pick<CurrentSandboxTaskSource["run"], "id" | "companyId" | "agentId" | "responsibleUserId" | "contextSnapshot">;
+  manifest: Pick<CurrentSandboxTaskSource["manifest"], "id">;
+  attempt?: Pick<NonNullable<CurrentSandboxTaskSource["attempt"]>, "runId" | "status"> | null;
+  providerConformanceBootstrap?: boolean;
+  source: { task: Pick<CurrentSandboxTaskSource["source"]["task"], "id"> };
+};
+
+/** MS1h7. The owner lane of a managed Native model session: its start (at
+ * dispatch, again when the claim is persisted, and at the Host claim) and its
+ * refresh (at the Host claim). Exported for regression tests.
+ * - `worker`: the Run's plan worker attempt is this Run's and running. A Run
+ *   with both a Native review wake and a worker attempt stays on this lane.
+ * - `conformance`: the hidden conformance probe Run, which has no attempt.
+ * - `reviewer`: a Run with a persisted Native review wake
+ *   (`readNativeReviewAssignmentContext`) and no plan worker attempt row, that
+ *   is the current Native completion Reviewer of this exact Run and manifest
+ *   (`currentNativeReviewerRun`). The attempt row and every predicate fact
+ *   are read in the caller's transaction.
+ * Anything else is null, and every caller refuses it. The Reviewer's call is
+ * not plan-less (brief RT-03): its only model capability is `review_model`
+ * from `issueForReviewRun`, whose binding names the reviewed plan, plan
+ * version and source worker attempt, and whose reservation the 0581 CHECK
+ * charges under that plan. The Reviewer gets no plan worker attempt, no
+ * `worker_model` or `conversation_model` capability and no sandbox credential
+ * binding (MS1h2), and it is never the Task assignee (brief §57.1). */
+export async function nativeModelSessionOwnerLane(tx: Db, source: NativeModelSessionOwnerSource):
+  Promise<"worker" | "conformance" | "reviewer" | null> {
+  if (source.attempt) return source.attempt.runId === source.run.id && source.attempt.status === "running" ? "worker" : null;
+  if (source.providerConformanceBootstrap) return "conformance";
+  const { run, manifest } = source;
+  if (!run.agentId || !readNativeReviewAssignmentContext(run.contextSnapshot)) return null;
+  const [attempt] = await tx.select({ id: orchestrationWorkerAttempts.id }).from(orchestrationWorkerAttempts).where(and(
+    eq(orchestrationWorkerAttempts.companyId, run.companyId), eq(orchestrationWorkerAttempts.runId, run.id))).limit(1);
+  if (attempt) return null;
+  return await currentNativeReviewerRun(tx, { companyId: run.companyId, agentId: run.agentId, runId: run.id,
+    issueId: source.source.task.id, manifestId: manifest.id }) ? "reviewer" : null;
+}
+
+/** MS1h7. On the `reviewer` lane the Host claim admits only a `review_model`
+ * RuntimeTools capability for this company, Reviewer Agent, Run, Human and
+ * manifest (exported for regression tests). The credential check later in
+ * the same transaction compares the whole binding with the current review
+ * (`currentReviewBinding`). */
+export function nativeReviewerModelCredentialExact(source: Pick<NativeModelSessionOwnerSource, "run" | "manifest">,
+  modelCredential: { capabilityToken: string } | undefined): boolean {
+  const claims = modelCredential ? verifyRuntimeToolsToken(modelCredential.capabilityToken, "review_model") : null;
+  return !!claims?.review_model && claims.company_id === source.run.companyId && claims.sub === source.run.agentId &&
+    claims.run_id === source.run.id && claims.responsible_user_id === source.run.responsibleUserId &&
+    claims.review_model.executionManifestId === source.manifest.id;
+}
+
+/** MS1h7. The one choice of managed OpenCode model issuer at dispatch, the
+ * same for a session start, a refresh and a plain command (exported for
+ * regression tests): the conformance probe; a Native review Run without a
+ * plan worker attempt (`review_model`); a conversation Run without one
+ * (`conversation_model`); otherwise the plan worker (`worker_model`). */
+export function nativeManagedModelIssuer(input: { providerConformanceBootstrap: boolean; contextSnapshot: unknown;
+  hasWorkerAttempt: boolean; hasConversationIdentity: boolean }): "conformance" | "review" | "conversation" | "worker" {
+  if (input.providerConformanceBootstrap) return "conformance";
+  if (readNativeReviewAssignmentContext(input.contextSnapshot) && !input.hasWorkerAttempt) return "review";
+  if (input.hasConversationIdentity && !input.hasWorkerAttempt) return "conversation";
+  return "worker";
+}
+
 /** The managed model credential carries the Host's OpenShell auth-injection
  * profile (`capability.modelBrokerProviderProfile`) with its exact hash, and
  * the request carries the configured broker origin. Every managed OpenCode
@@ -4240,9 +4305,15 @@ export function runtimeControlService(
         let execution: ReturnType<typeof parseNativeExecutionInput> | null = null;
         try { execution = parseNativeExecutionInput(profile.nativeExecutionInput); } catch { execution = null; }
         const taskRoot = execution?.workspace.cwd;
+        // MS1h7. The Run's own running plan worker attempt, or the current
+        // Native completion Reviewer (no attempt row) presenting its own
+        // `review_model` capability, read in this claim transaction.
+        const refreshOwnerLane = await nativeModelSessionOwnerLane(tx, source);
+        const exactRefreshOwner = refreshOwnerLane === "worker" ||
+          (refreshOwnerLane === "reviewer" && nativeReviewerModelCredentialExact(source, request.modelBrokerCredential));
         if (source.run.status !== "running" || source.run.runtimeMode !== "native" || !source.run.agentId ||
           !source.run.responsibleUserId || !source.run.nativeSessionId || !source.run.runnerInstanceId ||
-          !source.attempt || source.attempt.runId !== source.run.id || source.attempt.status !== "running" ||
+          !exactRefreshOwner ||
           !execution || execution.provider.kind !== "opencode" || execution.session.driverKind !== "opencode_server" ||
           execution.session.normalizedSessionId !== source.run.nativeSessionId || execution.binding.companyId !== claims.company_id ||
           execution.binding.runId !== source.run.id || execution.binding.agentId !== source.run.agentId ||
@@ -4260,13 +4331,19 @@ export function runtimeControlService(
         const filesystem = source.policy.compilation.compiledPolicy.filesystem;
         const readRoots = Array.isArray(filesystem?.readPaths) ? filesystem.readPaths : [];
         const writeRoots = Array.isArray(filesystem?.writePaths) ? filesystem.writePaths : [];
+        // MS1h7. The Task assignee's own running plan worker attempt, or the
+        // current Native completion Reviewer (no attempt row) presenting its
+        // own `review_model` capability, read in this claim transaction.
+        const sessionOwnerLane = await nativeModelSessionOwnerLane(tx, source);
+        const exactSessionOwner = (sessionOwnerLane === "worker" && task.assigneeAgentId === source.run.agentId) ||
+          (sessionOwnerLane === "reviewer" && nativeReviewerModelCredentialExact(source, request.modelBrokerCredential));
         const exactWorkerRun = source.run.status === "running" && source.run.runtimeMode === "native" &&
           source.run.agentId && source.run.responsibleUserId && source.run.nativeIssueId === task.id &&
-          source.run.runnerInstanceId && source.run.nativeSessionId && source.attempt?.runId === source.run.id &&
-          source.attempt.status === "running" && source.manifest.runId === source.run.id &&
+          source.run.runnerInstanceId && source.run.nativeSessionId && exactSessionOwner &&
+          source.manifest.runId === source.run.id &&
           source.manifest.agentId === source.run.agentId &&
           source.manifest.manifest.responsibleUserId === source.run.responsibleUserId &&
-          source.run.scopeKind === "issue" && task.assigneeAgentId === source.run.agentId;
+          source.run.scopeKind === "issue";
         if (!exactWorkerRun || !execution || execution.provider.kind !== "opencode" ||
           execution.session.driverKind !== "opencode_server" || execution.session.normalizedSessionId !== source.run.nativeSessionId ||
           execution.binding.companyId !== claims.company_id || execution.binding.runId !== source.run.id ||
@@ -4986,6 +5063,12 @@ export function runtimeControlService(
     const runnerProfile = initialSource.source.agent.adapterType === "paperclip_runner"
       ? resolvePaperclipRunnerProviderProfile(initialSource.source.agent.adapterConfig)
       : null;
+    // MS1h7. A Worker-family session start belongs to the Run's plan worker
+    // attempt, the hidden conformance probe, or the current Native completion
+    // Reviewer (no attempt row). The Reviewer lane is read again on the
+    // transaction that persists the claim.
+    const sessionOwnerLane = nativeSessionStart && !hasConversationIdentity
+      ? await nativeModelSessionOwnerLane(db, initialSource) : null;
     if (nativeSessionStart && !hasConversationIdentity) {
       const execution = conversationExecution;
       const taskRoot = execution?.workspace.cwd;
@@ -4997,8 +5080,7 @@ export function runtimeControlService(
         runnerProfile?.provider !== "opencode" || initialSource.run.status !== "running" ||
         initialSource.run.runtimeMode !== "native" || !initialSource.run.agentId || !initialSource.run.responsibleUserId ||
         !initialSource.run.nativeSessionId || !initialSource.run.runnerInstanceId ||
-        (!initialSource.providerConformanceBootstrap && !initialSource.attempt) ||
-        (initialSource.attempt && (initialSource.attempt.runId !== initialSource.run.id || initialSource.attempt.status !== "running")) ||
+        !sessionOwnerLane ||
         initialSource.manifest.runId !== initialSource.run.id || initialSource.manifest.agentId !== initialSource.run.agentId ||
         initialSource.manifest.manifest.responsibleUserId !== initialSource.run.responsibleUserId ||
         (initialSource.providerConformanceBootstrap && initialSource.manifest.manifest.capabilities.length !== 0) ||
@@ -5099,10 +5181,13 @@ export function runtimeControlService(
             .where(and(eq(heartbeatRuns.companyId, input.companyId), eq(heartbeatRuns.id, current.id), eq(heartbeatRuns.status, "running")));
         });
       } else {
-        const nativeReview = readNativeReviewAssignmentContext(initialSource.run.contextSnapshot);
-        minted = nativeReview && !initialSource.attempt
+        // MS1h7. A Native review Run without a plan worker attempt (the
+        // `reviewer` session lane) mints and refreshes only `review_model`.
+        const issuer = nativeManagedModelIssuer({ providerConformanceBootstrap: false,
+          contextSnapshot: initialSource.run.contextSnapshot, hasWorkerAttempt: !!initialSource.attempt, hasConversationIdentity });
+        minted = issuer === "review"
           ? await options.workerModels.issueForReviewRun(mintInput)
-          : hasConversationIdentity && !initialSource.attempt
+          : issuer === "conversation"
             ? await options.workerModels.issueForConversationRun(mintInput)
             : await options.workerModels.issueForRun(mintInput);
       }
@@ -5233,6 +5318,9 @@ export function runtimeControlService(
         source.sandboxBinding.id !== initialSource.sandboxBinding.id || source.cell.generation !== initialSource.cell.generation ||
         source.policy.id !== initialSource.policy.id || source.policy.policyHash !== initialSource.policy.policyHash ||
         source.deadlineAt < deadlineAt) throw conflict("Sandbox execution source changed before claim admission");
+      if (sessionOwnerLane === "reviewer" && await nativeModelSessionOwnerLane(tx, source) !== "reviewer")
+        throw conflict("Native completion Reviewer session start changed before signed claim persistence",
+          { code: "native_reviewer_session_start_changed" });
       const [unresolvedExec] = await tx.select({ id: runtimeHostCommands.id }).from(runtimeHostCommands).where(and(
         eq(runtimeHostCommands.companyId, input.companyId),
         eq(runtimeHostCommands.runtimeCellId, source.cell.id),

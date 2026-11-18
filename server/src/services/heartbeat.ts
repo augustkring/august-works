@@ -474,7 +474,7 @@ import {
   parseIssueExecutionState,
 } from "./issue-execution-policy.js";
 import { buildExecutionStageWakeup } from "./issue-execution-stage-wakeup.js";
-import { captureNativeExecutionStageTaskWakeSource } from "./native-stage-wake-source.js";
+import { captureNativeExecutionStageTaskWakeSource, nativeTaskWakeReason } from "./native-stage-wake-source.js";
 import { captureNativeRunLivenessContinuationTrigger } from "./native-runtime/native-liveness-continuation-source.js";
 import { nativeCompactContinuationSourceSetAdmits, nativeVerifiedRetainedResumeApplies,
   qualifyNativeRetainedCompactContinuation } from "./native-runtime/native-compact-continuation-source.js";
@@ -24671,6 +24671,16 @@ export function heartbeatService(
                   reviewerRunId: run.id, reviewerAgentId: agent.id, responsibleUserId: run.responsibleUserId,
                   reviewerCompletionContract: { id: completionContract.row.id, sha256: completionContract.row.canonicalSha256 },
                   assignment: nativeReview }) : null;
+            // MS1h8. The same wake reason owner as the dispatch recheck: a Native
+            // completion review Run's exactly bound status wake intent, else
+            // the Run context reason. An unbound intent captures no wake.
+            const nativeWakeReasonOwner = capturedTaskSource?.input.kind === "task" && issueRef
+              ? await nativeTaskWakeReason(db, { companyId: agent.companyId, issueId: issueRef.id, run,
+                  defaultReason: readNonEmptyString(parseObject(run.contextSnapshot).wakeReason) })
+              : null;
+            if (capturedTaskSource?.input.kind === "task" && issueRef && !nativeWakeReasonOwner &&
+              process.env.PAPERCLIP_NATIVE_SOURCE_CLOSURE_DIAGNOSTICS === "1")
+              nativeBootstrapWakeDiagnostics.push("review_wake_request_unbound");
             const nativeTaskWakeCapture: Parameters<typeof captureNativeTaskWakeSource>[0] | null =
               capturedTaskSource?.input.kind === "task" && issueRef ? {
                 companyId: agent.companyId, runId: run.id, issueId: issueRef.id,
@@ -24683,7 +24693,7 @@ export function heartbeatService(
                 workspaceCoordinationCapture: originalCoordinationCapture, blockedHumanInteraction, treeHoldInteractionSource,
                 responsibleUserId: run.responsibleUserId, wakeupRequestId: run.wakeupRequestId,
                 nativeReviewWitness: nativeReviewWakeWitness, continuationCapture: closedTaskContinuation, ordinaryPlanRead,
-                persistedWakeReason: readNonEmptyString(parseObject(run.contextSnapshot).wakeReason),
+                persistedWakeReason: nativeWakeReasonOwner?.reason ?? null,
                 checkoutRunId: issueContext?.checkoutRunId ?? null,
                 // A conversation wake (web or linked-Human channel) never renders
                 // the Task description, so its exact projection has none.
