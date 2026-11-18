@@ -760,12 +760,21 @@ function reserveSerialHostAdmission<Host>(admissions: Map<string, SerialHostAdmi
   return entry;
 }
 
+/** MS1h8 fixture. The managed model capability a software Host accepts, as
+ * the real Host agent does: the conformance probe's `provider_conformance`;
+ * otherwise a plan Worker's `worker_model`, or the completion Reviewer's
+ * `review_model` (Host agent MS1h5; RuntimeControl MS1h7). */
+function verifySerialManagedModelToken(token: string, providerConformance: boolean) {
+  return providerConformance ? verifyRuntimeToolsToken(token, "provider_conformance")
+    : verifyRuntimeToolsToken(token, "worker_model") ?? verifyRuntimeToolsToken(token, "review_model");
+}
+
 function authenticateSerialModelRequest(authorization: string | undefined,
   scope: { companyId: string; agentId: string; runId?: string; capabilityToken?: string; providerConformance?: true }) {
   const match = typeof authorization === "string" ? /^Bearer\s+(\S+)$/i.exec(authorization) : null;
   const token = match?.[1];
-  const claims = token ? verifyRuntimeToolsToken(token, scope.providerConformance ? "provider_conformance" : "worker_model") : null;
-  if (!token || !claims || (scope.providerConformance ? !claims.provider_conformance : !claims.worker_model) ||
+  const claims = token ? verifySerialManagedModelToken(token, Boolean(scope.providerConformance)) : null;
+  if (!token || !claims || (scope.providerConformance ? !claims.provider_conformance : !claims.worker_model && !claims.review_model) ||
       claims.company_id !== scope.companyId || claims.sub !== scope.agentId ||
       (scope.runId !== undefined && claims.run_id !== scope.runId) ||
       (scope.capabilityToken !== undefined && nativeSha256(token) !== nativeSha256(scope.capabilityToken)))
@@ -2142,7 +2151,7 @@ async function configureManagedSandboxRun(input: ManagedSandboxHostInput,
     return { ...record, moved: true, replayAliasExact: aliasExact, targetAbsent: false };
   };
   const sessionProviders = new Map<string, { type: string; credential: string | null; expiresAt: string | null;
-    family: "worker_model" | "conversation_model" | "provider_conformance" | null }>();
+    family: "worker_model" | "conversation_model" | "review_model" | "provider_conformance" | null }>();
   const attachedSessionProviders = new Set<string>();
   const hostCredentialProfile = {
     id: "paperclip-runtime-app-broker",
@@ -2267,7 +2276,7 @@ async function configureManagedSandboxRun(input: ManagedSandboxHostInput,
         const entry = currentJournal.modelBrokerSessions?.[descriptor.sessionKey];
         const provider = entry ? sessionProviders.get(entry.providerName) : null;
         const token = provider?.credential;
-        const tokenClaims = token ? verifyRuntimeToolsToken(token, nativeConformanceMode ? "provider_conformance" : "worker_model") : null;
+        const tokenClaims = token ? verifySerialManagedModelToken(token, nativeConformanceMode) : null;
         const [run] = await db.select().from(heartbeatRuns).where(and(eq(heartbeatRuns.companyId, companyId),
           eq(heartbeatRuns.agentId, agentId), eq(heartbeatRuns.id, request.runId))).limit(1);
         const [lease] = await db.select().from(environmentLeases).where(and(eq(environmentLeases.companyId, companyId),
@@ -2283,6 +2292,7 @@ async function configureManagedSandboxRun(input: ManagedSandboxHostInput,
             entry.startBindingDigest !== descriptor.startBindingDigest || entry.profileId !== hostModelProfile.id ||
             entry.profileHash !== nativeSha256(hostModelProfile) || !attachedSessionProviders.has(entry.providerName) ||
             !token || !tokenClaims || tokenClaims.run_id !== request.runId || tokenClaims.company_id !== companyId || tokenClaims.sub !== agentId || tokenClaims.responsible_user_id !== actor.userId ||
+            (tokenClaims.review_model !== undefined && tokenClaims.review_model.executionManifestId !== request.manifestId) ||
             !Number.isFinite(Date.parse(entry.expiresAt)) || !Number.isFinite(Date.parse(descriptor.sessionDeadlineAt)) ||
             createHash("sha256").update(token).digest("hex") !== entry.capabilityHash || provider?.expiresAt !== entry.expiresAt ||
             Date.parse(entry.expiresAt) <= Date.now() || Date.parse(entry.expiresAt) > Date.parse(descriptor.sessionDeadlineAt) ||
@@ -2658,7 +2668,8 @@ async function configureManagedSandboxRun(input: ManagedSandboxHostInput,
         const family = credential ? nativeConformanceMode
           ? verifyRuntimeToolsToken(credential, "provider_conformance") ? "provider_conformance" : null
           : verifyRuntimeToolsToken(credential, "worker_model") ? "worker_model" :
-            verifyRuntimeToolsToken(credential, "conversation_model") ? "conversation_model" : null : null;
+            verifyRuntimeToolsToken(credential, "conversation_model") ? "conversation_model" :
+              verifyRuntimeToolsToken(credential, "review_model") ? "review_model" : null : null;
         sessionProviders.set(name, { type, credential, expiresAt: null, family });
         return { stdout: "provider created", stderr: "" };
       }
