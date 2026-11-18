@@ -358,6 +358,36 @@ describeDb("Reviewer model credential read inside the sandbox-exec transaction (
       .rejects.toThrow("One exact current assigned completion review and committed source are required");
   });
 
+  // MS1h18. No residual Reviewer capability after its decision and discard close.
+  it("mints no Reviewer credential once this Run recorded its decision", async () => {
+    const ids = await seed();
+    await issued(ids);
+    await db.update(issueThreadInteractions).set({ status: "accepted", resolvedByAgentId: ids.reviewer,
+      resolvedByRunId: ids.reviewerRun, resolvedAt: new Date() }).where(eq(issueThreadInteractions.id, ids.interaction));
+    // RuntimeControl's issuance and refresh need the pending review.
+    await expect(models().issueForReviewRun(mintInput(ids)))
+      .rejects.toThrow("One exact current assigned completion review and committed source are required");
+  });
+
+  it("refuses this Run's model calls once the Run is no longer running", async () => {
+    const ids = await seed();
+    const claims = await issued(ids);
+    await db.update(issueThreadInteractions).set({ status: "accepted", resolvedByAgentId: ids.reviewer,
+      resolvedByRunId: ids.reviewerRun, resolvedAt: new Date() }).where(eq(issueThreadInteractions.id, ids.interaction));
+    // While the Run is still running (its closing turn after the decision), the
+    // review authority admits the call; this fixture then stops it at the later
+    // input-receipt check, which proves the authority check passed.
+    await expect(models().callManagedMessages(claims, {}))
+      .rejects.toThrow("The Reviewer Native input receipt is unavailable");
+    // Finalization ends the Run (before the controller destroys its sandbox).
+    await db.update(heartbeatRuns).set({ status: "succeeded", finishedAt: new Date() })
+      .where(eq(heartbeatRuns.id, ids.reviewerRun));
+    await expect(models().callManagedMessages(claims, {}))
+      .rejects.toThrow("The exact current assigned review and committed source are required");
+    await expect(models().issueForReviewRun(mintInput(ids)))
+      .rejects.toThrow("One exact current assigned completion review and committed source are required");
+  });
+
   it("refuses a capability issued before the plan advanced", async () => {
     const ids = await seed();
     const claims = await issued(ids);

@@ -1180,6 +1180,16 @@ export interface CapabilityRunnerdCodexTransportOptions {
   /** Provider system instructions supplied by a native execution caller. */
   baseInstructions?: string;
   closeGraceMs?: number;
+  /**
+   * Close-time check supplied by the controller. When it resolves true for
+   * this exact run, close skips the durable suspension barrier and the runner
+   * process exit wait (both exist only to make a resumable checkpoint safe),
+   * releases process ownership without a checkpoint, and does not raise
+   * NativeSessionCloseUnrecoverableError. The controller then owns
+   * containment by destroying the runner's sandbox. Absent, false, or a
+   * failing check keeps the normal close unchanged.
+   */
+  discardWithoutCheckpoint?: () => Promise<boolean>;
   /** Bounded provider turn-admission wait; defaults to 30 seconds. */
   turnStartTimeoutMs?: number;
   onDiagnostic?: (message: string) => void;
@@ -4292,6 +4302,10 @@ class DurablePrpCodexTransport implements CodexAppServerTransport {
     // A remote handle also owns its awaited model-provider Stop. Durable
     // suspension cannot replace successful completion of that exact owner.
     let exactCompletionConfirmed = this.#handle === null;
+    // Decided once per close; any failure keeps the normal checkpointing close.
+    const discardWithoutCheckpoint = this.options.discardWithoutCheckpoint
+      ? await this.options.discardWithoutCheckpoint().then((value) => value === true, () => false)
+      : false;
     if (
       this.#core !== null &&
       (this.#handle !== null || adoptedRunner !== undefined) &&
@@ -4327,55 +4341,61 @@ class DurablePrpCodexTransport implements CodexAppServerTransport {
           Math.min(5_000, Math.max(0, preparationDeadline - Date.now())),
         );
       }
-      // Local durable roots are reused too. Process exit alone cannot prove
-      // their authority is safe to rotate; require the same exact suspension
-      // barrier even when there is no remote checkpoint callback.
-      suspensionRequired = true;
-      runnerSuspended = await awaitRunnerSuspensionBarrier({
-        commands: () => this.#core?.store.state.commands ?? [],
-        queueSuspend: (commandId) => {
-          this.#core?.queueCommand("runner.suspend", {}, commandId, true);
-        },
-        readRunnerState: async () => {
-          const state = await this.#readDurableRunnerState();
-          assertSuspendedRunnerState(state, this.#core!.store.state.identity);
-          return state;
-        },
-        runnerHasExited: () => this.#runnerHasExited(),
-        pump: () => this.#pumpEventsSafely(),
-        deadline: closeDeadline,
-      });
-      if (!runnerSuspended) {
+      if (discardWithoutCheckpoint) {
         this.#diagnostic(
-          "runner did not prove durable suspension before checkpoint",
+          "runner closed without a suspension checkpoint: the controller discards its sandbox",
         );
-      }
-      try {
-        if (this.#handle) {
-          const result = await waitForProcess(
-            this.#handle,
-            Math.max(0, closeDeadline - Date.now()),
+      } else {
+        // Local durable roots are reused too. Process exit alone cannot prove
+        // their authority is safe to rotate; require the same exact suspension
+        // barrier even when there is no remote checkpoint callback.
+        suspensionRequired = true;
+        runnerSuspended = await awaitRunnerSuspensionBarrier({
+          commands: () => this.#core?.store.state.commands ?? [],
+          queueSuspend: (commandId) => {
+            this.#core?.queueCommand("runner.suspend", {}, commandId, true);
+          },
+          readRunnerState: async () => {
+            const state = await this.#readDurableRunnerState();
+            assertSuspendedRunnerState(state, this.#core!.store.state.identity);
+            return state;
+          },
+          runnerHasExited: () => this.#runnerHasExited(),
+          pump: () => this.#pumpEventsSafely(),
+          deadline: closeDeadline,
+        });
+        if (!runnerSuspended) {
+          this.#diagnostic(
+            "runner did not prove durable suspension before checkpoint",
           );
-          exactCompletionConfirmed = true;
-          this.#evidence.runnerExited = true;
-          this.#evidence.runnerExitCode = result.code;
-          this.#evidence.runnerSignal = result.signal as NodeJS.Signals | null;
-          if (result.stderr.trim())
-            this.#diagnostic(result.stderr.trim().slice(-4_096));
-        } else if (adoptedRunner) {
-          while (
-            (await adoptedRunner.isAlive()) &&
-            Date.now() < closeDeadline
-          ) {
-            await new Promise((resolveWait) => setTimeout(resolveWait, 25));
-          }
-          if (await adoptedRunner.isAlive()) {
-            await adoptedRunner.signal?.("SIGKILL");
-          }
-          this.#evidence.runnerExited = !(await adoptedRunner.isAlive());
         }
-      } catch (error) {
-        this.#diagnostic(`runner shutdown failed: ${String(error)}`);
+        try {
+          if (this.#handle) {
+            const result = await waitForProcess(
+              this.#handle,
+              Math.max(0, closeDeadline - Date.now()),
+            );
+            exactCompletionConfirmed = true;
+            this.#evidence.runnerExited = true;
+            this.#evidence.runnerExitCode = result.code;
+            this.#evidence.runnerSignal = result.signal as NodeJS.Signals | null;
+            if (result.stderr.trim())
+              this.#diagnostic(result.stderr.trim().slice(-4_096));
+          } else if (adoptedRunner) {
+            while (
+              (await adoptedRunner.isAlive()) &&
+              Date.now() < closeDeadline
+            ) {
+              await new Promise((resolveWait) => setTimeout(resolveWait, 25));
+            }
+            if (await adoptedRunner.isAlive()) {
+              await adoptedRunner.signal?.("SIGKILL");
+            }
+            this.#evidence.runnerExited = !(await adoptedRunner.isAlive());
+          }
+        } catch (error) {
+          this.#diagnostic(`runner shutdown failed: ${String(error)}`);
+        }
       }
     }
     this.#flushPendingTraceRehydrations();
@@ -4431,7 +4451,8 @@ class DurablePrpCodexTransport implements CodexAppServerTransport {
         // that never authenticated to this controller (for example after an
         // executable upgrade). Retain its prior checkpoint without rewriting it.
         checkpoint:
-          adoptedRunner && !this.#adoptedRunnerAuthenticated
+          discardWithoutCheckpoint ||
+          (adoptedRunner && !this.#adoptedRunnerAuthenticated)
             ? null
             : this.#controlPlaneCheckpoint,
         forceKill: () => {

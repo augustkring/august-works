@@ -17805,6 +17805,19 @@ async function createRunnerdBackendWithinSessionClaim(
             `[paperclip-runner] runnerd diagnostic: ${redactSensitiveText(message).slice(-4_096)}\n`,
           );
         },
+        // MS1h18. Only a recorded completion Reviewer lane for this exact Run,
+        // in a controller-owned sandbox that finalization destroys, closes
+        // without the suspension barrier, exit wait or checkpoint. Worker,
+        // conversation and conformance closes keep the checkpointing close.
+        discardWithoutCheckpoint:
+          input.providerConformanceProbe !== true &&
+          remoteTarget?.transport === "sandbox" &&
+          remoteCommandRunner && remoteStateDirectory && remoteRunnerFilesystemRoot
+            ? () => nativeReviewerLaneRecorded(input.db, {
+                companyId: input.execution.binding.companyId,
+                runId: input.execution.binding.runId,
+              })
+            : undefined,
         lifecyclePolicy: input.execution.session.lifecyclePolicy,
         runtimeContext:
           "runtimeContext" in input.execution

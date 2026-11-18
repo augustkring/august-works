@@ -774,6 +774,82 @@ it("refuses a reusable close checkpoint when the local provider snapshot is unre
   }
 }, 15_000);
 
+// MS1h18. A controller-confirmed discard (a read-only completion Reviewer whose
+// sandbox the controller destroys) closes without the suspension barrier, the
+// process exit wait or a checkpoint. The unreadable provider store below makes
+// the barrier fail, so only a skipped barrier can close cleanly.
+it.each([
+  ["the discard check resolves false", async () => false],
+  ["the discard check fails", async () => { throw new Error("check unavailable"); }],
+] as const)("keeps the checkpointing close when %s", async (_name, discardWithoutCheckpoint) => {
+  const stateDirectory = await mkdtemp(join(tmpdir(), "runnerd-close-keep-"));
+  const checkpoint = vi.fn();
+  const diagnostics: string[] = [];
+  const bundle = createCapabilityRunnerdCodexTransport({
+    runnerBinary: defaultCapabilityRunnerdBinary(),
+    codexCommand: fakeCodex,
+    codexArgs: fakeCodexArgs(stateDirectory),
+    stateDirectory,
+    closeGraceMs: 3_000,
+    discardWithoutCheckpoint,
+    onDiagnostic: (message) => diagnostics.push(message),
+    controlPlaneRegistration: async (authority) => {
+      await authority.start();
+      return { checkpoint, release: () => undefined };
+    },
+  });
+  try {
+    await bundle.transport.request("thread/start", { cwd: tmpdir() });
+    const providerPath = join(stateDirectory, "runner", "codex-provider-state.json");
+    await rename(providerPath, `${providerPath}.preserved`);
+    await mkdir(providerPath);
+    await expect(bundle.transport.close()).rejects.toBeInstanceOf(NativeSessionCloseUnrecoverableError);
+    expect(checkpoint).toHaveBeenCalledWith("unsettled");
+    // The checkpointing branch ran: its suspension barrier, then its exit wait.
+    expect(diagnostics).toContain("runner did not prove durable suspension before checkpoint");
+    expect(diagnostics).not.toContain("runner closed without a suspension checkpoint: the controller discards its sandbox");
+  } finally {
+    await bundle.transport.close().catch(() => undefined);
+    await rm(stateDirectory, { recursive: true, force: true });
+  }
+}, 15_000);
+
+it("closes a controller-discarded runner without the suspension barrier or a checkpoint", async () => {
+  const stateDirectory = await mkdtemp(join(tmpdir(), "runnerd-close-discard-"));
+  const checkpoint = vi.fn();
+  const release = vi.fn();
+  const diagnostics: string[] = [];
+  const discardWithoutCheckpoint = vi.fn(async () => true);
+  const bundle = createCapabilityRunnerdCodexTransport({
+    runnerBinary: defaultCapabilityRunnerdBinary(),
+    codexCommand: fakeCodex,
+    codexArgs: fakeCodexArgs(stateDirectory),
+    stateDirectory,
+    closeGraceMs: 3_000,
+    discardWithoutCheckpoint,
+    onDiagnostic: (message) => diagnostics.push(message),
+    controlPlaneRegistration: async (authority) => {
+      await authority.start();
+      return { checkpoint, release };
+    },
+  });
+  try {
+    await bundle.transport.request("thread/start", { cwd: tmpdir() });
+    const providerPath = join(stateDirectory, "runner", "codex-provider-state.json");
+    await rename(providerPath, `${providerPath}.preserved`);
+    await mkdir(providerPath);
+    await expect(bundle.transport.close()).resolves.toBeUndefined();
+    expect(discardWithoutCheckpoint).toHaveBeenCalledTimes(1);
+    expect(checkpoint).not.toHaveBeenCalled();
+    expect(release).toHaveBeenCalledTimes(1);
+    expect(diagnostics).toContain("runner closed without a suspension checkpoint: the controller discards its sandbox");
+    expect(diagnostics).not.toContain("runner did not prove durable suspension before checkpoint");
+  } finally {
+    await bundle.transport.close().catch(() => undefined);
+    await rm(stateDirectory, { recursive: true, force: true });
+  }
+}, 15_000);
+
 it.each(["after_budget", "within_budget", "persistence_failure"] as const)(
   "fences reusable suspension against late semantic completion (%s)",
   async (mode) => {
