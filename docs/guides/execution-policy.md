@@ -138,6 +138,12 @@ A Native executor reaches the first stage through a **stage handoff**. The plan'
 
 The committer applies the same transition as for `done`. If no stage would become pending when it commits (for example, the policy was edited), it records the incomplete-evidence decision instead. A handoff never moves the issue to `done`. Without a covering plan, or with an `agent_claim_policy` contract, nothing changes.
 
+An Agent participant of a pending **review** stage on a planned issue runs as a Reviewer of the plan, not as a plan worker (it gets no worker attempt):
+
+- Its wake must be the current stage wake of the executor's `execution_policy_stage_pending` decision, the issue must be `in_review` with that stage pending, the Reviewer as participant, assignee and execution Run, and the plan Worker (never the Reviewer) as the stage's `returnAssignee`. The executor's Run must be committed with exactly one plan attempt. Otherwise its Run is refused before it starts.
+- Its model calls use a stage-bound `review_model` capability and are reserved under the plan's model budget. Its approval comment (`call_api`, `POST /api/issues/{id}/comments`) and each read of one of the issue's declared required-output documents (`read_document` with exactly `{ "key": <output key> }`) are charged once each to the plan's tool budget. Every other tool is refused while the plan is active. A completion Reviewer may read the declared output documents the same way.
+- Its own run result keeps the issue status, and after it records its stage decision its workspace is discarded rather than copied back.
+
 After the stages:
 
 - The final approval is still recorded (`outcome: "approved"`), and `executionState.status` becomes `completed` with `lastDecisionId` set to that decision.
