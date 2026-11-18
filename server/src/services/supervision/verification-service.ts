@@ -19,7 +19,7 @@ import { validateWorkflowOutput } from "../workflows/workflow-output-schema.js";
 import { reconcileOrchestrationAttempts } from "../orchestration/orchestration-admission.js";
 import { orchestrationService, assertOrchestrationSources } from "../orchestration/orchestration-service.js";
 import { issueService, executeIssuePostCommitActions, type IssuePostCommitAction } from "../issues.js";
-import { parseIssueExecutionState } from "../issue-execution-policy.js";
+import { normalizeIssueExecutionPolicy, parseIssueExecutionState } from "../issue-execution-policy.js";
 import { enqueueSupervisionStop, ensureSupervisionSession } from "./supervision-outbox.js";
 import { conflict, notFound } from "../../errors.js";
 
@@ -148,27 +148,44 @@ export function verificationService(db: Db) {
         evidence.push({ ref: `tool:${receipt.id}`,type: "tool_receipt",sourceId: receipt.id,sourceVersion: receipt.updatedAt.toISOString(),hash: nativeSha256({ arguments: receipt.argumentsHash,result: receipt.resultHash,approval: receipt.approvalState }) });
       }
     }
-    // MS1f. A declared execution-policy stage on the subject Task is part of
-    // the result under review. A pending stage refuses verification; the
-    // approving decision of each completed stage is evidence, as ids and
-    // hashes only (never the decision body). For schema-valid plans the
-    // subject Task is also every subject worker's Task (a single worker runs
-    // the root Task; a parallel worker is verified on its own Task first).
+    // MS1f. The declared execution-policy stages of the subject Task are part
+    // of the result under review. Verification passes only when every
+    // declared stage is completed and its latest decision is an approval:
+    // otherwise execution_stage_changes_requested:<stageId> (latest decision
+    // asked for changes and the stage is not back in review) or
+    // execution_stage_incomplete:<stageId> (pending, not started, or completed
+    // without an approval). A pending or returned stage the policy no longer
+    // declares also blocks. The approving latest decision of each completed
+    // stage is evidence, as ids and hashes only (never the decision body).
+    // For schema-valid plans the subject Task is also every subject worker's
+    // Task (a single worker runs the root Task; a parallel worker is verified
+    // on its own Task first).
     const stageState = parseIssueExecutionState(task.executionState);
-    if (stageState?.status === "pending") failures.push(`execution_stage_incomplete:${stageState.currentStageId ?? "unknown"}`);
-    const completedStageIds = stageState?.completedStageIds ?? [];
-    if (completedStageIds.length) {
-      const decisions = await tx.select().from(issueExecutionDecisions).where(and(eq(issueExecutionDecisions.companyId,companyId),eq(issueExecutionDecisions.issueId,task.id),inArray(issueExecutionDecisions.stageId,completedStageIds))).orderBy(desc(issueExecutionDecisions.createdAt),desc(issueExecutionDecisions.id)).limit(257).for("share");
+    let declaredStageIds: string[] = [];
+    try { declaredStageIds = normalizeIssueExecutionPolicy(task.executionPolicy ?? null)?.stages.map(stage => stage.id) ?? []; }
+    catch { failures.push("execution_policy_invalid"); }
+    const completedStageIds = new Set(stageState?.completedStageIds ?? []);
+    const stageIds = [...new Set([...declaredStageIds, ...completedStageIds])];
+    const latestDecisions = new Map<string, typeof issueExecutionDecisions.$inferSelect>();
+    if (stageIds.length) {
+      const decisions = await tx.select().from(issueExecutionDecisions).where(and(eq(issueExecutionDecisions.companyId,companyId),eq(issueExecutionDecisions.issueId,task.id),inArray(issueExecutionDecisions.stageId,stageIds))).orderBy(desc(issueExecutionDecisions.createdAt),desc(issueExecutionDecisions.id)).limit(257).for("share");
       if (decisions.length > 256) throw conflict("The complete verification source set exceeds its budget");
-      const decided = new Set<string>();
-      for (const decision of decisions) {
-        // The latest decision of a completed stage is the one that completed it.
-        if (decided.has(decision.stageId)) continue;
-        decided.add(decision.stageId);
-        if (decision.outcome !== "approved") continue;
-        evidence.push({ ref: `stage_decision:${decision.id}`,type: "stage_decision",sourceId: decision.id,sourceVersion: decision.updatedAt.toISOString(),
-          hash: nativeSha256({ issueId: decision.issueId,stageId: decision.stageId,stageType: decision.stageType,outcome: decision.outcome,actorAgentId: decision.actorAgentId,actorUserId: decision.actorUserId,createdByRunId: decision.createdByRunId,bodySha256: nativeSha256(decision.body) }) });
-      }
+      for (const decision of decisions) if (!latestDecisions.has(decision.stageId)) latestDecisions.set(decision.stageId, decision);
+    }
+    for (const stageId of declaredStageIds) {
+      const latest = latestDecisions.get(stageId);
+      if (completedStageIds.has(stageId) && latest?.outcome === "approved") continue;
+      const inReview = stageState?.status === "pending" && stageState.currentStageId === stageId;
+      failures.push(!inReview && latest?.outcome === "changes_requested" ? `execution_stage_changes_requested:${stageId}` : `execution_stage_incomplete:${stageId}`);
+    }
+    if ((stageState?.status === "pending" || stageState?.status === "changes_requested") && !declaredStageIds.includes(stageState.currentStageId ?? ""))
+      failures.push(`execution_stage_incomplete:${stageState.currentStageId ?? "unknown"}`);
+    for (const stageId of completedStageIds) {
+      // The latest decision of a completed stage is the one that completed it.
+      const decision = latestDecisions.get(stageId);
+      if (decision?.outcome !== "approved") continue;
+      evidence.push({ ref: `stage_decision:${decision.id}`,type: "stage_decision",sourceId: decision.id,sourceVersion: decision.updatedAt.toISOString(),
+        hash: nativeSha256({ issueId: decision.issueId,stageId: decision.stageId,stageType: decision.stageType,outcome: decision.outcome,actorAgentId: decision.actorAgentId,actorUserId: decision.actorUserId,createdByRunId: decision.createdByRunId,bodySha256: nativeSha256(decision.body) }) });
     }
     const manifests = subjectAttempts.flatMap(a => a.executionManifestId ? [a.executionManifestId] : []);
     if (manifests.length) {

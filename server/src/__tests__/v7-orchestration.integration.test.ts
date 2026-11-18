@@ -378,9 +378,66 @@ const support = await getEmbeddedPostgresTestSupport();
       const packet = await verificationService(db).packet(f.actor,f.home,plan.id);
       expect(packet.evidence.filter(e => e.type === "stage_decision").map(e => e.sourceId)).toEqual([last.id]);
       expect(packet.evidence.some(e => e.sourceId === first.id)).toBe(false);
-      // A later changes-requested decision on a stage still listed as completed is not approval evidence.
+      // A later changes-requested decision on a stage still listed as completed is not approval evidence, and blocks.
       await decide("changes_requested", now);
-      expect((await verificationService(db).packet(f.actor,f.home,plan.id)).evidence.filter(e => e.type === "stage_decision")).toEqual([]);
+      const reopened = await verificationService(db).packet(f.actor,f.home,plan.id);
+      expect(reopened.evidence.filter(e => e.type === "stage_decision")).toEqual([]);
+      expect(reopened.deterministicFailures).toEqual([`execution_stage_changes_requested:${stageId}`]);
+    });
+
+    it("passes only when every declared stage is completed with an approved latest decision", async () => {
+      await instanceSettingsService(db).updateExperimental({ supervision_v7: true,verifier_v7: true });
+      const plan = await started(), execution = await run(); await execution.prepare(); await saveOutput(); await successful(execution);
+      const reviewer = await stageReviewer(), verifier = verificationService(db);
+      const failures = async () => (await verifier.packet(f.actor,f.home,plan.id)).deterministicFailures;
+      // A stored policy that no longer parses fails closed.
+      await db.update(issues).set({ executionPolicy: { stages: [{ type: "review", participants: [{ type: "agent" }] }] } }).where(eq(issues.id, task.id));
+      expect(await failures()).toContain("execution_policy_invalid");
+      const policy = normalizeIssueExecutionPolicy({ stages: [{ type: "review", participants: [{ type: "agent", agentId: reviewer.id }] },
+        { type: "approval", participants: [{ type: "user", userId: f.userId }] }] })!;
+      const [review, approval] = policy.stages.map(stage => stage.id) as [string, string];
+      const base = { currentStageIndex: null, currentStageType: null, currentParticipant: null, returnAssignee: { type: "agent", agentId: f.presence.id, userId: null },
+        reviewRequest: null, lastDecisionId: null, lastDecisionOutcome: null, changesRequestedCount: 0 };
+      const state = (status: string, currentStageId: string | null, completedStageIds: string[]) =>
+        db.update(issues).set({ executionPolicy: policy as unknown as Record<string, unknown>, executionState: { ...base, status, currentStageId, completedStageIds } }).where(eq(issues.id, task.id));
+      let at = Date.now() - 60_000;
+      const decide = (stageId: string, outcome: "approved" | "changes_requested") => db.insert(issueExecutionDecisions).values({ companyId: f.home, issueId: task.id,
+        stageId, stageType: stageId === review ? "review" : "approval", actorAgentId: stageId === review ? reviewer.id : null, actorUserId: stageId === review ? null : f.userId,
+        outcome, body: `${outcome} ${stageId}`, createdAt: new Date(at += 1000) }).returning().then(rows => rows[0]!);
+
+      // Declared but not started.
+      await db.update(issues).set({ executionPolicy: policy as unknown as Record<string, unknown>, executionState: null }).where(eq(issues.id, task.id));
+      expect(await failures()).toEqual([`execution_stage_incomplete:${approval}`, `execution_stage_incomplete:${review}`].sort());
+      // The Reviewer asks for changes: the stage is returned, verification is refused.
+      await decide(review, "changes_requested"); await state("changes_requested", review, []);
+      const returned = await verifier.packet(f.actor,f.home,plan.id);
+      expect(returned.deterministicFailures).toEqual([`execution_stage_changes_requested:${review}`, `execution_stage_incomplete:${approval}`].sort());
+      const refused = await verifier.review(f.actor,f.home,plan.id,passing(returned));
+      expect(refused.result).toBe("fail"); expect(refused.failedInvariants).toContain(`execution_stage_changes_requested:${review}`);
+      expect(await taskStatus()).not.toBe("done");
+      // Resubmitted: back in review, still incomplete.
+      await state("pending", review, []);
+      expect(await failures()).toEqual([`execution_stage_incomplete:${approval}`, `execution_stage_incomplete:${review}`].sort());
+      // Re-approved; the approval stage is now in review.
+      await decide(review, "approved"); await state("pending", approval, [review]);
+      expect(await failures()).toEqual([`execution_stage_incomplete:${approval}`]);
+      // An approval recorded while its stage is not completed is not enough, nor a completion without an approval.
+      const approved = await decide(approval, "approved");
+      expect(await failures()).toEqual([`execution_stage_incomplete:${approval}`]);
+      await db.delete(issueExecutionDecisions).where(eq(issueExecutionDecisions.id, approved.id));
+      await state("completed", null, [review, approval]);
+      expect(await failures()).toEqual([`execution_stage_incomplete:${approval}`]);
+      await decide(approval, "approved");
+      // A pending stage the policy no longer declares still blocks.
+      const undeclared = randomUUID();
+      await state("pending", undeclared, [review, approval]);
+      expect(await failures()).toEqual([`execution_stage_incomplete:${undeclared}`]);
+      await state("completed", null, [review, approval]);
+      const current = await verifier.packet(f.actor,f.home,plan.id);
+      expect(current.deterministicFailures).toEqual([]);
+      expect(current.evidence.filter(e => e.type === "stage_decision")).toHaveLength(2);
+      expect((await verifier.review(f.actor,f.home,plan.id,passing(current))).result).toBe("pass");
+      expect(await taskStatus()).toBe("done");
     });
 
     it("refuses a parallel worker's verification while a stage on its Task is pending, so its join stays closed", async () => {
