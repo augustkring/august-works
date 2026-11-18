@@ -10604,7 +10604,7 @@
         },
         {
           "path": "server/src/services/workspace-runtime.ts",
-          "sha256": "9bea9b30457d3700a8f9440c47e4fecedc43edb2ae42920e4e41eaae344e6085"
+          "sha256": "6e1b90ae6f78b77c4bf312483b2467d184445c64273306015ffb4114f81fe0c7"
         }
       ],
       "kind": "safe_change_record",
@@ -20212,7 +20212,7 @@
         },
         {
           "path": "packages/db/src/test-embedded-postgres.ts",
-          "sha256": "9f989d24cc239759f144bb82fd65409013f1d4f54ccab3e0a4a3a427f405a1f2"
+          "sha256": "36825261ef5c067d885b665285676813fdd16bda76d99914eb865441e1630834"
         },
         {
           "path": "packages/db/src/transient-write-retry.test.ts",
@@ -21304,11 +21304,11 @@
         },
         {
           "path": "server/src/services/context/context-engine.test.ts",
-          "sha256": "b8c7cc408916009dd3fb5c962d8aaa414c227e502edfd2c87e1c06bb0f66b237"
+          "sha256": "b1ed37ef8a5a99a6db1c6b17753878d4ae845e3db54e5c5896570cca96d4c93b"
         },
         {
           "path": "server/src/services/context/context-engine.ts",
-          "sha256": "3c87eeef23b240e8b1fb0359cc475a7df3703db1c2a689e459ae9208f7e73d7d"
+          "sha256": "3fccaebc9fe30c08c37e5dcdbb82f4817d7d7605b8959403805ffa1b45107e71"
         },
         {
           "path": "server/src/services/context/context-manifest.test.ts",
@@ -30467,11 +30467,11 @@
         },
         {
           "path": "server/src/services/business-experiments/analysis.ts",
-          "sha256": "750bb0ea12d8cb7f8a95f13cea0367bafc8454f1a9f794e0d1b4a0633cf4dd61"
+          "sha256": "115c564e4d39e4095a114115d6bdb549a80c98adb0ee3481403da2fb73c27f94"
         },
         {
           "path": "server/src/services/business-experiments/receipts.ts",
-          "sha256": "c69663b618ee371dc3e27e7cbf139ad94e63c8b9ce8d25dc190d0fa90bb73d5e"
+          "sha256": "483c74d7cc23a48971388383d83b5ac6c628eed0a80e1a51a18ee2288677aca1"
         },
         {
           "path": "server/src/services/business-experiments/results.ts",
@@ -51621,7 +51621,7 @@
       "id": "source:server/src/services/workspace-runtime.ts",
       "kind": "current_source_owner",
       "path": "server/src/services/workspace-runtime.ts",
-      "sha256": "9bea9b30457d3700a8f9440c47e4fecedc43edb2ae42920e4e41eaae344e6085",
+      "sha256": "6e1b90ae6f78b77c4bf312483b2467d184445c64273306015ffb4114f81fe0c7",
       "changeIds": [
         "SCR-V10-HOTSPOT-08"
       ],
@@ -59260,7 +59260,7 @@
       "id": "source:packages/db/src/test-embedded-postgres.ts",
       "kind": "current_source_owner",
       "path": "packages/db/src/test-embedded-postgres.ts",
-      "sha256": "9f989d24cc239759f144bb82fd65409013f1d4f54ccab3e0a4a3a427f405a1f2",
+      "sha256": "36825261ef5c067d885b665285676813fdd16bda76d99914eb865441e1630834",
       "changeIds": [
         "SCR-V10-DATABASE-SCHEMA-AND-MIGRATIONS"
       ],
@@ -59995,7 +59995,7 @@
       "id": "source:server/src/services/context/context-engine.test.ts",
       "kind": "current_source_owner",
       "path": "server/src/services/context/context-engine.test.ts",
-      "sha256": "b8c7cc408916009dd3fb5c962d8aaa414c227e502edfd2c87e1c06bb0f66b237",
+      "sha256": "b1ed37ef8a5a99a6db1c6b17753878d4ae845e3db54e5c5896570cca96d4c93b",
       "changeIds": [
         "SCR-V10-PRIVATE-DATA-ERASURE"
       ],
@@ -60010,7 +60010,7 @@
       "id": "source:server/src/services/context/context-engine.ts",
       "kind": "current_source_owner",
       "path": "server/src/services/context/context-engine.ts",
-      "sha256": "3c87eeef23b240e8b1fb0359cc475a7df3703db1c2a689e459ae9208f7e73d7d",
+      "sha256": "3fccaebc9fe30c08c37e5dcdbb82f4817d7d7605b8959403805ffa1b45107e71",
       "changeIds": [
         "SCR-V10-PRIVATE-DATA-ERASURE"
       ],
@@ -70680,7 +70680,7 @@
       "id": "source:server/src/services/business-experiments/analysis.ts",
       "kind": "current_source_owner",
       "path": "server/src/services/business-experiments/analysis.ts",
-      "sha256": "750bb0ea12d8cb7f8a95f13cea0367bafc8454f1a9f794e0d1b4a0633cf4dd61",
+      "sha256": "115c564e4d39e4095a114115d6bdb549a80c98adb0ee3481403da2fb73c27f94",
       "changeIds": [
         "SCR-V10-ANALYTICS-LEARNING"
       ],
@@ -70695,7 +70695,7 @@
       "id": "source:server/src/services/business-experiments/receipts.ts",
       "kind": "current_source_owner",
       "path": "server/src/services/business-experiments/receipts.ts",
-      "sha256": "c69663b618ee371dc3e27e7cbf139ad94e63c8b9ce8d25dc190d0fa90bb73d5e",
+      "sha256": "483c74d7cc23a48971388383d83b5ac6c628eed0a80e1a51a18ee2288677aca1",
       "changeIds": [
         "SCR-V10-ANALYTICS-LEARNING"
       ],

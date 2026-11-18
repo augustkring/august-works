@@ -1613,10 +1613,10 @@
     {
       "source": "server/src/services/workspace-runtime.ts",
       "articleId": "recovering-work",
-      "sourceSha256": "9bea9b30457d3700a8f9440c47e4fecedc43edb2ae42920e4e41eaae344e6085",
+      "sourceSha256": "6e1b90ae6f78b77c4bf312483b2467d184445c64273306015ffb4114f81fe0c7",
       "articleSha256": "0296c2c8ae18c613eef9c17ea9679b146e8afbcd3504451a5511a218d6d8b955",
-      "decision": "updated",
-      "rationale": "Cleanup keeps Git workspaces without exact restoration proof and avoids removing non-empty local workspaces; the article tells owners to review files reported as kept."
+      "decision": "no_change",
+      "rationale": "Port allocation now retries an unattributed listener on the next port without the extra 250 ms wait; workspace cleanup and restoration behavior described in the article is unchanged."
     },
     {
       "source": "ui/src/components/IssueBlockedNotice.tsx",
@@ -1717,10 +1717,10 @@
     {
       "source": "server/src/services/workspace-runtime.ts",
       "articleId": "recovering-work-da",
-      "sourceSha256": "9bea9b30457d3700a8f9440c47e4fecedc43edb2ae42920e4e41eaae344e6085",
+      "sourceSha256": "6e1b90ae6f78b77c4bf312483b2467d184445c64273306015ffb4114f81fe0c7",
       "articleSha256": "ce0a7beaa56a5db23963d81eed8c19687d2efc5405773ec33dfd635a377090bc",
-      "decision": "updated",
-      "rationale": "Danish version checked against the same current source behavior: Cleanup keeps Git workspaces without exact restoration proof and avoids removing non-empty local workspaces; the article tells owners to review files reported as kept."
+      "decision": "no_change",
+      "rationale": "Danish version checked against the same source change: port allocation retries an unattributed listener without the extra wait; cleanup and restoration behavior in the article is unchanged."
     },
     {
       "source": "ui/src/components/IssueBlockedNotice.tsx",
