@@ -131,7 +131,7 @@ When an orchestration plan that is not finished covers the issue (the plan's own
 - The final approval is still recorded (`outcome: "approved"`), and `executionState.status` becomes `completed` with `lastDecisionId` set to that decision.
 - The issue stays `in_review` and returns to the stage's `returnAssignee` (the plan Worker) without waking it.
 - The `issue.updated` activity records `taskCompletion: "awaiting_plan_verification"` and the plan id.
-- Plan verification is refused while a stage is still pending (deterministic failure `execution_stage_incomplete:<stageId>`). The verification packet cites each completed stage's approving decision as `stage_decision:<decisionId>` evidence, as ids and hashes only (never the decision text).
+- Plan verification passes only when every declared stage is completed and its latest decision is an approval. Otherwise it reports the deterministic failure `execution_stage_changes_requested:<stageId>` (the latest decision asked for changes and the stage is not back in review) or `execution_stage_incomplete:<stageId>` (pending, not started, or completed without an approval); a pending or returned stage the policy no longer declares also blocks. The verification packet cites each completed stage's approving decision as `stage_decision:<decisionId>` evidence, as ids and hashes only (never the decision text).
 
 Requesting changes is unchanged. Without a covering plan, the final approval moves the issue to `done` as before.
 
