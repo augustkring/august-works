@@ -637,11 +637,17 @@ export function companyService(db: Db) {
       return result.company;
     },
 
-    remove: (id: string) =>
-      db.transaction(async (tx) => {
+    remove: async (id: string) => {
+      // PRIV-R7 (CE-15). The company's Run rows are the only owners of their
+      // runtime files and durable session folders; erase those files with the
+      // removal and refuse (409) while a Run is live or erasure is pending.
+      const runtimeErasure = await import("./native-runtime/native-run-deletion-erasure.js");
+      await runtimeErasure.closeWarmNativeOwnersBeforeRunDeletion(db, { companyId: id });
+      return db.transaction(async (tx) => {
         // The legacy local remove has no durable provider-erasure owner.
         // Preserve its original semantics only after protected images have
         // settled; it cannot report completion while leaving their objects.
+        await runtimeErasure.lockNativeRunDeletionPrivacy(tx as unknown as Db, id);
         await tx.select({ id: companies.id }).from(companies).where(eq(companies.id, id)).for("update");
         await companyTransferRunService.assertCompanyExportErasureComplete(tx as unknown as Db, id);
         await assertCompanyManagedSecretErasureComplete(tx, id);
@@ -659,6 +665,7 @@ export function companyService(db: Db) {
         )).limit(1);
         if (pendingImages.length || pendingReceipts.length)
           throw conflict("Company removal requires confirmed protected-image erasure");
+        const runFiles = await runtimeErasure.prepareNativeRunDeletionErasure(tx as unknown as Db, { companyId: id });
         // Delete from child tables in dependency order
         // The original feedback root owns its private access and event rows
         // through tenant-bound cascade FKs. Erase it before its company.
@@ -678,7 +685,7 @@ export function companyService(db: Db) {
         await tx.delete(agentTaskSessions).where(eq(agentTaskSessions.companyId, id));
         await tx.delete(activityLog).where(eq(activityLog.companyId, id));
         await tx.delete(runIdentityContexts).where(eq(runIdentityContexts.companyId, id));
-        await tx.delete(heartbeatRuns).where(eq(heartbeatRuns.companyId, id));
+        const deletedRuns = await tx.delete(heartbeatRuns).where(eq(heartbeatRuns.companyId, id)).returning({ id: heartbeatRuns.id });
         await tx.delete(agentWakeupRequests).where(eq(agentWakeupRequests.companyId, id));
         await tx.delete(agentApiKeys).where(eq(agentApiKeys.companyId, id));
         await tx.delete(agentRuntimeState).where(eq(agentRuntimeState.companyId, id));
@@ -709,6 +716,9 @@ export function companyService(db: Db) {
           .delete(companies)
           .where(eq(companies.id, id))
           .returning();
+        // Files are erased only after every row deletion succeeded; an erasure
+        // failure rolls the removal back.
+        if (rows[0]) await runFiles.execute(deletedRuns.map((run) => run.id));
         return rows[0] ?? null;
       }).catch((error: unknown) => {
         // Classification follows transaction rollback. A dependency refusal
@@ -724,7 +734,8 @@ export function companyService(db: Db) {
           cause = pg.cause;
         }
         throw error;
-      }),
+      });
+    },
 
     stats: () =>
       Promise.all([

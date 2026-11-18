@@ -123,4 +123,40 @@ describe("Companies page", () => {
       root.unmount();
     });
   });
+
+  it("shows why a refused organization removal deleted nothing", async () => {
+    // PRIV-R7: the legacy removal refuses (409) while a run is active or its
+    // runtime files cannot be erased yet. The confirmation must say so.
+    const refusal = "The company's saved runtime files could not be erased yet, so nothing was deleted.";
+    mockCompaniesApi.remove.mockRejectedValue(new Error(refusal));
+    const root = await renderPage();
+    const pointerClick = (el: Element) => {
+      el.dispatchEvent(new PointerEvent("pointerdown", { bubbles: true, cancelable: true, button: 0 }));
+      el.dispatchEvent(new PointerEvent("pointerup", { bubbles: true, cancelable: true, button: 0 }));
+      (el as HTMLElement).click();
+    };
+
+    const trigger = container.querySelector("[aria-haspopup='menu']");
+    expect(trigger).not.toBeNull();
+    act(() => pointerClick(trigger!));
+    await flushReact();
+    const menuItem = [...document.querySelectorAll("[role='menuitem']")]
+      .find((item) => item.textContent?.includes("Delete Organization"));
+    expect(menuItem).toBeDefined();
+    act(() => pointerClick(menuItem!));
+    await flushReact();
+    const confirm = [...container.querySelectorAll("button")].find((button) => button.textContent === "Delete");
+    expect(confirm).toBeDefined();
+    act(() => (confirm as HTMLButtonElement).click());
+    await flushReact();
+    await flushReact();
+
+    expect(mockCompaniesApi.remove).toHaveBeenCalledWith("company-1");
+    expect(container.querySelector("[role='alert']")?.textContent).toBe(refusal);
+    expect(container.textContent).toContain("Delete this organization and all its data?");
+
+    act(() => {
+      root.unmount();
+    });
+  });
 });

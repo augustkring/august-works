@@ -9,10 +9,10 @@ owner: augustkring/august-works
 maturity: preview
 applicable_product_versions: [V10]
 locale: da
-last_verified_at: 2026-11-02
+last_verified_at: 2026-11-17
 review_trigger: Ændringer i Co-worker-opsætning, kontoforbindelser, status, pause eller opgavefordeling
 security_or_privacy_sensitive: true
-linked_source_files: [ui/src/pages/Agents.tsx, ui/src/components/AgentModelMigrationMonitor.tsx, server/src/services/agents/authoring-model-migration-monitor.ts, server/src/services/agents/authoring-tests.ts, ui/src/pages/AgentDetail.tsx, server/src/services/agents.ts, server/src/services/agents/authoring-publication.ts, server/src/services/experience/model-retirement-notices.ts, ui/src/components/AgentRuntimeCandidates.tsx, ui/src/components/AgentDraftPublication.tsx, ui/src/components/MandatoryProductNotices.tsx, server/src/services/native-runtime/paid-transport-admission.ts, packages/adapter-utils/src/paid-model-probe.ts]
+linked_source_files: [ui/src/pages/Agents.tsx, ui/src/components/AgentModelMigrationMonitor.tsx, server/src/services/agents/authoring-model-migration-monitor.ts, server/src/services/agents/authoring-tests.ts, ui/src/pages/AgentDetail.tsx, server/src/services/agents.ts, server/src/services/agents/authoring-publication.ts, server/src/services/experience/model-retirement-notices.ts, ui/src/components/AgentRuntimeCandidates.tsx, ui/src/components/AgentDraftPublication.tsx, ui/src/components/MandatoryProductNotices.tsx, server/src/services/native-runtime/paid-transport-admission.ts, packages/adapter-utils/src/paid-model-probe.ts, ui/src/pages/ApprovalDetail.tsx, server/src/services/native-runtime/native-run-deletion-erasure.ts]
 ---
 
 Blentera kalder virksomhedens arbejdere for **Co-workers**. Nogle af de nuværende skærmbilleder bruger stadig betegnelsen **Agent**. Find dem under virksomhedens område for agenter, og åbn en Co-worker for at gennemgå dens indstillinger, forbindelse og seneste arbejde.
@@ -36,6 +36,10 @@ Sæt en Co-worker på pause, hvis den ikke skal modtage nye planlagte eller tild
 Når du tildeler arbejde, skal du gennemgå opgavens instruktioner, ejer og projekt. Opgavesiden viser dens aktuelle status og registrerede resultat. Co-workerens status alene bekræfter ikke, at opgaven er færdig.
 
 Se [Personer og virksomhedsadgang](/da/guides/board-operator/org-structure) for virksomhedens medlemmer og deres adgang. Se [Genoptag afbrudt arbejde](/da/help/recovering-work), hvis en opgave ikke blev færdig.
+
+## Slet en afvist Co-worker
+
+Hvis en ansættelsesanmodning blev afvist, kan du slette Co-workeren fra godkendelsessiden. Når du sletter en Co-worker, fjernes dens kørsler. For Native-kørsler sletter Blentera også de runtimefiler og den gemte sessionstilstand, der er gemt for kørslerne. Hvis en af kørslerne stadig er aktiv, eller filerne endnu ikke kan slettes, slettes intet, og siden viser årsagen. Stop kørslen, og prøv igen. Blentera kan ikke slette filer i en ekstern sandkasse på denne måde, så en Co-worker med sådanne kørsler slettes ikke. Sæt den på pause i stedet. Det samme gælder, hvis en kørsel allerede har afsluttede arbejdsposter: der slettes intet, og siden beder dig sætte Co-workeren på pause i stedet.
 
 ## Gennemgå et modelskift
 
