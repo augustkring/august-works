@@ -5,6 +5,7 @@ import {
   agentExecutionManifests,
   agentPresenceRuntimeBindings,
   agentProviderBindings,
+  agentWakeupRequests,
   agents,
   billingAccountCompanies,
   billingAccounts,
@@ -70,6 +71,7 @@ import { executionSandboxService } from "../execution-sandbox/sandbox-service.js
 import { currentWorkerNativePreparationRoot, nativeManagedModelIssuer, nativeModelSessionOwnerLane,
   nativeReviewerModelCredentialExact } from "../runtime/control.js";
 import { createRuntimeToolsToken } from "../../runtime-tools-token.js";
+import { nativeTaskWakeReason } from "../native-stage-wake-source.js";
 import { parseNativeExecutionInput } from "../../vendor/paperclip-runner/index.js";
 import { nativeSha256 } from "./canonical.js";
 import { instanceSettingsService } from "../instance-settings.js";
@@ -779,6 +781,156 @@ describeDb("current Native completion Reviewer sandbox owner (MS1h2)", () => {
       expect(issuer({ hasWorkerAttempt: true })).toBe("worker");
       expect(issuer({})).toBe("worker");
       expect(issuer({ providerConformanceBootstrap: true, contextSnapshot: review })).toBe("conformance");
+    });
+  });
+  // MS1h8. The wake reason owner shared by the bootstrap capture and the
+  // dispatch recheck: a Native completion review Run's exactly bound status
+  // wake intent; every other Run keeps the caller's reason.
+  describe("Native completion review wake reason owner (MS1h8)", () => {
+    /** The committer's review intent (coalesced) and the dispatcher's receipt
+     * for it, admitted by the Reviewer's Run; `promoted` receipts carry the
+     * reason that deferred-wake promotion writes. */
+    async function reviewWake(ids: Ids, options: { promoted?: boolean } = {}) {
+      const intentId = randomUUID(), receiptId = randomUUID(), key = `native-review:${ids.interaction}`;
+      const review = { nativeReviewInteractionId: ids.interaction, nativeReviewDecisionId: ids.decision };
+      const wakeContext = { issueId: ids.issue, taskId: ids.issue, ...review, forceFreshSession: true,
+        wakeReason: "native_completion_review", source: "native_status_decision", statusDecisionSource: "native_status_decision" };
+      await db.insert(agentWakeupRequests).values([
+        { id: intentId, companyId: ids.company, agentId: ids.reviewer, source: "automation", triggerDetail: "system",
+          reason: "native_completion_review", status: "coalesced", requestedByActorType: "system",
+          requestedByActorId: "native-status-committer", idempotencyKey: key,
+          payload: { issueId: ids.issue, taskId: ids.issue, ...review, _paperclipWakeContext: wakeContext } },
+        { id: receiptId, companyId: ids.company, agentId: ids.reviewer, source: "automation", triggerDetail: "system",
+          reason: options.promoted === false ? "native_completion_review" : "issue_execution_promoted", status: "claimed",
+          requestedByActorType: "system", requestedByActorId: `native-status-wake-dispatch:${intentId}`, idempotencyKey: key,
+          runId: ids.reviewerRun, payload: { issueId: ids.issue, taskId: ids.issue, ...review,
+            _paperclipWakeContext: { ...wakeContext, nativeStatusWakeIntentId: intentId } } },
+      ]);
+      const [run] = await db.select().from(heartbeatRuns).where(eq(heartbeatRuns.id, ids.reviewerRun));
+      await db.update(heartbeatRuns).set({ wakeupRequestId: receiptId, contextSnapshot: { ...run!.contextSnapshot,
+        wakeReason: "native_completion_review", source: "native_status_decision", nativeStatusWakeIntentId: intentId } })
+        .where(eq(heartbeatRuns.id, ids.reviewerRun));
+      return { intentId, receiptId, key };
+    }
+    const reviewerRunRow = async (ids: Ids) => (await db.select().from(heartbeatRuns).where(eq(heartbeatRuns.id, ids.reviewerRun)))[0]!;
+    const owner = async (ids: Ids, overrides: Partial<Parameters<typeof nativeTaskWakeReason>[1]> = {}) => {
+      const run = await reviewerRunRow(ids);
+      return db.transaction(tx => nativeTaskWakeReason(tx as never, { companyId: ids.company, issueId: ids.issue, run,
+        defaultReason: "issue_execution_promoted", ...overrides }));
+    };
+    const setContext = async (ids: Ids, change: (context: Record<string, unknown>) => Record<string, unknown>) => {
+      const run = await reviewerRunRow(ids);
+      await db.update(heartbeatRuns).set({ contextSnapshot: change({ ...run.contextSnapshot }) }).where(eq(heartbeatRuns.id, ids.reviewerRun));
+    };
+    const intentRow = (wake: { intentId: string }) => eq(agentWakeupRequests.id, wake.intentId);
+    const receiptRow = (wake: { receiptId: string }) => eq(agentWakeupRequests.id, wake.receiptId);
+
+    it("takes a promoted Reviewer wake's reason from its exactly bound intent, for bootstrap and recheck alike", async () => {
+      const ids = await seed();
+      await reviewWake(ids);
+      const expected = { reason: "native_completion_review", owner: "review_intent" };
+      // Recheck default: the admitted (promoted) row's reason.
+      await expect(owner(ids)).resolves.toEqual(expected);
+      // Bootstrap default: the Run context's reason.
+      await expect(owner(ids, { defaultReason: "native_completion_review" })).resolves.toEqual(expected);
+    });
+
+    it("binds a Reviewer wake that was delivered without deferral", async () => {
+      const ids = await seed();
+      await reviewWake(ids, { promoted: false });
+      await expect(owner(ids, { defaultReason: "native_completion_review" }))
+        .resolves.toEqual({ reason: "native_completion_review", owner: "review_intent" });
+    });
+
+    it("keeps the caller's reason for a review Run that names no intent", async () => {
+      const ids = await seed();
+      await reviewWake(ids);
+      await setContext(ids, ({ nativeStatusWakeIntentId: _intent, ...context }) => context);
+      await expect(owner(ids)).resolves.toEqual({ reason: "issue_execution_promoted", owner: "default" });
+    });
+
+    it("keeps the admitted row's reason for a promoted wake that is not a Native review", async () => {
+      const ids = await seed();
+      await reviewWake(ids);
+      await setContext(ids, ({ nativeReviewInteractionId: _interaction, nativeReviewDecisionId: _decision, ...context }) => context);
+      await expect(owner(ids)).resolves.toEqual({ reason: "issue_execution_promoted", owner: "default" });
+    });
+
+    const refusals: Array<[string, (ids: Ids, wake: Awaited<ReturnType<typeof reviewWake>>) =>
+      Promise<Partial<Parameters<typeof nativeTaskWakeReason>[1]> | void>]> = [
+      ["a forged intent id", ids => setContext(ids, context => ({ ...context, nativeStatusWakeIntentId: randomUUID() }))],
+      ["a malformed intent id", ids => setContext(ids, context => ({ ...context, nativeStatusWakeIntentId: "intent" }))],
+      ["an intent for another Run", (ids, wake) => db.update(agentWakeupRequests).set({ runId: ids.sourceRun })
+        .where(intentRow(wake)).then(() => undefined)],
+      ["an intent for another Task", async (ids, wake) => {
+        const [intent] = await db.select().from(agentWakeupRequests).where(intentRow(wake));
+        await db.update(agentWakeupRequests).set({ payload: { ...intent!.payload, issueId: ids.otherIssue } }).where(intentRow(wake));
+      }],
+      ["an intent for another Agent", (ids, wake) => db.update(agentWakeupRequests).set({ agentId: ids.outsider })
+        .where(intentRow(wake)).then(() => undefined)],
+      ["another company", async ids => ({ companyId: ids.otherCompany })],
+      ["an intent and receipt keyed to another review", async (_ids, wake) => {
+        // Both rows keep one shared key, which names another review interaction.
+        const key = `native-review:${randomUUID()}`;
+        await db.update(agentWakeupRequests).set({ idempotencyKey: key }).where(intentRow(wake));
+        await db.update(agentWakeupRequests).set({ idempotencyKey: key }).where(receiptRow(wake));
+      }],
+      ["an intent stored under another company", async (ids, wake) => {
+        // Same id shape and binding, but the named intent row belongs to another company.
+        const [intent] = await db.select().from(agentWakeupRequests).where(intentRow(wake));
+        const foreign = randomUUID();
+        await db.insert(agentWakeupRequests).values({ ...intent!, id: foreign, companyId: ids.otherCompany });
+        await db.update(agentWakeupRequests).set({ requestedByActorId: `native-status-wake-dispatch:${foreign}` }).where(receiptRow(wake));
+        await setContext(ids, context => ({ ...context, nativeStatusWakeIntentId: foreign }));
+      }],
+      ["an admitted row stored under another company", async (ids, wake) => {
+        const [receipt] = await db.select().from(agentWakeupRequests).where(receiptRow(wake));
+        const foreign = randomUUID();
+        await db.insert(agentWakeupRequests).values({ ...receipt!, id: foreign, companyId: ids.otherCompany });
+        await db.update(heartbeatRuns).set({ wakeupRequestId: foreign }).where(eq(heartbeatRuns.id, ids.reviewerRun));
+      }],
+      ["a Run admitted by another row while the receipt exists", async (ids, wake) => {
+        // A wake the Run coalesced into: the dispatcher's receipt still names this Run, but is not the admitted row.
+        const [receipt] = await db.select().from(agentWakeupRequests).where(receiptRow(wake));
+        const other = randomUUID();
+        await db.insert(agentWakeupRequests).values({ ...receipt!, id: other, requestedByActorType: "user",
+          requestedByActorId: ids.user, idempotencyKey: `other:${other}` });
+        await db.update(heartbeatRuns).set({ wakeupRequestId: other }).where(eq(heartbeatRuns.id, ids.reviewerRun));
+      }],
+      ["a receipt with another idempotency key", (_ids, wake) => db.update(agentWakeupRequests)
+        .set({ idempotencyKey: `native-review:${randomUUID()}` }).where(receiptRow(wake)).then(() => undefined)],
+      ["an admitted row that is not the intent's dispatch receipt", (_ids, wake) => db.update(agentWakeupRequests)
+        .set({ requestedByActorId: `native-status-wake-dispatch:${randomUUID()}` }).where(receiptRow(wake)).then(() => undefined)],
+      ["an admitted row not requested by the system dispatcher", (_ids, wake) => db.update(agentWakeupRequests)
+        .set({ requestedByActorType: "agent" }).where(receiptRow(wake)).then(() => undefined)],
+      ["an admitted row of another Run", (ids, wake) => db.update(agentWakeupRequests).set({ runId: ids.sourceRun })
+        .where(receiptRow(wake)).then(() => undefined)],
+      ["an admitted row of another Agent", (ids, wake) => db.update(agentWakeupRequests).set({ agentId: ids.outsider })
+        .where(receiptRow(wake)).then(() => undefined)],
+      ["a Run without an admitted wake", async ids => ({ run: { ...(await reviewerRunRow(ids)), wakeupRequestId: null } })],
+      ["an intent with another reason", (_ids, wake) => db.update(agentWakeupRequests).set({ reason: "issue_status_changed" })
+        .where(intentRow(wake)).then(() => undefined)],
+      ["an intent not written by the status committer", (_ids, wake) => db.update(agentWakeupRequests)
+        .set({ requestedByActorId: "someone-else" }).where(intentRow(wake)).then(() => undefined)],
+      ["an intent not requested by the system", (_ids, wake) => db.update(agentWakeupRequests)
+        .set({ requestedByActorType: "user" }).where(intentRow(wake)).then(() => undefined)],
+      ["an intent naming another review interaction", async (_ids, wake) => {
+        const [intent] = await db.select().from(agentWakeupRequests).where(intentRow(wake));
+        await db.update(agentWakeupRequests).set({ payload: { ...intent!.payload, nativeReviewInteractionId: randomUUID() } })
+          .where(intentRow(wake));
+      }],
+      ["an intent naming another review decision", async (_ids, wake) => {
+        const [intent] = await db.select().from(agentWakeupRequests).where(intentRow(wake));
+        await db.update(agentWakeupRequests).set({ payload: { ...intent!.payload, nativeReviewDecisionId: randomUUID() } })
+          .where(intentRow(wake));
+      }],
+    ];
+    it.each(refusals)("refuses %s", async (_name, arrange) => {
+      const ids = await seed();
+      const wake = await reviewWake(ids);
+      await expect(owner(ids)).resolves.toEqual({ reason: "native_completion_review", owner: "review_intent" });
+      const overrides = await arrange(ids, wake);
+      await expect(owner(ids, overrides ?? {})).resolves.toBeNull();
     });
   });
   describe("sandbox policy guard trigger (migration 0582)", () => {

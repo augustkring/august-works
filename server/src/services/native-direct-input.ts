@@ -55,7 +55,7 @@ import { captureNativeTaskWakeSource, type NativeConsumedSourceComponent, type N
 import { captureNativeReviewWakeWitness, getNativeReviewAssignment, getNativeReviewSourceAssignment,
   readNativeReviewAssignmentContext } from "./native-runtime/native-review-participant.js";
 import { assertV7Authorization } from "./v7-authorization.js";
-import { captureNativeExecutionStageTaskWakeSource } from "./native-stage-wake-source.js";
+import { captureNativeExecutionStageTaskWakeSource, nativeTaskWakeReason } from "./native-stage-wake-source.js";
 import { isCurrentConversationModelRoot } from "./native-runtime/worker-conversation-root.js";
 import { readNativeChannelConversationScope } from "./native-runtime/native-channel-conversation-owner.js";
 import { issueTreeControlService, isVerifiedIssueTreeControlInteractionWake } from "./issue-tree-control.js";
@@ -2737,6 +2737,12 @@ async function assertNativeTaskWakeSourceCurrentInScope(db: Db | Transaction, sc
   )).limit(1) : [];
   // Control wakes can coalesce into Run context; original wake authority is the exact admitted queue row.
   if (!admittedWake) throw forbidden("The original Native task wake is unavailable");
+  // MS1h8. A Native completion review Run's wake reason belongs to its exactly
+  // bound native status wake intent (deferred-wake promotion rewrites the
+  // admitted row's reason); every other Run keeps the admitted row's reason.
+  const wakeReasonOwner = run ? await nativeTaskWakeReason(db, { companyId: input.companyId, issueId: input.issueId, run,
+    defaultReason: admittedWake.reason }) : { reason: admittedWake.reason, owner: "default" as const };
+  if (!wakeReasonOwner) throw forbidden("The original Native review wake request changed");
   const reviewContext = run ? (await import("./native-runtime/native-review-participant.js")).readNativeReviewAssignmentContext(run.contextSnapshot) : null;
   let reviewWitness: import("./native-runtime/native-review-participant.js").NativeReviewWakeWitness | null = null;
   if (Boolean(reviewContext) !== Boolean(input.source.nativeReview)) throw forbidden("A Native review wake source changed");
@@ -3250,7 +3256,7 @@ async function assertNativeTaskWakeSourceCurrentInScope(db: Db | Transaction, sc
       externalChatProvider, canonicalInitialGuidance, nativeInitialGuidance,
       workspaceCapture, workspaceCoordinationCapture, blockedHumanInteraction, treeHoldInteractionSource,
       wakeupRequestId: run.wakeupRequestId, continuationCapture, ordinaryPlanRead,
-      historicalPendingSources: input.historicalTransition ? pendingInteractions : undefined, persistedWakeReason: admittedWake.reason,
+      historicalPendingSources: input.historicalTransition ? pendingInteractions : undefined, persistedWakeReason: wakeReasonOwner.reason,
       task: wakeTask, checkoutRunId: context?.paperclipHarnessCheckedOut === true ? input.runId : null,
       commentSources: input.inputs.filter((value): value is Extract<NativePayloadSourceInput, { kind: "comment" }> =>
         value.kind === "comment"), nativeReviewWitness: reviewWitness, payload: wake,

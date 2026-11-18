@@ -11,6 +11,7 @@ import { createRunSecretRedactionRegistry } from "./run-secret-redaction.js";
 import { parseIssueExecutionState } from "./issue-execution-policy.js";
 import { captureNativeFinalizedStageTaskBodyRead, nativeRunInputSourceReceiptPrefixMatches } from "./native-stage-task-body-source.js";
 import { captureNativeFinalizedContinuationSummary, type NativeStageTaskContinuationTrigger } from "./execution-continuation.js";
+import { readNativeReviewAssignmentContext } from "./native-runtime/native-review-participant.js";
 
 /** Live selection requires the receiver's own actor context. Historical
  * selection relaxes that identity check only; its actual consumption proof and
@@ -191,12 +192,8 @@ export async function captureNativeExecutionStageTaskWakeSource(db: Db | Transac
     !sameStage(intentContext.executionStage, stage) || !sameStage(reviewerContext.executionStage, stage) ||
     !sameStage(payload.executionStage, stage)) return null;
 
-  const [deliveredWake] = await db.select().from(agentWakeupRequests).where(and(
-    eq(agentWakeupRequests.companyId, input.companyId), eq(agentWakeupRequests.id, reviewerRun.wakeupRequestId),
-    eq(agentWakeupRequests.agentId, reviewerRun.agentId), eq(agentWakeupRequests.runId, reviewerRun.id),
-    eq(agentWakeupRequests.requestedByActorType, "system"),
-    eq(agentWakeupRequests.requestedByActorId, `native-status-wake-dispatch:${intent.id}`),
-  )).limit(1).for("share");
+  const deliveredWake = await readNativeStatusWakeDispatchReceipt(db, { companyId: input.companyId,
+    run: { id: reviewerRun.id, agentId: reviewerRun.agentId, wakeupRequestId: reviewerRun.wakeupRequestId }, intentId: intent.id });
   const deliveredPayload = record(deliveredWake?.payload);
   if (!deliveredWake || !deliveredPayload || deliveredWake.source !== "assignment" || deliveredWake.reason !== intent.reason ||
     deliveredPayload.issueId !== input.issueId || deliveredPayload.mutation !== "update" ||
@@ -276,6 +273,57 @@ export async function captureNativeExecutionStageTaskWakeSource(db: Db | Transac
   });
   if (source && closedContinuation) input.onContinuationCapture?.(closedContinuation);
   return source ? { ...source, contentHash: nativeSha256(input.payload) } : null;
+}
+
+/** The exact delivered receipt of one native status wake intent: this Run's
+ * admitted wake row, which the post-commit dispatcher created for that intent
+ * (`requestedByActorId native-status-wake-dispatch:<intent id>`). Shared by the
+ * execution-stage owner and the Native completion review wake reason. */
+export async function readNativeStatusWakeDispatchReceipt(db: Db | Transaction, input: { companyId: string;
+  run: { id: string; agentId: string; wakeupRequestId: string }; intentId: string }) {
+  const [deliveredWake] = await db.select().from(agentWakeupRequests).where(and(
+    eq(agentWakeupRequests.companyId, input.companyId), eq(agentWakeupRequests.id, input.run.wakeupRequestId),
+    eq(agentWakeupRequests.agentId, input.run.agentId), eq(agentWakeupRequests.runId, input.run.id),
+    eq(agentWakeupRequests.requestedByActorType, "system"),
+    eq(agentWakeupRequests.requestedByActorId, `native-status-wake-dispatch:${input.intentId}`),
+  )).limit(1).for("share");
+  return deliveredWake ?? null;
+}
+
+/** MS1h8. The wake reason owner of a Native completion review Run whose
+ * context names its native status wake intent (`nativeStatusWakeIntentId`).
+ * When the Reviewer's dispatch receipt waits behind the executor's execution
+ * lock, deferred-wake promotion rewrites that admitted row's `reason` to
+ * `issue_execution_promoted`; the original intent keeps the committer's
+ * `native_completion_review`. The intent owns the reason only when it is
+ * exactly bound to this Run, Task, Agent and review, and the Run's admitted row
+ * is the dispatcher's receipt for it with the same idempotency key (the
+ * binding the execution-stage owner uses). Bootstrap capture and the dispatch
+ * recheck both read the reason here, so they agree. Every other Run keeps
+ * `defaultReason` (bootstrap: the Run context; recheck: the admitted row).
+ * Null means a review Run names an intent that is not exactly bound: refuse. */
+export async function nativeTaskWakeReason(db: Db | Transaction, input: { companyId: string; issueId: string;
+  run: Pick<typeof heartbeatRuns.$inferSelect, "id" | "agentId" | "wakeupRequestId" | "contextSnapshot">;
+  defaultReason: string | null }): Promise<{ reason: string | null; owner: "default" | "review_intent" } | null> {
+  const context = record(input.run.contextSnapshot);
+  const review = readNativeReviewAssignmentContext(input.run.contextSnapshot);
+  if (!review || !context || !Object.hasOwn(context, "nativeStatusWakeIntentId"))
+    return { reason: input.defaultReason, owner: "default" };
+  const intentId = nonEmpty(context.nativeStatusWakeIntentId);
+  if (!intentId || !/^[a-f0-9]{8}-[a-f0-9]{4}-[1-8][a-f0-9]{3}-[89ab][a-f0-9]{3}-[a-f0-9]{12}$/i.test(intentId) ||
+    !input.run.agentId || !input.run.wakeupRequestId) return null;
+  const [intent] = await db.select().from(agentWakeupRequests).where(and(eq(agentWakeupRequests.companyId, input.companyId),
+    eq(agentWakeupRequests.id, intentId), eq(agentWakeupRequests.agentId, input.run.agentId))).limit(1).for("share");
+  const intentPayload = record(intent?.payload);
+  if (!intent || intent.reason !== "native_completion_review" || intent.requestedByActorType !== "system" ||
+    intent.requestedByActorId !== "native-status-committer" || (intent.runId !== null && intent.runId !== input.run.id) ||
+    intent.idempotencyKey !== `native-review:${review.nativeReviewInteractionId}` || intentPayload?.issueId !== input.issueId ||
+    intentPayload.nativeReviewInteractionId !== review.nativeReviewInteractionId ||
+    intentPayload.nativeReviewDecisionId !== review.nativeReviewDecisionId) return null;
+  const delivered = await readNativeStatusWakeDispatchReceipt(db, { companyId: input.companyId,
+    run: { id: input.run.id, agentId: input.run.agentId, wakeupRequestId: input.run.wakeupRequestId }, intentId: intent.id });
+  if (!delivered || delivered.idempotencyKey !== intent.idempotencyKey) return null;
+  return { reason: intent.reason, owner: "review_intent" };
 }
 
 type NativeStageOrigin = {intentId:string;intentHash:string;effectId:string;effectHash:string;decisionId:string;decisionHash:string;
