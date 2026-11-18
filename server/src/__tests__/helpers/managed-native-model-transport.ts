@@ -204,10 +204,14 @@ function socketOwner(client: Socket, until: number) {
   const rows = Buffer.concat(chunks, total).toString("utf8").split("\n").slice(1).map(row => row.trim().split(/\s+/))
     .filter(fields => fields[1] === local && fields[2] === remote && fields[3] === "01");
   checked(rows.length === 1 && /^[1-9]\d*$/.test(rows[0]?.[9] ?? "")); const inode = rows[0]![9]!;
-  const owners = new Set<number>(); let visited = 0;
+  // MS1h10. Two bounds: at most 8192 processes, and at most 131072 visited
+  // processes plus descriptors. The process bound used the shared counter, so
+  // a later Run on a busier local host (the completion Reviewer after its
+  // executor) tripped it after about 8192 descriptors.
+  const owners = new Set<number>(); let visited = 0, processes = 0;
   for (const pidText of readdirSync("/proc")) {
     if (!/^\d+$/.test(pidText)) continue;
-    checked(Date.now() < until && ++visited <= 8192);
+    checked(Date.now() < until && ++processes <= 8192 && ++visited <= 131072);
     const pid = Number(pidText);
     try {
       if (statSync(`/proc/${pid}`).uid !== process.getuid?.()) continue;
