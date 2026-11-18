@@ -32692,7 +32692,7 @@
         },
         {
           "path": "doc/operations/v10-capability-projection.json",
-          "sha256": "1fca9a924c7056b2f4cd05183c16301405c31a8227549b334a6183b3c48cc555"
+          "sha256": "0b350163b35d6e4df855877b311e9738a14b70968298ba54ac4cc0fb06d833e8"
         },
         {
           "path": "package.json",
@@ -73095,7 +73095,7 @@
       "id": "source:doc/operations/v10-capability-projection.json",
       "kind": "current_source_owner",
       "path": "doc/operations/v10-capability-projection.json",
-      "sha256": "1fca9a924c7056b2f4cd05183c16301405c31a8227549b334a6183b3c48cc555",
+      "sha256": "0b350163b35d6e4df855877b311e9738a14b70968298ba54ac4cc0fb06d833e8",
       "changeIds": [
         "SCR-V10-CI-RELEASE-AND-CATALOG-GOVERNANCE"
       ],

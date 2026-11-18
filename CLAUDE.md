@@ -70,7 +70,7 @@ run these and commit any regenerated output:
 - `node scripts/build-reference-index.mjs --check`
 - `pnpm -s run check:v10-169-migration-phases`. It has no write mode: if it reports `source pin changed: <path>`, set that path's `sha256` in `doc/operations/aw-v10-evidence/v10-169-migration-phases-current-2026-10-30/phase-matrix.json` to the file's current `sha256sum`.
 - `node scripts/check-help-change-review.mjs --base <full base sha> --head <full head sha>`. If a source file linked from a help article changed, review that article and update `docs/help/change-review.json` (keep its `\u` escaping: write JSON with `ensure_ascii=True`).
-- After a UI change that moves API calls in `ui/src` (the `coverage` job reports `Stale UI client operation inventory entry`): `node scripts/refresh-aw-v10-operation-coverage.mjs --write`, then `node scripts/check-aw-v10-operation-coverage.mjs`. The refresh only updates line numbers of reviewed call sites; a new or changed call still fails and needs review.
+- After a UI change that moves API calls in `ui/src` (the `coverage` job reports `Stale UI client operation inventory entry`): `node scripts/refresh-aw-v10-operation-coverage.mjs --write`, then `node scripts/check-aw-v10-operation-coverage.mjs`, then regenerate the capability projection (`node cli/node_modules/tsx/dist/cli.mjs scripts/generate-v10-capability-projection.ts`, checked by `node scripts/check-v10-capability-projection.mjs`) and the Safe Change graph. The refresh only updates line numbers of reviewed call sites; a new or changed call still fails and needs review.
 
 ## Evidence
 
