@@ -1,7 +1,7 @@
 import { createHash } from "node:crypto";
 import { isDeepStrictEqual } from "node:util";
 import { and, desc, eq, inArray } from "drizzle-orm";
-import { agentExecutionManifests, analyticalContextRoots, completionContracts, contextManifestMemoryRoots, documentRevisions, documents, heartbeatRuns, issueDocuments, issues, orchestrationPlans, orchestrationWorkers, orchestrationWorkerAttempts, orchestrationToolCharges, supervisionSignals, toolInvocations, verificationRuns, type Db } from "@paperclipai/db";
+import { agentExecutionManifests, analyticalContextRoots, completionContracts, contextManifestMemoryRoots, documentRevisions, documents, heartbeatRuns, issueDocuments, issueExecutionDecisions, issues, orchestrationPlans, orchestrationWorkers, orchestrationWorkerAttempts, orchestrationToolCharges, supervisionSignals, toolInvocations, verificationRuns, type Db } from "@paperclipai/db";
 import { nativePayloadSourceInputSchema, nativePayloadSourcePolicySchema, orchestrationCompletionSchema, verificationReviewSchema, trajectoryReviewSchema, type TrajectoryReviewInput, type VerificationPacket, type VerificationEvidenceRef, type VerificationReviewInput } from "@paperclipai/shared";
 import type { AuthorizationActor } from "../authorization.js";
 import { assertV7Authorization, assertV7Enabled, v7HumanActorId } from "../v7-authorization.js";
@@ -19,6 +19,7 @@ import { validateWorkflowOutput } from "../workflows/workflow-output-schema.js";
 import { reconcileOrchestrationAttempts } from "../orchestration/orchestration-admission.js";
 import { orchestrationService, assertOrchestrationSources } from "../orchestration/orchestration-service.js";
 import { issueService, executeIssuePostCommitActions, type IssuePostCommitAction } from "../issues.js";
+import { parseIssueExecutionState } from "../issue-execution-policy.js";
 import { enqueueSupervisionStop, ensureSupervisionSession } from "./supervision-outbox.js";
 import { conflict, notFound } from "../../errors.js";
 
@@ -145,6 +146,28 @@ export function verificationService(db: Db) {
         const receipt = receipts.find(r => r.receipt.toolName === condition.toolName && r.receipt.argumentsHash === condition.argumentsHash && r.receipt.status === "succeeded" && (!condition.requireApproval || r.receipt.approvalState === "approved") && (!worker || subjectAttempts.some(a => a.runId === r.receipt.runId || a.workflowRunId === r.receipt.workflowRunId)))?.receipt;
         if (!receipt) { failures.push(`postcondition_missing:${index}`); continue; }
         evidence.push({ ref: `tool:${receipt.id}`,type: "tool_receipt",sourceId: receipt.id,sourceVersion: receipt.updatedAt.toISOString(),hash: nativeSha256({ arguments: receipt.argumentsHash,result: receipt.resultHash,approval: receipt.approvalState }) });
+      }
+    }
+    // MS1f. A declared execution-policy stage on the subject Task is part of
+    // the result under review. A pending stage refuses verification; the
+    // approving decision of each completed stage is evidence, as ids and
+    // hashes only (never the decision body). For schema-valid plans the
+    // subject Task is also every subject worker's Task (a single worker runs
+    // the root Task; a parallel worker is verified on its own Task first).
+    const stageState = parseIssueExecutionState(task.executionState);
+    if (stageState?.status === "pending") failures.push(`execution_stage_incomplete:${stageState.currentStageId ?? "unknown"}`);
+    const completedStageIds = stageState?.completedStageIds ?? [];
+    if (completedStageIds.length) {
+      const decisions = await tx.select().from(issueExecutionDecisions).where(and(eq(issueExecutionDecisions.companyId,companyId),eq(issueExecutionDecisions.issueId,task.id),inArray(issueExecutionDecisions.stageId,completedStageIds))).orderBy(desc(issueExecutionDecisions.createdAt),desc(issueExecutionDecisions.id)).limit(257).for("share");
+      if (decisions.length > 256) throw conflict("The complete verification source set exceeds its budget");
+      const decided = new Set<string>();
+      for (const decision of decisions) {
+        // The latest decision of a completed stage is the one that completed it.
+        if (decided.has(decision.stageId)) continue;
+        decided.add(decision.stageId);
+        if (decision.outcome !== "approved") continue;
+        evidence.push({ ref: `stage_decision:${decision.id}`,type: "stage_decision",sourceId: decision.id,sourceVersion: decision.updatedAt.toISOString(),
+          hash: nativeSha256({ issueId: decision.issueId,stageId: decision.stageId,stageType: decision.stageType,outcome: decision.outcome,actorAgentId: decision.actorAgentId,actorUserId: decision.actorUserId,createdByRunId: decision.createdByRunId,bodySha256: nativeSha256(decision.body) }) });
       }
     }
     const manifests = subjectAttempts.flatMap(a => a.executionManifestId ? [a.executionManifestId] : []);
