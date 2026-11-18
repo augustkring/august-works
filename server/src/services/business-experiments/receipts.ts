@@ -4,7 +4,7 @@ import { analyticalLineageEdges, analyticalLineageManifests, businessExperimentA
 import { ISSUE_STATUSES, PROJECT_STATUSES, type BusinessExperimentAssignmentView, type BusinessExperimentExposureView, type BusinessExperimentUnitSnapshot } from "@paperclipai/shared";
 import { conflict, notFound, unprocessable } from "../../errors.js";
 import type { AuthorizationActor } from "../authorization.js";
-import { resolveDecisionSigningSecret, signDecisionSpec, verifyDecisionSpec } from "../decision-signing.js";
+import { resolveDecisionSigningSecret, signDecisionSpec, verifyDecisionSpec, withDecisionSigningKey } from "../decision-signing.js";
 import { canonicalNativeJson, nativeSha256 } from "../native-runtime/canonical.js";
 import { authorizeStrategyNativePopulation, authorizeStrategyReference } from "../strategy-execution/references.js";
 import { inspectDecisionSourceAuthority } from "../decision-intelligence.js";
@@ -125,6 +125,11 @@ export function nativeExperimentUnit(tx:Db,companyId:string,actor:AuthorizationA
 /** Registry and recording consumers must authorize every enrolled source before
  * returning any protocol/receipt/aggregate. No recursive registry admission. */
 export async function inspectBusinessExperimentReceipts(tx: Db, companyId: string, actor: AuthorizationActor, version: ExperimentVersion, deadline: number) {
+  // Every receipt and outcome of this one read verifies against the same key,
+  // resolved once instead of once per receipt.
+  return withDecisionSigningKey(() => inspectBusinessExperimentReceiptsWithKey(tx, companyId, actor, version, deadline));
+}
+async function inspectBusinessExperimentReceiptsWithKey(tx: Db, companyId: string, actor: AuthorizationActor, version: ExperimentVersion, deadline: number) {
   const currentUnits = new Map<string, Awaited<ReturnType<typeof nativeExperimentUnit>>>();
   const where = and(eq(businessExperimentExecutions.companyId, companyId), eq(businessExperimentExecutions.experimentId, version.experimentId), eq(businessExperimentExecutions.versionId, version.id));
   const [execution] = await tx.select().from(businessExperimentExecutions).where(where).for("share");
