@@ -672,7 +672,11 @@ export function openShellHostEngine({
     const conversation = decoded?.scope === "conversation_model" && decoded.conversation_model && !decoded.worker_model &&
       uuid.test(decoded.conversation_model.issueId ?? "") && Number.isSafeInteger(decoded.conversation_model.conversationSessionGeneration) &&
       decoded.conversation_model.executionManifestId === request.manifestId && decoded.conversation_model.executionManifestHash === request.manifestHash;
-    if (!decoded || (!worker && !conversation) || decoded.company_id !== scope.companyId || decoded.run_id !== request.runId ||
+    // The assigned Reviewer Run's first sandbox command carries its review
+    // capability without a model session; the binding is checked exactly as
+    // the session path checks it. provider_conformance stays session-only.
+    const review = decoded?.scope === "review_model" && exactReviewModelClaims(decoded, request);
+    if (!decoded || (!worker && !conversation && !review) || decoded.company_id !== scope.companyId || decoded.run_id !== request.runId ||
       typeof decoded.sub !== "string" || !decoded.sub || typeof decoded.responsible_user_id !== "string" ||
       !Number.isSafeInteger(decoded.iat) || !Number.isSafeInteger(decoded.exp) || decoded.exp <= decoded.iat ||
       decoded.exp - decoded.iat > 300 || decoded.exp * 1000 <= Date.now() || decoded.exp * 1000 < Date.parse(broker.expiresAt))
@@ -723,7 +727,25 @@ export function openShellHostEngine({
   // named by the scope (`createRuntimeToolsToken`).
   function closedModelClaims(decoded, family) {
     return closedRecord(decoded, ["company_id", "exp", "iat", "instance_id", family, "responsible_user_id", "run_id", "scope", "sub"]) &&
-      typeof decoded.instance_id === "string" && decoded.instance_id.length > 0 && decoded.responsible_user_id.length > 0;
+      typeof decoded.instance_id === "string" && decoded.instance_id.length > 0 &&
+      typeof decoded.responsible_user_id === "string" && decoded.responsible_user_id.length > 0;
+  }
+  // The assigned Reviewer Run's completion-review binding, closed to the
+  // shared `reviewModelBindingSchema`. The reviewer is this Run and its
+  // agent, the manifest is this request's, and the reviewed source Run is
+  // a different (committed) Run. Used by plain commands and model sessions.
+  function exactReviewModelClaims(decoded, request) {
+    const b = decoded.review_model;
+    return closedModelClaims(decoded, "review_model") && closedRecord(b, ["decisionId", "executionManifestId",
+      "expectedPlanVersion", "interactionId", "issueId", "planId", "reviewerAgentId", "reviewerRunId", "sourceAgentId",
+      "sourceAttemptId", "sourceReceiptDigest", "sourceResultCanonicalSha256", "sourceResultId", "sourceRunId", "sourceWorkerId"]) &&
+      [b.planId, b.issueId, b.interactionId, b.decisionId, b.sourceRunId, b.sourceWorkerId, b.sourceAgentId, b.sourceAttemptId,
+        b.sourceResultId, b.reviewerAgentId, b.reviewerRunId, b.executionManifestId].every(isUuid) &&
+      isHex64(b.sourceReceiptDigest) && typeof b.sourceResultCanonicalSha256 === "string" &&
+      /^(?:sha256:)?[a-f0-9]{64}$/.test(b.sourceResultCanonicalSha256) &&
+      Number.isSafeInteger(b.expectedPlanVersion) && b.expectedPlanVersion >= 1 &&
+      b.reviewerRunId === decoded.run_id && b.reviewerRunId === request.runId && b.reviewerAgentId === decoded.sub &&
+      b.executionManifestId === request.manifestId && b.sourceRunId !== request.runId;
   }
   function modelBrokerSessionCredential(request, scope, descriptor) {
     const broker = request.modelBrokerCredential;
@@ -762,23 +784,9 @@ export function openShellHostEngine({
       authority = { scope: decoded.scope, sub: decoded.sub, company_id: decoded.company_id, run_id: decoded.run_id,
         responsible_user_id: decoded.responsible_user_id, instance_id: decoded.instance_id, provider_conformance: b };
     } else if (decoded.scope === "review_model") {
-      // The assigned Reviewer Run's completion-review binding, closed to the
-      // shared `reviewModelBindingSchema`. The reviewer is this Run and its
-      // agent, the manifest is this request's, and the reviewed source Run is
-      // a different (committed) Run.
-      const b = decoded.review_model;
-      if (!closedModelClaims(decoded, "review_model") || !closedRecord(b, ["decisionId", "executionManifestId",
-        "expectedPlanVersion", "interactionId", "issueId", "planId", "reviewerAgentId", "reviewerRunId", "sourceAgentId",
-        "sourceAttemptId", "sourceReceiptDigest", "sourceResultCanonicalSha256", "sourceResultId", "sourceRunId", "sourceWorkerId"]) ||
-        ![b.planId, b.issueId, b.interactionId, b.decisionId, b.sourceRunId, b.sourceWorkerId, b.sourceAgentId, b.sourceAttemptId,
-          b.sourceResultId, b.reviewerAgentId, b.reviewerRunId, b.executionManifestId].every(isUuid) ||
-        !isHex64(b.sourceReceiptDigest) || typeof b.sourceResultCanonicalSha256 !== "string" ||
-        !/^(?:sha256:)?[a-f0-9]{64}$/.test(b.sourceResultCanonicalSha256) ||
-        !Number.isSafeInteger(b.expectedPlanVersion) || b.expectedPlanVersion < 1 ||
-        b.reviewerRunId !== decoded.run_id || b.reviewerRunId !== request.runId || b.reviewerAgentId !== decoded.sub ||
-        b.executionManifestId !== request.manifestId || b.sourceRunId === request.runId) return null;
+      if (!exactReviewModelClaims(decoded, request)) return null;
       authority = { scope: decoded.scope, sub: decoded.sub, company_id: decoded.company_id, run_id: decoded.run_id,
-        responsible_user_id: decoded.responsible_user_id, instance_id: decoded.instance_id, review_model: b };
+        responsible_user_id: decoded.responsible_user_id, instance_id: decoded.instance_id, review_model: decoded.review_model };
     } else return null;
     return { authorityHash: hash(JSON.stringify(canonical(authority))), capabilityHash: hash(broker.capabilityToken),
       profileId: broker.profileId, profileHash: broker.profileHash, expiresAt: broker.expiresAt,

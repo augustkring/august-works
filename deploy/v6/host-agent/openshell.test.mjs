@@ -1034,14 +1034,29 @@ function brokerExecRequest() {
   }))).digest("hex");
   return { request, token };
 }
-function modelBrokerExecRequest() {
+function modelBrokerExecRequest(family = "worker_model", mutateClaims = null) {
   const request = execRequest();
   const expiresAt = new Date(Math.min(Date.parse(request.deadlineAt), Date.now() + 30000)).toISOString();
-  const claims = { scope: "worker_model", company_id: scope.companyId, run_id: request.runId, sub: randomUUID(),
+  const sub = randomUUID();
+  const baseClaims = { scope: family, company_id: scope.companyId, run_id: request.runId, sub,
     responsible_user_id: randomUUID(), instance_id: randomUUID(), iat: Math.floor(Date.now() / 1000),
-    exp: Math.floor(Date.parse(expiresAt) / 1000) + 1,
-    worker_model: { planId: randomUUID(), workerId: randomUUID(), workerAttemptId: randomUUID(),
-      executionManifestId: request.manifestId, expectedPlanVersion: 1 } };
+    exp: Math.floor(Date.parse(expiresAt) / 1000) + 1 };
+  const familyClaims = family === "worker_model"
+    ? { ...baseClaims, worker_model: { planId: randomUUID(), workerId: randomUUID(), workerAttemptId: randomUUID(),
+      executionManifestId: request.manifestId, expectedPlanVersion: 1 } }
+    : family === "review_model"
+      ? { ...baseClaims, review_model: { planId: randomUUID(), issueId: randomUUID(), interactionId: randomUUID(),
+        decisionId: randomUUID(), sourceRunId: randomUUID(), sourceWorkerId: randomUUID(), sourceAgentId: randomUUID(),
+        sourceAttemptId: randomUUID(), sourceResultId: randomUUID(), sourceReceiptDigest: "d".repeat(64),
+        sourceResultCanonicalSha256: "e".repeat(64), reviewerAgentId: sub, reviewerRunId: request.runId,
+        executionManifestId: request.manifestId, expectedPlanVersion: 3 } }
+      : family === "provider_conformance"
+        ? { ...baseClaims, provider_conformance: { qualificationGroupId: randomUUID(), probeId: randomUUID(),
+          probeRunId: request.runId, planId: randomUUID(), profileId: randomUUID(), dispatchNonce: randomUUID(),
+          authorityHash: "c".repeat(64) } }
+        : { ...baseClaims, conversation_model: { issueId: randomUUID(), conversationSessionGeneration: 4,
+          executionManifestId: request.manifestId, executionManifestHash: request.manifestHash } };
+  const claims = mutateClaims ? mutateClaims(structuredClone(familyClaims), request) : familyClaims;
   const token = `fixture.${Buffer.from(JSON.stringify(claims)).toString("base64url")}.signature`;
   request.env.PAPERCLIP_MANAGED_MODEL_BROKER_ORIGIN = "https://paperclip.example.test";
   request.env.PAPERCLIP_MANAGED_MODEL_INPUT_TOKENS_UPPER_BOUND = "100000";
@@ -3061,6 +3076,67 @@ test("managed model capability uses its exact Messages route profile and stays o
     await assert.rejects(() => engine.executeStream({
       scope: scopeInput, request: forged, capabilityToken: "fixture-token",
     }, () => {}), /sandbox_scope_changed/);
+  }, hooks);
+});
+
+test("a plain managed command attaches an exact review_model credential and refuses it outside the Reviewer binding", async () => {
+  const hooks = exactModelSessionHooks();
+  await fixture(async ({ engine, enablePhysical, setPhase, calls }) => {
+    enablePhysical(); setPhase("Stopped");
+    await engine.execute(randomUUID(), { ...input("apply"), admission: hostAdmission("plain-review-model-policy", policyDocument) }, deadline());
+    await engine.execute(randomUUID(), { ...input("start"), start: { policyHash, expiresAt: new Date(Date.now() + 50000).toISOString(), idempotencyKey: "plain-review-model-start" } }, deadline());
+    const scopeInput = { companyId: scope.companyId, bindingId: scope.bindingId, cellId: scope.cellId, cellGeneration: "1", sandboxRef: scope.sandboxRef };
+    const creates = () => calls.filter(call => call.args.slice(4).join(" ").includes("provider create --name awmb-")).length;
+    const attaches = name => calls.some(call => call.args.slice(4).join(" ").includes(`sandbox provider attach ${scope.sandboxRef} ${name}`));
+    // Positive controls: the exact Reviewer credential, and the unchanged worker and conversation scopes.
+    for (const family of ["review_model", "worker_model", "conversation_model"]) {
+      const before = creates();
+      const { request, token } = modelBrokerExecRequest(family); hooks.brokerToken = token;
+      assert.deepEqual(await engine.executeStream({ scope: scopeInput, request, capabilityToken: "fixture-token" }, () => {}),
+        { exitCode: 0, timedOut: false }, family);
+      assert.equal(creates(), before + 1, `${family}: one provider is created`);
+      assert.ok(attaches(`awmb-${request.requestId.replaceAll("-", "")}`), `${family}: the provider is attached`);
+    }
+    const nowSeconds = () => Math.floor(Date.now() / 1000);
+    const binding = change => claims => ({ ...claims, review_model: change({ ...claims.review_model }) });
+    const omit = key => value => { delete value[key]; return value; };
+    const cases = [
+      ["Reviewer Run is another Run", "review_model", binding(b => ({ ...b, reviewerRunId: randomUUID() }))],
+      ["review token for another Run", "review_model", claims => { const other = randomUUID();
+        return { ...claims, run_id: other, review_model: { ...claims.review_model, reviewerRunId: other } }; }],
+      ["review token for another company", "review_model", claims => ({ ...claims, company_id: randomUUID() })],
+      ["reviewer agent is not the subject", "review_model", binding(b => ({ ...b, reviewerAgentId: randomUUID() }))],
+      ["review manifest is another manifest", "review_model", binding(b => ({ ...b, executionManifestId: randomUUID() }))],
+      ["reviewed source Run is the Reviewer Run", "review_model", (claims, request) => ({ ...claims,
+        review_model: { ...claims.review_model, sourceRunId: request.runId } })],
+      ["extra review binding field", "review_model", binding(b => ({ ...b, workerAttemptId: randomUUID() }))],
+      ["missing review source result", "review_model", binding(omit("sourceResultId"))],
+      ["missing review interaction", "review_model", binding(omit("interactionId"))],
+      ["prefixed review receipt digest", "review_model", binding(b => ({ ...b, sourceReceiptDigest: `sha256:${"d".repeat(64)}` }))],
+      ["review plan version zero", "review_model", binding(b => ({ ...b, expectedPlanVersion: 0 }))],
+      ["review id is not a UUID", "review_model", binding(b => ({ ...b, planId: "plan-1" }))],
+      ["review binding is not an object", "review_model", claims => ({ ...claims, review_model: [claims.review_model] })],
+      ["extra review claim member", "review_model", claims => ({ ...claims, aud: "paperclip-model-broker" })],
+      ["missing review instance", "review_model", claims => { delete claims.instance_id; return claims; }],
+      ["null review responsible user", "review_model", claims => ({ ...claims, responsible_user_id: null })],
+      ["expired review token", "review_model", claims => ({ ...claims, iat: nowSeconds() - 50, exp: nowSeconds() - 1 })],
+      ["review token longer than 300 seconds", "review_model", claims => ({ ...claims, iat: claims.exp - 301 })],
+      ["review token with a second worker binding", "review_model", claims => ({ ...claims,
+        worker_model: { planId: randomUUID(), workerId: randomUUID(), workerAttemptId: randomUUID(), executionManifestId: randomUUID(), expectedPlanVersion: 1 } })],
+      ["worker scope carrying a review binding", "review_model", claims => ({ ...claims, scope: "worker_model" })],
+      ["missing scope", "review_model", claims => { delete claims.scope; return claims; }],
+      ["exact provider_conformance credential on a plain command", "provider_conformance", null],
+      ["review scope carrying a conformance binding", "provider_conformance", claims => ({ ...claims, scope: "review_model" })],
+    ];
+    hooks.forbidSpawn = true;
+    for (const [name, family, mutate] of cases) {
+      const before = creates();
+      const { request, token } = modelBrokerExecRequest(family, mutate);
+      hooks.brokerToken = token;
+      await assert.rejects(engine.executeStream({ scope: scopeInput, request, capabilityToken: "fixture-token" }, () => {}),
+        /sandbox_scope_changed/, name);
+      assert.equal(creates(), before, `${name}: no provider is created`);
+    }
   }, hooks);
 });
 

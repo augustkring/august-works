@@ -40,6 +40,8 @@ import type { BetterAuthSessionResult } from "../../auth/better-auth.js";
 import { createLocalDiskStorageProvider } from "../../storage/local-disk-provider.js";
 import { createStorageService } from "../../storage/service.js";
 import { verifyRuntimeToolsToken } from "../../runtime-tools-token.js";
+import { HttpError } from "../../errors.js";
+import { readNativeReviewAssignmentContext } from "../../services/native-runtime/native-review-participant.js";
 import { setupRunnerPrpWebSocketServer, runnerPrpWebSocketInternals } from "../../realtime/runner-prp-ws.js";
 import { createToolGatewayService } from "../../services/tool-gateway.js";
 import { createManagedAssignedGatewayResultObserver } from "./assigned-tool-gateway-result-observer.js";
@@ -378,7 +380,7 @@ export async function withManagedNativeHeartbeatFixture<T>(input: Omit<FrameInpu
   }
   const executionsByRun = new Map<string, { execution: NativeExecutionInput; issueId: string | null; agentId: string }>();
   const preModelFailures = new Map<string, { stage: "input" | "host" | "mint" | "issuer";
-    code: string; httpStatus: number | null }>();
+    code: string; httpStatus: number | null; refusal: string | null }>();
   let activeToken: string | null = null;
   let activeExecution: import("../../vendor/paperclip-runner/index.js").NativeExecutionInput | null = null;
   let activeRunId: string | null = null;
@@ -1125,17 +1127,27 @@ export async function withManagedNativeHeartbeatFixture<T>(input: Omit<FrameInpu
     const [ownerRun] = await db.select({ contextSnapshot: heartbeatRuns.contextSnapshot }).from(heartbeatRuns)
       .where(and(eq(heartbeatRuns.companyId, companyId), eq(heartbeatRuns.id, runId), eq(heartbeatRuns.agentId, currentAgentId))).limit(1);
     const nativeConversation = ownerRun?.contextSnapshot?.conversationMode === true;
+    // Same selection as RuntimeControl's dispatch mint (`control.ts`): a Run
+    // with a Native review context and no worker attempt is an assigned
+    // completion Reviewer and mints only through `issueForReviewRun`.
+    const nativeReview = !nativeConversation && !input.controlledNativeSessionBackendFactory &&
+      readNativeReviewAssignmentContext(ownerRun?.contextSnapshot) !== null &&
+      (await db.select({ id: orchestrationWorkerAttempts.id }).from(orchestrationWorkerAttempts)
+        .where(and(eq(orchestrationWorkerAttempts.companyId, companyId), eq(orchestrationWorkerAttempts.runId, runId))).limit(1)).length === 0;
+    const mintedScope = nativeConversation ? "conversation_model" : nativeReview ? "review_model" : "worker_model";
     const minted = input.controlledNativeSessionBackendFactory ? null : nativeConversation
       ? await gateway.issueForConversationRun({ companyId, agentId: currentAgentId, runId, responsibleUserId })
-      : await gateway.issueForRun({ companyId, agentId: currentAgentId, runId, responsibleUserId });
+      : nativeReview
+        ? await gateway.issueForReviewRun({ companyId, agentId: currentAgentId, runId, responsibleUserId })
+        : await gateway.issueForRun({ companyId, agentId: currentAgentId, runId, responsibleUserId });
     stage = "issuer";
     if (minted) {
-      const claims = nativeConversation ? verifyRuntimeToolsToken(minted.token, "conversation_model")
-        : verifyRuntimeToolsToken(minted.token, "worker_model");
-      if (!claims || claims.scope !== (nativeConversation ? "conversation_model" : "worker_model"))
+      const claims = verifyRuntimeToolsToken(minted.token, mintedScope);
+      const manifestId = mintedScope === "conversation_model" ? claims?.conversation_model?.executionManifestId
+        : mintedScope === "review_model" ? claims?.review_model?.executionManifestId : claims?.worker_model?.executionManifestId;
+      if (!claims || claims.scope !== mintedScope || !manifestId)
         throw new Error("scheduler_fixture_issuer_scope_missing");
-      issuerFacts.push({ scope: claims.scope, runId: claims.run_id,
-        manifestId: nativeConversation ? claims.conversation_model!.executionManifestId : claims.worker_model!.executionManifestId });
+      issuerFacts.push({ scope: claims.scope, runId: claims.run_id, manifestId });
     }
     return { PATH: `${dirname(input.opencodeBinary)}:${process.env.PATH ?? ""}`,
       OPENCODE_DISABLE_DEFAULT_PLUGINS: "true", OPENCODE_DISABLE_MODELS_FETCH: "true",
@@ -1197,7 +1209,12 @@ export async function withManagedNativeHeartbeatFixture<T>(input: Omit<FrameInpu
         const code = typeof firstLine === "string" && labels.has(firstLine) ? firstLine : "OTHER";
         const httpStatus = typeof row.status === "number" && Number.isInteger(row.status)
           && row.status >= 100 && row.status <= 599 ? row.status : null;
-        if (!preModelFailures.has(runId)) preModelFailures.set(runId, { stage, code, httpStatus });
+        // A typed gateway/RuntimeControl refusal at mint or issuer carries a
+        // fixed server message; keep its first line (bounded) so CI names the
+        // exact gate. Other errors keep only the closed label.
+        const refusal = (stage === "mint" || stage === "issuer") && error instanceof HttpError &&
+          error.status >= 400 && error.status < 500 && typeof firstLine === "string" ? firstLine.slice(0, 240) : null;
+        if (!preModelFailures.has(runId)) preModelFailures.set(runId, { stage, code, httpStatus, refusal });
       } catch { /* Failure projection must never replace the original error. */ }
       throw error;
     }
