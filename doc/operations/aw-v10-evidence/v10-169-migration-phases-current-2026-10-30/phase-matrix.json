@@ -655,10 +655,11 @@
       "purpose": "PRIV-R8. Keep the content-free controller durable session folder record (runner_profile_json.nativeDurableSessionScope: scope digests and the server-generated session id) when Source erasure scrubs a Run profile, so runtime asset erasure, company purge, offboarding and Run deletion can find a folder that a crash left without a runner identity.",
       "authority": "The Native executor writes the record under the Run row lock before it migrates, renames or creates the folder. The record grants nothing: erasure only uses it to attribute a folder to its own Run's company and to leave another owner's folder alone.",
       "durableState": [
-        "heartbeat_runs.runner_profile_json.nativeDurableSessionScope {schema, normalizedSessionId, scopeSha256[]} retained through aw_erase_workflow_agent_payload; every other scrubbed column and key is unchanged"
+        "heartbeat_runs.runner_profile_json.nativeDurableSessionScope {schema, normalizedSessionId, scopeSha256[]} retained through aw_erase_workflow_agent_payload only when public.aw_native_durable_session_scope_only accepts it; every other scrubbed column and key is unchanged",
+        "aw_native_run_input_source_receipt_binding (exact 0545 copy) treats a profile holding only that record as cleared when an erased Run drops its native input receipt"
       ],
-      "compatibility": "Trigger-only replacement of aw_erase_workflow_agent_payload with one changed assignment; no column, index or backfill. Runs from before the change have no record and stay on the fail-closed unattributed-folder path (pending while recent, instance-orphan erasure after 24 hours).",
-      "recovery": "Rolling back restores the previous scrub (the record is nulled with the profile); erasure then treats affected folders as unattributed and still never reports false success. Re-applying the migration is idempotent (CREATE OR REPLACE).",
+      "compatibility": "Trigger/function-only: adds IMMUTABLE aw_native_durable_session_scope_only and replaces aw_erase_workflow_agent_payload (0488) and aw_native_run_input_source_receipt_binding (0545) with one changed assignment and two widened cleared-profile conditions; no column, index or backfill. Runs from before the change have no record and stay on the fail-closed unattributed-folder path (pending while recent, instance-orphan erasure after 24 hours).",
+      "recovery": "Rolling back restores the previous scrub and receipt guard (the record is nulled with the profile); erasure then treats affected folders as unattributed and still never reports false success. Re-applying the migration is idempotent (CREATE OR REPLACE).",
       "owners": [
         "packages/db/src/migrations/0583_native_durable_session_scope_retention.sql",
         "server/src/services/native-runtime/native-durable-session-scope.ts",
@@ -1531,7 +1532,7 @@
     },
     {
       "path": "server/src/services/memory/memory-privacy.ts",
-      "sha256": "73b794e43d02cda32e53b2f38eda0380f4e56d55ab92047bb907a16841c00659"
+      "sha256": "f9bfb8c209344dd73f5655caa0833adad00618874a61485c36dac76a73f41b62"
     },
     {
       "path": "server/src/services/native-runtime/native-model-input-dispatch.integration.test.ts",
@@ -1659,7 +1660,7 @@
     },
     {
       "path": "packages/db/src/migrations/0583_native_durable_session_scope_retention.sql",
-      "sha256": "a60247cd7e72e08b98ef55a6f0265865c7b6fcc91a15f3affc9a78022df9c298"
+      "sha256": "402f03f1edd52e49febf1e43ff92363d20ba606f9c206e83b8d5819fb551360b"
     },
     {
       "path": "server/src/services/native-runtime/native-durable-session-scope.ts",
@@ -1671,7 +1672,7 @@
     },
     {
       "path": "server/src/services/native-runtime/native-durable-session-erasure.integration.test.ts",
-      "sha256": "992a45cbbaafa70887772186df69c65331696566f476139ba508ec942baecaad"
+      "sha256": "ef71b985f1ba42c1c7f243d4bb3d8adafac36b7108b96efc47786753c939672c"
     },
     {
       "path": "packages/db/src/migrations/meta/0583_snapshot.json",
@@ -1715,7 +1716,7 @@
     "0580": "Extends existing shared durable-execution policy/admission to export claims and uncertain allocated writes, preserving original Native cleanup predicates, configured limits and Stop/settlement bypass. Adds only a partial active-liability index; no new queue or invented quota.",
     "0581": "Replaces only the review_source_result_canonical_sha256 pattern in orchestration_model_reservation_scope_ck so a review-model reservation accepts the stored Native result hash verbatim in either form (ControlPlanePort plain hex or durable-coordinator sha256: prefix). No backfill; the previous CHECK admitted no plain-hex rows, so no existing row can violate the new one.",
     "0582": "Replaces aw_v7_sandbox_policy_guard with every original clause intact and one alternative to the Task assignee: aw_v10_current_native_reviewer_run, the SQL mirror of currentNativeReviewerRun (pending native completion review addressed to the policy's Agent with this acting Run, Task in review with this execution Run, running Native Run and manifest with the same Human, invokable Reviewer, committed source Run with cleanup done), on a visible Task only. Company-scoped reads; no backfill, no credential or connection authority; a Reviewer policy still carries no credential binding (the broker owner refuses one).",
-    "0583": "Replaces aw_erase_workflow_agent_payload from 0488 with every scrub intact except that a heartbeat_runs profile keeps only its content-free nativeDurableSessionScope record instead of becoming NULL. No schema change, no backfill."
+    "0583": "Adds aw_native_durable_session_scope_only and replaces aw_erase_workflow_agent_payload (0488) and aw_native_run_input_source_receipt_binding (0545) with every check intact, except that an erased heartbeat_runs profile keeps only a well-formed content-free nativeDurableSessionScope record (instead of NULL) and the receipt guard accepts that record as a cleared profile. No schema change, no backfill."
   },
   "revisionDate": "2026-11-12",
   "sourceHead": "884dbba4a78603a791b65471e41fe950a23e2e4f",

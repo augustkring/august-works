@@ -385,6 +385,71 @@ const sha256 = (value: string) => createHash("sha256").update(value).digest("hex
     for (const target of s.untouched) expect(await exists(target)).toBe(true);
   });
 
+  // R8-G (CI regression): the 0545 input receipt guard let an erased Run drop
+  // its receipt only with a NULL or empty profile, so keeping the folder record
+  // made Source erasure of any Native Run with an input receipt fail.
+  async function withInputReceipt(runId: string, profile: Record<string, unknown>) {
+    await db.transaction(async tx => {
+      // Fixture only: a real receipt needs the full dispatch graph; bypass its binding check for this write.
+      await tx.execute(sql`set local session_replication_role = 'replica'`);
+      await tx.update(heartbeatRuns).set({ nativeInputSourceProtocolVersion: 1, runnerProfileJson: profile })
+        .where(eq(heartbeatRuns.id, runId));
+    });
+  }
+  function scopeRecord(sessionId: string, digests: unknown[]) {
+    return { schema: "paperclip.native-durable-session-scope.v1", normalizedSessionId: sessionId, scopeSha256: digests };
+  }
+  async function profileOf(runId: string) {
+    const [row] = await db.select({ profile: heartbeatRuns.runnerProfileJson }).from(heartbeatRuns).where(eq(heartbeatRuns.id, runId));
+    return row?.profile ?? null;
+  }
+
+  it("Source erasure of a Native Run with an input receipt keeps only a well-formed folder record (R8-G)", async () => {
+    const t = await tenant();
+    const sessionId = randomUUID(), digest = sha256(`scope:${randomUUID()}`);
+    const receiptProfile = (scope: unknown) => ({ nativeInputSourceReceipt: { fixture: true },
+      nativeExecutionInput: { private: "prompt" }, [NATIVE_DURABLE_SESSION_SCOPE_KEY]: scope });
+    // Erasure owner path (memory-privacy), well-formed and malformed records.
+    const kept = await insertRun({ ...t, sessionId });
+    const malformed = await insertRun({ ...t, sessionId });
+    await withInputReceipt(kept, receiptProfile(scopeRecord(sessionId, [digest])));
+    await withInputReceipt(malformed, receiptProfile(scopeRecord(sessionId, ["not-a-digest"])));
+    await db.transaction(async tx => {
+      await lockMemoryPrivacy(tx as never, t.companyId);
+      await purgeDerivedWorkflowMemory(tx as never, t.companyId, [], new Date(),
+        { workflowRevisionIds: [], artifactVersionIds: [], runIds: [kept, malformed] });
+    });
+    expect(await profileOf(kept)).toEqual({ [NATIVE_DURABLE_SESSION_SCOPE_KEY]: scopeRecord(sessionId, [digest]) });
+    expect(await profileOf(malformed)).toBeNull();
+    // Trigger path: any later write to a Run of the erased Task scrubs it.
+    const later = await insertRun({ ...t, sessionId });
+    await withInputReceipt(later, { ...receiptProfile(scopeRecord(sessionId, [digest])), extra: "private" });
+    await db.update(heartbeatRuns).set({ errorCode: "fixture_touch" }).where(eq(heartbeatRuns.id, later));
+    expect(await profileOf(later)).toEqual({ [NATIVE_DURABLE_SESSION_SCOPE_KEY]: scopeRecord(sessionId, [digest]) });
+    // A live Run cannot use the record (alone or with other keys) to drop its receipt.
+    const live = await insertRun({ ...t, issueId: t.liveIssueId, sessionId: randomUUID() });
+    await withInputReceipt(live, receiptProfile(scopeRecord(sessionId, [digest])));
+    for (const profile of [{ [NATIVE_DURABLE_SESSION_SCOPE_KEY]: scopeRecord(sessionId, [digest]) },
+      { [NATIVE_DURABLE_SESSION_SCOPE_KEY]: scopeRecord(sessionId, [digest]), extra: 1 }])
+      await expect(db.update(heartbeatRuns).set({ runnerProfileJson: profile }).where(eq(heartbeatRuns.id, live)))
+        .rejects.toMatchObject({ cause: expect.objectContaining({ message: "Native run input receipt cannot be removed" }) });
+    expect(await profileOf(live)).toMatchObject({ nativeInputSourceReceipt: { fixture: true } });
+    // The helper admits exactly the record and nothing else.
+    const only = async (value: unknown) => (await db.execute(sql`select public.aw_native_durable_session_scope_only(${JSON.stringify(value)}::jsonb) as ok`) as unknown as Array<{ ok: boolean }>)[0]!.ok;
+    const record = scopeRecord(sessionId, [digest]);
+    expect(await only({ [NATIVE_DURABLE_SESSION_SCOPE_KEY]: record })).toBe(true);
+    expect(await only({ [NATIVE_DURABLE_SESSION_SCOPE_KEY]: scopeRecord(`session-${randomUUID()}`, [digest, sha256("b")]) })).toBe(true);
+    for (const value of [null, {}, { [NATIVE_DURABLE_SESSION_SCOPE_KEY]: record, extra: 1 },
+      { [NATIVE_DURABLE_SESSION_SCOPE_KEY]: { ...record, extra: 1 } },
+      { [NATIVE_DURABLE_SESSION_SCOPE_KEY]: { ...record, schema: "other" } },
+      { [NATIVE_DURABLE_SESSION_SCOPE_KEY]: scopeRecord("prompt text", [digest]) },
+      { [NATIVE_DURABLE_SESSION_SCOPE_KEY]: scopeRecord(sessionId, []) },
+      { [NATIVE_DURABLE_SESSION_SCOPE_KEY]: scopeRecord(sessionId, Array.from({ length: 17 }, (_, i) => sha256(String(i)))) },
+      { [NATIVE_DURABLE_SESSION_SCOPE_KEY]: scopeRecord(sessionId, [digest.toUpperCase()]) },
+      { [NATIVE_DURABLE_SESSION_SCOPE_KEY]: scopeRecord(sessionId, [1]) }])
+      expect(await only(value)).toBe(false);
+  });
+
   it("another company's unreadable folder does not block this company's erasure", async () => {
     const s = await seedSession();
     // Company B: a recorded folder with a corrupt identity, and an older

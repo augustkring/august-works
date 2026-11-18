@@ -669,7 +669,7 @@
     {
       "source": "server/src/services/memory/memory-privacy.ts",
       "articleId": "export-and-delete",
-      "sourceSha256": "73b794e43d02cda32e53b2f38eda0380f4e56d55ab92047bb907a16841c00659",
+      "sourceSha256": "f9bfb8c209344dd73f5655caa0833adad00618874a61485c36dac76a73f41b62",
       "articleSha256": "25db726931b7999c19f56322106777efa7bb26904630c527dcdfc9a07286f0c7",
       "decision": "updated",
       "rationale": "Added that erasure also covers a session folder an interrupted run left before saving its state, stays pending while a recently used folder cannot yet be matched to an organization, and erases a folder no run claims after a day unused (PRIV-R8)."
@@ -749,7 +749,7 @@
     {
       "source": "server/src/services/memory/memory-privacy.ts",
       "articleId": "export-and-delete-da",
-      "sourceSha256": "73b794e43d02cda32e53b2f38eda0380f4e56d55ab92047bb907a16841c00659",
+      "sourceSha256": "f9bfb8c209344dd73f5655caa0833adad00618874a61485c36dac76a73f41b62",
       "articleSha256": "1ac6922a3e3f6b16feb3d3756d7f980bae7e40608dcaa1f352f3d0b6822e773d",
       "decision": "updated",
       "rationale": "Added that erasure also covers a session folder an interrupted run left before saving its state, stays pending while a recently used folder cannot yet be matched to an organization, and erases a folder no run claims after a day unused (PRIV-R8)."

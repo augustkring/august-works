@@ -11812,7 +11812,7 @@
         },
         {
           "path": "server/src/services/memory/memory-privacy.ts",
-          "sha256": "73b794e43d02cda32e53b2f38eda0380f4e56d55ab92047bb907a16841c00659"
+          "sha256": "f9bfb8c209344dd73f5655caa0833adad00618874a61485c36dac76a73f41b62"
         },
         {
           "path": "server/src/services/optimizer/optimizer-evaluation.integration.test.ts",
@@ -46204,7 +46204,7 @@
       "id": "0583_native_durable_session_scope_retention",
       "kind": "journaled_migration_source",
       "path": "packages/db/src/migrations/0583_native_durable_session_scope_retention.sql",
-      "sha256": "a60247cd7e72e08b98ef55a6f0265865c7b6fcc91a15f3affc9a78022df9c298",
+      "sha256": "402f03f1edd52e49febf1e43ff92363d20ba606f9c206e83b8d5819fb551360b",
       "journalPosition": 581,
       "journalIndex": 583,
       "createdAt": 1794966768371,
@@ -52009,7 +52009,7 @@
       "id": "source:server/src/services/memory/memory-privacy.ts",
       "kind": "current_source_owner",
       "path": "server/src/services/memory/memory-privacy.ts",
-      "sha256": "73b794e43d02cda32e53b2f38eda0380f4e56d55ab92047bb907a16841c00659",
+      "sha256": "f9bfb8c209344dd73f5655caa0833adad00618874a61485c36dac76a73f41b62",
       "changeIds": [
         "SCR-V10-HOTSPOT-12"
       ],
