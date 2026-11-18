@@ -1894,6 +1894,29 @@ function nativeWirePurposeMatches(value: unknown, kind: "worker_model_dispatch" 
 /** A review dispatch is a historical registered response owned by the exact
  * retained review, not a worker dispatch with a different label. Paid gateway
  * admission separately rechecks live plan, deadline, assignment and lease. */
+/** MS1h19. Each later dispatch receipt of a Run carries its earlier model
+ * dispatch markers forward (`uniqueInputs` in the gateway's response capture
+ * ends with the response's own marker). A review marker is retained history
+ * only when exactly one dispatch records it (the marker is that dispatch's
+ * last input) and every other copy of it (any review marker with its
+ * reservation or call) is identical to it, in a dispatch of the same execution
+ * input. A conflicting copy, or a second dispatch ending with it, is refused. */
+export function nativeReviewMarkerRecordedOnce(
+  dispatches: readonly { executionInputDigest: string; inputs: readonly NativePayloadSourceInput[] }[],
+  marker: Extract<NativePayloadSourceInput, { kind: "review_model_dispatch" }>, sourceDispatchDigest: unknown): boolean {
+  if (typeof sourceDispatchDigest !== "string") return false;
+  const copyOf = (source: NativePayloadSourceInput) => source.kind === "review_model_dispatch" &&
+    (source.reservationId === marker.reservationId || source.callId === marker.callId);
+  const holding = dispatches.filter(dispatch => dispatch.inputs.some(copyOf));
+  const recording = holding.filter(dispatch => {
+    const last = dispatch.inputs.at(-1);
+    return last !== undefined && copyOf(last);
+  });
+  return recording.length === 1 &&
+    holding.every(dispatch => dispatch.executionInputDigest === sourceDispatchDigest &&
+      dispatch.inputs.every(source => !copyOf(source) || isDeepStrictEqual(source, marker)));
+}
+
 async function assertNativeReviewModelDispatchCurrentInScope(db: Db | Transaction, companyId: string,
   marker: Extract<NativePayloadSourceInput, { kind: "review_model_dispatch" }>, scope: NativeSourceReadScope): Promise<void> {
   const dispatchRun = await nativeSourceReadRun(db, companyId, marker.runId, scope);
@@ -1928,9 +1951,8 @@ async function assertNativeReviewModelDispatchCurrentInScope(db: Db | Transactio
   const reservation = await nativeSourceReadReservation(db, companyId, marker.reservationId, scope);
   const intentBinding = reviewModelBindingSchema.safeParse(intent?.reviewModelBinding);
   const exactBinding = intentBinding.success && isDeepStrictEqual(intentBinding.data, binding);
-  const prefix = receipt?.success && intent && typeof intent.sourceDispatchDigest === "string"
-    ? receipt.data.dispatches.filter(dispatch => dispatch.executionInputDigest === intent!.sourceDispatchDigest &&
-      dispatch.inputs.some(source => source.kind === "review_model_dispatch" && isDeepStrictEqual(source, marker))) : [];
+  const recordedOnce = !!receipt?.success && !!intent &&
+    nativeReviewMarkerRecordedOnce(receipt.data.dispatches, marker, intent.sourceDispatchDigest);
   if (!dispatchRun || dispatchRun.runtimeMode !== "native" ||
     dispatchRun.nativeIssueId !== marker.issueId || dispatchRun.agentId !== marker.reviewerAgentId || !dispatchRun.responsibleUserId ||
     !receipt?.success || !context || context.nativeReviewInteractionId !== marker.interactionId || context.nativeReviewDecisionId !== marker.decisionId ||
@@ -1940,7 +1962,7 @@ async function assertNativeReviewModelDispatchCurrentInScope(db: Db | Transactio
     witness.sourceResultId !== marker.sourceResultId || witness.sourceReceiptDigest !== marker.sourceReceiptDigest ||
     witness.sourceResultCanonicalSha256 !== marker.sourceResultCanonicalSha256 || witness.sourceRunId !== marker.sourceRunId ||
     witness.interactionId !== marker.interactionId || witness.decisionId !== marker.decisionId ||
-    intents.length !== 1 || !exactBinding || prefix.length !== 1 || !reservation || reservation.purpose !== "review_model" ||
+    intents.length !== 1 || !exactBinding || !recordedOnce || !reservation || reservation.purpose !== "review_model" ||
     reservation.status !== "completed" || reservation.planId !== binding.planId || reservation.workerId !== null || reservation.workerAttemptId !== null ||
     reservation.reviewIssueId !== binding.issueId || reservation.reviewInteractionId !== binding.interactionId ||
     reservation.reviewDecisionId !== binding.decisionId || reservation.reviewSourceRunId !== binding.sourceRunId ||
