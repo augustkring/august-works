@@ -1543,7 +1543,7 @@
     },
     {
       "path": "server/src/services/native-runtime/native-session-executor.ts",
-      "sha256": "38b24933ba0fc0e6fc40c031a3f050ea1055f43701f48df6f0a8fd53bf5c9ff7"
+      "sha256": "419c0a37749e0bbec846f79a4557fbee545c8089b3b1f16b3959b80af7f3484f"
     },
     {
       "path": "server/src/services/native-stage-task-body-source.test.ts",
@@ -1643,7 +1643,7 @@
     },
     {
       "path": "server/src/services/native-runtime/native-reviewer-sandbox-owner.test.ts",
-      "sha256": "df4a24e0e6000cca63fb8a9239ab9842b3ecd5ba924f88439bf9d26ec85468c6"
+      "sha256": "19b55744b2aadb53e737112b6c96af9eb8434f971cfaecbc5d4366ddf83c72d6"
     },
     {
       "path": "packages/db/src/schema/company_transfer_runs.ts",
