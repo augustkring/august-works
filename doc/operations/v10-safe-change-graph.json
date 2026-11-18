@@ -5911,7 +5911,7 @@
         },
         {
           "path": "server/src/services/native-runtime/paperclip-runner-tool-authority.test.ts",
-          "sha256": "446f73d2b2d0fa0be57f20c5a76edf622904b87e5bc31a301b6d6e0b85945de7"
+          "sha256": "68afff8d84ecc8ea8db7ae0b2c663fd2d8914546b16b9f431f1fdc270ff198c8"
         },
         {
           "path": "server/src/services/platform-skill-admission.ts",
@@ -7698,7 +7698,7 @@
         },
         {
           "path": "server/src/services/native-runtime/paperclip-runner-tool-authority.test.ts",
-          "sha256": "446f73d2b2d0fa0be57f20c5a76edf622904b87e5bc31a301b6d6e0b85945de7"
+          "sha256": "68afff8d84ecc8ea8db7ae0b2c663fd2d8914546b16b9f431f1fdc270ff198c8"
         },
         {
           "path": "server/src/services/native-runtime/status-arbiter.test.ts",
@@ -9340,7 +9340,7 @@
         },
         {
           "path": "server/src/services/native-runtime/native-opencode-managed-project-create-wait.integration.test.ts",
-          "sha256": "ff1c1c3535c7913d3e8e925158d312fc6e284fc7378ad59b524520f40a28b079"
+          "sha256": "8fd5f419746b48bb584c81314470b70fd57cf8c641a8ad230b79d55946ec51f3"
         },
         {
           "path": "server/src/services/native-runtime/native-opencode-managed-source.integration.test.ts",
@@ -9372,7 +9372,7 @@
         },
         {
           "path": "server/src/services/native-runtime/paperclip-runner-tool-authority.test.ts",
-          "sha256": "446f73d2b2d0fa0be57f20c5a76edf622904b87e5bc31a301b6d6e0b85945de7"
+          "sha256": "68afff8d84ecc8ea8db7ae0b2c663fd2d8914546b16b9f431f1fdc270ff198c8"
         },
         {
           "path": "server/src/services/native-runtime/paperclip-runner-tool-authority.ts",
@@ -10361,7 +10361,7 @@
         },
         {
           "path": "server/src/services/native-runtime/paperclip-runner-tool-authority.test.ts",
-          "sha256": "446f73d2b2d0fa0be57f20c5a76edf622904b87e5bc31a301b6d6e0b85945de7"
+          "sha256": "68afff8d84ecc8ea8db7ae0b2c663fd2d8914546b16b9f431f1fdc270ff198c8"
         },
         {
           "path": "server/src/services/native-runtime/paperclip-runner-tool-authority.ts",
@@ -48500,7 +48500,7 @@
       "id": "source:server/src/services/native-runtime/paperclip-runner-tool-authority.test.ts",
       "kind": "current_source_owner",
       "path": "server/src/services/native-runtime/paperclip-runner-tool-authority.test.ts",
-      "sha256": "446f73d2b2d0fa0be57f20c5a76edf622904b87e5bc31a301b6d6e0b85945de7",
+      "sha256": "68afff8d84ecc8ea8db7ae0b2c663fd2d8914546b16b9f431f1fdc270ff198c8",
       "changeIds": [
         "SCR-V10-HOTSPOT-02",
         "SCR-V10-HOTSPOT-05",
@@ -50921,7 +50921,7 @@
       "id": "source:server/src/services/native-runtime/native-opencode-managed-project-create-wait.integration.test.ts",
       "kind": "current_source_owner",
       "path": "server/src/services/native-runtime/native-opencode-managed-project-create-wait.integration.test.ts",
-      "sha256": "ff1c1c3535c7913d3e8e925158d312fc6e284fc7378ad59b524520f40a28b079",
+      "sha256": "8fd5f419746b48bb584c81314470b70fd57cf8c641a8ad230b79d55946ec51f3",
       "changeIds": [
         "SCR-V10-HOTSPOT-06"
       ],
