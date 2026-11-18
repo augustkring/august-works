@@ -19,6 +19,9 @@ import {
   issueThreadInteractions,
   issues,
   nativeRunResults,
+  orchestrationPlans,
+  orchestrationWorkerAttempts,
+  orchestrationWorkers,
   runtimeCapacityProfiles,
   runtimeCells,
   runtimePolicySnapshots,
@@ -64,7 +67,9 @@ vi.mock("../native-direct-input.js", async importOriginal => ({
 import { currentNativeReviewerRun } from "./native-review-participant.js";
 import { createToolGatewayService } from "../tool-gateway.js";
 import { executionSandboxService } from "../execution-sandbox/sandbox-service.js";
-import { currentWorkerNativePreparationRoot } from "../runtime/control.js";
+import { currentWorkerNativePreparationRoot, nativeManagedModelIssuer, nativeModelSessionOwnerLane,
+  nativeReviewerModelCredentialExact } from "../runtime/control.js";
+import { createRuntimeToolsToken } from "../../runtime-tools-token.js";
 import { parseNativeExecutionInput } from "../../vendor/paperclip-runner/index.js";
 import { nativeSha256 } from "./canonical.js";
 import { instanceSettingsService } from "../instance-settings.js";
@@ -573,6 +578,207 @@ describeDb("current Native completion Reviewer sandbox owner (MS1h2)", () => {
       const ids = await seed();
       const asked = await arrange(ids);
       await expect(prepare(await source(ids, asked))).rejects.toThrow(ownerRefusal);
+    });
+  });
+
+  // MS1h7. The managed model-session owner lane (session start at dispatch,
+  // claim persistence and Host claim; refresh at Host claim): the plan worker
+  // attempt, the conformance probe, or the current Native completion Reviewer
+  // without a worker attempt row.
+  describe("RuntimeControl model-session owner lane (MS1h7)", () => {
+    /** RuntimeControl's view of `asked` after `assertTaskExecutionContext`:
+     * the persisted Run (and its review wake), its own manifest, no attempt. */
+    async function laneSource(ids: Ids, asked: { companyId: string; agentId: string; runId: string }) {
+      const [run] = await db.select().from(heartbeatRuns).where(eq(heartbeatRuns.id, asked.runId));
+      const [manifest] = await db.select().from(agentExecutionManifests).where(eq(agentExecutionManifests.runId, asked.runId));
+      return { run: { ...run!, companyId: asked.companyId }, manifest: manifest!,
+        attempt: null as null | { runId: string; status: string }, providerConformanceBootstrap: false,
+        source: { task: { id: ids.issue } } };
+    }
+    const lane = (input: Awaited<ReturnType<typeof laneSource>>) => db.transaction(tx =>
+      nativeModelSessionOwnerLane(tx as never, input as never));
+    const reviewer = (ids: Ids) => ({ companyId: ids.company, agentId: ids.reviewer, runId: ids.reviewerRun });
+    /** A plan worker attempt row for the Reviewer's Run (a plan Worker Run). */
+    async function workerAttempt(ids: Ids, status: "running" | "succeeded") {
+      const plan = randomUUID(), worker = randomUUID(), attempt = randomUUID();
+      await db.insert(orchestrationPlans).values({ id: plan, companyId: ids.company, issueId: ids.issue,
+        completionContractId: ids.contract, mode: "single_worker", actionClass: "internal_draft", riskClass: "C0",
+        supervisionMode: "none", verificationMode: "deterministic", humanOversightMode: "human_review", createdBy: ids.user,
+        budgets: { maxWorkerCount: 1, maxParallelWorkers: 1, maxDelegationDepth: 1, maxRetries: 0, maxWallClockSeconds: 3600,
+          maxToolActions: 5, maxModelCostMinor: 1000 } });
+      await db.insert(orchestrationWorkers).values({ id: worker, companyId: ids.company, planId: plan, issueId: ids.issue,
+        agentId: ids.reviewer, completionContractId: ids.contract, workerKey: "reviewer-worker", dependsOn: [],
+        status: status === "running" ? "running" : "completed", attemptCount: 1 });
+      await db.update(orchestrationPlans).set({ status: "running", startedAt: new Date(), version: 2,
+        executionPrincipal: { type: "user", userId: ids.user } }).where(eq(orchestrationPlans.id, plan));
+      await db.insert(orchestrationWorkerAttempts).values({ id: attempt, companyId: ids.company, planId: plan, workerId: worker,
+        agentId: ids.reviewer, runId: ids.reviewerRun, attempt: 1, status, executionManifestId: ids.manifest,
+        ...(status === "running" ? {} : { finishedAt: new Date() }) });
+      return { id: attempt, plan, worker, runId: ids.reviewerRun, status };
+    }
+
+    it("puts the exact current Reviewer without a worker attempt on the reviewer lane", async () => {
+      const ids = await seed();
+      await expect(lane(await laneSource(ids, reviewer(ids)))).resolves.toBe("reviewer");
+    });
+
+    it("keeps a Run with a review wake and a running worker attempt on the worker lane", async () => {
+      const ids = await seed();
+      const attempt = await workerAttempt(ids, "running");
+      await expect(lane({ ...await laneSource(ids, reviewer(ids)), attempt })).resolves.toBe("worker");
+      // A worker attempt that is not this Run's running attempt never falls back to the reviewer lane.
+      await expect(lane({ ...await laneSource(ids, reviewer(ids)), attempt: { ...attempt, status: "succeeded" } }))
+        .resolves.toBeNull();
+      await expect(lane({ ...await laneSource(ids, reviewer(ids)), attempt: { ...attempt, runId: ids.sourceRun } }))
+        .resolves.toBeNull();
+    });
+
+    it("re-reads the worker attempt row in the caller's transaction", async () => {
+      const ids = await seed();
+      // A stale source snapshot without an attempt: the row, in any state, keeps the Run off the reviewer lane.
+      await workerAttempt(ids, "succeeded");
+      await expect(lane(await laneSource(ids, reviewer(ids)))).resolves.toBeNull();
+    });
+
+    it("keeps the conformance lane unchanged", async () => {
+      const ids = await seed();
+      await expect(lane({ ...await laneSource(ids, reviewer(ids)), providerConformanceBootstrap: true }))
+        .resolves.toBe("conformance");
+    });
+
+    it("refuses a Run without a Native review wake in its source", async () => {
+      const ids = await seed();
+      const current = await laneSource(ids, reviewer(ids));
+      // The persisted Run still carries the wake; the lane reads the caller's source Run.
+      await expect(lane({ ...current, run: { ...current.run, contextSnapshot: { issueId: ids.issue } } })).resolves.toBeNull();
+      // The assignee's own Run without an attempt and without a review wake stays refused.
+      const executorRun = await addRun(ids, ids.executor);
+      await db.update(heartbeatRuns).set({ contextSnapshot: { issueId: ids.issue } }).where(eq(heartbeatRuns.id, executorRun.runId));
+      await db.update(issues).set({ executionRunId: executorRun.runId }).where(eq(issues.id, ids.issue));
+      await expect(lane(await laneSource(ids, { companyId: ids.company, agentId: ids.executor, runId: executorRun.runId })))
+        .resolves.toBeNull();
+    });
+
+    it.each(refusalCases)("refuses %s", async (_name, arrange) => {
+      const ids = await seed();
+      const asked = await arrange(ids);
+      await expect(lane(await laneSource(ids, asked))).resolves.toBeNull();
+    });
+
+    // A stale review, each fact changed alone after the Reviewer was admitted.
+    const staleReviews: Array<[string, (ids: Ids) => Promise<unknown>]> = [
+      ["the Task is no longer in review", async ids => {
+        await db.update(issues).set({ status: "in_progress" }).where(eq(issues.id, ids.issue));
+        await db.update(issues).set({ statusVersion: 1 }).where(eq(issues.id, ids.issue));
+      }],
+      ["the Task execution Run changed", async ids => {
+        const other = await addRun(ids, ids.reviewer);
+        await db.update(issues).set({ executionRunId: other.runId }).where(eq(issues.id, ids.issue));
+      }],
+      ["the review resolved", ids => db.update(issueThreadInteractions).set({ status: "accepted", resolvedByAgentId: ids.reviewer,
+        resolvedByRunId: ids.reviewerRun, resolvedAt: new Date() }).where(eq(issueThreadInteractions.id, ids.interaction))],
+      ["the source Run cleanup is pending again", ids =>
+        projectSourceCleanup(ids.company, ids.executor, ids.sourceRun, "native.process_start_requested", 2)],
+    ];
+    it.each(staleReviews)("refuses the Reviewer once %s", async (_name, change) => {
+      const ids = await seed();
+      const current = await laneSource(ids, reviewer(ids));
+      await expect(lane(current)).resolves.toBe("reviewer");
+      await change(ids);
+      // The same source snapshot, read again on a new transaction.
+      await expect(lane(current)).resolves.toBeNull();
+    });
+
+    it("refuses another manifest for the Reviewer's Run", async () => {
+      const ids = await seed();
+      const current = await laneSource(ids, reviewer(ids));
+      await expect(lane({ ...current, manifest: { ...current.manifest, id: randomUUID() } })).resolves.toBeNull();
+    });
+
+    describe("Reviewer model capability on the reviewer lane", () => {
+      const previousSecret = process.env.PAPERCLIP_AGENT_JWT_SECRET;
+      beforeAll(() => { process.env.PAPERCLIP_AGENT_JWT_SECRET = `ms1h7-${randomUUID()}`; });
+      afterAll(() => {
+        if (previousSecret === undefined) delete process.env.PAPERCLIP_AGENT_JWT_SECRET;
+        else process.env.PAPERCLIP_AGENT_JWT_SECRET = previousSecret;
+      });
+      const reviewBinding = (ids: Ids, overrides: Partial<{ reviewerAgentId: string; reviewerRunId: string;
+        executionManifestId: string }> = {}) => ({ planId: randomUUID(), issueId: ids.issue, interactionId: ids.interaction,
+        decisionId: ids.decision, sourceRunId: ids.sourceRun, sourceWorkerId: randomUUID(), sourceAgentId: ids.executor,
+        sourceAttemptId: randomUUID(), sourceResultId: ids.result, sourceReceiptDigest: "a".repeat(64),
+        sourceResultCanonicalSha256: "b".repeat(64), reviewerAgentId: ids.reviewer, reviewerRunId: ids.reviewerRun,
+        executionManifestId: ids.manifest, expectedPlanVersion: 2, ...overrides });
+      const reviewToken = (ids: Ids, overrides: Partial<{ companyId: string; agentId: string; runId: string;
+        responsibleUserId: string; executionManifestId: string }> = {}) => {
+        const agentId = overrides.agentId ?? ids.reviewer, runId = overrides.runId ?? ids.reviewerRun;
+        const minted = createRuntimeToolsToken({ agentId, companyId: overrides.companyId ?? ids.company, runId,
+          responsibleUserId: overrides.responsibleUserId ?? ids.user, scope: "review_model",
+          reviewModelBinding: reviewBinding(ids, { reviewerAgentId: agentId, reviewerRunId: runId,
+            ...(overrides.executionManifestId ? { executionManifestId: overrides.executionManifestId } : {}) }) });
+        if (!minted) throw new Error("fixture_review_token_unavailable");
+        return { capabilityToken: minted.token };
+      };
+      const workerToken = (ids: Ids) => {
+        const minted = createRuntimeToolsToken({ agentId: ids.reviewer, companyId: ids.company, runId: ids.reviewerRun,
+          responsibleUserId: ids.user, scope: "worker_model", workerModelBinding: { planId: randomUUID(), workerId: randomUUID(),
+            workerAttemptId: randomUUID(), executionManifestId: ids.manifest, expectedPlanVersion: 2 } });
+        if (!minted) throw new Error("fixture_worker_token_unavailable");
+        return { capabilityToken: minted.token };
+      };
+      const conversationToken = (ids: Ids) => {
+        const minted = createRuntimeToolsToken({ agentId: ids.reviewer, companyId: ids.company, runId: ids.reviewerRun,
+          responsibleUserId: ids.user, scope: "conversation_model", conversationModelBinding: { issueId: ids.issue,
+            conversationSessionGeneration: 0, executionManifestId: ids.manifest, executionManifestHash: "d".repeat(64) } });
+        if (!minted) throw new Error("fixture_conversation_token_unavailable");
+        return { capabilityToken: minted.token };
+      };
+
+      it("admits only the Reviewer's own review_model capability", async () => {
+        const ids = await seed();
+        const current = await laneSource(ids, reviewer(ids));
+        expect(nativeReviewerModelCredentialExact(current, reviewToken(ids))).toBe(true);
+        expect(nativeReviewerModelCredentialExact(current, undefined)).toBe(false);
+        expect(nativeReviewerModelCredentialExact(current, workerToken(ids))).toBe(false);
+        expect(nativeReviewerModelCredentialExact(current, conversationToken(ids))).toBe(false);
+      });
+
+      it.each([
+        ["another company", (ids: Ids) => ({ companyId: ids.otherCompany })],
+        ["another Agent", (ids: Ids) => ({ agentId: ids.outsider })],
+        ["another Run", () => ({ runId: randomUUID() })],
+        ["another Human", () => ({ responsibleUserId: `user-${randomUUID()}` })],
+        ["another manifest", () => ({ executionManifestId: randomUUID() })],
+      ])("refuses a review_model capability for %s", async (_name, change) => {
+        const ids = await seed();
+        const current = await laneSource(ids, reviewer(ids));
+        expect(nativeReviewerModelCredentialExact(current, reviewToken(ids, change(ids)))).toBe(false);
+      });
+
+      it("never mints or admits worker_model for a Reviewer refresh", async () => {
+        const ids = await seed();
+        const current = await laneSource(ids, reviewer(ids));
+        // The dispatch issuer is the same for a session start, a refresh and a plain command.
+        expect(nativeManagedModelIssuer({ providerConformanceBootstrap: false, contextSnapshot: current.run.contextSnapshot,
+          hasWorkerAttempt: false, hasConversationIdentity: false })).toBe("review");
+        // The Host claim of the refresh is on the reviewer lane and refuses a worker capability.
+        await expect(lane(current)).resolves.toBe("reviewer");
+        expect(nativeReviewerModelCredentialExact(current, workerToken(ids))).toBe(false);
+        expect(nativeReviewerModelCredentialExact(current, reviewToken(ids))).toBe(true);
+      });
+    });
+
+    it("keeps the dispatch issuer of every other lane unchanged", () => {
+      const review = { nativeReviewInteractionId: randomUUID(), nativeReviewDecisionId: randomUUID() };
+      const issuer = (input: Partial<Parameters<typeof nativeManagedModelIssuer>[0]>) => nativeManagedModelIssuer({
+        providerConformanceBootstrap: false, contextSnapshot: {}, hasWorkerAttempt: false, hasConversationIdentity: false, ...input });
+      expect(issuer({ contextSnapshot: review })).toBe("review");
+      expect(issuer({ contextSnapshot: review, hasWorkerAttempt: true })).toBe("worker");
+      expect(issuer({ contextSnapshot: review, hasConversationIdentity: true })).toBe("review");
+      expect(issuer({ hasConversationIdentity: true })).toBe("conversation");
+      expect(issuer({ hasConversationIdentity: true, hasWorkerAttempt: true })).toBe("worker");
+      expect(issuer({ hasWorkerAttempt: true })).toBe("worker");
+      expect(issuer({})).toBe("worker");
+      expect(issuer({ providerConformanceBootstrap: true, contextSnapshot: review })).toBe("conformance");
     });
   });
   describe("sandbox policy guard trigger (migration 0582)", () => {
