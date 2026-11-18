@@ -3,6 +3,7 @@ import type { Db } from "@paperclipai/db";
 import { forbidden } from "../../errors.js";
 import type { ContextPacket, EvidenceItem } from "@paperclipai/shared";
 import {
+  contextFoundationProviderTimeoutMs,
   contextMemoryProviderTimeoutMs,
   contextTaskProviderTimeoutMs,
   contextTotalDeadlineMs,
@@ -110,6 +111,11 @@ describe("Context provider deadline policy", () => {
     expect(contextTaskProviderTimeoutMs(DEFAULT_CONTEXT_TOTAL_DEADLINE_MS)).toBe(900);
     expect(contextTaskProviderTimeoutMs(NATIVE_CONTEXT_BOOTSTRAP_TOTAL_DEADLINE_MS, true)).toBe(7_650);
     expect(contextTaskProviderTimeoutMs(400, true)).toBe(50);
+    // Foundation revalidates learned revisions' retained sources like Memory,
+    // so it shares the deadline-derived slice, still bounded by the total.
+    expect(contextFoundationProviderTimeoutMs(DEFAULT_CONTEXT_TOTAL_DEADLINE_MS)).toBe(1_150);
+    expect(contextFoundationProviderTimeoutMs(30_000)).toBe(8_000);
+    expect(contextFoundationProviderTimeoutMs(400)).toBe(50);
 
     let capturedSignal: AbortSignal | undefined;
     let releaseLateResult: ((result: { evidence: EvidenceItem[] }) => void) | undefined;
