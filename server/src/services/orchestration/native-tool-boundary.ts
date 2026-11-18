@@ -39,6 +39,7 @@ import { readNativeChannelConversationScope } from "../native-runtime/native-cha
 import { enqueueSupervisionStop } from "../supervision/supervision-outbox.js";
 import { withV7ActivityTransaction, logActivity } from "../v7-mutations.js";
 import { resolveDelegatedContextManifestBindings } from "../context/delegated-context-binding.js";
+import { nativeReviewerLaneRun } from "../native-runtime/native-review-participant.js";
 import type { AuthorizationActor } from "../authorization.js";
 
 type Binding = {
@@ -75,7 +76,10 @@ const draftWrites = new Set([
   "connection_request",
 ]);
 
-async function scope(db: Db, b: Binding) {
+/** The plan scope of a Native tool call: this Run's plan worker attempt, or
+ * `unadmitted` when the Task has an active plan but this Run has no attempt,
+ * or null when no active plan covers the Task. */
+async function planScope(db: Db, b: Binding) {
   const [attempt] = await db
     .select({
       plan: orchestrationPlans,
@@ -126,9 +130,101 @@ async function scope(db: Db, b: Binding) {
       ),
     )
     .limit(1);
-  if (unadmitted)
-    throw forbidden("Native tools require the plan's admitted worker attempt");
+  if (unadmitted) return "unadmitted" as const;
   return null;
+}
+
+async function scope(db: Db, b: Binding) {
+  const bound = await planScope(db, b);
+  if (bound === "unadmitted")
+    throw forbidden("Native tools require the plan's admitted worker attempt");
+  return bound;
+}
+
+/** MS1h12. Re-checks, inside the transaction that writes the Native completion
+ * review action's tool invocation, that this Run is still on the reviewer lane
+ * under the reviewed plan. Passed only to the `resolve_review` effect. */
+export type NativeReviewerActionGuard = (tx: Db) => Promise<void>;
+
+/** MS1h12. The reviewer lane (`nativeReviewerLaneRun`) of this exact Run,
+ * Agent and Task, with the Run's own execution manifest (one per Run). */
+async function nativeReviewerToolLane(db: Db, b: Binding): Promise<boolean> {
+  const [row] = await db
+    .select({ contextSnapshot: heartbeatRuns.contextSnapshot, manifestId: agentExecutionManifests.id })
+    .from(heartbeatRuns)
+    .innerJoin(
+      agentExecutionManifests,
+      and(
+        eq(agentExecutionManifests.companyId, heartbeatRuns.companyId),
+        eq(agentExecutionManifests.runId, heartbeatRuns.id),
+        eq(agentExecutionManifests.agentId, heartbeatRuns.agentId),
+      ),
+    )
+    .where(
+      and(
+        eq(heartbeatRuns.companyId, b.companyId),
+        eq(heartbeatRuns.id, b.runId),
+        eq(heartbeatRuns.agentId, b.agentId),
+      ),
+    )
+    .limit(1);
+  if (!row) return false;
+  return nativeReviewerLaneRun(db, {
+    companyId: b.companyId,
+    agentId: b.agentId,
+    runId: b.runId,
+    issueId: b.issueId,
+    manifestId: row.manifestId,
+    contextSnapshot: row.contextSnapshot,
+  });
+}
+
+/** MS1h12. The tool-charge trigger (aw_v7_orchestration_tool_charge, 0576)
+ * refuses a Reviewer's `resolve_review` invocation it cannot charge to the
+ * reviewed plan; surface those refusals as typed errors. */
+function nativeReviewerActionChargeError(error: unknown): HttpError | null {
+  let current = error;
+  for (let depth = 0; depth < 6 && current && typeof current === "object"; depth++) {
+    const value = current as { code?: unknown; message?: unknown; cause?: unknown };
+    if (value.code === "23514" && typeof value.message === "string") {
+      if (
+        value.message === "orchestration_tool_requires_admitted_attempt" ||
+        value.message === "orchestration_review_action_requires_current_reservation"
+      )
+        return conflict("The completion review action has no completed review model reservation under the reviewed plan");
+      if (value.message === "orchestration_tool_budget_exhausted")
+        return forbidden("The original accepted plan has no remaining review tool-action budget");
+      if (value.message === "orchestration_execution_not_authorized")
+        return forbidden("Native plan tool authority is no longer current");
+      return null;
+    }
+    current = value.cause;
+  }
+  return null;
+}
+
+/** MS1h12. A current Native completion Reviewer (reviewer lane, no plan
+ * worker attempt) may call exactly `resolve_review` on a Task whose plan is
+ * active. The effect writes the review action's own tool invocation, which
+ * the 0576 trigger binds to the reviewed plan through the Run's completed
+ * `review_model` reservation and charges as one plan tool action; the guard
+ * re-checks the lane in that same transaction, after the shared analytical
+ * and Memory locks. */
+async function withNativeReviewerAction(
+  b: Binding,
+  effect: (reviewerAction?: NativeReviewerActionGuard) => Promise<unknown>,
+): Promise<unknown> {
+  const guard: NativeReviewerActionGuard = async (tx) => {
+    await lockAnalyticalCompany(tx, b.companyId);
+    await lockMemoryPrivacy(tx, b.companyId);
+    if ((await planScope(tx, b)) !== "unadmitted" || !(await nativeReviewerToolLane(tx, b)))
+      throw forbidden("The Native completion review action is no longer current for this Reviewer Run");
+  };
+  try {
+    return await effect(guard);
+  } catch (error) {
+    throw nativeReviewerActionChargeError(error) ?? error;
+  }
 }
 
 /** AgentMail Tasks are `chat_channel` Tasks whose senders are external
@@ -537,10 +633,16 @@ export async function withOrchestrationNativeTool(
   db: Db,
   b: Binding,
   call: Call,
-  effect: () => Promise<unknown>,
+  effect: (reviewerAction?: NativeReviewerActionGuard) => Promise<unknown>,
   externallyMetered = false,
 ): Promise<unknown> {
-  const preliminary = await scope(db, b);
+  const planned = await planScope(db, b);
+  if (planned === "unadmitted") {
+    if (call.tool === "resolve_review" && !externallyMetered && (await nativeReviewerToolLane(db, b)))
+      return withNativeReviewerAction(b, effect);
+    throw forbidden("Native tools require the plan's admitted worker attempt");
+  }
+  const preliminary = planned;
   if (!preliminary) {
     await assertNativeConversationToolNoPlanScope(db, b);
     return effect();

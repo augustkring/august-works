@@ -9,7 +9,7 @@ import {assertAnalyticalContextPayloadAccess,assertNativeAnalyticalRunPayloadAcc
 import { lockMemoryPrivacy } from "../memory/memory-privacy.js";
 import { lockAnalyticalCompany } from "../analytical-privacy.js";
 import { withOrchestrationNativeTool, lockNativeToolPlan, assertNativeToolPlanCurrent,
-  assertNativeConversationToolNoPlanScope } from "../orchestration/native-tool-boundary.js";
+  assertNativeConversationToolNoPlanScope, type NativeReviewerActionGuard } from "../orchestration/native-tool-boundary.js";
 import { createAssignedMcpTools, getAssignedMcpGateway, type AssignedMcpInvocationWitness, type AssignedMcpPendingWitness, type AssignedMcpSearchWitness } from "./assigned-mcp-tools.js";
 import { assertAssignableAgent } from "../agent-assignability.js";
 import { authorizationService, issueReadSqlCondition, type AuthorizationActor } from "../authorization.js";
@@ -603,11 +603,11 @@ export class PaperclipRunnerToolAuthority {
       const managedProjectRepositoriesCapture: { value: NativeProjectRepositoriesToolResultCapture | null } = { value: null };
       const managedStageCommentCapture: { value: NativeManagedStageCommentCapture | null } = { value: null };
       const result = await withOrchestrationNativeTool(this.db, this.binding, call,
-        () => this.#executeAdmitted(call, source => { documentSource.value = source; }, options.onProjectToolResult,
+        reviewerAction => this.#executeAdmitted(call, source => { documentSource.value = source; }, options.onProjectToolResult,
           source => { nativeInputSource.value = source; }, capture => { managedProjectCreateCapture.value = capture; },
           capture => { managedStageCommentCapture.value = capture; }, boundNativeCall,
           capture => { managedProjectRepositoriesCapture.value = capture; }, options.onAssignedMcpToolInvocation,
-          options.onAssignedMcpToolPending, options.onAssignedMcpToolSearch),
+          options.onAssignedMcpToolPending, options.onAssignedMcpToolSearch, reviewerAction),
         call.tool === MANAGED_NATIVE_REMEMBER_TOOL ||
           (call.tool !== "paperclip_search_assigned_tools" && (this.binding.assignedMcpTools?.has(call.tool) ?? false)));
       if (call.tool === "read_document") {
@@ -720,9 +720,10 @@ export class PaperclipRunnerToolAuthority {
     onManagedProjectRepositoriesCapture?: (capture: NativeProjectRepositoriesToolResultCapture) => void,
     onAssignedMcpToolInvocation?: (witness: AssignedMcpInvocationWitness) => Promise<void>,
     onAssignedMcpToolPending?: (witness: AssignedMcpPendingWitness) => Promise<void>,
-    onAssignedMcpToolSearch?: (witness: AssignedMcpSearchWitness) => Promise<void>): Promise<unknown> {
+    onAssignedMcpToolSearch?: (witness: AssignedMcpSearchWitness) => Promise<void>,
+    reviewerAction?: NativeReviewerActionGuard): Promise<unknown> {
     if (this.binding.nativeReview) {
-      if (call.tool === "resolve_review") return this.#resolveReview(call.arguments, call.callId);
+      if (call.tool === "resolve_review") return this.#resolveReview(call.arguments, call.callId, reviewerAction);
       if (!NATIVE_REVIEW_READ_TOOLS.has(call.tool)) {
         throw forbidden("This review run may only inspect the assigned task and resolve its review.");
       }
@@ -1634,7 +1635,10 @@ export class PaperclipRunnerToolAuthority {
     return row;
   }
 
-  async #resolveReview(value: unknown, callId: string) {
+  /** `reviewerAction` is the tool boundary's MS1h12 re-check for a Reviewer on
+   * a Task with an active plan; it runs in the transaction that writes this
+   * action's tool invocation, which the 0576 trigger charges to that plan. */
+  async #resolveReview(value: unknown, callId: string, reviewerAction?: NativeReviewerActionGuard) {
     const input = record(value);
     if (Object.keys(input).some((key) => !["decision", "reason"].includes(key))
       || !["accept", "reject"].includes(String(input.decision))) {
@@ -1657,6 +1661,7 @@ export class PaperclipRunnerToolAuthority {
     const requestHash = nativeSha256({ interactionId: review.interaction.id, decision: input.decision, reason });
     const [invocation] = await this.db.transaction(async (transaction) => {
       const tx = transaction as unknown as Db;
+      await reviewerAction?.(tx);
       const [existing] = await tx.select().from(toolInvocations).where(and(eq(toolInvocations.companyId, this.binding.companyId),
         eq(toolInvocations.idempotencyKey, idempotencyKey))).limit(1);
       if (existing) {
