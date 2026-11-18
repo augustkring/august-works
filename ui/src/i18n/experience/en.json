@@ -928,6 +928,9 @@
     "cancelled": "Cancelled",
     "blocked": "Waiting for help"
   },
+  "taskActivity": {
+    "reviewAwaitingPlanVerification": "Review accepted. The task stays in review until a person verifies its plan."
+  },
   "mobileNavigation": "Mobile navigation",
   "openNavigation": "Open navigation",
   "commands": {

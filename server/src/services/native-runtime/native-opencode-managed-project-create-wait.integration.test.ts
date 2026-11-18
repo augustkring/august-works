@@ -30,6 +30,13 @@ function deferred<T>() {
 describe.skipIf(!hasPinnedOpenCodeProfile())("managed OpenCode Project source wait", () => {
   let database: Awaited<ReturnType<typeof startEmbeddedPostgresTestDatabase>>;
   let db: ReturnType<typeof createDb>;
+  // The test coordinator holds the Task row lock and then probes for the
+  // constructor's lock wait. It must not borrow from the run's small pool:
+  // while the lock is held, every run connection can be blocked behind it
+  // (the constructor plus concurrent source checks or run-row writes that
+  // queue behind the constructor), and a probe waiting for a free pool slot
+  // would then never release the lock.
+  let controlDb: ReturnType<typeof createDb>;
   let root = "";
   let instanceId = "";
 
@@ -42,6 +49,7 @@ describe.skipIf(!hasPinnedOpenCodeProfile())("managed OpenCode Project source wa
     vi.stubEnv("PAPERCLIP_AGENT_JWT_SECRET", `managed-opencode-project-wait-${randomUUID()}-${randomUUID()}`);
     database = await startEmbeddedPostgresTestDatabase("managed-opencode-project-wait-e2e-");
     db = createDb(database.connectionString, { maxConnections: 3 });
+    controlDb = createDb(database.connectionString, { maxConnections: 2 });
     await instanceSettingsService(db).getExperimental();
     await enableV5ForTest(db);
     await instanceSettingsService(db).updateExperimental({ enableWorkflowsV1: true,
@@ -78,7 +86,7 @@ describe.skipIf(!hasPinnedOpenCodeProfile())("managed OpenCode Project source wa
       ],
       beforeManagedProjectCreate: async (capture: NativeModelOutputCapture) => {
         runId = capture.runId;
-        const [run] = await db.select({ id: heartbeatRuns.id, companyId: heartbeatRuns.companyId,
+        const [run] = await controlDb.select({ id: heartbeatRuns.id, companyId: heartbeatRuns.companyId,
           nativeIssueId: heartbeatRuns.nativeIssueId, responsibleUserId: heartbeatRuns.responsibleUserId })
           .from(heartbeatRuns).where(eq(heartbeatRuns.id, capture.runId));
         const taskId = capture.sourceSet.inputs.find((source): source is Extract<typeof source, { kind: "task" }> =>
@@ -87,11 +95,11 @@ describe.skipIf(!hasPinnedOpenCodeProfile())("managed OpenCode Project source wa
           throw new Error("managed_project_wait_source_task_missing");
         companyId = run.companyId;
         const now = new Date();
-        const [session] = await db.select({ id: authSessions.id }).from(authSessions).where(and(
+        const [session] = await controlDb.select({ id: authSessions.id }).from(authSessions).where(and(
           eq(authSessions.userId, run.responsibleUserId), gt(authSessions.expiresAt, now),
         )).orderBy(desc(authSessions.createdAt)).limit(1);
         if (!session) throw new Error("managed_project_wait_human_session_missing");
-        const [membership] = await db.select().from(companyMemberships).where(and(
+        const [membership] = await controlDb.select().from(companyMemberships).where(and(
           eq(companyMemberships.companyId, run.companyId),
           eq(companyMemberships.principalType, "user"),
           eq(companyMemberships.principalId, run.responsibleUserId),
@@ -102,14 +110,14 @@ describe.skipIf(!hasPinnedOpenCodeProfile())("managed OpenCode Project source wa
           sessionId: session.id, companyIds: [run.companyId], memberships: [{ companyId: run.companyId,
             membershipRole: membership.membershipRole, status: "active" }] };
 
-        blocker = db.transaction(async tx => {
+        blocker = controlDb.transaction(async tx => {
           await tx.select({ id: issues.id }).from(issues).where(and(eq(issues.companyId, run.companyId),
             eq(issues.id, taskId))).for("update");
           const [backend] = await tx.execute<{ pid: number }>(sql`select pg_backend_pid() as pid`);
           taskLocked.resolve({ pid: Number(backend!.pid), taskId, userId: run.responsibleUserId!, actor });
           await mutateTask.promise;
-          await issueService(db).update(taskId, { title: `Changed while managed Project waits ${suffix}`,
-            actorUserId: run.responsibleUserId, privacyActor: actor }, tx as unknown as typeof db);
+          await issueService(controlDb).update(taskId, { title: `Changed while managed Project waits ${suffix}`,
+            actorUserId: run.responsibleUserId, privacyActor: actor }, tx as unknown as typeof controlDb);
         });
         await taskLocked.promise;
       },
@@ -128,7 +136,7 @@ describe.skipIf(!hasPinnedOpenCodeProfile())("managed OpenCode Project source wa
       ]);
       taskId = locked.taskId;
       for (let attempt = 0; attempt < 300; attempt++) {
-        const [row] = await db.execute<{ waiting: number }>(sql`select count(*)::int as waiting
+        const [row] = await controlDb.execute<{ waiting: number }>(sql`select count(*)::int as waiting
           from pg_stat_activity a where a.datname=current_database() and a.wait_event_type='Lock'
             and ${locked.pid}::int = any(pg_blocking_pids(a.pid))`);
         if ((row?.waiting ?? 0) > 0) { waitObserved = true; break; }

@@ -40,7 +40,8 @@ import { executionBlockerPredicate, getExecutionBlocker, hasPendingRunCleanup } 
 import { lockNativeRuntimeSelectionRows } from "./native-runtime-selection-lock.js";
 import { CONVERSATION_CONTINUATION_POLICY, claimedAdapterType, runUsedConversationAdapter, hasConversationContinuationPolicy, isConversationAdapter } from "./conversation-continuation.js";
 import { recordExecutionWait } from "./execution-wait.js";
-import { getNativeReviewAssignment, nativeReviewWakeExcludesContinuationSummary, readNativeReviewAssignmentContext } from "./native-runtime/native-review-participant.js";
+import { getNativeReviewAssignment, nativeReviewerLaneRecorded, nativeReviewWakeExcludesContinuationSummary,
+  readNativeReviewAssignmentContext } from "./native-runtime/native-review-participant.js";
 import { claimQueuedNativeReviewRun } from "./native-runtime/native-review-dispatch.js";
 import { buildNativeReviewRequest } from "./native-runtime/native-review-prompt.js";
 import { captureNativeReviewWakeWitness } from "./native-runtime/native-review-participant.js";
@@ -25944,10 +25945,27 @@ export function heartbeatService(
           // If recording the barrier itself fails, propagate as a run failure
           // rather than silently leaving dependents stranded behind a missing
           // finalize row.
-          if (nativeWorkspaceSync) {
+          // MS1h17. A completion Reviewer is read-only (brief §57.1): its sandbox
+          // content is never copied back into the Task workspace. The sandbox is
+          // destroyed at lease release through the controller's own path; the
+          // Reviewer gets no sandbox ownership after its decision.
+          const reviewerWorkspaceDiscarded = nativeWorkspaceSync
+            ? await nativeReviewerLaneRecorded(db, { companyId: run.companyId, runId: run.id })
+            : false;
+          if (nativeWorkspaceSync && !reviewerWorkspaceDiscarded) {
             await options.testBeforeNativeWorkspaceSyncRestore?.({ runId: run.id,
               workspaceLocalDir: executionWorkspace.cwd, workspaceId: nativeWorkspaceSync.reference.workspaceId });
             await nativeWorkspaceSync.restoreWorkspace();
+          }
+          if (reviewerWorkspaceDiscarded) {
+            providerResourceDispositionForRun = "destroy";
+            await appendRunEvent(run, {
+              eventType: "lifecycle",
+              stream: "system",
+              level: "info",
+              message: "Completion Reviewer workspace discarded by design; the Task workspace was not changed.",
+              payload: { reason: "native_reviewer_workspace_discarded", providerResourceDisposition: "destroy" },
+            });
           }
           await db
             .update(heartbeatRuns)
@@ -25959,7 +25977,8 @@ export function heartbeatService(
               ),
             );
           const workspaceFinalizeStatus = hasWorkspaceRestoreFailure(adapterResult.resultJson) ? "failed" : "succeeded";
-          await recordWorkspaceFinalize(workspaceFinalizeStatus);
+          await recordWorkspaceFinalize(workspaceFinalizeStatus,
+            reviewerWorkspaceDiscarded ? { nativeReviewerWorkspace: "discarded_by_design" } : undefined);
           if (adapterResult.nativeFinalization) {
             adapterResult.nativeFinalization.workspaceFinalizeStatus =
               workspaceFinalizeStatus;

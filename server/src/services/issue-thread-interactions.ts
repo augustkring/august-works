@@ -14,6 +14,7 @@ import {
   isNotNull,
   isNull,
   ne,
+  notInArray,
   or,
   sql,
 } from "drizzle-orm";
@@ -33,6 +34,8 @@ import {
   issueQuestionResponseDeliveries,
   issueThreadInteractions,
   issues,
+  orchestrationPlans,
+  orchestrationWorkers,
   toolActionRequests,
   toolOauthStates,
 } from "@paperclipai/db";
@@ -349,10 +352,16 @@ type IssueWakeTarget = {
   workMode?: string;
 };
 
+/** MS1h14. An accepted Native completion review that did not complete its
+ * Task because an orchestration plan that is not finished covers the Task; the
+ * Task stays `in_review` for the plan's Human server verification. */
+type TaskCompletionHeld = { reason: "awaiting_plan_verification"; planId: string };
+
 type ResolvedInteractionResult = {
   interaction: IssueThreadInteraction;
   createdIssues: IssueWakeTarget[];
   continuationIssue?: IssueWakeTarget | null;
+  taskCompletionHeld?: TaskCompletionHeld | null;
 };
 
 type IssueThreadInteractionRow = typeof issueThreadInteractions.$inferSelect;
@@ -763,6 +772,30 @@ function hydrateInteraction(
     default:
       throw unprocessable(`Unknown interaction kind: ${row.kind}`);
   }
+}
+
+/** MS1h14. The orchestration plan that is not finished and covers this Task,
+ * read in the caller's transaction: the same fact aw_v7_orchestration_task_guard
+ * (migration 0360) uses to refuse `done` before the plan's server verification
+ * (the plan's own Task, or a worker Task whose worker is not completed). The
+ * trigger stays the backstop. */
+async function activePlanCoveringTask(db: Pick<Db, "select">, companyId: string, issueId: string): Promise<string | null> {
+  const [plan] = await db
+    .select({ id: orchestrationPlans.id })
+    .from(orchestrationPlans)
+    .where(and(
+      eq(orchestrationPlans.companyId, companyId),
+      notInArray(orchestrationPlans.status, ["completed", "cancelled", "failed"]),
+      or(
+        eq(orchestrationPlans.issueId, issueId),
+        sql`exists (select 1 from ${orchestrationWorkers} where ${orchestrationWorkers.companyId} = ${orchestrationPlans.companyId}
+          and ${orchestrationWorkers.planId} = ${orchestrationPlans.id} and ${orchestrationWorkers.issueId} = ${issueId}
+          and ${orchestrationWorkers.status} <> 'completed')`,
+      ),
+    ))
+    .orderBy(asc(orchestrationPlans.createdAt))
+    .limit(1);
+  return plan?.id ?? null;
 }
 
 async function touchIssue(db: IssueTouchDb, issueId: string) {
@@ -2110,6 +2143,7 @@ export function issueThreadInteractionService(
   }): Promise<{
     interaction: IssueThreadInteraction;
     continuationIssue: IssueWakeTarget | null;
+    taskCompletionHeld: TaskCompletionHeld | null;
   }> {
     const expired = await expireStaleRequestConfirmationTarget(db, {
       row: args.current,
@@ -2229,6 +2263,7 @@ export function issueThreadInteractionService(
       );
 
       let continuationIssue: IssueWakeTarget | null = null;
+      let taskCompletionHeld: TaskCompletionHeld | null = null;
       const acceptedPlanTarget = readAcceptedPlanConfirmationTarget(
         lockedCurrent.payload,
         issueContext.id,
@@ -2255,7 +2290,18 @@ export function issueThreadInteractionService(
           )).limit(1);
         // Each explicit reviewer must be able to answer independently. Completing
         // on the first answer would cancel the other pending decisions.
-        const completedIssue = otherPending.length > 0 || issueContext.status !== "in_review" ? null : await issueService(db).update(
+        const completionCandidate = otherPending.length === 0 && issueContext.status === "in_review";
+        // MS1h14. Under an orchestration plan that is not finished, a completion
+        // Reviewer Agent's accepted review is recorded but completes nothing: the
+        // Task stays in review for the plan's Human server verification
+        // (verification-service). A Human accept keeps its existing behaviour:
+        // the 0360 guard refuses `done` and the whole accept rolls back with
+        // 409 orchestration_completion_requires_server_verification.
+        const coveringPlanId = completionCandidate && args.actor.agentId
+          ? await activePlanCoveringTask(tx as unknown as Db, issueContext.companyId, issueContext.id)
+          : null;
+        if (coveringPlanId) taskCompletionHeld = { reason: "awaiting_plan_verification", planId: coveringPlanId };
+        const completedIssue = !completionCandidate || coveringPlanId ? null : await issueService(db).update(
           args.issue.id,
           {
             status: "done",
@@ -2364,6 +2410,9 @@ export function issueThreadInteractionService(
             requestedResolverPolicy: lockedCurrent.requestedResolverPolicy,
             effectiveResolverPolicy: lockedCurrent.effectiveResolverPolicy,
             ...(args.actor.resolutionDetails ?? {}),
+            ...(taskCompletionHeld
+              ? { taskCompletion: taskCompletionHeld.reason, planId: taskCompletionHeld.planId }
+              : {}),
           },
         });
       }
@@ -2371,6 +2420,7 @@ export function issueThreadInteractionService(
       return {
         interaction: acceptedInteraction,
         continuationIssue,
+        taskCompletionHeld,
       };
     });
     for (const publication of postCommitActivityPublications)
@@ -3744,6 +3794,7 @@ export function issueThreadInteractionService(
           return {
             interaction: accepted.interaction,
             continuationIssue: accepted.continuationIssue,
+            taskCompletionHeld: accepted.taskCompletionHeld,
             createdIssues: [],
           };
         }
@@ -3763,6 +3814,7 @@ export function issueThreadInteractionService(
           return {
             interaction: accepted.interaction,
             continuationIssue: accepted.continuationIssue,
+            taskCompletionHeld: accepted.taskCompletionHeld,
             createdIssues: [],
           };
         }

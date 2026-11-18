@@ -16636,7 +16636,7 @@ export function issueRoutes(
         throw unprocessable(
           "Remembered permission is only supported for tool reviews",
         );
-      const { interaction, createdIssues, continuationIssue } =
+      const { interaction, createdIssues, continuationIssue, taskCompletionHeld } =
         await interactionSvc.acceptInteraction(issue, interactionId, req.body, {
           requestActor: { ...req.actor },
           agentId: actor.agentId,
@@ -16827,6 +16827,11 @@ export function issueRoutes(
             interaction.kind === "suggest_tasks"
               ? (interaction.result?.skippedClientKeys?.length ?? 0)
               : 0,
+          // MS1h14. An accepted Native completion review under an unfinished
+          // plan leaves the Task in review for the plan's server verification.
+          ...(taskCompletionHeld
+            ? { taskCompletion: taskCompletionHeld.reason, planId: taskCompletionHeld.planId }
+            : {}),
         },
       });
 

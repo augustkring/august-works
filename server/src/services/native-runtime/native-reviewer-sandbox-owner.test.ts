@@ -10,6 +10,7 @@ import {
   billingAccountCompanies,
   billingAccounts,
   companies,
+  companyMemberships,
   completionContracts,
   contextManifests,
   createDb,
@@ -67,7 +68,7 @@ vi.mock("../native-direct-input.js", async importOriginal => ({
   assertNativeWorkspaceMetadataSourcesCurrent: async () => undefined,
 }));
 
-import { currentNativeReviewerRun, nativeReviewerLaneRun } from "./native-review-participant.js";
+import { currentNativeReviewerRun, nativeReviewerLaneRecorded, nativeReviewerLaneRun } from "./native-review-participant.js";
 import { createToolGatewayService } from "../tool-gateway.js";
 import { executionSandboxService } from "../execution-sandbox/sandbox-service.js";
 import { currentWorkerNativePreparationRoot, nativeManagedModelIssuer, nativeModelSessionOwnerLane,
@@ -1053,7 +1054,9 @@ describeDb("current Native completion Reviewer sandbox owner (MS1h2)", () => {
     let PaperclipRunnerToolAuthority!: typeof import("./paperclip-runner-tool-authority.js").PaperclipRunnerToolAuthority;
     let withOrchestrationNativeTool!: typeof import("../orchestration/native-tool-boundary.js").withOrchestrationNativeTool;
     let lockAnalyticalCompany!: typeof import("../analytical-privacy.js").lockAnalyticalCompany;
+    let issueThreadInteractionService!: typeof import("../issue-thread-interactions.js").issueThreadInteractionService;
     beforeAll(async () => {
+      ({ issueThreadInteractionService } = await import("../issue-thread-interactions.js"));
       ({ PaperclipRunnerToolAuthority } = await import("./paperclip-runner-tool-authority.js"));
       ({ withOrchestrationNativeTool } = await import("../orchestration/native-tool-boundary.js"));
       ({ lockAnalyticalCompany } = await import("../analytical-privacy.js"));
@@ -1160,6 +1163,12 @@ describeDb("current Native completion Reviewer sandbox owner (MS1h2)", () => {
       expect(after.invocations).toEqual([expect.objectContaining({ runId: ids.reviewerRun, agentId: ids.reviewer,
         issueId: ids.issue, status: "succeeded", idempotencyKey: `aw-native-tool:${ids.reviewerRun}:resolve-admitted` })]);
       expect(after.charges).toEqual([after.invocations[0]!.id]);
+      // MS1h15. The receipt binds the exact provider arguments, as plan tool
+      // receipts do; the request hash (naming the interaction) stays the
+      // idempotency identity.
+      expect(after.invocations[0]!.argumentsHash).toBe(nativeSha256({ decision: "accept" }));
+      expect(after.invocations[0]!.idempotencyRequestHash).toBe(nativeSha256({ interactionId: ids.interaction,
+        decision: "accept", reason: "" }));
       expect(fetchCalls).toEqual([`http://127.0.0.1:9/api/issues/${ids.issue}/interactions/${ids.interaction}/accept`]);
     });
 
@@ -1240,6 +1249,171 @@ describeDb("current Native completion Reviewer sandbox owner (MS1h2)", () => {
         message: "The completion review action has no completed review model reservation under the reviewed plan" });
       expect(await ledger(ids, plan)).toMatchObject({ used: 0, charges: [], invocations: [] });
       expect(fetchCalls).toEqual([]);
+    });
+
+    describe("accepting the completion review under an unfinished plan (MS1h14)", () => {
+      const reviewIssue = (ids: Ids) => ({ id: ids.issue, companyId: ids.company, projectId: null, goalId: null,
+        status: "in_review" });
+      const reviewerActor = (ids: Ids) => ({ agentId: ids.reviewer, runId: ids.reviewerRun });
+      /** Plan, workers and attempts exactly as they were, for "no plan change". */
+      async function planState(plan: string) {
+        const [row] = await db.select().from(orchestrationPlans).where(eq(orchestrationPlans.id, plan));
+        const workers = await db.select().from(orchestrationWorkers).where(eq(orchestrationWorkers.planId, plan));
+        const attempts = await db.select().from(orchestrationWorkerAttempts).where(eq(orchestrationWorkerAttempts.planId, plan));
+        return { plan: row, workers, attempts };
+      }
+      /** The Run's responsible Human is a current member, as Task updates require. */
+      async function seedMember(variant: Parameters<typeof seed>[0] = {}) {
+        const ids = await seed(variant);
+        const now = new Date().toISOString();
+        await db.execute(sql`insert into "user" (id,name,email,email_verified,created_at,updated_at)
+          values (${ids.user},'Responsible Human',${`${ids.user}@test.invalid`},true,${now},${now})`);
+        await db.insert(companyMemberships).values({ companyId: ids.company, principalType: "user", principalId: ids.user,
+          status: "active", membershipRole: "member" });
+        return ids;
+      }
+      async function taskAndReview(ids: Ids) {
+        const [task] = await db.select({ status: issues.status, statusVersion: issues.statusVersion,
+          executionRunId: issues.executionRunId }).from(issues).where(eq(issues.id, ids.issue));
+        const [review] = await db.select({ status: issueThreadInteractions.status,
+          resolvedByRunId: issueThreadInteractions.resolvedByRunId, resolvedByAgentId: issueThreadInteractions.resolvedByAgentId })
+          .from(issueThreadInteractions).where(eq(issueThreadInteractions.id, ids.interaction));
+        return { task, review };
+      }
+      /** A running plan on the other Task whose worker is this reviewed Task. */
+      async function workerTaskPlan(ids: Ids, workerStatus: "running" | "completed") {
+        const plan = randomUUID(), worker = randomUUID(), contract = randomUUID();
+        await db.insert(completionContracts).values({ id: contract, companyId: ids.company, issueId: ids.otherIssue,
+          revision: 1, schemaVersion: "1", policyVersion: "test", risk: "low", completionAuthority: "agent_claim_policy",
+          incompleteCriteriaPolicy: "block", contractJson: {}, canonicalSha256: randomUUID(), createdByActorType: "agent",
+          createdByActorId: ids.executor });
+        await db.insert(orchestrationPlans).values({ id: plan, companyId: ids.company, issueId: ids.otherIssue,
+          completionContractId: contract, mode: "single_worker", actionClass: "internal_draft", riskClass: "C0",
+          supervisionMode: "none", verificationMode: "deterministic", humanOversightMode: "human_review", createdBy: ids.user,
+          budgets: { maxWorkerCount: 1, maxParallelWorkers: 1, maxDelegationDepth: 1, maxRetries: 0, maxWallClockSeconds: 3600,
+            maxToolActions: 5, maxModelCostMinor: 1000 } });
+        await db.insert(orchestrationWorkers).values({ id: worker, companyId: ids.company, planId: plan, issueId: ids.issue,
+          agentId: ids.executor, completionContractId: ids.contract, workerKey: "writer", dependsOn: [],
+          status: workerStatus, attemptCount: 1 });
+        await db.update(orchestrationPlans).set({ status: "running", startedAt: new Date(), version: 2,
+          executionPrincipal: { type: "user", userId: ids.user } }).where(eq(orchestrationPlans.id, plan));
+        return plan;
+      }
+
+      it("records the accepted review and leaves the Task in review, the plan, workers and attempts unchanged", async () => {
+        const ids = await seedMember({ resultCanonicalSha256: sourceCanonical });
+        const { plan } = await reviewedPlan(ids);
+        const before = await planState(plan);
+        const result = await issueThreadInteractionService(db as never).acceptInteraction(reviewIssue(ids), ids.interaction, {},
+          reviewerActor(ids));
+        expect(result.taskCompletionHeld).toEqual({ reason: "awaiting_plan_verification", planId: plan });
+        expect(result.continuationIssue).toBeNull();
+        expect(await taskAndReview(ids)).toEqual({
+          task: { status: "in_review", statusVersion: 1, executionRunId: ids.reviewerRun },
+          review: { status: "accepted", resolvedByRunId: ids.reviewerRun, resolvedByAgentId: ids.reviewer },
+        });
+        expect(await planState(plan)).toEqual(before);
+      });
+
+      it("holds completion for a Task that is the unfinished worker Task of a plan on another Task", async () => {
+        const ids = await seedMember();
+        const plan = await workerTaskPlan(ids, "running");
+        const result = await issueThreadInteractionService(db as never).acceptInteraction(reviewIssue(ids), ids.interaction, {},
+          reviewerActor(ids));
+        expect(result.taskCompletionHeld).toEqual({ reason: "awaiting_plan_verification", planId: plan });
+        expect((await taskAndReview(ids)).task?.status).toBe("in_review");
+      });
+
+      // The plan no longer covers the Task, exactly where aw_v7_orchestration_task_guard admits `done`.
+      const uncovered: Array<[string, (ids: Ids) => Promise<unknown>]> = [
+        ["there is no plan", async () => undefined],
+        ["the Task's only plan is cancelled", async ids => {
+          const { plan } = await reviewedPlan(ids, "none");
+          await db.update(orchestrationPlans).set({ status: "cancelled", completedAt: new Date(), version: 3 })
+            .where(eq(orchestrationPlans.id, plan));
+        }],
+        ["its worker on another Task's running plan is completed", ids => workerTaskPlan(ids, "completed")],
+      ];
+      it.each(uncovered)("completes the Task as before when %s", async (_name, arrange) => {
+        const ids = await seedMember();
+        await arrange(ids);
+        const result = await issueThreadInteractionService(db as never).acceptInteraction(reviewIssue(ids), ids.interaction, {},
+          reviewerActor(ids));
+        expect(result.taskCompletionHeld).toBeNull();
+        expect(result.continuationIssue).toMatchObject({ id: ids.issue, status: "done" });
+        expect(await taskAndReview(ids)).toMatchObject({ task: { status: "done" }, review: { status: "accepted" } });
+      });
+
+      it("keeps the reject path unchanged under the plan", async () => {
+        const planned = await seedMember({ resultCanonicalSha256: sourceCanonical });
+        const { plan } = await reviewedPlan(planned);
+        const before = await planState(plan);
+        const plain = await seedMember();
+        for (const ids of [planned, plain])
+          await issueThreadInteractionService(db as never).rejectInteraction(reviewIssue(ids), ids.interaction,
+            { reason: "Please add the missing section." }, reviewerActor(ids));
+        const [withPlan, withoutPlan] = [await taskAndReview(planned), await taskAndReview(plain)];
+        expect(withPlan.review?.status).toBe("rejected");
+        expect(withPlan.task?.status).toBe(withoutPlan.task?.status);
+        expect(withPlan.task?.status).not.toBe("in_review");
+        expect(await planState(plan)).toEqual(before);
+      });
+      describe("reviewer lane recorded for finalization (MS1h17)", () => {
+        const recorded = (ids: Ids, runId: string = ids.reviewerRun, companyId: string = ids.company) =>
+          nativeReviewerLaneRecorded(db as never, { companyId, runId });
+        it("holds for the Reviewer Run bound by its review_model reservation, before and after its decision", async () => {
+          const ids = await seedMember({ resultCanonicalSha256: sourceCanonical });
+          await reviewedPlan(ids);
+          await expect(recorded(ids)).resolves.toBe(true);
+          await issueThreadInteractionService(db as never).acceptInteraction(reviewIssue(ids), ids.interaction, {}, reviewerActor(ids));
+          // After its own decision the Run is no longer the current Reviewer,
+          // but the recorded lane still holds (plan-covered: Task in review).
+          await expect(predicate(ids)).resolves.toBe(false);
+          await expect(recorded(ids)).resolves.toBe(true);
+          expect((await taskAndReview(ids)).task?.status).toBe("in_review");
+        });
+
+        it("holds after a decision that completed the Task and released its execution lock", async () => {
+          const ids = await seedMember({ resultCanonicalSha256: sourceCanonical });
+          const { plan } = await reviewedPlan(ids, "dispatched");
+          await db.update(orchestrationPlans).set({ status: "cancelled", completedAt: new Date(), version: 3 })
+            .where(eq(orchestrationPlans.id, plan));
+          await issueThreadInteractionService(db as never).acceptInteraction(reviewIssue(ids), ids.interaction, {}, reviewerActor(ids));
+          expect((await taskAndReview(ids)).task).toMatchObject({ status: "done", executionRunId: null });
+          await expect(recorded(ids)).resolves.toBe(true);
+        });
+
+        const forged: Array<[string, (ids: Ids) => Promise<{ runId?: string; companyId?: string } | void>]> = [
+          ["a review wake without a review_model reservation", async () => undefined],
+          ["another Run of the Reviewer carrying the same review wake", async ids => {
+            await reviewedPlan(ids);
+            const other = await addRun(ids, ids.reviewer);
+            return { runId: other.runId };
+          }],
+          ["a Reviewer Run that also has a plan worker attempt", async ids => {
+            await reviewedPlan(ids, "completed", { reviewerWorkerAttempt: true });
+          }],
+          ["the Task assignee's Run", async ids => {
+            await reviewedPlan(ids);
+            return { runId: ids.sourceRun };
+          }],
+          ["another company", async ids => {
+            await reviewedPlan(ids);
+            return { companyId: ids.otherCompany };
+          }],
+          ["a review wake naming another interaction", async ids => {
+            await reviewedPlan(ids);
+            const [run] = await db.select().from(heartbeatRuns).where(eq(heartbeatRuns.id, ids.reviewerRun));
+            await db.update(heartbeatRuns).set({ contextSnapshot: { ...(run!.contextSnapshot as object),
+              nativeReviewInteractionId: randomUUID() } }).where(eq(heartbeatRuns.id, ids.reviewerRun));
+          }],
+        ];
+        it.each(forged)("does not hold for %s", async (_name, arrange) => {
+          const ids = await seedMember({ resultCanonicalSha256: sourceCanonical });
+          const asked = (await arrange(ids)) ?? {};
+          await expect(recorded(ids, asked.runId, asked.companyId)).resolves.toBe(false);
+        });
+      });
     });
   });
 });

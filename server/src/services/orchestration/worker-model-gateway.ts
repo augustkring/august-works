@@ -657,6 +657,53 @@ type ManagedRetainedHistory = NonNullable<Awaited<ReturnType<typeof loadManagedR
  * from the current prompt onward, is returned; a terminal placeholder there
  * refuses. Reads only existing records; writes nothing.
  */
+/** MS1h16. A Native completion Reviewer's `resolve_review` result may enter
+ * its next model input only as its exact current decision receipt: a
+ * `review_model` credential; a result of exactly `{ interactionId, status }`
+ * naming the claims' review interaction and the decision this Run recorded on
+ * it (read from the database by the caller); the succeeded plan invocation of
+ * this Run on the bound review Task, keyed to this provider tool use and bound
+ * to its exact provider arguments (MS1h15); and a consumed source entry that is
+ * exactly that one tool-result source with an empty source policy, so nothing
+ * else enters the model input. Exported for regression tests. */
+export function managedReviewDecisionResultExact(input: {
+  claims: { scope: string; run_id: string; sub: string; responsible_user_id: string;
+    review_model?: { issueId: string; interactionId: string } | null };
+  toolUseId: string;
+  providerArgumentsHash: string;
+  capture: Record<string, unknown>;
+  source: Record<string, unknown>;
+  invocation: { id: string; issueId: string | null; runId: string | null; agentId: string | null; toolName: string;
+    status: string; idempotencyKey: string | null; argumentsHash: string | null } | null | undefined;
+  consumedEntry: { responsibleUserId: string; policy: unknown; inputs: unknown[] } | null | undefined;
+  result: unknown;
+  interaction: { id: string; issueId: string; status: string; resolvedByRunId: string | null;
+    resolvedByAgentId: string | null } | null | undefined;
+}): boolean {
+  const { claims, invocation, consumedEntry, interaction } = input;
+  const review = claims.scope === "review_model" ? claims.review_model : null;
+  if (!review || !invocation || !consumedEntry || !interaction) return false;
+  const result = input.result && typeof input.result === "object" && !Array.isArray(input.result)
+    ? input.result as Record<string, unknown> : null;
+  if (!result || Object.keys(result).sort().join(",") !== "interactionId,status" ||
+    result.interactionId !== review.interactionId || (result.status !== "accepted" && result.status !== "rejected"))
+    return false;
+  return interaction.id === review.interactionId && interaction.issueId === review.issueId &&
+    interaction.status === result.status && interaction.resolvedByRunId === claims.run_id &&
+    interaction.resolvedByAgentId === claims.sub &&
+    invocation.issueId === review.issueId && invocation.runId === claims.run_id && invocation.agentId === claims.sub &&
+    invocation.toolName === "resolve_review" && invocation.status === "succeeded" &&
+    invocation.idempotencyKey === `aw-native-tool:${claims.run_id}:${input.toolUseId}` &&
+    invocation.argumentsHash === input.providerArgumentsHash &&
+    input.capture.managedOpenCode === true && input.capture.callId === input.toolUseId &&
+    input.capture.tool === "resolve_review" && input.capture.argumentsHash === input.providerArgumentsHash &&
+    input.source.kind === "tool_result" && input.source.runId === claims.run_id && input.source.callId === input.toolUseId &&
+    input.source.toolName === "resolve_review" && input.source.invocationId === invocation.id &&
+    consumedEntry.responsibleUserId === claims.responsible_user_id &&
+    isDeepStrictEqual(consumedEntry.inputs, [input.source]) &&
+    isDeepStrictEqual(consumedEntry.policy, { issueIds: [], projectIds: [], runIds: [], memoryIds: [], foundationRevisionIds: [] });
+}
+
 export async function managedOpenCodeRequestOwnMessages(input: {
   db: Db;
   claims: ManagedModelClaims;
@@ -1892,6 +1939,24 @@ async function assertManagedOpenCodeRequestSources(db: Db, claims: ManagedModelC
             issueId: run.nativeIssueId!, responsibleUserId: claims.responsible_user_id,
             capture: repositoryCapture,
           });
+          continue;
+        }
+        if (toolName === "resolve_review") {
+          // MS1h16. Only a review_model credential, and only its exact current
+          // decision receipt; every other credential family and any mismatch
+          // keeps the 403.
+          const reviewBinding = claims.scope === "review_model" ? (claims as ReviewClaims).review_model : null;
+          const [decision] = reviewBinding ? await db.select({ id: issueThreadInteractions.id,
+            issueId: issueThreadInteractions.issueId, status: issueThreadInteractions.status,
+            resolvedByRunId: issueThreadInteractions.resolvedByRunId, resolvedByAgentId: issueThreadInteractions.resolvedByAgentId })
+            .from(issueThreadInteractions).where(and(eq(issueThreadInteractions.companyId, claims.company_id),
+              eq(issueThreadInteractions.issueId, reviewBinding.issueId), eq(issueThreadInteractions.id, reviewBinding.interactionId)))
+            .limit(1) : [];
+          if (!managedReviewDecisionResultExact({ claims: { scope: claims.scope, run_id: claims.run_id, sub: claims.sub,
+            responsible_user_id: claims.responsible_user_id, review_model: reviewBinding }, toolUseId: block.tool_use_id,
+            providerArgumentsHash: providerUse.argumentsHash, capture, source, invocation, consumedEntry, result,
+            interaction: decision }))
+            throw forbidden("Managed OpenCode review decision result is not its exact current receipt");
           continue;
         }
         if (toolName === "create_task") {

@@ -203,7 +203,8 @@ import { NATIVE_OPENCODE_CONFORMANCE_SYSTEM, sealNativeOpenCodeConformanceDispat
   type NativeOpenCodeConformanceDispatchSource, type NativeOpenCodeConformanceSourceAuthority } from "../orchestration/native-opencode-conformance-source.js";
 import { createAssignedMcpTools, getAssignedMcpGateway, type AssignedMcpInvocationWitness, type AssignedMcpPendingWitness, type AssignedMcpSearchWitness } from "./assigned-mcp-tools.js";
 import { captureNativeGovernedPendingInteractions } from "./native-interaction-bridge.js";
-import { captureNativeReviewWakeWitness, getNativeReviewAssignment, readNativeReviewAssignmentContext } from "./native-review-participant.js";
+import { captureNativeReviewWakeWitness, getNativeReviewAssignment, nativeReviewerLaneRecorded,
+  readNativeReviewAssignmentContext } from "./native-review-participant.js";
 import { NativeChatAttachmentReadScope } from "./chat-attachment-read.js";
 import {
   assertCurrentWakeCommentsRead,
@@ -1736,8 +1737,11 @@ class SessionToolAuthorityEpoch {
       if (call.turnId && assignedMcpSearch.value)
         await this.onManagedOpenCodeToolResult?.({ tool: call.tool, callId: call.callId, turnId: call.turnId,
           argumentsHash, result, assignedMcpSearch: assignedMcpSearch.value });
+      // MS1h15. resolve_review's plan invocation receipt is captured like the
+      // other plan tool results, so the next managed request can bind it.
       if (call.turnId && (call.tool === "read_document" || call.tool === "write_document" || call.tool === "report_progress" ||
         call.tool === "create_task" || call.tool === "self_remember" || call.tool === "request_human_input" || call.tool === "read_context" || call.tool === "list_project_repositories" ||
+        call.tool === "resolve_review" ||
 
         call.tool === "get_task_context" || call.tool === "get_task_history" || call.tool === "read_chat_attachment" || call.tool === "query_business_metric")) {
         if (toolResultDiagnostics && call.tool === "create_task")
@@ -17344,8 +17348,26 @@ async function createRunnerdBackendWithinSessionClaim(
 
   const checkpointRemoteRunner = async (
     settlement: "settled" | "unsettled",
-  ) => withRemoteSessionFilesystemFence("native_harness_state", () =>
-    checkpointRemoteRunnerUnlocked(settlement));
+  ) => {
+    // MS1h17. A completion Reviewer is read-only: its sandbox is discarded at
+    // finalization, a resolved review is never resumed, and a failed Reviewer
+    // is replaced by a new Reviewer Run. Take no harness checkpoint or backup
+    // for it, and no filesystem fence (both would need sandbox ownership after
+    // the Reviewer's own decision).
+    if (remoteCommandRunner && remoteStateDirectory && remoteRunnerFilesystemRoot &&
+      await nativeReviewerLaneRecorded(input.db, {
+        companyId: input.execution.binding.companyId,
+        runId: input.execution.binding.runId,
+      })) {
+      await input.onLog?.(
+        "stderr",
+        "[paperclip-runner] remote checkpoint skipped: completion Reviewer workspace is discarded by design\n",
+      );
+      return;
+    }
+    return withRemoteSessionFilesystemFence("native_harness_state", () =>
+      checkpointRemoteRunnerUnlocked(settlement));
+  };
 
   const prepareExternalRunnerState =
     remoteTarget && remoteCommandRunner

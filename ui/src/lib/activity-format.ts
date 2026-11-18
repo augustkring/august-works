@@ -232,6 +232,15 @@ function formatInteractionOutcomeLabel(action: string, details: ActivityDetails)
   return kind ? table[kind] ?? null : null;
 }
 
+/**
+ * MS1h14. An accepted completion review whose Task an unfinished orchestration
+ * plan still covers: the Task stays in review until a person verifies the plan.
+ * The server records this as `taskCompletion: "awaiting_plan_verification"`.
+ */
+export function activityReviewAwaitsPlanVerification(action: string, details?: ActivityDetails): boolean {
+  return action === "issue.thread_interaction_accepted" && details?.taskCompletion === "awaiting_plan_verification";
+}
+
 function asRecord(value: unknown): Record<string, unknown> | null {
   if (!value || typeof value !== "object" || Array.isArray(value)) return null;
   return value as Record<string, unknown>;

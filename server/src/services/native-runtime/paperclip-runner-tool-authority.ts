@@ -1671,10 +1671,13 @@ export class PaperclipRunnerToolAuthority {
         if (existing.status === "succeeded") return [existing];
         throw conflict("Native review action is already committed or unresolved");
       }
+      // MS1h15. Like every plan tool receipt, argumentsHash binds the exact
+      // provider tool arguments; the request hash (which also names the
+      // interaction) stays the idempotency identity.
       return tx.insert(toolInvocations).values({ companyId: this.binding.companyId, idempotencyKey,
         idempotencyRequestHash: requestHash, runId: this.binding.runId, issueId: this.binding.issueId,
         agentId: this.binding.agentId, actorType: "agent", actorId: this.binding.agentId, toolName: "resolve_review",
-        argumentsHash: requestHash, riskLevel: "low", policyDecision: "allow", approvalState: "not_required",
+        argumentsHash: nativeSha256(value), riskLevel: "low", policyDecision: "allow", approvalState: "not_required",
         status: "executing", startedAt: new Date() }).returning();
     });
     if (!invocation) throw forbidden("The bounded Native review action could not be charged");
