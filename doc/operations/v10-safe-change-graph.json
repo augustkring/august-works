@@ -7630,7 +7630,7 @@
         },
         {
           "path": "server/src/__tests__/native-status-arbiter-corpus.test.ts",
-          "sha256": "7698aa51bf7fd55c1edc5ec6466e094776450545bceea7585c70a30d700ca81b"
+          "sha256": "431429166cbba4b77eab224c62707082e10af20b8a79814155de1ea885ac490b"
         },
         {
           "path": "server/src/index.ts",
@@ -7702,11 +7702,11 @@
         },
         {
           "path": "server/src/services/native-runtime/status-arbiter.test.ts",
-          "sha256": "2ce0e8a541a45960109090a8bdfdd76bf8065dda11327e694b7b190d12589674"
+          "sha256": "1ba0ca1f7bdedf18c44e47a4e30262f1e9ec1769b8334b5411e7095734ba9057"
         },
         {
           "path": "server/src/services/native-runtime/status-arbiter.ts",
-          "sha256": "562842af1d123edc63ab89ac1f5c535eb1105b6b7d91dde3c853e1d9b96b7ea4"
+          "sha256": "9f2482c721c4ed01f125ef02fe0f42952f2cf0db752e6833a5fa10ddecdd33a9"
         },
         {
           "path": "server/src/services/runtime/native-harness-state-owner.test.ts",
@@ -9084,7 +9084,7 @@
         },
         {
           "path": "server/src/__tests__/native-status-arbiter-corpus.test.ts",
-          "sha256": "7698aa51bf7fd55c1edc5ec6466e094776450545bceea7585c70a30d700ca81b"
+          "sha256": "431429166cbba4b77eab224c62707082e10af20b8a79814155de1ea885ac490b"
         },
         {
           "path": "server/src/__tests__/playbooks-project-control-v5.test.ts",
@@ -9380,7 +9380,7 @@
         },
         {
           "path": "server/src/services/native-runtime/status-decision-committer.ts",
-          "sha256": "a3f4d4b2392e8abd323c5a75445534d4944e187ab6204ef7595169c7028417bf"
+          "sha256": "4b8133f20609067df6eaca3d6e51f801df1467f75fb6e6c5d95fe63a6af1da70"
         },
         {
           "path": "server/src/services/native-runtime/task-creation-backlog.test.ts",
@@ -9420,7 +9420,7 @@
         },
         {
           "path": "server/src/services/supervision/verification-service.ts",
-          "sha256": "3b47fc88c86a71741d97f48c1e3472ae5adc066226c3e4858081c9e7eb49a026"
+          "sha256": "c2dcca6e23ae8ab1817ddcf519ea7ad2dd2ff58863911be84b0c524a67111fe6"
         },
         {
           "path": "server/src/services/workflows/workflow-direct-agent.test.ts",
@@ -13904,7 +13904,7 @@
         },
         {
           "path": "server/src/__tests__/helpers/managed-native-completion-diagnostic.ts",
-          "sha256": "2757aebae9973482729ed142442821342ea34420cb0d49c5a4236256b17fe2c0"
+          "sha256": "87d9db2a45906d4cf32862f42d635fd360ab5e785a2d01ca55ad0b0106a594e3"
         },
         {
           "path": "server/src/__tests__/helpers/managed-native-heartbeat-fixture.ts",
@@ -25174,7 +25174,7 @@
         },
         {
           "path": "server/src/services/native-runtime/native-run-finalizer.ts",
-          "sha256": "da0d37140e3119cfb508f9dbffb80ebf12eeb84a9f9f4dff87f4e33b354953f9"
+          "sha256": "9aa54a3fac1f5318a5ed1d00e0876e653e470200ab98bbf25e43ea2281dda7d2"
         },
         {
           "path": "server/src/services/native-runtime/native-runner-ownership.ts",
@@ -32121,7 +32121,7 @@
         },
         {
           "path": "server/src/services/company-search-help.generated.ts",
-          "sha256": "d7d59fc7eea42b9bd7f87b1e2be48e774d89bce77c66759d92c14d49283143e5"
+          "sha256": "e89acf0b03b14de407aa6b62c74e8b796a9c0bcdcb9aabaacac513c8b4f09745"
         },
         {
           "path": "server/src/services/task-search.ts",
@@ -49745,7 +49745,7 @@
       "id": "source:server/src/__tests__/native-status-arbiter-corpus.test.ts",
       "kind": "current_source_owner",
       "path": "server/src/__tests__/native-status-arbiter-corpus.test.ts",
-      "sha256": "7698aa51bf7fd55c1edc5ec6466e094776450545bceea7585c70a30d700ca81b",
+      "sha256": "431429166cbba4b77eab224c62707082e10af20b8a79814155de1ea885ac490b",
       "changeIds": [
         "SCR-V10-HOTSPOT-05",
         "SCR-V10-HOTSPOT-06"
@@ -49883,7 +49883,7 @@
       "id": "source:server/src/services/native-runtime/status-arbiter.test.ts",
       "kind": "current_source_owner",
       "path": "server/src/services/native-runtime/status-arbiter.test.ts",
-      "sha256": "2ce0e8a541a45960109090a8bdfdd76bf8065dda11327e694b7b190d12589674",
+      "sha256": "1ba0ca1f7bdedf18c44e47a4e30262f1e9ec1769b8334b5411e7095734ba9057",
       "changeIds": [
         "SCR-V10-HOTSPOT-05"
       ],
@@ -49898,7 +49898,7 @@
       "id": "source:server/src/services/native-runtime/status-arbiter.ts",
       "kind": "current_source_owner",
       "path": "server/src/services/native-runtime/status-arbiter.ts",
-      "sha256": "562842af1d123edc63ab89ac1f5c535eb1105b6b7d91dde3c853e1d9b96b7ea4",
+      "sha256": "9f2482c721c4ed01f125ef02fe0f42952f2cf0db752e6833a5fa10ddecdd33a9",
       "changeIds": [
         "SCR-V10-HOTSPOT-05"
       ],
@@ -50998,7 +50998,7 @@
       "id": "source:server/src/services/native-runtime/status-decision-committer.ts",
       "kind": "current_source_owner",
       "path": "server/src/services/native-runtime/status-decision-committer.ts",
-      "sha256": "a3f4d4b2392e8abd323c5a75445534d4944e187ab6204ef7595169c7028417bf",
+      "sha256": "4b8133f20609067df6eaca3d6e51f801df1467f75fb6e6c5d95fe63a6af1da70",
       "changeIds": [
         "SCR-V10-HOTSPOT-06"
       ],
@@ -51121,7 +51121,7 @@
       "id": "source:server/src/services/supervision/verification-service.ts",
       "kind": "current_source_owner",
       "path": "server/src/services/supervision/verification-service.ts",
-      "sha256": "3b47fc88c86a71741d97f48c1e3472ae5adc066226c3e4858081c9e7eb49a026",
+      "sha256": "c2dcca6e23ae8ab1817ddcf519ea7ad2dd2ff58863911be84b0c524a67111fe6",
       "changeIds": [
         "SCR-V10-HOTSPOT-06"
       ],
@@ -52881,7 +52881,7 @@
       "id": "source:server/src/__tests__/helpers/managed-native-completion-diagnostic.ts",
       "kind": "current_source_owner",
       "path": "server/src/__tests__/helpers/managed-native-completion-diagnostic.ts",
-      "sha256": "2757aebae9973482729ed142442821342ea34420cb0d49c5a4236256b17fe2c0",
+      "sha256": "87d9db2a45906d4cf32862f42d635fd360ab5e785a2d01ca55ad0b0106a594e3",
       "changeIds": [
         "SCR-V10-WORKFLOWS-DURABLE-OPERATIONS"
       ],
@@ -64318,7 +64318,7 @@
       "id": "source:server/src/services/native-runtime/native-run-finalizer.ts",
       "kind": "current_source_owner",
       "path": "server/src/services/native-runtime/native-run-finalizer.ts",
-      "sha256": "da0d37140e3119cfb508f9dbffb80ebf12eeb84a9f9f4dff87f4e33b354953f9",
+      "sha256": "9aa54a3fac1f5318a5ed1d00e0876e653e470200ab98bbf25e43ea2281dda7d2",
       "changeIds": [
         "SCR-V10-NATIVE-RUNTIME-AND-AUTHORITY"
       ],
@@ -72540,7 +72540,7 @@
       "id": "source:server/src/services/company-search-help.generated.ts",
       "kind": "current_source_owner",
       "path": "server/src/services/company-search-help.generated.ts",
-      "sha256": "d7d59fc7eea42b9bd7f87b1e2be48e774d89bce77c66759d92c14d49283143e5",
+      "sha256": "e89acf0b03b14de407aa6b62c74e8b796a9c0bcdcb9aabaacac513c8b4f09745",
       "changeIds": [
         "SCR-V10-PRODUCT-IDENTITY-HELP-LANGUAGE"
       ],
