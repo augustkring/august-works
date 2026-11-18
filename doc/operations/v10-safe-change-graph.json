@@ -4517,7 +4517,7 @@
         },
         {
           "path": "server/src/services/orchestration/worker-model-gateway.ts",
-          "sha256": "aa0f22db3c6419a932ce3f98097ae325108a512ca99b18727ded188fc365c6b9"
+          "sha256": "d08a0e70535dcc5d5ebcd23d5871d7812a62d84ec84ff0225493a17d6f583d88"
         },
         {
           "path": "server/src/services/tool-gateway.ts",
@@ -10377,7 +10377,7 @@
         },
         {
           "path": "server/src/services/orchestration/worker-model-gateway.ts",
-          "sha256": "aa0f22db3c6419a932ce3f98097ae325108a512ca99b18727ded188fc365c6b9"
+          "sha256": "d08a0e70535dcc5d5ebcd23d5871d7812a62d84ec84ff0225493a17d6f583d88"
         },
         {
           "path": "server/src/services/platform-skill-admission.ts",
@@ -47110,7 +47110,7 @@
       "id": "source:server/src/services/orchestration/worker-model-gateway.ts",
       "kind": "current_source_owner",
       "path": "server/src/services/orchestration/worker-model-gateway.ts",
-      "sha256": "aa0f22db3c6419a932ce3f98097ae325108a512ca99b18727ded188fc365c6b9",
+      "sha256": "d08a0e70535dcc5d5ebcd23d5871d7812a62d84ec84ff0225493a17d6f583d88",
       "changeIds": [
         "SCR-V10-HOTSPOT-01",
         "SCR-V10-HOTSPOT-07"
