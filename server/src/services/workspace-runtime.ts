@@ -5216,7 +5216,18 @@ async function waitForAllocatedPortBind(input: {
       throw new Error("service process exited before binding its allocated port");
     }
 
-    const ownerPid = await readLocalServicePortOwner(input.port);
+    let ownerPid = await readLocalServicePortOwner(input.port);
+    // A present listener proves only that some listener appeared. The owner read above can
+    // precede the bind, so attribute a present listener once more right away. If it still
+    // cannot be attributed, retry on the next port now: waiting cannot make an unattributed
+    // listener acceptable, and acceptance below still requires this launched process group
+    // to own the port on both sides of the stability delay. Without this, every attempt on a
+    // host where ownership is unavailable slept the full delay before the same rejection.
+    // The presence read never binds the port, so it cannot steal the port from the child.
+    if (!ownerPid && await hasLoopbackPortListener(input.port)) {
+      ownerPid = await readLocalServicePortOwner(input.port);
+      if (!ownerPid) throw new RuntimeServicePortBindCollision(input.port);
+    }
     if (ownerPid) {
       const childPid = input.child.pid ?? null;
       if (!childPid || !(await isLocalServiceProcessOwnedBy(ownerPid, childPid))) {
@@ -5233,20 +5244,6 @@ async function waitForAllocatedPortBind(input: {
         throw new RuntimeServicePortBindCollision(input.port);
       }
       return;
-    }
-
-    // A present listener proves only that some listener appeared. If listener ownership cannot
-    // be attributed to this child after a stability delay, retry instead of accepting a sibling.
-    // The presence read never binds the port, so it cannot steal the port from the child.
-    if (await hasLoopbackPortListener(input.port)) {
-      await delay(250);
-      if (input.child.exitCode !== null || input.child.signalCode !== null) {
-        throw new Error("service process exited after losing its allocated port");
-      }
-      const stableOwnerPid = await readLocalServicePortOwner(input.port);
-      const childPid = input.child.pid ?? null;
-      if (stableOwnerPid && childPid && await isLocalServiceProcessOwnedBy(stableOwnerPid, childPid)) return;
-      throw new RuntimeServicePortBindCollision(input.port);
     }
     await delay(50);
   }
