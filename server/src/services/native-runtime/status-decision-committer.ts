@@ -1,4 +1,4 @@
-import { and, asc, desc, eq, inArray, notInArray, or, sql } from "drizzle-orm";
+import { and, asc, desc, eq, inArray, notInArray, sql } from "drizzle-orm";
 import type { Db } from "@paperclipai/db";
 import type { CreateIssueThreadInteraction } from "@paperclipai/shared";
 import {
@@ -13,8 +13,6 @@ import {
   issues,
   nativeRunFinalizations,
   nativeRunResults,
-  orchestrationPlans,
-  orchestrationWorkers,
   statusDecisionEffects,
   statusDecisions,
   workAssessments,
@@ -47,6 +45,7 @@ import {
   parseIssueExecutionState,
 } from "../issue-execution-policy.js";
 import { buildExecutionStageWakeup } from "../issue-execution-stage-wakeup.js";
+import { activePlanCoveringTask } from "../orchestration/plan-coverage.js";
 import { issueThreadInteractionService } from "../issue-thread-interactions.js";
 import { issueRecoveryActionService } from "../issue-recovery-actions.js";
 import { buildIssueBlockersResolvedWakeIdempotencyKey } from "../issue-dependency-wakeups.js";
@@ -1733,24 +1732,10 @@ export async function commitNativeStatusDecision(input: {
           },
         };
       } else {
-        const requiresOrchestrationVerification = await tx
-          .select({ id: orchestrationPlans.id })
-          .from(orchestrationPlans)
-          .leftJoin(orchestrationWorkers, and(
-            eq(orchestrationWorkers.companyId, orchestrationPlans.companyId),
-            eq(orchestrationWorkers.planId, orchestrationPlans.id),
-            eq(orchestrationWorkers.issueId, input.issueId),
-          ))
-          .where(and(
-            eq(orchestrationPlans.companyId, input.companyId),
-            notInArray(orchestrationPlans.status, ["completed", "cancelled", "failed"]),
-            or(
-              eq(orchestrationPlans.issueId, input.issueId),
-              and(eq(orchestrationWorkers.issueId, input.issueId), notInArray(orchestrationWorkers.status, ["completed"])),
-            ),
-          ))
-          .limit(1)
-          .then((rows) => rows.length > 0);
+        // The same plan-coverage fact as the 0360 guard and the stage approval
+        // routes (MS1f): one shared helper, read in this transaction.
+        const requiresOrchestrationVerification =
+          (await activePlanCoveringTask(tx as unknown as Db, input.companyId, input.issueId)) !== null;
         if (requiresOrchestrationVerification && issue.status !== "done") {
           input = {
             ...input,

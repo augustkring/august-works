@@ -55,7 +55,7 @@ type TransitionInput = {
   monitorExplicitlyUpdated?: boolean;
 };
 
-type TransitionResult = {
+export type TransitionResult = {
   patch: Record<string, unknown>;
   decision?: Pick<IssueExecutionDecision, "stageId" | "stageType" | "outcome" | "body">;
   workflowControlledAssignment?: boolean;
@@ -1223,6 +1223,37 @@ export function applyIssueExecutionPolicyTransition(input: TransitionInput): Tra
 
 export function applyIssueMonitorPolicyTransition(input: TransitionInput): TransitionResult {
   return { patch: applyMonitorTransition(input, {}) };
+}
+
+/**
+ * MS1f. The transition is the final approval of a declared execution-policy
+ * stage: the decision is `approved` and the stage left the execution state
+ * `completed` (no further stage became pending), so the caller would set the
+ * Task `done`. Only such a transition can be held for plan verification.
+ */
+export function isFinalExecutionStageApproval(transition: TransitionResult): boolean {
+  if (transition.decision?.outcome !== "approved") return false;
+  return parseIssueExecutionState(transition.patch.executionState)?.status === COMPLETED_STATUS;
+}
+
+/**
+ * MS1f. The final stage approval on a Task that an unfinished orchestration
+ * plan covers completes the stage (its execution state and decision are kept
+ * as approved) but not the Task: the Task stays `in_review` and returns to the
+ * stage's return assignee (the plan Worker) for the plan's Human server
+ * verification. The assignment is workflow-controlled, as when a stage returns
+ * the Task for changes. Callers decide plan coverage and must not wake the
+ * restored assignee. Mutates and returns the transition.
+ */
+export function holdFinalExecutionStageApprovalForPlanVerification(transition: TransitionResult): TransitionResult {
+  if (!isFinalExecutionStageApproval(transition)) {
+    throw new Error("Only a final execution-policy stage approval can be held for plan verification");
+  }
+  const state = parseIssueExecutionState(transition.patch.executionState);
+  transition.patch.status = "in_review";
+  if (state?.returnAssignee) Object.assign(transition.patch, patchForPrincipal(state.returnAssignee));
+  transition.workflowControlledAssignment = true;
+  return transition;
 }
 
 // Negation/rejection markers that invalidate an otherwise approval-looking heading.
