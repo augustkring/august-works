@@ -203,7 +203,8 @@ import { NATIVE_OPENCODE_CONFORMANCE_SYSTEM, sealNativeOpenCodeConformanceDispat
   type NativeOpenCodeConformanceDispatchSource, type NativeOpenCodeConformanceSourceAuthority } from "../orchestration/native-opencode-conformance-source.js";
 import { createAssignedMcpTools, getAssignedMcpGateway, type AssignedMcpInvocationWitness, type AssignedMcpPendingWitness, type AssignedMcpSearchWitness } from "./assigned-mcp-tools.js";
 import { captureNativeGovernedPendingInteractions } from "./native-interaction-bridge.js";
-import { captureNativeReviewWakeWitness, getNativeReviewAssignment, readNativeReviewAssignmentContext } from "./native-review-participant.js";
+import { captureNativeReviewWakeWitness, getNativeReviewAssignment, nativeReviewerLaneRecorded,
+  readNativeReviewAssignmentContext } from "./native-review-participant.js";
 import { NativeChatAttachmentReadScope } from "./chat-attachment-read.js";
 import {
   assertCurrentWakeCommentsRead,
@@ -17347,8 +17348,26 @@ async function createRunnerdBackendWithinSessionClaim(
 
   const checkpointRemoteRunner = async (
     settlement: "settled" | "unsettled",
-  ) => withRemoteSessionFilesystemFence("native_harness_state", () =>
-    checkpointRemoteRunnerUnlocked(settlement));
+  ) => {
+    // MS1h17. A completion Reviewer is read-only: its sandbox is discarded at
+    // finalization, a resolved review is never resumed, and a failed Reviewer
+    // is replaced by a new Reviewer Run. Take no harness checkpoint or backup
+    // for it, and no filesystem fence (both would need sandbox ownership after
+    // the Reviewer's own decision).
+    if (remoteCommandRunner && remoteStateDirectory && remoteRunnerFilesystemRoot &&
+      await nativeReviewerLaneRecorded(input.db, {
+        companyId: input.execution.binding.companyId,
+        runId: input.execution.binding.runId,
+      })) {
+      await input.onLog?.(
+        "stderr",
+        "[paperclip-runner] remote checkpoint skipped: completion Reviewer workspace is discarded by design\n",
+      );
+      return;
+    }
+    return withRemoteSessionFilesystemFence("native_harness_state", () =>
+      checkpointRemoteRunnerUnlocked(settlement));
+  };
 
   const prepareExternalRunnerState =
     remoteTarget && remoteCommandRunner

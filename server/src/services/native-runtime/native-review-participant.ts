@@ -5,6 +5,7 @@ import {
   nativeRunFinalizations,
   statusDecisionEffects,
   nativeRunResults,
+  orchestrationModelReservations,
   orchestrationWorkerAttempts,
   workAssessments,
   issueThreadInteractions,
@@ -316,12 +317,56 @@ export async function nativeReviewerLaneRun(db: Db, input: {
   manifestId: string;
   contextSnapshot: unknown;
 }): Promise<boolean> {
-  if (!input.agentId || !readNativeReviewAssignmentContext(input.contextSnapshot)) return false;
+  const base = await nativeReviewerLaneBase(db, input);
+  if (!base) return false;
+  return currentNativeReviewerRun(db, { companyId: input.companyId, agentId: base.agentId, runId: input.runId,
+    issueId: input.issueId, manifestId: input.manifestId });
+}
+
+/** The durable part of the reviewer lane shared by `nativeReviewerLaneRun` and
+ * `nativeReviewerLaneRecorded`: a review wake in the Run's context and no plan
+ * worker attempt row for the Run. */
+async function nativeReviewerLaneBase(db: Db, input: { companyId: string; agentId: string | null; runId: string;
+  contextSnapshot: unknown }) {
+  const context = readNativeReviewAssignmentContext(input.contextSnapshot);
+  if (!input.agentId || !context) return null;
   const [attempt] = await db.select({ id: orchestrationWorkerAttempts.id }).from(orchestrationWorkerAttempts).where(and(
     eq(orchestrationWorkerAttempts.companyId, input.companyId), eq(orchestrationWorkerAttempts.runId, input.runId))).limit(1);
-  if (attempt) return false;
-  return currentNativeReviewerRun(db, { companyId: input.companyId, agentId: input.agentId, runId: input.runId,
-    issueId: input.issueId, manifestId: input.manifestId });
+  return attempt ? null : { agentId: input.agentId, context };
+}
+
+/** MS1h17. The reviewer lane decided from facts recorded when the Reviewer
+ * was dispatched, for its finalization after its own decision (when the review
+ * is no longer pending, so `currentNativeReviewerRun` no longer holds): the
+ * lane base of this Run (review wake, no plan worker attempt) and a
+ * `review_model` reservation bound to this exact Run, Agent, Task, review
+ * interaction, decision and the Run's own manifest. That reservation exists
+ * only after `issueForReviewRun` qualified this Run as the current Reviewer,
+ * and its binding is immutable (0576). Grants nothing: finalization uses it
+ * only to discard the Reviewer's sandbox (read-only Reviewer, MS1h17). */
+export async function nativeReviewerLaneRecorded(db: Db, input: { companyId: string; runId: string }): Promise<boolean> {
+  const [run] = await db.select({ agentId: heartbeatRuns.agentId, nativeIssueId: heartbeatRuns.nativeIssueId,
+    contextSnapshot: heartbeatRuns.contextSnapshot }).from(heartbeatRuns)
+    .where(and(eq(heartbeatRuns.companyId, input.companyId), eq(heartbeatRuns.id, input.runId))).limit(1);
+  if (!run?.nativeIssueId) return false;
+  const base = await nativeReviewerLaneBase(db, { companyId: input.companyId, agentId: run.agentId, runId: input.runId,
+    contextSnapshot: run.contextSnapshot });
+  if (!base) return false;
+  const [manifest] = await db.select({ id: agentExecutionManifests.id }).from(agentExecutionManifests).where(and(
+    eq(agentExecutionManifests.companyId, input.companyId), eq(agentExecutionManifests.runId, input.runId),
+    eq(agentExecutionManifests.agentId, base.agentId))).limit(1);
+  if (!manifest) return false;
+  const [reservation] = await db.select({ id: orchestrationModelReservations.id }).from(orchestrationModelReservations).where(and(
+    eq(orchestrationModelReservations.companyId, input.companyId),
+    eq(orchestrationModelReservations.purpose, "review_model"),
+    eq(orchestrationModelReservations.reviewRunId, input.runId),
+    eq(orchestrationModelReservations.reviewAgentId, base.agentId),
+    eq(orchestrationModelReservations.reviewIssueId, run.nativeIssueId),
+    eq(orchestrationModelReservations.reviewInteractionId, base.context.nativeReviewInteractionId),
+    eq(orchestrationModelReservations.reviewDecisionId, base.context.nativeReviewDecisionId),
+    eq(orchestrationModelReservations.reviewExecutionManifestId, manifest.id),
+  )).limit(1);
+  return Boolean(reservation);
 }
 
 /** Resolve an already-captured review's immutable owner rows without applying

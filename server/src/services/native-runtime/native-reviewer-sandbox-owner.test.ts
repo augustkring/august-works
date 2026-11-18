@@ -68,7 +68,7 @@ vi.mock("../native-direct-input.js", async importOriginal => ({
   assertNativeWorkspaceMetadataSourcesCurrent: async () => undefined,
 }));
 
-import { currentNativeReviewerRun, nativeReviewerLaneRun } from "./native-review-participant.js";
+import { currentNativeReviewerRun, nativeReviewerLaneRecorded, nativeReviewerLaneRun } from "./native-review-participant.js";
 import { createToolGatewayService } from "../tool-gateway.js";
 import { executionSandboxService } from "../execution-sandbox/sandbox-service.js";
 import { currentWorkerNativePreparationRoot, nativeManagedModelIssuer, nativeModelSessionOwnerLane,
@@ -1357,6 +1357,62 @@ describeDb("current Native completion Reviewer sandbox owner (MS1h2)", () => {
         expect(withPlan.task?.status).toBe(withoutPlan.task?.status);
         expect(withPlan.task?.status).not.toBe("in_review");
         expect(await planState(plan)).toEqual(before);
+      });
+      describe("reviewer lane recorded for finalization (MS1h17)", () => {
+        const recorded = (ids: Ids, runId: string = ids.reviewerRun, companyId: string = ids.company) =>
+          nativeReviewerLaneRecorded(db as never, { companyId, runId });
+        it("holds for the Reviewer Run bound by its review_model reservation, before and after its decision", async () => {
+          const ids = await seedMember({ resultCanonicalSha256: sourceCanonical });
+          await reviewedPlan(ids);
+          await expect(recorded(ids)).resolves.toBe(true);
+          await issueThreadInteractionService(db as never).acceptInteraction(reviewIssue(ids), ids.interaction, {}, reviewerActor(ids));
+          // After its own decision the Run is no longer the current Reviewer,
+          // but the recorded lane still holds (plan-covered: Task in review).
+          await expect(predicate(ids)).resolves.toBe(false);
+          await expect(recorded(ids)).resolves.toBe(true);
+          expect((await taskAndReview(ids)).task?.status).toBe("in_review");
+        });
+
+        it("holds after a decision that completed the Task and released its execution lock", async () => {
+          const ids = await seedMember({ resultCanonicalSha256: sourceCanonical });
+          const { plan } = await reviewedPlan(ids, "dispatched");
+          await db.update(orchestrationPlans).set({ status: "cancelled", completedAt: new Date(), version: 3 })
+            .where(eq(orchestrationPlans.id, plan));
+          await issueThreadInteractionService(db as never).acceptInteraction(reviewIssue(ids), ids.interaction, {}, reviewerActor(ids));
+          expect((await taskAndReview(ids)).task).toMatchObject({ status: "done", executionRunId: null });
+          await expect(recorded(ids)).resolves.toBe(true);
+        });
+
+        const forged: Array<[string, (ids: Ids) => Promise<{ runId?: string; companyId?: string } | void>]> = [
+          ["a review wake without a review_model reservation", async () => undefined],
+          ["another Run of the Reviewer carrying the same review wake", async ids => {
+            await reviewedPlan(ids);
+            const other = await addRun(ids, ids.reviewer);
+            return { runId: other.runId };
+          }],
+          ["a Reviewer Run that also has a plan worker attempt", async ids => {
+            await reviewedPlan(ids, "completed", { reviewerWorkerAttempt: true });
+          }],
+          ["the Task assignee's Run", async ids => {
+            await reviewedPlan(ids);
+            return { runId: ids.sourceRun };
+          }],
+          ["another company", async ids => {
+            await reviewedPlan(ids);
+            return { companyId: ids.otherCompany };
+          }],
+          ["a review wake naming another interaction", async ids => {
+            await reviewedPlan(ids);
+            const [run] = await db.select().from(heartbeatRuns).where(eq(heartbeatRuns.id, ids.reviewerRun));
+            await db.update(heartbeatRuns).set({ contextSnapshot: { ...(run!.contextSnapshot as object),
+              nativeReviewInteractionId: randomUUID() } }).where(eq(heartbeatRuns.id, ids.reviewerRun));
+          }],
+        ];
+        it.each(forged)("does not hold for %s", async (_name, arrange) => {
+          const ids = await seedMember({ resultCanonicalSha256: sourceCanonical });
+          const asked = (await arrange(ids)) ?? {};
+          await expect(recorded(ids, asked.runId, asked.companyId)).resolves.toBe(false);
+        });
       });
     });
   });
