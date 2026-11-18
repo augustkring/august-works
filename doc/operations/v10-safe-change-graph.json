@@ -9272,7 +9272,7 @@
         },
         {
           "path": "server/src/services/issue-thread-interactions.ts",
-          "sha256": "8bbd279090a259197c24c9bb8194242b998caf4b562a053b1ebaf02ad283c021"
+          "sha256": "ef0b36e83d2d2edf48d438457a593236babc9073f218f571aa54797730d2ca19"
         },
         {
           "path": "server/src/services/issues.ts",
@@ -50755,7 +50755,7 @@
       "id": "source:server/src/services/issue-thread-interactions.ts",
       "kind": "current_source_owner",
       "path": "server/src/services/issue-thread-interactions.ts",
-      "sha256": "8bbd279090a259197c24c9bb8194242b998caf4b562a053b1ebaf02ad283c021",
+      "sha256": "ef0b36e83d2d2edf48d438457a593236babc9073f218f571aa54797730d2ca19",
       "changeIds": [
         "SCR-V10-HOTSPOT-06"
       ],

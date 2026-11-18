@@ -2291,10 +2291,13 @@ export function issueThreadInteractionService(
         // Each explicit reviewer must be able to answer independently. Completing
         // on the first answer would cancel the other pending decisions.
         const completionCandidate = otherPending.length === 0 && issueContext.status === "in_review";
-        // MS1h14. Under an orchestration plan that is not finished, the accepted
-        // review is recorded but completes nothing: the Task stays in review for
-        // the plan's Human server verification (verification-service).
-        const coveringPlanId = completionCandidate
+        // MS1h14. Under an orchestration plan that is not finished, a completion
+        // Reviewer Agent's accepted review is recorded but completes nothing: the
+        // Task stays in review for the plan's Human server verification
+        // (verification-service). A Human accept keeps its existing behaviour:
+        // the 0360 guard refuses `done` and the whole accept rolls back with
+        // 409 orchestration_completion_requires_server_verification.
+        const coveringPlanId = completionCandidate && args.actor.agentId
           ? await activePlanCoveringTask(tx as unknown as Db, issueContext.companyId, issueContext.id)
           : null;
         if (coveringPlanId) taskCompletionHeld = { reason: "awaiting_plan_verification", planId: coveringPlanId };
