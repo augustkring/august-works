@@ -5587,7 +5587,7 @@
         },
         {
           "path": "server/src/__tests__/durable-chat-wakeup.test.ts",
-          "sha256": "9f205246497659d4fce7deb48ad43cf25223dbcc4366be6566990db4087f91d2"
+          "sha256": "f2ca185278fd6404a33761c5cdc68469ad05b0aba6428e6fcbda5892c3fb22da"
         },
         {
           "path": "server/src/__tests__/environment-runtime.test.ts",
@@ -7686,7 +7686,7 @@
         },
         {
           "path": "server/src/services/native-runtime/native-session-executor.ts",
-          "sha256": "dc45593ad1adeb5864b2f50711f5e42d6cf846bb69499568d98be0dad576f20e"
+          "sha256": "22c03f7db7533bf267a51e3a0fb6101c76eae21eaecee039b625b6e03c88169b"
         },
         {
           "path": "server/src/services/native-runtime/native-session-resume.test.ts",
@@ -9364,7 +9364,7 @@
         },
         {
           "path": "server/src/services/native-runtime/native-session-executor.ts",
-          "sha256": "dc45593ad1adeb5864b2f50711f5e42d6cf846bb69499568d98be0dad576f20e"
+          "sha256": "22c03f7db7533bf267a51e3a0fb6101c76eae21eaecee039b625b6e03c88169b"
         },
         {
           "path": "server/src/services/native-runtime/native-tool-task-privacy.integration.test.ts",
@@ -47298,7 +47298,7 @@
       "id": "source:server/src/__tests__/durable-chat-wakeup.test.ts",
       "kind": "current_source_owner",
       "path": "server/src/__tests__/durable-chat-wakeup.test.ts",
-      "sha256": "9f205246497659d4fce7deb48ad43cf25223dbcc4366be6566990db4087f91d2",
+      "sha256": "f2ca185278fd6404a33761c5cdc68469ad05b0aba6428e6fcbda5892c3fb22da",
       "changeIds": [
         "SCR-V10-HOTSPOT-02"
       ],
@@ -49827,7 +49827,7 @@
       "id": "source:server/src/services/native-runtime/native-session-executor.ts",
       "kind": "current_source_owner",
       "path": "server/src/services/native-runtime/native-session-executor.ts",
-      "sha256": "dc45593ad1adeb5864b2f50711f5e42d6cf846bb69499568d98be0dad576f20e",
+      "sha256": "22c03f7db7533bf267a51e3a0fb6101c76eae21eaecee039b625b6e03c88169b",
       "changeIds": [
         "SCR-V10-HOTSPOT-05",
         "SCR-V10-HOTSPOT-06"

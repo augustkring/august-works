@@ -15499,6 +15499,13 @@ async function createRunnerdBackendWithinSessionClaim(
       configuredProviderPackRoot,
     );
   }
+  // A3b: a managed Sandbox OpenCode conversation Run binds the same server-owned
+  // artifact facts as a Worker (controller runner bytes, operator-selected
+  // preinstalled pack root, build-owned manifest) and prepares only from them.
+  // This is provenance for that Run; it grants nothing.
+  const managedConversationArtifactPin = input.conversationMode === true && !input.prepareManagedWorkspace &&
+    !input.providerConformanceProbe && remoteTarget?.transport === "sandbox" &&
+    input.execution.provider.kind === "opencode" && expectedProviderPackManifest !== null;
   const stagedRemoteProviderPackRoot = remoteRuntimeRoot
     ? posix.join(remoteRuntimeRoot, "provider-pack")
     : null;
@@ -15659,7 +15666,8 @@ async function createRunnerdBackendWithinSessionClaim(
     if (input.prepareManagedWorkspace && (input.conversationMode === true || remoteTarget?.transport !== "sandbox" ||
       workspaceSources.length !== 1)) throw new Error("native_workspace_preparation_source_missing");
     const workspaceMetadataSource = workspaceSources[0] ?? null;
-    const artifactAuthority = (input.prepareManagedWorkspace || input.providerConformanceProbe) ? {
+    const artifactAuthority = (input.prepareManagedWorkspace || input.providerConformanceProbe ||
+      managedConversationArtifactPin) ? {
       runnerSha256: createHash("sha256").update(readFileSync(controllerRunnerBinary)).digest("hex"),
       installedPackRoot: configuredNativeProviderPackInstallRoot(),
       providerPackManifest: expectedProviderPackManifest,
@@ -16088,15 +16096,16 @@ async function createRunnerdBackendWithinSessionClaim(
 
   const discoverPreinstalledProviderPack = async () => {
     if (!remoteTarget || !remoteCommandRunner) return null;
-    const installedPack = (input.prepareManagedWorkspace || input.providerConformanceProbe) ? await input.db.select({ profile: heartbeatRuns.runnerProfileJson })
+    const pinnedArtifacts = input.prepareManagedWorkspace || input.providerConformanceProbe || managedConversationArtifactPin;
+    const installedPack = pinnedArtifacts ? await input.db.select({ profile: heartbeatRuns.runnerProfileJson })
       .from(heartbeatRuns).where(and(eq(heartbeatRuns.companyId, input.execution.binding.companyId),
         eq(heartbeatRuns.id, input.execution.binding.runId))).limit(1).then(rows =>
           record(record(record(rows[0]?.profile).nativeOpenCodeSourceAuthority).artifactAuthority).installedPackRoot) : null;
-    if ((input.prepareManagedWorkspace || input.providerConformanceProbe) && typeof installedPack !== "string")
+    if (pinnedArtifacts && typeof installedPack !== "string")
       throw new Error("native_worker_provider_pack_authority_missing");
     const result = await remoteCommandRunner.execute({
       command: "sh",
-      args: input.prepareManagedWorkspace || input.providerConformanceProbe
+      args: pinnedArtifacts
         ? ["-c", NATIVE_SELECTED_PROVIDER_PACK_DISCOVERY_SCRIPT, "paperclip-managed-provider-pack", installedPack as string]
         : ["-c", NATIVE_PROVIDER_PACK_DISCOVERY_SCRIPT],
       cwd: remoteTarget.remoteCwd,
@@ -16253,7 +16262,7 @@ async function createRunnerdBackendWithinSessionClaim(
       // vendors the runner under vendor/paperclip-runner/bin, so the package
       // development fallback cannot locate it in a deployed server.
       const sourceBinary = controllerRunnerBinary;
-      if (input.prepareManagedWorkspace || input.providerConformanceProbe) {
+      if (input.prepareManagedWorkspace || input.providerConformanceProbe || managedConversationArtifactPin) {
         const [current] = await input.db.select({ profile: heartbeatRuns.runnerProfileJson }).from(heartbeatRuns)
           .where(and(eq(heartbeatRuns.companyId, input.execution.binding.companyId), eq(heartbeatRuns.id, input.execution.binding.runId)));
         const authority = record(record(current?.profile).nativeOpenCodeSourceAuthority);

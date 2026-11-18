@@ -22,8 +22,11 @@ vi.mock("../services/native-runtime/paid-transport-admission.js", async (importO
   (await import("./helpers/mocked-legacy-paid-dispatch.js"))
     .withMockedLegacyDispatchAdmission(await importOriginal()));
 
-import { createHmac, randomUUID, timingSafeEqual } from "node:crypto";
+import { createHash, createHmac, randomUUID, timingSafeEqual } from "node:crypto";
+import { readFileSync } from "node:fs";
 import { mkdtemp, rmdir } from "node:fs/promises";
+import { resolvePaperclipRunnerBinary } from "../services/native-runtime/native-codex-runner.js";
+import { readRemoteProviderPackManifest } from "../services/native-runtime/native-session-executor.js";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { and, desc, eq, ne, sql } from "drizzle-orm";
@@ -777,6 +780,17 @@ describe("durable inbound chat scheduler receipts", () => {
             !sourceRun.runnerProfileJson?.nativeRemoteRuntimeAssetLocator ||
             factsForRun(sourceRun.id).providerCallCount !== 0)
           throw new Error("durable_retry_fixture_source_run_binding_invalid");
+        // A3b: this managed Sandbox conversation Run sealed the same server-owned
+        // artifact facts a Worker does, observed for this Run: the controller's
+        // runner bytes, the operator-selected preinstalled pack root and the
+        // build-owned manifest it prepares from (the serial Host matches the
+        // launched OpenCode image to this manifest).
+        const sealedArtifacts = (profile.nativeOpenCodeSourceAuthority as Record<string, any> | undefined)?.artifactAuthority;
+        expect(sealedArtifacts).toEqual({
+          runnerSha256: createHash("sha256").update(readFileSync(resolvePaperclipRunnerBinary())).digest("hex"),
+          installedPackRoot: process.env.PAPERCLIP_RUNNER_REMOTE_PROVIDER_PACK_INSTALL_ROOT,
+          providerPackManifest: readRemoteProviderPackManifest(process.env.PAPERCLIP_RUNNER_REMOTE_PROVIDER_PACK_PATH!),
+        });
         // Exercise the real exhausted bootstrap owner and its original cleanup scope.
         // Each contradictory DB fact is restored in finally, then the untouched original
         // owner retains the real Host Stop, Inspect, and runtime receipt path.
