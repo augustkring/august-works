@@ -2,7 +2,7 @@ import { createHash, randomUUID } from "node:crypto";
 import fs from "node:fs/promises";
 import os from "node:os";
 import path from "node:path";
-import { and, desc, eq } from "drizzle-orm";
+import { and, desc, eq, sql } from "drizzle-orm";
 import { afterAll, afterEach, beforeAll, beforeEach, describe, expect, it } from "vitest";
 import { agents, companies, createDb, EMBEDDED_POSTGRES_TEST_TIMEOUT_MS, heartbeatRunEvents, heartbeatRuns, issues,
   memoryJobs, nativeRunFinalizations } from "@paperclipai/db";
@@ -12,7 +12,10 @@ import { memoryJobService } from "../memory/memory-jobs.js";
 import { removeRuntimeStorageTree } from "../runtime-skill-cache.js";
 import { purgeCompanyContent } from "../saas/company-purge.js";
 import { eraseNativeRuntimeAssets, nativeRuntimeAssetsRoot } from "./runtime-asset-retention.js";
-import { eraseCompanyNativeDurableSessions, nativeDurableSessionsRoot } from "./native-durable-session-erasure.js";
+import { eraseCompanyNativeDurableSessions, nativeDurableSessionsRoot, UNATTRIBUTED_PENDING_CODE,
+  UNATTRIBUTED_SAFE_AGE_MS } from "./native-durable-session-erasure.js";
+import { NATIVE_DURABLE_SESSION_SCOPE_KEY, recordNativeDurableSessionScope } from "./native-durable-session-scope.js";
+import { lockMemoryPrivacy, purgeDerivedWorkflowMemory } from "../memory/memory-privacy.js";
 
 // PRIV-R5. The controller's durable session folder of an erased session (its
 // committed control-plane events, runner/provider state, continuity-break
@@ -91,6 +94,22 @@ const sha256 = (value: string) => createHash("sha256").update(value).digest("hex
       phase: "committed", leaseOwner: null, leaseExpiresAt: null }).onConflictDoNothing();
   }
 
+  /** PRIV-R8: the executor records each folder's scope on its Run first. */
+  async function recordScope(companyId: string, runId: string, sessionId: string, digest: string) {
+    await recordNativeDurableSessionScope(db, { companyId, runId, normalizedSessionId: sessionId, scopeSha256: digest });
+  }
+
+  /** Make a folder look untouched for longer than the unattributed safe age. */
+  async function age(target: string) {
+    const old = new Date(Date.now() - UNATTRIBUTED_SAFE_AGE_MS - 3_600_000);
+    const visit = async (entry: string) => {
+      const stat = await fs.lstat(entry);
+      if (stat.isDirectory()) for (const name of await fs.readdir(entry)) await visit(path.join(entry, name));
+      if (!stat.isSymbolicLink()) await fs.utimes(entry, old, old);
+    };
+    await visit(target);
+  }
+
   async function writeFile(file: string, contents: string, mode = 0o600) {
     await fs.mkdir(path.dirname(file), { recursive: true, mode: 0o700 });
     await fs.writeFile(file, contents, { mode });
@@ -165,7 +184,12 @@ const sha256 = (value: string) => createHash("sha256").update(value).digest("hex
     await writeFile(path.join(otherQuarantine, "control-plane", "control-plane-state.json"), controlPlane(otherSessionId, otherRun, "x"));
     const unattributedRoot = path.join(base, unattributed);
     await fs.mkdir(unattributedRoot, { mode: 0o700 });
-    return { ...t, other, sessionId, neighbourSessionId, run1, run2, neighbour, otherRun, digest, continuityOnly, scope, cleanupCopy,
+    // Each Run recorded its folder's scope before creating it (PRIV-R8).
+    await recordScope(t.companyId, run1, sessionId, continuityOnly);
+    await recordScope(t.companyId, run2, sessionId, digest);
+    await recordScope(t.companyId, neighbour, neighbourSessionId, neighbourDigest);
+    await recordScope(other.companyId, otherRun, otherSessionId, otherDigest);
+    return { ...t, other, sessionId, otherSessionId, neighbourSessionId, run1, run2, neighbour, otherRun, digest, continuityOnly, scope, cleanupCopy,
       emptyArchive, quarantined, legacy, neighbourScope, otherScope, otherQuarantine, unattributedRoot,
       erased: [scope, path.join(base, continuityOnly), cleanupCopy, emptyArchive, quarantined, legacy],
       untouched: [neighbourScope, otherScope, otherQuarantine, unattributedRoot] };
@@ -201,7 +225,7 @@ const sha256 = (value: string) => createHash("sha256").update(value).digest("hex
     expect(removing).toEqual([{ schema: "paperclip.native-durable-session-erasure.v1", companyId: s.companyId,
       normalizedSessionIds: [s.sessionId],
       removedScopeDigests: [s.digest, s.continuityOnly, path.basename(s.legacy)].sort(),
-      removedEntryCount: s.erased.length }]);
+      unattributedScopeDigests: [], removedEntryCount: s.erased.length }]);
     expect(receipts.filter(receipt => receipt.removedEntryCount === 0)).toHaveLength(1);
     expect((await fs.readdir(base)).filter(name => name.includes(".erasing-"))).toEqual([]);
     // Idempotent: a later erasure of another Run of the session finds nothing more.
@@ -214,6 +238,7 @@ const sha256 = (value: string) => createHash("sha256").update(value).digest("hex
     const s = await seedSession();
     // Another Task's Run of the same session: outside the carry cascade, inside the durable folder.
     const run3 = await insertRun({ ...s, issueId: s.liveIssueId, sessionId: s.sessionId, status: "running", createdAt: new Date() });
+    await recordScope(s.companyId, run3, s.sessionId, s.digest);
     // The erased Run's generated runtime copies are still removed at once.
     const generated = path.join(nativeRuntimeAssetsRoot({ companyId: s.companyId, runId: s.run1 }), "bundles", "AGENTS.md");
     await writeFile(generated, "Run 1 runtime context");
@@ -244,7 +269,9 @@ const sha256 = (value: string) => createHash("sha256").update(value).digest("hex
     const s = await seedSession();
     const secondSession = randomUUID();
     const secondRun = await insertRun({ ...s, issueId: s.liveIssueId, sessionId: secondSession });
-    const second = await writeScope(sha256(`scope:${randomUUID()}`), secondSession, secondRun, secondRun, "Second session");
+    const secondDigest = sha256(`scope:${randomUUID()}`);
+    await recordScope(s.companyId, secondRun, secondSession, secondDigest);
+    const second = await writeScope(secondDigest, secondSession, secondRun, secondRun, "Second session");
     const receipt = await eraseCompanyNativeDurableSessions(db, s.companyId);
     expect(receipt.normalizedSessionIds).toEqual([s.sessionId, s.neighbourSessionId, secondSession].sort());
     expect(receipt.removedEntryCount).toBe(s.erased.length + 2);
@@ -269,24 +296,28 @@ const sha256 = (value: string) => createHash("sha256").update(value).digest("hex
     await writeFile(path.join(outside, "keep.txt"), "outside data");
     // A link inside the erased folder is removed as a link; its target survives.
     await fs.symlink(path.join(outside, "keep.txt"), path.join(s.scope, "codex-home", "escape"));
-    // A symlink in place of a scope folder fails closed and removes nothing.
-    const planted = path.join(base, sha256(`planted:${randomUUID()}`));
+    // A symlink in place of a folder this session recorded fails closed and removes nothing.
+    const plantedDigest = sha256(`planted:${randomUUID()}`);
+    const planted = path.join(base, plantedDigest);
     await fs.symlink(outside, planted);
+    await recordScope(s.companyId, s.run1, s.sessionId, plantedDigest);
     await expect(eraseNativeRuntimeAssets(db, { companyId: s.companyId, runId: s.run1 }, []))
       .rejects.toThrow("Unsafe native durable session entry blocks erasure");
     for (const target of s.erased) expect(await exists(target)).toBe(true);
     await fs.unlink(planted);
-    // A symlinked identity holder makes ownership undecidable: fail closed.
+    // PRIV-R8: an unrecorded link and a folder with a symlinked identity holder
+    // cannot be this session's (all its Runs recorded their folders): they are
+    // left alone, never followed, and no longer block this erasure.
+    const strayLink = path.join(base, sha256(`stray:${randomUUID()}`));
+    await fs.symlink(outside, strayLink);
     const foreign = path.join(base, sha256(`foreign:${randomUUID()}`));
     await fs.mkdir(foreign, { mode: 0o700 });
     await fs.symlink(path.join(s.scope, "control-plane"), path.join(foreign, "control-plane"));
-    await expect(eraseNativeRuntimeAssets(db, { companyId: s.companyId, runId: s.run1 }, []))
-      .rejects.toThrow("Unreadable native durable session state blocks erasure");
-    for (const target of s.erased) expect(await exists(target)).toBe(true);
-    await removeRuntimeStorageTree(foreign);
     const result = await eraseNativeRuntimeAssets(db, { companyId: s.companyId, runId: s.run1 }, []);
     expect(result.durableSessionErasure?.removedEntryCount).toBe(s.erased.length);
     for (const target of s.erased) expect(await exists(target)).toBe(false);
+    expect((await fs.lstat(strayLink)).isSymbolicLink()).toBe(true);
+    expect((await fs.lstat(path.join(foreign, "control-plane"))).isSymbolicLink()).toBe(true);
     expect(await fs.readFile(path.join(outside, "keep.txt"), "utf8")).toBe("outside data");
     expect(await exists(outside)).toBe(true);
   });
@@ -315,5 +346,181 @@ const sha256 = (value: string) => createHash("sha256").update(value).digest("hex
     expect(result.durableSessionErasure).toMatchObject({ removedScopeDigests: [s.digest], removedEntryCount: 1 });
     expect(await exists(leftover)).toBe(false);
     expect(await exists(foreignTag)).toBe(true);
+  });
+  // PRIV-R8 regressions.
+  it("erases a recorded folder that a crash left without any identity, and lists it in the receipt", async () => {
+    const s = await seedSession();
+    // The executor recorded the scope, created the folder and copied the
+    // provider credential, then crashed before the runner wrote its state.
+    const crashDigest = sha256(`crash:${randomUUID()}`);
+    await recordScope(s.companyId, s.run2, s.sessionId, crashDigest);
+    const crash = path.join(base, crashDigest);
+    await writeFile(path.join(crash, "codex-home", "auth.json"), "provider credential");
+    const result = await eraseNativeRuntimeAssets(db, { companyId: s.companyId, runId: s.run1 }, []);
+    expect(result.durableSessionErasure).toMatchObject({ normalizedSessionIds: [s.sessionId],
+      removedScopeDigests: [s.digest, s.continuityOnly, path.basename(s.legacy), crashDigest].sort(),
+      unattributedScopeDigests: [], removedEntryCount: s.erased.length + 1 });
+    expect(await exists(crash)).toBe(false);
+    for (const target of s.untouched) expect(await exists(target)).toBe(true);
+  });
+
+  it("Source erasure keeps only the folder record, so the queued erasure still finds an identity-less folder", async () => {
+    const s = await seedSession();
+    const crashDigest = sha256(`crash:${randomUUID()}`);
+    await recordScope(s.companyId, s.run2, s.sessionId, crashDigest);
+    await db.update(heartbeatRuns).set({ runnerProfileJson: sql`${heartbeatRuns.runnerProfileJson} || '{"nativeExecutionInput":{"private":"Run 2 prompt"}}'::jsonb` })
+      .where(eq(heartbeatRuns.id, s.run2));
+    const crash = path.join(base, crashDigest);
+    await writeFile(path.join(crash, "codex-home", "auth.json"), "provider credential");
+    await db.transaction(async tx => {
+      await lockMemoryPrivacy(tx as never, s.companyId);
+      await purgeDerivedWorkflowMemory(tx as never, s.companyId, [], new Date(),
+        { workflowRevisionIds: [], artifactVersionIds: [], runIds: [s.run1, s.run2] });
+    });
+    const [run2] = await db.select({ profile: heartbeatRuns.runnerProfileJson }).from(heartbeatRuns).where(eq(heartbeatRuns.id, s.run2));
+    expect(run2?.profile).toEqual({ [NATIVE_DURABLE_SESSION_SCOPE_KEY]: { schema: "paperclip.native-durable-session-scope.v1",
+      normalizedSessionId: s.sessionId, scopeSha256: [crashDigest, s.digest].sort() } });
+    await memoryJobService(db).tick({ limit: 20, companyId: s.companyId });
+    for (const target of [...s.erased, crash]) expect(await exists(target)).toBe(false);
+    for (const target of s.untouched) expect(await exists(target)).toBe(true);
+  });
+
+  // R8-G (CI regression): the 0545 input receipt guard let an erased Run drop
+  // its receipt only with a NULL or empty profile, so keeping the folder record
+  // made Source erasure of any Native Run with an input receipt fail.
+  async function withInputReceipt(runId: string, profile: Record<string, unknown>) {
+    await db.transaction(async tx => {
+      // Fixture only: a real receipt needs the full dispatch graph; bypass its binding check for this write.
+      await tx.execute(sql`set local session_replication_role = 'replica'`);
+      await tx.update(heartbeatRuns).set({ nativeInputSourceProtocolVersion: 1, runnerProfileJson: profile })
+        .where(eq(heartbeatRuns.id, runId));
+    });
+  }
+  function scopeRecord(sessionId: string, digests: unknown[]) {
+    return { schema: "paperclip.native-durable-session-scope.v1", normalizedSessionId: sessionId, scopeSha256: digests };
+  }
+  async function profileOf(runId: string) {
+    const [row] = await db.select({ profile: heartbeatRuns.runnerProfileJson }).from(heartbeatRuns).where(eq(heartbeatRuns.id, runId));
+    return row?.profile ?? null;
+  }
+
+  it("Source erasure of a Native Run with an input receipt keeps only a well-formed folder record (R8-G)", async () => {
+    const t = await tenant();
+    const sessionId = randomUUID(), digest = sha256(`scope:${randomUUID()}`);
+    const receiptProfile = (scope: unknown) => ({ nativeInputSourceReceipt: { fixture: true },
+      nativeExecutionInput: { private: "prompt" }, [NATIVE_DURABLE_SESSION_SCOPE_KEY]: scope });
+    // Erasure owner path (memory-privacy), well-formed and malformed records.
+    const kept = await insertRun({ ...t, sessionId });
+    const malformed = await insertRun({ ...t, sessionId });
+    await withInputReceipt(kept, receiptProfile(scopeRecord(sessionId, [digest])));
+    await withInputReceipt(malformed, receiptProfile(scopeRecord(sessionId, ["not-a-digest"])));
+    await db.transaction(async tx => {
+      await lockMemoryPrivacy(tx as never, t.companyId);
+      await purgeDerivedWorkflowMemory(tx as never, t.companyId, [], new Date(),
+        { workflowRevisionIds: [], artifactVersionIds: [], runIds: [kept, malformed] });
+    });
+    expect(await profileOf(kept)).toEqual({ [NATIVE_DURABLE_SESSION_SCOPE_KEY]: scopeRecord(sessionId, [digest]) });
+    expect(await profileOf(malformed)).toBeNull();
+    // Trigger path: any later write to a Run of the erased Task scrubs it.
+    const later = await insertRun({ ...t, sessionId });
+    await withInputReceipt(later, { ...receiptProfile(scopeRecord(sessionId, [digest])), extra: "private" });
+    await db.update(heartbeatRuns).set({ errorCode: "fixture_touch" }).where(eq(heartbeatRuns.id, later));
+    expect(await profileOf(later)).toEqual({ [NATIVE_DURABLE_SESSION_SCOPE_KEY]: scopeRecord(sessionId, [digest]) });
+    // A live Run cannot use the record (alone or with other keys) to drop its receipt.
+    const live = await insertRun({ ...t, issueId: t.liveIssueId, sessionId: randomUUID() });
+    await withInputReceipt(live, receiptProfile(scopeRecord(sessionId, [digest])));
+    for (const profile of [{ [NATIVE_DURABLE_SESSION_SCOPE_KEY]: scopeRecord(sessionId, [digest]) },
+      { [NATIVE_DURABLE_SESSION_SCOPE_KEY]: scopeRecord(sessionId, [digest]), extra: 1 }])
+      await expect(db.update(heartbeatRuns).set({ runnerProfileJson: profile }).where(eq(heartbeatRuns.id, live)))
+        .rejects.toMatchObject({ cause: expect.objectContaining({ message: "Native run input receipt cannot be removed" }) });
+    expect(await profileOf(live)).toMatchObject({ nativeInputSourceReceipt: { fixture: true } });
+    // The helper admits exactly the record and nothing else.
+    const only = async (value: unknown) => (await db.execute(sql`select public.aw_native_durable_session_scope_only(${JSON.stringify(value)}::jsonb) as ok`) as unknown as Array<{ ok: boolean }>)[0]!.ok;
+    const record = scopeRecord(sessionId, [digest]);
+    expect(await only({ [NATIVE_DURABLE_SESSION_SCOPE_KEY]: record })).toBe(true);
+    expect(await only({ [NATIVE_DURABLE_SESSION_SCOPE_KEY]: scopeRecord(`session-${randomUUID()}`, [digest, sha256("b")]) })).toBe(true);
+    for (const value of [null, {}, { [NATIVE_DURABLE_SESSION_SCOPE_KEY]: record, extra: 1 },
+      { [NATIVE_DURABLE_SESSION_SCOPE_KEY]: { ...record, extra: 1 } },
+      { [NATIVE_DURABLE_SESSION_SCOPE_KEY]: { ...record, schema: "other" } },
+      { [NATIVE_DURABLE_SESSION_SCOPE_KEY]: scopeRecord("prompt text", [digest]) },
+      { [NATIVE_DURABLE_SESSION_SCOPE_KEY]: scopeRecord(sessionId, []) },
+      { [NATIVE_DURABLE_SESSION_SCOPE_KEY]: scopeRecord(sessionId, Array.from({ length: 17 }, (_, i) => sha256(String(i)))) },
+      { [NATIVE_DURABLE_SESSION_SCOPE_KEY]: scopeRecord(sessionId, [digest.toUpperCase()]) },
+      { [NATIVE_DURABLE_SESSION_SCOPE_KEY]: scopeRecord(sessionId, [1]) }])
+      expect(await only(value)).toBe(false);
+  });
+
+  it("another company's unreadable folder does not block this company's erasure", async () => {
+    const s = await seedSession();
+    // Company B: a recorded folder with a corrupt identity, and an older
+    // unrecorded one with a corrupt identity.
+    const brokenDigest = sha256(`broken:${randomUUID()}`), strayDigest = sha256(`stray:${randomUUID()}`);
+    await recordScope(s.other.companyId, s.otherRun, s.otherSessionId, brokenDigest);
+    const broken = path.join(base, brokenDigest), stray = path.join(base, strayDigest);
+    await writeFile(path.join(broken, "control-plane", "control-plane-state.json"), "{not json");
+    await writeFile(path.join(broken, "codex-home", "auth.json"), "company B credential");
+    await writeFile(path.join(stray, "runner", "runner-state.json"), "\u0000corrupt");
+    const result = await eraseNativeRuntimeAssets(db, { companyId: s.companyId, runId: s.run1 }, []);
+    expect(result.durableSessionErasure?.removedEntryCount).toBe(s.erased.length);
+    for (const target of s.erased) expect(await exists(target)).toBe(false);
+    expect(await fs.readFile(path.join(broken, "codex-home", "auth.json"), "utf8")).toBe("company B credential");
+    expect(await exists(stray)).toBe(true);
+    // Company B's own erasure removes its broken folder by the record alone.
+    const other = await eraseCompanyNativeDurableSessions(db, s.other.companyId);
+    expect(other.removedScopeDigests).toEqual([brokenDigest, path.basename(s.otherScope)].sort());
+    for (const target of [broken, s.otherScope, s.otherQuarantine]) expect(await exists(target)).toBe(false);
+    expect(await exists(stray)).toBe(true);
+  });
+
+  it("company erasure never reports success while an unattributed folder could be its own", async () => {
+    const s = await seedSession();
+    // A Run from before PRIV-R8 recorded nothing; its crash left a folder
+    // with provider credentials and no identity.
+    const legacySession = randomUUID();
+    await insertRun({ ...s, issueId: s.liveIssueId, sessionId: legacySession });
+    const orphanDigest = sha256(`orphan:${randomUUID()}`);
+    const orphan = path.join(base, orphanDigest);
+    await writeFile(path.join(orphan, "codex-home", "auth.json"), "unattributed credential");
+    // Company B's recorded crash folder is never this company's, however old.
+    const otherCrashDigest = sha256(`other-crash:${randomUUID()}`);
+    await recordScope(s.other.companyId, s.otherRun, s.otherSessionId, otherCrashDigest);
+    const otherCrash = path.join(base, otherCrashDigest);
+    await writeFile(path.join(otherCrash, "codex-home", "auth.json"), "company B credential");
+    await age(otherCrash);
+    // Young: either may still belong to a live launch (the seeded empty
+    // unattributed folder too), so the erasure stays pending.
+    await expect(eraseCompanyNativeDurableSessions(db, s.companyId)).rejects.toMatchObject({
+      status: 409, details: { code: UNATTRIBUTED_PENDING_CODE, unattributedFolderCount: 2 } });
+    for (const target of [...s.erased, s.neighbourScope, orphan, otherCrash]) expect(await exists(target)).toBe(true);
+    // The purge owner reports the same pending state rather than success.
+    await expect(purgeCompanyContent(db, s.companyId)).rejects.toMatchObject({ status: 409 });
+    expect(await exists(orphan)).toBe(true);
+    // One still young keeps it pending.
+    await age(orphan);
+    await expect(eraseCompanyNativeDurableSessions(db, s.companyId)).rejects.toMatchObject({
+      status: 409, details: { code: UNATTRIBUTED_PENDING_CODE, unattributedFolderCount: 1 } });
+    expect(await exists(orphan)).toBe(true);
+    // Untouched for longer than the safe age, both are removed as orphans.
+    await age(s.unattributedRoot);
+    const receipt = await eraseCompanyNativeDurableSessions(db, s.companyId);
+    expect(receipt.unattributedScopeDigests).toEqual([orphanDigest, path.basename(s.unattributedRoot)].sort());
+    expect(receipt.normalizedSessionIds).toEqual([s.sessionId, s.neighbourSessionId].sort());
+    for (const target of [...s.erased, s.neighbourScope, orphan, s.unattributedRoot]) expect(await exists(target)).toBe(false);
+    for (const target of [otherCrash, s.otherScope]) expect(await exists(target)).toBe(true);
+    // A young unattributed folder never blocks company B, whose Runs all recorded their folders.
+    const fresh = path.join(base, sha256(`fresh:${randomUUID()}`));
+    await writeFile(path.join(fresh, "codex-home", "auth.json"), "unattributed credential");
+    const other = await eraseCompanyNativeDurableSessions(db, s.other.companyId);
+    expect(other.removedScopeDigests).toEqual([otherCrashDigest, path.basename(s.otherScope)].sort());
+    expect(other.unattributedScopeDigests).toEqual([]);
+    expect(await exists(fresh)).toBe(true);
+    // Nor company C, whose only unrecorded Run finished long before the
+    // folder was written; its old orphan-free erasure succeeds.
+    const c = await tenant();
+    const longAgo = new Date(Date.now() - 2 * UNATTRIBUTED_SAFE_AGE_MS);
+    await insertRun({ ...c, sessionId: randomUUID(), createdAt: longAgo });
+    await db.update(heartbeatRuns).set({ finishedAt: new Date(longAgo.getTime() + 1_000) }).where(eq(heartbeatRuns.companyId, c.companyId));
+    expect((await eraseCompanyNativeDurableSessions(db, c.companyId)).unattributedScopeDigests).toEqual([]);
+    expect(await exists(fresh)).toBe(true);
   });
 });

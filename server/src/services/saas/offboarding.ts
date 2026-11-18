@@ -30,7 +30,7 @@ import type { billingService } from "../billing/billing.js";
 import type { runtimeControlService } from "../runtime/control.js";
 import { assertCompanyManagedOpenCodeRuntimeDataErased, enqueueCompanyManagedOpenCodeRuntimeErasure,
   retireCompanyNativeLegacyRuntimeProfiles } from "../native-runtime/runtime-asset-retention.js";
-import { eraseCompanyNativeDurableSessions } from "../native-runtime/native-durable-session-erasure.js";
+import { eraseCompanyNativeDurableSessions, UNATTRIBUTED_PENDING_CODE } from "../native-runtime/native-durable-session-erasure.js";
 import { memoryJobService } from "../memory/memory-jobs.js";
 import { SecretProviderClientError } from "../../secrets/types.js";
 import type { AuthorizationActor } from "../authorization.js";
@@ -486,8 +486,11 @@ export function saasOffboardingService(
           await assertCompanyManagedOpenCodeRuntimeDataErased(db, operation.companyId, operation.id);
         } catch (error) {
           if (!(error && typeof error === "object" && "status" in error && error.status === 409)) throw error;
+          // PRIV-R8: a folder that may be this company's has no provable owner yet.
+          const unattributed = (error as { details?: { code?: unknown } }).details?.code === UNATTRIBUTED_PENDING_CODE;
           await db.update(companyDeletionOperations).set({ notBefore: new Date(now.getTime() + 10000),
-            errorCode: retiredLegacyRunIds.length ? "legacy_runtime_asset_erasure_pending" : "managed_provider_erasure_pending" })
+            errorCode: unattributed ? UNATTRIBUTED_PENDING_CODE
+              : retiredLegacyRunIds.length ? "legacy_runtime_asset_erasure_pending" : "managed_provider_erasure_pending" })
             .where(currentOperation);
           return true;
         }

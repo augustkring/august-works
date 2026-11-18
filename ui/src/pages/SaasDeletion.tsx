@@ -62,6 +62,7 @@ function SaasDeletionForm() {
     secret_provider_erasure_pending: "providerPending",
     managed_provider_erasure_pending: "runtimePending",
     legacy_runtime_asset_erasure_pending: "runtimePending",
+    native_durable_session_unattributed_pending: "runtimePending",
     runtime_erasure_pending: "runtimePending",
     backup_retention_pending: "backupPending",
     feedback_retention_hold_pending: "retentionHold",

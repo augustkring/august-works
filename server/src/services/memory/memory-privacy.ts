@@ -3,6 +3,7 @@ import { AsyncLocalStorage } from "node:async_hooks";
 import { isDeepStrictEqual } from "node:util";
 import { and, eq, inArray, is, isNull, lte, notInArray, or, sql, type SQL } from "drizzle-orm";
 import { PgTransaction } from "drizzle-orm/pg-core";
+import { NATIVE_DURABLE_SESSION_SCOPE_KEY } from "../native-runtime/native-durable-session-scope.js";
 import type { NativeSiblingToolSourceProofs } from "../native-direct-input.js";
 import { agentExecutionManifests, providerTraceRecords,
   memoryDeletionMarkers, memoryEvidence, memoryJobs, memoryRecords, memoryPrivateSharePublications, memoryRetentionPolicies,
@@ -1175,7 +1176,14 @@ export async function purgeDerivedWorkflowMemory(db: Db, companyId: string, reco
     await db.update(providerTraceRecords).set({reason:"source_erased",updatedAt:now}).where(and(eq(providerTraceRecords.companyId,companyId),inArray(providerTraceRecords.runId,childIds)));
     await db.update(saasRunLogs).set({ erasedAt: now, pendingBytes: 0, sha256: null }).where(and(eq(saasRunLogs.companyId, companyId), inArray(saasRunLogs.id, childIds)));
     await db.update(saasRunLogChunks).set({ ciphertext: null }).where(and(eq(saasRunLogChunks.companyId, companyId), inArray(saasRunLogChunks.runId, childIds)));
-    await db.update(heartbeatRuns).set({ contextSnapshot: {}, resultJson: null, runnerProfileJson: {}, stdoutExcerpt: null,
+    // PRIV-R8: only a well-formed content-free durable session folder record
+    // survives (migration 0583 helper); the queued runtime asset erasure finds
+    // the folder by it. Anything else clears the profile as before.
+    await db.update(heartbeatRuns).set({ contextSnapshot: {}, resultJson: null, runnerProfileJson: sql`case
+        when public.aw_native_durable_session_scope_only(jsonb_build_object(${NATIVE_DURABLE_SESSION_SCOPE_KEY}::text,
+          ${heartbeatRuns.runnerProfileJson}->${NATIVE_DURABLE_SESSION_SCOPE_KEY}))
+        then jsonb_build_object(${NATIVE_DURABLE_SESSION_SCOPE_KEY}::text, ${heartbeatRuns.runnerProfileJson}->${NATIVE_DURABLE_SESSION_SCOPE_KEY})
+        else '{}'::jsonb end`, stdoutExcerpt: null,
       stderrExcerpt: null, error: null, logRef: null, logStore: null, logBytes: null, logSha256: null, updatedAt: now })
       .where(and(eq(heartbeatRuns.companyId, companyId), inArray(heartbeatRuns.id, childIds)));
     await db.update(nativeRunResults).set({ resultJson: { payloadDeleted: true } }).where(and(eq(nativeRunResults.companyId, companyId), inArray(nativeRunResults.runId, childIds)));

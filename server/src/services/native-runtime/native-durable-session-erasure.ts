@@ -10,6 +10,7 @@ import { conflict } from "../../errors.js";
 import { remoteExecutionHasStopped } from "../remote-execution-termination.js";
 import { lockAnalyticalCompany } from "../analytical-privacy.js";
 import { lockMemoryPrivacy } from "../memory/memory-privacy.js";
+import { NATIVE_DURABLE_SESSION_SCOPE_KEY, readNativeDurableSessionScopeRecord } from "./native-durable-session-scope.js";
 
 /**
  * PRIV-R5. The controller keeps one durable folder per Native session scope:
@@ -29,6 +30,24 @@ import { lockMemoryPrivacy } from "../memory/memory-privacy.js";
  * id. A folder is therefore attributed to an erased session only when that
  * identity names the session and a Run of this company in it. The two legacy
  * layouts are derived exactly from company and session ids.
+ *
+ * PRIV-R8. A crash before the runner writes its identity leaves a folder with
+ * no identity (it may already hold provider credentials), and a fault can
+ * corrupt one. Since PRIV-R8 the executor records each folder's scope digest
+ * on its Run before it creates the folder (`native-durable-session-scope.ts`),
+ * so a recorded folder belongs to its Run's company whatever its identity
+ * files say. A folder whose owner cannot be proven (no record, no readable
+ * identity, no derived legacy name) is "unattributed":
+ * - it is ignored by a company whose every started Run of the erased
+ *   sessions recorded its scope: such a folder cannot be one of theirs;
+ * - it is left to its owner when any Run on the instance recorded it;
+ * - otherwise (a Run from before PRIV-R8) it might be the company's, so the
+ *   erasure removes it as an instance orphan once it has been untouched for
+ *   `UNATTRIBUTED_SAFE_AGE_MS` (a link or file only as itself), and stays
+ *   pending with `native_durable_session_unattributed_pending` while a
+ *   younger one remains and one of the company's unrecorded Runs was active
+ *   within that age. Never a false success.
+ * One tenant's unreadable folder therefore no longer blocks other tenants.
  */
 
 const STATE_SCHEMA = "paperclip.runner.durable.state.v1";
@@ -39,6 +58,12 @@ const INVENTORY_ENTRY_BOUND = 20_000;
 const CONTINUITY_BREAK_BOUND = 256;
 const INVENTORY_DEADLINE_MS = 20_000;
 const SESSION_RUN_BOUND = 10_000;
+const SCOPE_RECORD_BATCH = 1_000;
+/** An identity-less folder of a live Run gets its identity within seconds;
+ * one untouched for a day has no live owner. */
+export const UNATTRIBUTED_SAFE_AGE_MS = 24 * 60 * 60 * 1000;
+const AGE_ENTRY_BOUND = 4_096;
+export const UNATTRIBUTED_PENDING_CODE = "native_durable_session_unattributed_pending";
 const COMPANY_RUN_BOUND = 500_000;
 const TERMINAL_RUN_STATUSES = ["succeeded", "interrupted", "failed", "cancelled", "timed_out"];
 const memberPattern = /^([a-f0-9]{64})(?:\.(.+))?$/;
@@ -55,6 +80,18 @@ export function nativeDurableSessionsRoot(): string {
 /** Normalized session id -> ids of this company's Runs in that session. */
 export type NativeDurableSessionTargets = Map<string, Set<string>>;
 
+/** What the target Runs recorded before creating their folders (PRIV-R8). */
+export type NativeDurableSessionScopes = {
+  /** Scope digest -> the target session whose Run recorded it. */
+  recorded: Map<string, string>;
+  /** Started target Runs that recorded nothing (from before PRIV-R8). A
+   * folder one of them created may have no identity and no record. */
+  unrecordedRunCount: number;
+  /** Those of them active within `UNATTRIBUTED_SAFE_AGE_MS`: only these can
+   * have written a recently modified folder. */
+  recentUnrecordedRunCount: number;
+};
+
 export type NativeDurableSessionErasureReceipt = {
   schema: "paperclip.native-durable-session-erasure.v1";
   companyId: string;
@@ -62,17 +99,26 @@ export type NativeDurableSessionErasureReceipt = {
   normalizedSessionIds: string[];
   /** Scope digests whose folders (and digest-named siblings) were removed. */
   removedScopeDigests: string[];
+  /** Unattributed scope digests removed as instance orphans (PRIV-R8): no
+   * Run recorded them and no identity names an owner; this company might
+   * have been the owner. */
+  unattributedScopeDigests: string[];
   /** Directory entries removed, counting each sibling and quarantine copy. */
   removedEntryCount: number;
 };
 
-type Member = { parent: string; name: string; digest: string; erasingTag: string | null };
-type PlannedGroup = { digest: string; sessionId: string; members: Member[] };
+type Member = { parent: string; name: string; digest: string; erasingTag: string | null; unsafe: boolean };
+type PlannedGroup = { digest: string; sessionId: string | null; members: Member[] };
 type Plan = { base: string; companyId: string; groups: PlannedGroup[] };
 type Identity = { status: "absent" } | { status: "indeterminate" } | { status: "valid"; sessionId: string; runId: string };
 
 function erasureTag(companyId: string, sessionId: string) {
   return sha256(`paperclip.native-durable-session-erasure.v1\0${companyId}\0${sessionId}`).slice(0, 32);
+}
+
+/** Instance-level: an orphan's renamed copy is finished by any later erasure. */
+function orphanTag(digest: string) {
+  return sha256(`paperclip.native-durable-session-erasure.orphan.v1\0${digest}`).slice(0, 32);
 }
 
 function normalizedSessionIdOf(run: { id: string; nativeSessionId: string | null }) {
@@ -133,8 +179,15 @@ async function resolveGroupIdentity(members: Member[], deadline: number): Promis
     const breaksKind = await directoryKind(breaks);
     if (breaksKind === "unsafe") { indeterminate = true; continue; }
     if (breaksKind === "absent") continue;
-    const tokens = (await fs.readdir(breaks)).sort();
-    if (tokens.length > CONTINUITY_BREAK_BOUND) throw conflict("Native durable session archive inventory exceeded its erasure bound");
+    let tokens: string[];
+    try {
+      tokens = (await fs.readdir(breaks)).sort();
+    } catch {
+      indeterminate = true;
+      continue;
+    }
+    // One folder's oversized archive makes only that folder unreadable.
+    if (tokens.length > CONTINUITY_BREAK_BOUND) { indeterminate = true; continue; }
     for (const token of tokens) {
       if (Date.now() >= deadline) throw conflict("Native durable session inventory exceeded its erasure bound");
       const archive = path.join(breaks, token);
@@ -167,18 +220,100 @@ async function inventory(directory: string, base: string, counter: { entries: nu
     }
     const match = memberPattern.exec(entry.name);
     if (!match) continue;
-    // The executor refuses a symlinked or non-directory state root as unsafe;
-    // erasure fails closed rather than following, skipping or guessing it.
-    if (entry.isSymbolicLink() || !entry.isDirectory()) throw conflict("Unsafe native durable session entry blocks erasure");
+    // The executor refuses a symlinked or non-directory state root as unsafe.
+    // Erasure never follows, removes or guesses it: the planner fails closed
+    // when it could be this company's, and otherwise leaves it to its owner.
+    const unsafe = entry.isSymbolicLink() || !entry.isDirectory();
     const erasing = match[2] ? erasingSuffixPattern.exec(match[2]) : null;
-    members.push({ parent: directory, name: entry.name, digest: match[1]!, erasingTag: erasing ? erasing[1]! : null });
+    members.push({ parent: directory, name: entry.name, digest: match[1]!, erasingTag: erasing ? erasing[1]! : null, unsafe });
   }
   return { members, quarantine };
 }
 
-/** Read-only: find every controller folder of the target sessions. Throws
- * instead of returning a partial plan when ownership cannot be decided. */
-export async function planNativeDurableSessionErasure(input: { companyId: string; targets: NativeDurableSessionTargets }): Promise<Plan> {
+/** Started target Runs' scope records (PRIV-R8). A malformed or contradictory
+ * record of this company's own Run fails closed for this company only. */
+export async function loadNativeDurableSessionScopes(tx: Db, companyId: string,
+  targets: NativeDurableSessionTargets): Promise<NativeDurableSessionScopes> {
+  const scopes: NativeDurableSessionScopes = { recorded: new Map(), unrecordedRunCount: 0, recentUnrecordedRunCount: 0 };
+  const recentSince = Date.now() - UNATTRIBUTED_SAFE_AGE_MS;
+  const ids = [...new Set([...targets.values()].flatMap(runIds => [...runIds]))];
+  for (let offset = 0; offset < ids.length; offset += SCOPE_RECORD_BATCH) {
+    const rows = await tx.select({ id: heartbeatRuns.id, nativeSessionId: heartbeatRuns.nativeSessionId,
+      startedAt: heartbeatRuns.startedAt, finishedAt: heartbeatRuns.finishedAt,
+      scope: sql<unknown>`${heartbeatRuns.runnerProfileJson}->${NATIVE_DURABLE_SESSION_SCOPE_KEY}` })
+      .from(heartbeatRuns).where(and(eq(heartbeatRuns.companyId, companyId),
+        inArray(heartbeatRuns.id, ids.slice(offset, offset + SCOPE_RECORD_BATCH))));
+    for (const row of rows) {
+      let scope: ReturnType<typeof readNativeDurableSessionScopeRecord>;
+      try {
+        scope = readNativeDurableSessionScopeRecord({ [NATIVE_DURABLE_SESSION_SCOPE_KEY]: row.scope });
+      } catch {
+        throw conflict("A Run's native durable session record is unreadable");
+      }
+      if (!scope) {
+        // A Run that never started never launched a runner.
+        if (row.startedAt === null) continue;
+        scopes.unrecordedRunCount++;
+        if (row.finishedAt === null || row.finishedAt.getTime() > recentSince) scopes.recentUnrecordedRunCount++;
+        continue;
+      }
+      const sessionId = normalizedSessionIdOf(row);
+      if (scope.normalizedSessionId !== sessionId || !targets.has(sessionId))
+        throw conflict("A Run's native durable session record contradicts its session");
+      for (const digest of scope.scopeSha256) {
+        const owner = scopes.recorded.get(digest);
+        if (owner !== undefined && owner !== sessionId) throw conflict("Two sessions recorded the same native durable session folder");
+        scopes.recorded.set(digest, sessionId);
+      }
+    }
+  }
+  return scopes;
+}
+
+/** Scope digests that any Run on the instance recorded (any company). Used
+ * only to leave another owner's folder alone; it reveals nothing else. */
+async function digestsRecordedOnInstance(tx: Db, digests: string[]): Promise<Set<string>> {
+  const found = new Set<string>();
+  for (let offset = 0; offset < digests.length; offset += SCOPE_RECORD_BATCH) {
+    const batch = digests.slice(offset, offset + SCOPE_RECORD_BATCH);
+    const list = sql.join(batch.map(digest => sql`${digest}`), sql`, `);
+    const scopes = sql`(${heartbeatRuns.runnerProfileJson}->${NATIVE_DURABLE_SESSION_SCOPE_KEY}->'scopeSha256')`;
+    const rows = await tx.execute(sql`select distinct d.value as digest from ${heartbeatRuns}
+      cross join lateral jsonb_array_elements_text(case when jsonb_typeof(${scopes}) = 'array' then ${scopes} else '[]'::jsonb end) as d(value)
+      where ${scopes} ?| array[${list}]::text[] and d.value in (${list})`);
+    for (const row of rows as unknown as Iterable<{ digest: unknown }>) if (typeof row.digest === "string") found.add(row.digest);
+  }
+  return found;
+}
+
+/** Newest modification under a folder (itself, its entries and theirs),
+ * without following links. Too many entries counts as recent. */
+async function newestModificationMs(root: string): Promise<number> {
+  let newest = 0, seen = 0;
+  const visit = async (target: string, depth: number) => {
+    if (++seen > AGE_ENTRY_BOUND) { newest = Number.POSITIVE_INFINITY; return; }
+    const stat = await fs.lstat(target);
+    newest = Math.max(newest, stat.mtimeMs);
+    if (depth >= 2 || !stat.isDirectory()) return;
+    for (const name of await fs.readdir(target)) {
+      await visit(path.join(target, name), depth + 1);
+      if (newest === Number.POSITIVE_INFINITY) return;
+    }
+  };
+  try {
+    await visit(root, 0);
+  } catch {
+    return Number.POSITIVE_INFINITY;
+  }
+  return newest;
+}
+
+/** Read-only: find every controller folder of the target sessions, and the
+ * unattributed folders this company might own (see the PRIV-R8 note above).
+ * Throws instead of returning a partial plan when ownership of a folder that
+ * could be this company's cannot be decided. */
+export async function planNativeDurableSessionErasure(tx: Db, input: { companyId: string;
+  targets: NativeDurableSessionTargets; scopes: NativeDurableSessionScopes }): Promise<Plan> {
   const base = nativeDurableSessionsRoot();
   const plan: Plan = { base, companyId: input.companyId, groups: [] };
   if (!input.targets.size) return plan;
@@ -199,69 +334,125 @@ export async function planNativeDurableSessionErasure(input: { companyId: string
   if (top.quarantine) members.push(...(await inventory(path.join(base, "quarantine"), base, counter, deadline)).members);
   const byDigest = new Map<string, Member[]>();
   for (const member of members) byDigest.set(member.digest, [...(byDigest.get(member.digest) ?? []), member]);
+  const unattributed: { digest: string; live: Member[]; leftovers: Member[] }[] = [];
   for (const [digest, group] of [...byDigest].sort(([left], [right]) => left.localeCompare(right))) {
     const live = group.filter(member => member.erasingTag === null);
-    // An interrupted erasure of a target session left these renamed copies.
-    const interrupted = group.filter(member => member.erasingTag !== null && tags.has(member.erasingTag));
+    // An interrupted erasure of a target session (or of this orphan) left these renamed copies.
+    const interrupted = group.filter(member => member.erasingTag !== null && !member.unsafe && tags.has(member.erasingTag));
+    const leftovers = group.filter(member => member.erasingTag === orphanTag(digest));
+    const recorded = input.scopes.recorded.get(digest) ?? null;
     const exact = derived.get(digest) ?? null;
     let sessionId: string | null = null;
     if (live.length) {
-      const identity = await resolveGroupIdentity(live, deadline);
-      if (identity.status === "valid" && input.targets.has(identity.sessionId)) {
-        if (!input.targets.get(identity.sessionId)!.has(identity.runId))
-          throw conflict("Native durable session state names the erased session without a Run of this company");
-        if (exact && exact !== identity.sessionId)
-          throw conflict("Native durable session state contradicts its derived session scope");
-        sessionId = identity.sessionId;
-      } else if (identity.status === "valid") {
-        if (exact) throw conflict("Native durable session state contradicts its derived session scope");
+      if (recorded) {
+        // The record was written before the folder existed: it decides the
+        // owner whatever the identity files say (or whether they exist).
+        if (exact && exact !== recorded) throw conflict("Native durable session state contradicts its derived session scope");
+        if (live.some(member => member.unsafe)) throw conflict("Unsafe native durable session entry blocks erasure");
+        sessionId = recorded;
       } else if (exact) {
+        if (live.some(member => member.unsafe)) throw conflict("Unsafe native durable session entry blocks erasure");
+        const identity = await resolveGroupIdentity(live, deadline);
+        if (identity.status === "valid" && identity.sessionId !== exact)
+          throw conflict("Native durable session state contradicts its derived session scope");
         sessionId = exact;
-      } else if (identity.status === "indeterminate") {
-        throw conflict("Unreadable native durable session state blocks erasure");
+      } else if (live.some(member => member.unsafe)) {
+        unattributed.push({ digest, live, leftovers });
+        if (interrupted.length) plan.groups.push({ digest, sessionId: tags.get(interrupted[0]!.erasingTag!)!, members: interrupted });
+        continue;
+      } else {
+        const identity = await resolveGroupIdentity(live, deadline);
+        if (identity.status === "valid" && input.targets.has(identity.sessionId)) {
+          if (!input.targets.get(identity.sessionId)!.has(identity.runId))
+            throw conflict("Native durable session state names the erased session without a Run of this company");
+          sessionId = identity.sessionId;
+        } else if (identity.status !== "valid") {
+          // No record, no derived name, no readable identity: isolated here
+          // rather than blocking every company's erasure.
+          unattributed.push({ digest, live, leftovers });
+          if (interrupted.length) plan.groups.push({ digest, sessionId: tags.get(interrupted[0]!.erasingTag!)!, members: interrupted });
+          continue;
+        }
       }
     }
-    if (sessionId) plan.groups.push({ digest, sessionId, members: [...live, ...interrupted] });
+    if (sessionId) plan.groups.push({ digest, sessionId, members: [...live, ...interrupted, ...leftovers] });
     else if (interrupted.length)
-      plan.groups.push({ digest, sessionId: tags.get(interrupted[0]!.erasingTag!)!, members: interrupted });
+      plan.groups.push({ digest, sessionId: tags.get(interrupted[0]!.erasingTag!)!, members: [...interrupted, ...leftovers] });
+    else if (leftovers.length) plan.groups.push({ digest, sessionId: null, members: leftovers });
   }
+  // Every started Run of these sessions recorded its scope before creating a
+  // folder, so an unattributed folder cannot be one of this company's.
+  if (!unattributed.length || input.scopes.unrecordedRunCount === 0) return plan;
+  const elsewhere = await digestsRecordedOnInstance(tx, unattributed.map(entry => entry.digest));
+  let pending = 0;
+  for (const entry of unattributed) {
+    // Another Run (of any company) recorded it: that owner's erasure finds it.
+    if (elsewhere.has(entry.digest)) continue;
+    let newest = 0;
+    for (const member of entry.live) newest = Math.max(newest, await newestModificationMs(path.join(member.parent, member.name)));
+    if (Date.now() - newest >= UNATTRIBUTED_SAFE_AGE_MS) {
+      // Untouched for the safe age and recorded by no Run: no live owner. It
+      // may be this company's, so it is removed (a link only as a link).
+      plan.groups.push({ digest: entry.digest, sessionId: null, members: [...entry.live, ...entry.leftovers] });
+    } else if (input.scopes.recentUnrecordedRunCount > 0) {
+      // Recently written while one of this company's unrecorded Runs was
+      // active: it may be that Run's live or crashed folder. Wait.
+      pending++;
+    }
+    // Otherwise it was written after every unrecorded Run of these sessions
+    // had finished, so none of them wrote it; recorded Runs would have
+    // recorded it. It is not this company's.
+  }
+  if (pending) throw conflict("Native durable session erasure awaits unattributed runtime folders that may belong to this company",
+    { code: UNATTRIBUTED_PENDING_CODE, unattributedFolderCount: pending });
   return plan;
 }
 
 /** Rename each folder out of its canonical name, then remove it. A crash
- * leaves only `<digest>.erasing-<session tag>-*`, which the next attempt
- * for the same company session removes by that DB-derived tag. */
+ * leaves only `<digest>.erasing-<tag>-*`, which the next attempt removes by
+ * that DB-derived session tag (or, for an orphan, its digest-derived tag). */
 export async function executeNativeDurableSessionErasure(plan: Plan): Promise<NativeDurableSessionErasureReceipt> {
   const quarantine = path.join(plan.base, "quarantine");
   const renamed: string[] = [];
+  const unlinked: string[] = [];
   const vacated: string[] = [];
   for (const group of plan.groups) {
-    const tag = erasureTag(plan.companyId, group.sessionId);
+    const tag = group.sessionId === null ? orphanTag(group.digest) : erasureTag(plan.companyId, group.sessionId);
     for (const member of group.members) {
       const source = path.resolve(member.parent, member.name);
       if ((member.parent !== plan.base && member.parent !== quarantine) || path.dirname(source) !== member.parent ||
-        !memberPattern.test(path.basename(source)) || await directoryKind(source) !== "directory")
+        !memberPattern.test(path.basename(source)))
         throw conflict("Unsafe native durable session entry blocks erasure");
-      if (member.erasingTag !== null) { renamed.push(source); continue; }
+      const kind = await directoryKind(source);
+      // Only an unattributed orphan's link or file is removed, as itself.
+      if (kind !== "directory" && !(kind === "unsafe" && member.unsafe && group.sessionId === null))
+        throw conflict("Unsafe native durable session entry blocks erasure");
+      if (member.erasingTag !== null) { (kind === "directory" ? renamed : unlinked).push(source); continue; }
       const target = path.join(member.parent, `${group.digest}.erasing-${tag}-${randomUUID()}`);
       await fs.rename(source, target);
       vacated.push(source);
-      renamed.push(target);
+      (kind === "directory" ? renamed : unlinked).push(target);
     }
+  }
+  for (const target of unlinked) {
+    if (await directoryKind(target) !== "unsafe") throw conflict("Unsafe native durable session entry blocks erasure");
+    await fs.unlink(target);
   }
   for (const target of renamed) {
     await assertRuntimeStorageDirectories(target, plan.base);
     await removeRuntimeStorageTree(target);
   }
-  for (const target of [...vacated, ...renamed]) {
+  for (const target of [...vacated, ...renamed, ...unlinked]) {
     if (await directoryKind(target) !== "absent") throw new Error("Native durable session erasure could not confirm removal");
   }
+  const owned = plan.groups.filter(group => group.sessionId !== null);
   return {
     schema: "paperclip.native-durable-session-erasure.v1",
     companyId: plan.companyId,
-    normalizedSessionIds: [...new Set(plan.groups.map(group => group.sessionId))].sort(),
-    removedScopeDigests: [...new Set(plan.groups.map(group => group.digest))].sort(),
-    removedEntryCount: renamed.length,
+    normalizedSessionIds: [...new Set(owned.map(group => group.sessionId!))].sort(),
+    removedScopeDigests: [...new Set(owned.map(group => group.digest))].sort(),
+    unattributedScopeDigests: [...new Set(plan.groups.filter(group => group.sessionId === null).map(group => group.digest))].sort(),
+    removedEntryCount: renamed.length + unlinked.length,
   };
 }
 
@@ -329,20 +520,26 @@ export async function eraseNativeDurableSessionForRun(tx: Db, companyId: string,
   // folder is actually attributed to its fallback session key.
   const bound = !targets.has(`session-${runId}`);
   if (bound) await assertNativeDurableSessionRunsStopped(tx, companyId, owners);
-  const plan = await planNativeDurableSessionErasure({ companyId, targets });
+  const scopes = await loadNativeDurableSessionScopes(tx, companyId, targets);
+  const plan = await planNativeDurableSessionErasure(tx, { companyId, targets, scopes });
   if (!bound && plan.groups.length) await assertNativeDurableSessionRunsStopped(tx, companyId, owners);
   return executeNativeDurableSessionErasure(plan);
+}
+
+/** The Runs of the sessions whose folders a plan removes. */
+export function sessionOwners(plan: Plan, targets: NativeDurableSessionTargets): string[] {
+  return plan.groups.flatMap(group => group.sessionId === null ? [] : [...targets.get(group.sessionId) ?? []]);
 }
 
 /** Company purge: remove every durable folder of the company's sessions,
  * then prove none remains. The caller already holds the company locks. */
 export async function eraseCompanyNativeDurableSessionsInTransaction(tx: Db, companyId: string) {
   const targets = await nativeDurableSessionTargetsForCompany(tx, companyId);
-  const plan = await planNativeDurableSessionErasure({ companyId, targets });
-  const owners = plan.groups.flatMap(group => [...targets.get(group.sessionId) ?? []]);
-  await assertNativeDurableSessionRunsStopped(tx, companyId, owners);
+  const scopes = await loadNativeDurableSessionScopes(tx, companyId, targets);
+  const plan = await planNativeDurableSessionErasure(tx, { companyId, targets, scopes });
+  await assertNativeDurableSessionRunsStopped(tx, companyId, sessionOwners(plan, targets));
   const receipt = await executeNativeDurableSessionErasure(plan);
-  if ((await planNativeDurableSessionErasure({ companyId, targets })).groups.length)
+  if ((await planNativeDurableSessionErasure(tx, { companyId, targets, scopes })).groups.length)
     throw conflict("Native durable session state remains after company erasure");
   return receipt;
 }
@@ -351,10 +548,11 @@ export async function eraseCompanyNativeDurableSessionsInTransaction(tx: Db, com
  * company's sessions outside the transaction, then erase under the locks. */
 export async function eraseCompanyNativeDurableSessions(db: Db, companyId: string) {
   const targets = await nativeDurableSessionTargetsForCompany(db, companyId);
-  const plan = await planNativeDurableSessionErasure({ companyId, targets });
+  const scopes = await loadNativeDurableSessionScopes(db, companyId, targets);
+  const plan = await planNativeDurableSessionErasure(db, { companyId, targets, scopes });
   if (plan.groups.length) {
     const { closeWarmNativeSessionsForRun } = await import("./native-session-executor.js");
-    for (const runId of new Set(plan.groups.flatMap(group => [...targets.get(group.sessionId) ?? []]))) {
+    for (const runId of new Set(sessionOwners(plan, targets))) {
       const stop = await closeWarmNativeSessionsForRun({ companyId, runId, reason: "company offboarding" });
       if (stop.busy || stop.failed) throw conflict("Native durable session erasure awaits a warm session Stop");
     }
