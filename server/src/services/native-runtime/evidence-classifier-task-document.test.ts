@@ -310,5 +310,17 @@ describeEmbeddedPostgres("Native evidence classifier: Task document evidence (MS
     expect(assessment.verificationAssessments[0]).toMatchObject({ outcome: "unverifiable", reasonCode: "document_evidence_not_verification" });
     expect(assessment.allCriteriaSatisfied).toBe(false);
     expect(assessment.verificationPassed).toBe(false);
+    // Accepted for its own output criterion: listed once as accepted evidence.
+    expect(assessment.acceptedEvidenceRefs).toEqual([output.ref]);
+  });
+
+  it("does not list a document ref cited only for another criterion or a verification as accepted evidence (MS1f phase 2 finding 3)", async () => {
+    const f = await fixture();
+    const output = await saveOutput(f);
+    const assessment = await classify(f, result([], { invariantRefs: [output.ref], verificationRef: output.ref }));
+    expect(assessment.criterionAssessments[1]).toMatchObject({ criterionId: "invariant_0",
+      evidenceRefs: [expect.objectContaining({ outcome: "unverifiable", reasonCode: "document_evidence_other_criterion" })] });
+    expect(assessment.verificationAssessments[0]).toMatchObject({ reasonCode: "document_evidence_not_verification" });
+    expect(assessment.acceptedEvidenceRefs).toEqual([]);
   });
 });

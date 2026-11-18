@@ -203,6 +203,7 @@ import { NATIVE_OPENCODE_CONFORMANCE_SYSTEM, sealNativeOpenCodeConformanceDispat
   type NativeOpenCodeConformanceDispatchSource, type NativeOpenCodeConformanceSourceAuthority } from "../orchestration/native-opencode-conformance-source.js";
 import { createAssignedMcpTools, getAssignedMcpGateway, type AssignedMcpInvocationWitness, type AssignedMcpPendingWitness, type AssignedMcpSearchWitness } from "./assigned-mcp-tools.js";
 import { captureNativeGovernedPendingInteractions } from "./native-interaction-bridge.js";
+import { reviewModelDispatchMarker, reviewModelReservationMatches } from "../orchestration/review-model-binding.js";
 import { captureNativeReviewWakeWitness, getNativeReviewAssignment, nativeReviewerLaneRecorded,
   readNativeReviewAssignmentContext } from "./native-review-participant.js";
 import { NativeChatAttachmentReadScope } from "./chat-attachment-read.js";
@@ -9990,16 +9991,9 @@ async function assertManagedOpenCodeToolCallCurrent(input: Parameters<typeof ren
       reservation.conversationSessionGeneration !== binding?.data.conversationSessionGeneration ||
       reservation.executionManifestId !== binding?.data.executionManifestId ||
       reservation.executionManifestHash !== binding?.data.executionManifestHash)) ||
-    (purpose === "review_model" && (!reviewBinding?.success || reservation.planId !== reviewBinding.data.planId ||
-      reservation.reviewIssueId !== input.issueId || reservation.reviewInteractionId !== reviewBinding.data.interactionId ||
-      reservation.reviewDecisionId !== reviewBinding.data.decisionId || reservation.reviewSourceRunId !== reviewBinding.data.sourceRunId ||
-      reservation.reviewSourceResultId !== reviewBinding.data.sourceResultId || reservation.reviewSourceAttemptId !== reviewBinding.data.sourceAttemptId ||
-      reservation.reviewSourceReceiptDigest !== reviewBinding.data.sourceReceiptDigest ||
-      reservation.reviewSourceResultCanonicalSha256 !== reviewBinding.data.sourceResultCanonicalSha256 ||
-      reservation.reviewSourceWorkerId !== reviewBinding.data.sourceWorkerId || reservation.reviewSourceAgentId !== reviewBinding.data.sourceAgentId ||
-      reservation.reviewPlanVersion !== reviewBinding.data.expectedPlanVersion || reservation.workerId !== null || reservation.workerAttemptId !== null ||
-      reservation.reviewAgentId !== input.agentId || reservation.reviewRunId !== input.runId ||
-      reservation.reviewExecutionManifestId !== reviewBinding.data.executionManifestId)))
+    (purpose === "review_model" && (!reviewBinding?.success || !reviewModelReservationMatches(reservation, reviewBinding.data) ||
+      reservation.reviewIssueId !== input.issueId || reservation.workerId !== null || reservation.workerAttemptId !== null ||
+      reservation.reviewAgentId !== input.agentId || reservation.reviewRunId !== input.runId)))
     throw new Error("managed_opencode_tool_call_response_unsettled");
 }
 
@@ -10052,15 +10046,9 @@ async function prepareManagedOpenCodeOutputCapture(input: Parameters<typeof rene
         reservation.conversationSessionGeneration !== conversationBindingData?.conversationSessionGeneration ||
         reservation.executionManifestId !== conversationBindingData?.executionManifestId ||
         reservation.executionManifestHash !== conversationBindingData?.executionManifestHash)) || (purpose === "review_model" &&
-      (!reviewBinding?.success || reservation.planId !== reviewBindingData?.planId || reservation.reviewIssueId !== input.issueId ||
-        reservation.reviewInteractionId !== reviewBindingData?.interactionId || reservation.reviewDecisionId !== reviewBindingData?.decisionId ||
-        reservation.reviewSourceRunId !== reviewBindingData?.sourceRunId || reservation.reviewSourceResultId !== reviewBindingData?.sourceResultId ||
-        reservation.reviewSourceAttemptId !== reviewBindingData?.sourceAttemptId || reservation.reviewSourceReceiptDigest !== reviewBindingData?.sourceReceiptDigest ||
-        reservation.reviewSourceResultCanonicalSha256 !== reviewBindingData?.sourceResultCanonicalSha256 ||
-        reservation.reviewSourceWorkerId !== reviewBindingData?.sourceWorkerId || reservation.reviewSourceAgentId !== reviewBindingData?.sourceAgentId ||
-        reservation.reviewPlanVersion !== reviewBindingData?.expectedPlanVersion || reservation.workerId !== null || reservation.workerAttemptId !== null ||
-        reservation.reviewAgentId !== input.agentId || reservation.reviewRunId !== input.runId ||
-        reservation.reviewExecutionManifestId !== reviewBindingData?.executionManifestId)))
+      (!reviewBinding?.success || !reviewBindingData || !reviewModelReservationMatches(reservation, reviewBindingData) ||
+        reservation.reviewIssueId !== input.issueId || reservation.workerId !== null || reservation.workerAttemptId !== null ||
+        reservation.reviewAgentId !== input.agentId || reservation.reviewRunId !== input.runId)))
     throw new Error("managed_opencode_output_capture_reservation_unavailable");
   const parsedDispatchInput = nativePayloadSourceInputSchema.parse(purpose === "conversation_model" ? {
     kind: "conversation_model_dispatch", runId: input.runId, agentId: input.agentId, issueId: input.issueId,
@@ -10069,16 +10057,10 @@ async function prepareManagedOpenCodeOutputCapture(input: Parameters<typeof rene
     executionManifestHash: conversationBindingData!.executionManifestHash, reservationId: reservation.id,
     callId: intent.callId, requestHash: intent.requestHash, wireBodyHash: intent.wireBodyHash,
     responseHash: reservation.providerResponseHash,
-  } : purpose === "review_model" ? {
-    kind: "review_model_dispatch", runId: input.runId, reservationId: reservation.id, callId: intent.callId,
-    planId: reviewBindingData!.planId, issueId: reviewBindingData!.issueId, interactionId: reviewBindingData!.interactionId,
-    decisionId: reviewBindingData!.decisionId, sourceRunId: reviewBindingData!.sourceRunId,
-    sourceWorkerId: reviewBindingData!.sourceWorkerId, sourceAgentId: reviewBindingData!.sourceAgentId,
-    sourceResultId: reviewBindingData!.sourceResultId, sourceAttemptId: reviewBindingData!.sourceAttemptId,
-    sourceReceiptDigest: reviewBindingData!.sourceReceiptDigest, sourceResultCanonicalSha256: reviewBindingData!.sourceResultCanonicalSha256,
-    reviewerAgentId: reviewBindingData!.reviewerAgentId, executionManifestId: reviewBindingData!.executionManifestId,
-    expectedPlanVersion: reviewBindingData!.expectedPlanVersion, requestHash: intent.requestHash, wireBodyHash: intent.wireBodyHash, responseHash: reservation.providerResponseHash,
-  } : { kind: "worker_model_dispatch", runId: input.runId, reservationId: reservation.id,
+  } : purpose === "review_model" ? reviewModelDispatchMarker(reviewBindingData!, { runId: input.runId,
+    reservationId: reservation.id, callId: intent.callId as string, requestHash: intent.requestHash as string,
+    wireBodyHash: intent.wireBodyHash as string, responseHash: reservation.providerResponseHash })
+  : { kind: "worker_model_dispatch", runId: input.runId, reservationId: reservation.id,
     callId: intent.callId, requestHash: intent.requestHash, wireBodyHash: intent.wireBodyHash,
     responseHash: reservation.providerResponseHash });
   if (parsedDispatchInput.kind !== "worker_model_dispatch" && parsedDispatchInput.kind !== "conversation_model_dispatch" && parsedDispatchInput.kind !== "review_model_dispatch")

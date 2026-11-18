@@ -120,7 +120,15 @@ export async function readNativeManagedStageCommentCapture(db: Db | Transaction,
   const response=object(input.result),data=object(response.data),capture=input.outputCapture,use=capture.managedOpenCodeToolUse;
   const digest=nativeSha256(nativeCallApiResultEnvelope(input.callId,input.result));
   const {operationId:_operationId,...publicResult}=object(api.result);
-  if(!run?.responsibleUserId || capture.dispatch.kind!=="worker_model_dispatch" || capture.runId!==run.id || use?.toolName!=="call_api" || use.callId!==input.callId || use.argumentsHash!==input.argumentsHash ||
+  // MS1f decision 4. A stage Reviewer under a plan calls the model through its
+  // stage-bound review_model capability, so its output capture names the
+  // review dispatch of this exact Run, Task and stage (checked below against
+  // the transition's stage); every other dispatch kind stays refused.
+  const dispatch=capture.dispatch;
+  const reviewDispatch=dispatch.kind==="review_model_dispatch" && dispatch.reviewKind==="execution_stage" &&
+    dispatch.interactionId===undefined && dispatch.runId===input.runId && dispatch.issueId===input.issueId &&
+    dispatch.reviewerAgentId===input.agentId && dispatch.sourceAgentId!==input.agentId ? dispatch : null;
+  if(!run?.responsibleUserId || (dispatch.kind!=="worker_model_dispatch" && !reviewDispatch) || capture.runId!==run.id || use?.toolName!=="call_api" || use.callId!==input.callId || use.argumentsHash!==input.argumentsHash ||
     api.operationId!==NATIVE_STAGE_COMMENT_OPERATION || api.state!=="completed" || api.method!=="POST" || api.pathAndQuery!==`/api/issues/${input.issueId}/comments` ||
     api.callId!==input.callId || api.argumentsHash!==input.argumentsHash || api.providerResultDigest!==digest ||
     !isDeepStrictEqual({...publicResult,apiOperationId:NATIVE_STAGE_COMMENT_OPERATION},input.result) ||
@@ -137,6 +145,9 @@ export async function readNativeManagedStageCommentCapture(db: Db | Transaction,
   const from=parseIssueExecutionState(transition.fromState),to=parseIssueExecutionState(transition.toState);
   if(!origin || !isDeepStrictEqual(transition.origin,origin) || !from || from.status!=="pending" || from.currentParticipant?.type!=="agent" ||
     from.currentParticipant.agentId!==run.agentId || !to || to.lastDecisionId!==transition.stageDecisionId ||
+    (reviewDispatch && (reviewDispatch.stageId!==from.currentStageId || reviewDispatch.decisionId!==origin.decisionId ||
+      reviewDispatch.sourceRunId!==origin.executorRunId || from.returnAssignee?.type!=="agent" ||
+      from.returnAssignee.agentId!==reviewDispatch.sourceAgentId)) ||
     !["approved","changes_requested"].includes(to.lastDecisionOutcome ?? ""))throw new Error("native_stage_comment_origin_changed");
   const [comment]=await db.select().from(issueComments).where(and(eq(issueComments.companyId,input.companyId),eq(issueComments.issueId,input.issueId),eq(issueComments.id,data.id),
     eq(issueComments.createdByRunId,run.id),eq(issueComments.authorAgentId,run.agentId))).limit(1).for("share");

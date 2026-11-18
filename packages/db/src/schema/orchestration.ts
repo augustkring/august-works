@@ -60,7 +60,7 @@ export const orchestrationModelReservations = pgTable("orchestration_model_reser
   id: uuid("id").primaryKey().defaultRandom(), companyId: uuid("company_id").notNull(), planId: uuid("plan_id"), workerId: uuid("worker_id"), workerAttemptId: uuid("worker_attempt_id"),
   conversationAgentId: uuid("conversation_agent_id"), conversationRunId: uuid("conversation_run_id"), conversationIssueId: uuid("conversation_issue_id"),
   conversationSessionGeneration: integer("conversation_session_generation"), executionManifestId: uuid("execution_manifest_id"), executionManifestHash: text("execution_manifest_hash"),
-  reviewIssueId: uuid("review_issue_id"), reviewInteractionId: uuid("review_interaction_id"), reviewDecisionId: uuid("review_decision_id"),
+  reviewIssueId: uuid("review_issue_id"), reviewInteractionId: uuid("review_interaction_id"), reviewStageId: text("review_stage_id"), reviewDecisionId: uuid("review_decision_id"),
   reviewSourceRunId: uuid("review_source_run_id"), reviewSourceResultId: uuid("review_source_result_id"), reviewSourceWorkerId: uuid("review_source_worker_id"), reviewSourceAgentId: uuid("review_source_agent_id"), reviewSourceAttemptId: uuid("review_source_attempt_id"), reviewSourceReceiptDigest: text("review_source_receipt_digest"), reviewSourceResultCanonicalSha256: text("review_source_result_canonical_sha256"),
   reviewAgentId: uuid("review_agent_id"), reviewRunId: uuid("review_run_id"), reviewExecutionManifestId: uuid("review_execution_manifest_id"), reviewPlanVersion: integer("review_plan_version"),
   conversationTariffSnapshot: jsonb("conversation_tariff_snapshot").$type<ModelTariffCeiling | null>(),
@@ -90,12 +90,12 @@ export const orchestrationModelReservations = pgTable("orchestration_model_reser
     ${t.conversationAgentId} is not null and ${t.conversationRunId} is not null and ${t.conversationIssueId} is not null and
     ${t.conversationSessionGeneration} is not null and ${t.conversationSessionGeneration}>=0 and ${t.executionManifestId} is not null and
     ${t.executionManifestHash} is not null and ${t.executionManifestHash} ~ '^[a-f0-9]{64}$' and ${t.conversationTariffSnapshot} is not null and jsonb_typeof(${t.conversationTariffSnapshot})='object' and
-    ${t.reviewIssueId} is null and ${t.reviewInteractionId} is null and ${t.reviewDecisionId} is null and ${t.reviewSourceRunId} is null and ${t.reviewSourceResultId} is null and
+    ${t.reviewIssueId} is null and ${t.reviewInteractionId} is null and ${t.reviewStageId} is null and ${t.reviewDecisionId} is null and ${t.reviewSourceRunId} is null and ${t.reviewSourceResultId} is null and
     ${t.reviewSourceWorkerId} is null and ${t.reviewSourceAgentId} is null and ${t.reviewSourceAttemptId} is null and ${t.reviewSourceReceiptDigest} is null and ${t.reviewSourceResultCanonicalSha256} is null and
     ${t.reviewAgentId} is null and ${t.reviewRunId} is null and ${t.reviewExecutionManifestId} is null and ${t.reviewPlanVersion} is null
   ) or (
     ${t.purpose}='review_model' and ${t.planId} is not null and ${t.workerId} is null and ${t.workerAttemptId} is null and
-    ${t.reviewIssueId} is not null and ${t.reviewInteractionId} is not null and ${t.reviewDecisionId} is not null and
+    ${t.reviewIssueId} is not null and ((${t.reviewInteractionId} is not null and ${t.reviewStageId} is null) or (${t.reviewInteractionId} is null and ${t.reviewStageId} is not null)) and ${t.reviewDecisionId} is not null and
     ${t.reviewSourceRunId} is not null and ${t.reviewSourceResultId} is not null and ${t.reviewSourceWorkerId} is not null and ${t.reviewSourceAgentId} is not null and ${t.reviewSourceAttemptId} is not null and ${t.reviewSourceReceiptDigest} is not null and ${t.reviewSourceReceiptDigest} ~ '^[a-f0-9]{64}$' and ${t.reviewSourceResultCanonicalSha256} is not null and ${t.reviewSourceResultCanonicalSha256} ~ '^(sha256:)?[a-f0-9]{64}$' and
     ${t.reviewAgentId} is not null and ${t.reviewRunId} is not null and ${t.reviewExecutionManifestId} is not null and ${t.reviewPlanVersion} is not null and ${t.reviewPlanVersion}>0 and
     ${t.conversationAgentId} is null and ${t.conversationRunId} is null and ${t.conversationIssueId} is null and
@@ -104,7 +104,7 @@ export const orchestrationModelReservations = pgTable("orchestration_model_reser
     ${t.purpose} not in ('conversation_model','review_model') and ${t.planId} is not null and ${t.conversationAgentId} is null and
     ${t.conversationRunId} is null and ${t.conversationIssueId} is null and ${t.conversationSessionGeneration} is null and
     ${t.executionManifestId} is null and ${t.executionManifestHash} is null and ${t.conversationTariffSnapshot} is null and
-    ${t.reviewIssueId} is null and ${t.reviewInteractionId} is null and ${t.reviewDecisionId} is null and ${t.reviewSourceRunId} is null and ${t.reviewSourceResultId} is null and
+    ${t.reviewIssueId} is null and ${t.reviewInteractionId} is null and ${t.reviewStageId} is null and ${t.reviewDecisionId} is null and ${t.reviewSourceRunId} is null and ${t.reviewSourceResultId} is null and
     ${t.reviewSourceWorkerId} is null and ${t.reviewSourceAgentId} is null and ${t.reviewSourceAttemptId} is null and ${t.reviewSourceReceiptDigest} is null and ${t.reviewSourceResultCanonicalSha256} is null and ${t.reviewAgentId} is null and ${t.reviewRunId} is null and ${t.reviewExecutionManifestId} is null and ${t.reviewPlanVersion} is null
   )`),
   statusCheck: check("orchestration_model_reservation_status_ck", sql`${t.status} in ('reserved','dispatched','completed','failed','unknown','cancelled')`),

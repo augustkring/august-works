@@ -1,5 +1,7 @@
 import { exactNativeManagedArtifactCommand } from "../native-runtime/native-artifact-preparation.js";
-import { currentNativeReviewerRun, nativeReviewerLaneRun, readNativeReviewAssignmentContext } from "../native-runtime/native-review-participant.js";
+import { currentNativeReviewerRun, nativeReviewerLaneRun, readNativeReviewAssignmentContext,
+  readNativeStageReviewContext } from "../native-runtime/native-review-participant.js";
+import { reviewModelBindingKind } from "../orchestration/review-model-binding.js";
 import { NATIVE_ATTACHMENT_CLEANUP_PREPARATION_PURPOSE, NATIVE_ATTACHMENT_STAGE_PREPARATION_PURPOSE, parseNativeRemoteAttachmentStageCommand } from "../native-runtime/native-attachment-remote-stage.js";
 import { captureNativeRemoteAttachmentReadbackOwner, captureNativeRemoteAttachmentStageOwner } from "../native-runtime/native-attachment-remote-stage-owner.js";
 import { buildRemoteRunnerFileStageScript, NATIVE_RUNNER_TRUST_BUNDLE_MAX_BYTES, NATIVE_RUNNER_TRUST_BUNDLE_MODE,
@@ -802,7 +804,12 @@ type NativeModelSessionOwnerSource = {
  * version and source worker attempt, and whose reservation the 0581 CHECK
  * charges under that plan. The Reviewer gets no plan worker attempt, no
  * `worker_model` or `conversation_model` capability and no sandbox credential
- * binding (MS1h2), and it is never the Task assignee (brief §57.1). */
+ * binding (MS1h2), and it is never the Task assignee (brief §57.1).
+ * MS1f decision 4: an execution-policy stage Reviewer under a plan (its
+ * persisted stage Reviewer wake, no plan worker attempt, the current pending
+ * stage of this exact Run) is on the same `reviewer` lane with a stage-bound
+ * `review_model` binding; it is the Task assignee while its stage is pending,
+ * and the stage's return assignee is the plan Worker, never this Reviewer. */
 export async function nativeModelSessionOwnerLane(tx: Db, source: NativeModelSessionOwnerSource):
   Promise<"worker" | "conformance" | "reviewer" | null> {
   if (source.attempt) return source.attempt.runId === source.run.id && source.attempt.status === "running" ? "worker" : null;
@@ -816,24 +823,31 @@ export async function nativeModelSessionOwnerLane(tx: Db, source: NativeModelSes
  * RuntimeTools capability for this company, Reviewer Agent, Run, Human and
  * manifest (exported for regression tests). The credential check later in
  * the same transaction compares the whole binding with the current review
- * (`currentReviewBinding`). */
+ * (`currentReviewBinding`). MS1f decision 4: the binding's kind is the kind of
+ * the Run's persisted review wake (a stage binding only for a stage Reviewer
+ * wake, a completion binding only for a completion review wake). */
 export function nativeReviewerModelCredentialExact(source: Pick<NativeModelSessionOwnerSource, "run" | "manifest">,
   modelCredential: { capabilityToken: string } | undefined): boolean {
   const claims = modelCredential ? verifyRuntimeToolsToken(modelCredential.capabilityToken, "review_model") : null;
+  const wakeKind = readNativeStageReviewContext(source.run.contextSnapshot) ? "execution_stage"
+    : readNativeReviewAssignmentContext(source.run.contextSnapshot) ? "completion" : null;
   return !!claims?.review_model && claims.company_id === source.run.companyId && claims.sub === source.run.agentId &&
     claims.run_id === source.run.id && claims.responsible_user_id === source.run.responsibleUserId &&
-    claims.review_model.executionManifestId === source.manifest.id;
+    claims.review_model.executionManifestId === source.manifest.id && reviewModelBindingKind(claims.review_model) === wakeKind;
 }
 
 /** MS1h7. The one choice of managed OpenCode model issuer at dispatch, the
  * same for a session start, a refresh and a plain command (exported for
  * regression tests): the conformance probe; a Native review Run without a
  * plan worker attempt (`review_model`); a conversation Run without one
- * (`conversation_model`); otherwise the plan worker (`worker_model`). */
+ * (`conversation_model`); otherwise the plan worker (`worker_model`).
+ * MS1f decision 4: an execution-policy stage Reviewer Run without a plan
+ * worker attempt is a Native review Run (`review_model`, stage binding). */
 export function nativeManagedModelIssuer(input: { providerConformanceBootstrap: boolean; contextSnapshot: unknown;
   hasWorkerAttempt: boolean; hasConversationIdentity: boolean }): "conformance" | "review" | "conversation" | "worker" {
   if (input.providerConformanceBootstrap) return "conformance";
-  if (readNativeReviewAssignmentContext(input.contextSnapshot) && !input.hasWorkerAttempt) return "review";
+  if ((readNativeReviewAssignmentContext(input.contextSnapshot) || readNativeStageReviewContext(input.contextSnapshot)) &&
+    !input.hasWorkerAttempt) return "review";
   if (input.hasConversationIdentity && !input.hasWorkerAttempt) return "conversation";
   return "worker";
 }

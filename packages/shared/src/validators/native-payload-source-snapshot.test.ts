@@ -206,4 +206,21 @@ describe("Native Stage policy transform structural boundary", () => {
     expect(nativePayloadSourceSnapshotSchema.safeParse(dispatch(`sha256:${hash}`)).success).toBe(true);
     expect(nativePayloadSourceSnapshotSchema.safeParse(dispatch(`sha512:${hash}`)).success).toBe(false);
   });
+  it("binds a review model dispatch to exactly one review subject: an interaction or an execution stage (MS1f decision 4)", () => {
+    const base = { kind: "review_model_dispatch", runId: randomUUID(), reservationId: randomUUID(), callId: "call-1",
+      planId: randomUUID(), issueId: randomUUID(), decisionId: randomUUID(), sourceRunId: randomUUID(),
+      sourceWorkerId: randomUUID(), sourceAgentId: randomUUID(), sourceResultId: randomUUID(), sourceAttemptId: randomUUID(),
+      expectedPlanVersion: 1, sourceReceiptDigest: hash, sourceResultCanonicalSha256: hash, reviewerAgentId: randomUUID(),
+      executionManifestId: randomUUID(), requestHash: hash, wireBodyHash: hash, responseHash: hash };
+    const parses = (subject: Record<string, unknown>) =>
+      nativePayloadSourceSnapshotSchema.safeParse(snapshot([{ ...base, ...subject } as never])).success;
+    expect(parses({ interactionId: randomUUID() })).toBe(true);
+    expect(parses({ reviewKind: "execution_stage", stageId: randomUUID() })).toBe(true);
+    expect(parses({})).toBe(false);
+    expect(parses({ interactionId: randomUUID(), reviewKind: "execution_stage", stageId: randomUUID() })).toBe(false);
+    expect(parses({ interactionId: randomUUID(), stageId: randomUUID() })).toBe(false);
+    expect(parses({ reviewKind: "execution_stage" })).toBe(false);
+    expect(parses({ stageId: randomUUID() })).toBe(false);
+    expect(parses({ reviewKind: "completion", stageId: randomUUID() })).toBe(false);
+  });
 });

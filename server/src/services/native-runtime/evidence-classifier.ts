@@ -429,7 +429,16 @@ export async function classifyNativeEvidence(input: {
 
   const allRefs = [...cache.keys()].map((ref) => cache.get(ref)!);
   const resolvedRefs = await Promise.all(allRefs);
-  const acceptedEvidenceRefs = resolvedRefs.filter((entry) => entry.outcome === "accepted").map((entry) => entry.ref);
+  // MS1f phase 2 finding 3. A Task document ref counts as accepted evidence
+  // only where it was accepted for its own output criterion; one cited only for
+  // another criterion or a verification is not listed (those assessments
+  // already downgrade it).
+  const acceptedDocumentUses = new Set([
+    ...criterionAssessments.flatMap((entry) => entry.evidenceRefs.filter((ref) => ref.outcome === "accepted").map((ref) => ref.ref)),
+    ...verificationAssessments.flatMap((entry) => entry.evidenceRef?.outcome === "accepted" ? [entry.evidenceRef.ref] : []),
+  ]);
+  const acceptedEvidenceRefs = resolvedRefs.filter((entry) => entry.outcome === "accepted" &&
+    (entry.kind !== "document" || acceptedDocumentUses.has(entry.ref))).map((entry) => entry.ref);
   const missingRequirements = [
     ...criterionAssessments.filter((entry) => entry.outcome === "missing").map((entry) => entry.criterionId),
     ...verificationAssessments.filter((entry) => entry.outcome === "missing").map((entry) => entry.commandOrCheck),
