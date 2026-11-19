@@ -13908,7 +13908,7 @@
         },
         {
           "path": "server/src/__tests__/helpers/managed-native-heartbeat-fixture.ts",
-          "sha256": "b530d422457fae9680fc14eaec85559831a1dd8ab062b9d5b77c2afa47d189f0"
+          "sha256": "61f549dcd93c60f5f2a4e465175b02be711a6e3a8e1b36438351865573a777bd"
         },
         {
           "path": "server/src/__tests__/helpers/prepare-genuine-native-draft-conformance-fixture.ts",
@@ -25066,7 +25066,7 @@
         },
         {
           "path": "server/src/services/native-runtime/managed-signoff-api-policy.integration.test.ts",
-          "sha256": "9ccafa90e39187a3f407d47fed69d86f7961978494812546df88f5fd7e845336"
+          "sha256": "778001a235d56bf4718a6f0956dd7045c8185bc4b226e6828bf384d2fa38fd5a"
         },
         {
           "path": "server/src/services/native-runtime/management-analytical-tools.test.ts",
@@ -32085,7 +32085,7 @@
         },
         {
           "path": "server/src/__tests__/helpers/managed-native-conversation-sandbox-host.ts",
-          "sha256": "5ec6eabf17ad6dcec4be89d28998fb21abb7e9e751a50b8a29ebfd3b15a5997f"
+          "sha256": "708aee28f42ef609135fb0ebd77a15b91e50b1313a3f6f42527e9160bdeac789"
         },
         {
           "path": "server/src/__tests__/helpers/managed-native-infrastructure-cleanup.test.ts",
@@ -52926,7 +52926,7 @@
       "id": "source:server/src/__tests__/helpers/managed-native-heartbeat-fixture.ts",
       "kind": "current_source_owner",
       "path": "server/src/__tests__/helpers/managed-native-heartbeat-fixture.ts",
-      "sha256": "b530d422457fae9680fc14eaec85559831a1dd8ab062b9d5b77c2afa47d189f0",
+      "sha256": "61f549dcd93c60f5f2a4e465175b02be711a6e3a8e1b36438351865573a777bd",
       "changeIds": [
         "SCR-V10-WORKFLOWS-DURABLE-OPERATIONS"
       ],
@@ -63973,7 +63973,7 @@
       "id": "source:server/src/services/native-runtime/managed-signoff-api-policy.integration.test.ts",
       "kind": "current_source_owner",
       "path": "server/src/services/native-runtime/managed-signoff-api-policy.integration.test.ts",
-      "sha256": "9ccafa90e39187a3f407d47fed69d86f7961978494812546df88f5fd7e845336",
+      "sha256": "778001a235d56bf4718a6f0956dd7045c8185bc4b226e6828bf384d2fa38fd5a",
       "changeIds": [
         "SCR-V10-NATIVE-RUNTIME-AND-AUTHORITY"
       ],
@@ -72435,7 +72435,7 @@
       "id": "source:server/src/__tests__/helpers/managed-native-conversation-sandbox-host.ts",
       "kind": "current_source_owner",
       "path": "server/src/__tests__/helpers/managed-native-conversation-sandbox-host.ts",
-      "sha256": "5ec6eabf17ad6dcec4be89d28998fb21abb7e9e751a50b8a29ebfd3b15a5997f",
+      "sha256": "708aee28f42ef609135fb0ebd77a15b91e50b1313a3f6f42527e9160bdeac789",
       "changeIds": [
         "SCR-V10-PRODUCT-IDENTITY-HELP-LANGUAGE"
       ],
