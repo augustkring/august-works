@@ -73,13 +73,14 @@ const plannedResultBody = "The declared result is ready for the independent stag
  * revision for `output_result`, and reports the Reviewer's later decision
  * (`invariant_0`) as `unknown`, so its claim hands off to the declared stage. */
 function plannedExecutorReply(input: { body: Record<string, unknown>; execution: NativeExecutionInput; runId: string;
-  callIndex: number }): ProviderReply {
+  callIndex: number; resubmission?: { baseRevisionId: string } }): ProviderReply {
   const { body, execution, runId, callIndex } = input;
   if (callIndex > 3) throw new Error("managed_signoff_executor_unexpected_provider_replay");
   if (callIndex === 3) return { stop_reason: "end_turn", content: [{ type: "text", text: "The declared result is handed to review." }] };
   if (callIndex === 1) return { stop_reason: "tool_use", content: [{ type: "tool_use", id: `write-result-${runId}`,
     name: nativeTool(body, "write_document").name, input: { idempotencyKey: `result-${runId}`, key: "result", title: "Result",
-      body: plannedResultBody, baseRevisionId: null } }] };
+      body: input.resubmission ? `${plannedResultBody}\n\nResubmitted after the board returned the Task.` : plannedResultBody,
+      baseRevisionId: input.resubmission?.baseRevisionId ?? null } }] };
   const written = JSON.parse(nativeToolResult(body, `write-result-${runId}`)) as {
     disposition?: string; document?: { id?: string; key?: string; latestRevisionId?: string } };
   expect(written).toMatchObject({ disposition: "applied", document: { key: "result" } });
@@ -110,7 +111,8 @@ let completed = false;
 /** RT-03 (MS1c option A): task-bound inference needs the root plan, so the
  * executor runs as that plan's Worker. The plan declares the `result` document
  * and the Reviewer's decision as its invariant. */
-async function startPlannedStageTask(actor: AuthorizationActor, companyId: string, issueId: string) {
+async function startPlannedStageTask(actor: AuthorizationActor, companyId: string, issueId: string,
+  budgets: { maxModelCostMinor: number; maxToolActions: number } = { maxModelCostMinor: 20, maxToolActions: 10 }) {
   const [plannedTask] = await db.select().from(issues).where(and(eq(issues.companyId, companyId), eq(issues.id, issueId))).limit(1);
   if (!plannedTask || !actor.userId) throw new Error("managed_signoff_plan_input_missing");
   const plan = await orchestrationService(db).create(actor, companyId, { issueId,
@@ -118,7 +120,7 @@ async function startPlannedStageTask(actor: AuthorizationActor, companyId: strin
     completionContract: { objective: "Write the declared result, then have the independent stage Reviewer record its decision.",
       requiredOutputs: [{ kind: "task_document", key: "result" }],
       businessInvariants: ["The assigned Reviewer records the stage decision"] },
-    budgets: { maxModelCostMinor: 20, maxToolActions: 10 }, workers: [{ key: "writer", issueId }] });
+    budgets, workers: [{ key: "writer", issueId }] });
   await orchestrationService(db).decide(actor, companyId, plan.id, { expectedVersion: plan.version, action: "start",
     rationale: "Authorize this bounded managed stage review test" });
   return plan;
@@ -221,6 +223,8 @@ it("denies an authenticated Reviewer's missing-comment decision on the actual st
   let fixtureExecutorId = "";
   let fixtureReviewerId = "";
   let preNativeStageSummary: { runId: string; body: string } | null = null;
+  // The second executor round revises the declared result from its latest revision.
+  let resubmissionBaseRevisionId: string | null = null;
   // MS1b, MS1f decision 7: both Runs use the real runner, so each has its
   // signed session start and its signed Stop. The Reviewer's first managed
   // model request is held after the Host authenticated it and before the
@@ -266,7 +270,8 @@ it("denies an authenticated Reviewer's missing-comment decision on the actual st
     providerReply: ({ body, execution, runId }) => {
       const callIndex = (calls.get(runId) ?? 0) + 1;
       calls.set(runId, callIndex);
-      if (execution.binding.agentId === fixtureExecutorId) return plannedExecutorReply({ body, execution, runId, callIndex });
+      if (execution.binding.agentId === fixtureExecutorId) return plannedExecutorReply({ body, execution, runId, callIndex,
+        ...(resubmissionBaseRevisionId ? { resubmission: { baseRevisionId: resubmissionBaseRevisionId } } : {}) });
       if (execution.binding.agentId !== fixtureReviewerId) throw new Error("managed_signoff_api_policy_foreign_agent");
       // Released only after the denied decision: the Reviewer ends its turn
       // without a stage decision, so the stage stays pending with it.
@@ -292,7 +297,8 @@ it("denies an authenticated Reviewer's missing-comment decision on the actual st
         actorUserId: actor.userId!, privacyActor: actor, companyGuard: companyId });
       // Reviewer independence (brief §50.4): the stage Reviewer is not the plan Worker.
       expect(managedAgentIds.reviewer).not.toBe(managedAgentIds.executor);
-      const plan = await startPlannedStageTask(actor, companyId, issueId);
+      // Two executor rounds and two Reviewer turns run under this plan.
+      const plan = await startPlannedStageTask(actor, companyId, issueId, { maxModelCostMinor: 40, maxToolActions: 20 });
       const [initialTask] = await db.select().from(issues).where(and(eq(issues.companyId, companyId), eq(issues.id, issueId))).limit(1);
       const initialSnapshot = nativePayloadSourceSnapshotSchema.parse(initialTask?.payloadSourceSnapshot);
       expect(initialSnapshot.transforms).toBeUndefined();
@@ -706,69 +712,92 @@ it("denies an authenticated Reviewer's missing-comment decision on the actual st
         reviewerId: managedAgentIds.reviewer, toolNames: [] });
 
       // Exercise a stale outbox control after a newer applied decision reuses
-      // the same stage ID and Reviewer. The source rows remain FK-valid, and
-      // the stale request carries the original decision/effect projection.
-      const [priorAssessment] = await db.select().from(workAssessments)
-        .where(and(eq(workAssessments.companyId, companyId), eq(workAssessments.runId, executorRun!.id),
-          eq(workAssessments.id, executorDecision!.assessmentId))).limit(1);
-      expect(priorAssessment).toBeTruthy();
+      // the same stage ID and Reviewer. The newer decision is the Reviewer's own
+      // real `native_review_unresolved` decision, committed by its finalizer: it
+      // keeps the same stage pending with the same Reviewer and the same stage
+      // projection, so only the decision generation tells the rounds apart. The
+      // stale request carries the original decision/effect projection.
       const [priorStageEffect] = await db.select().from(statusDecisionEffects)
         .where(and(eq(statusDecisionEffects.companyId, companyId), eq(statusDecisionEffects.issueId, issueId),
           eq(statusDecisionEffects.decisionId, executorDecision!.id), eq(statusDecisionEffects.effectKind, "execution_stage_wake"),
           eq(statusDecisionEffects.targetId, stageWake!.id))).limit(1);
       expect(priorStageEffect).toBeTruthy();
-      const nextAssessmentId = randomUUID();
-      const nextDecisionId = randomUUID();
-      const priorIssueDecisions = await db.select({ decisionVersion: statusDecisions.decisionVersion })
-        .from(statusDecisions).where(and(eq(statusDecisions.companyId, companyId), eq(statusDecisions.issueId, issueId)));
-      const nextDecisionVersion = Math.max(0, ...priorIssueDecisions.map(row => row.decisionVersion)) + 1;
-      await db.insert(workAssessments).values({
-        id: nextAssessmentId,
-        companyId,
-        issueId,
-        runId: executorRun!.id,
-        turnId: priorAssessment!.turnId,
-        contractId: priorAssessment!.contractId,
-        resultId: priorAssessment!.resultId,
-        triggerKind: priorAssessment!.triggerKind,
-        triggerRef: priorAssessment!.triggerRef,
-        triggerCapability: priorAssessment!.triggerCapability,
-        triggerActorCompanyId: companyId,
-        priorIssueStatus: "in_review",
-        priorStatusVersion: reviewStageIssue!.statusVersion,
-        priorDecisionId: executorDecision!.id,
-        policyVersion: priorAssessment!.policyVersion,
-        assessmentJson: priorAssessment!.assessmentJson,
-        inputDigest: `managed-signoff-resubmission:${nextAssessmentId}`,
-        supersedesAssessmentId: priorAssessment!.id,
-      });
-      await db.insert(statusDecisions).values({
-        id: nextDecisionId,
-        companyId,
-        issueId,
-        runId: executorRun!.id,
-        assessmentId: nextAssessmentId,
-        decisionVersion: nextDecisionVersion,
-        policyVersion: executorDecision!.policyVersion,
-        fromStatus: "in_review",
-        toStatus: "in_review",
-        reasonCode: "execution_policy_stage_pending",
-        decisionJson: executorDecision!.decisionJson,
-        decisionDigest: `managed-signoff-resubmission:${nextDecisionId}`,
-        applicationState: "applied",
-        supersedesDecisionId: executorDecision!.id,
-        appliedAt: new Date(),
-      });
-      const nextReviewState = {
-        ...reviewState,
-        status: "pending",
-        reviewRequest: { instructions: "Review the resubmitted work in the same stage." },
-        lastDecisionOutcome: "changes_requested",
-      };
-      await db.update(issues).set({ statusVersion: reviewStageIssue!.statusVersion + 1,
-        lastStatusDecisionId: nextDecisionId, executionState: nextReviewState })
-        .where(and(eq(issues.companyId, companyId), eq(issues.id, issueId)));
+      // The Reviewer's unresolved decision preserves the Task status: it opens
+      // no new decision generation, so the executor's stage-pending decision
+      // and its stage wake are still the current ones.
+      expect(reviewerDecision).toMatchObject({ applicationState: "applied" });
+      expect(afterReviewer).toMatchObject({ lastStatusDecisionId: executorDecision!.id,
+        statusVersion: reviewStageIssue!.statusVersion });
+
+      // A newer round through real routes and a real decision. The board
+      // returns the Task to the executor (its override of the pending stage),
+      // the route's assignment wake starts the executor's second real Run,
+      // which revises the declared result and hands off to the same declared
+      // stage: a new applied execution_policy_stage_pending decision that
+      // reuses the stage ID and selects the same Reviewer.
+      const [resultDocument] = await db.select({ latestRevisionId: documents.latestRevisionId }).from(documents)
+        .innerJoin(issueDocuments, eq(issueDocuments.documentId, documents.id))
+        .where(and(eq(issueDocuments.companyId, companyId), eq(issueDocuments.issueId, issueId), eq(issueDocuments.key, "result"))).limit(1);
+      if (!resultDocument?.latestRevisionId) throw new Error("managed_signoff_result_revision_missing");
+      resubmissionBaseRevisionId = resultDocument.latestRevisionId;
+      const executorRunIdsBeforeReturn = (await db.select({ id: heartbeatRuns.id }).from(heartbeatRuns)
+        .where(and(eq(heartbeatRuns.companyId, companyId), eq(heartbeatRuns.agentId, managedAgentIds.executor)))).map(run => run.id);
+      const returned = await request(managedSignoff.app).patch(`/api/issues/${issueId}`)
+        .set("Cookie", managedSignoff.humanCookie)
+        .send({ status: "in_progress", assigneeAgentId: managedAgentIds.executor });
+      expect(returned.status, JSON.stringify(returned.body)).toBe(200);
+      const [returnedIssue] = await db.select().from(issues).where(and(eq(issues.companyId, companyId), eq(issues.id, issueId))).limit(1);
+      expect(returnedIssue).toMatchObject({ assigneeAgentId: managedAgentIds.executor, executionState: null });
+      let secondExecutorRunId: string | null = null;
+      await expect.poll(async () => {
+        const rows = await db.select({ id: heartbeatRuns.id }).from(heartbeatRuns)
+          .where(and(eq(heartbeatRuns.companyId, companyId), eq(heartbeatRuns.agentId, managedAgentIds.executor)));
+        const fresh = rows.filter(run => !executorRunIdsBeforeReturn.includes(run.id));
+        secondExecutorRunId = fresh.length === 1 ? fresh[0]!.id : null;
+        return fresh.length;
+      }, { timeout: 60_000, interval: 100 }).toBe(1);
+      const secondExecutorTerminal = await waitForTerminalRun(secondExecutorRunId!);
+      expect(secondExecutorTerminal, JSON.stringify({ errorCode: secondExecutorTerminal.errorCode, error: secondExecutorTerminal.error }))
+        .toMatchObject({ status: "succeeded", runtimeMode: "native", agentId: managedAgentIds.executor, nativeIssueId: issueId });
+      await expect.poll(async () => (await db.select({ pending: heartbeatRuns.nativeProcessCleanupPending }).from(heartbeatRuns)
+        .where(eq(heartbeatRuns.id, secondExecutorRunId!)).limit(1))[0]?.pending, { timeout: 120_000, interval: 100 }).toBe(false);
+      const resubmissions = await db.select().from(statusDecisions)
+        .where(and(eq(statusDecisions.companyId, companyId), eq(statusDecisions.runId, secondExecutorRunId!)));
+      expect(resubmissions).toHaveLength(1);
+      const resubmission = resubmissions[0]!;
+      expect(resubmission).toMatchObject({ toStatus: "in_review", reasonCode: "execution_policy_stage_pending", applicationState: "applied" });
+      expect(resubmission.decisionVersion).toBeGreaterThan(reviewerDecision!.decisionVersion);
+      const [nextRoundIssue] = await db.select().from(issues).where(and(eq(issues.companyId, companyId), eq(issues.id, issueId))).limit(1);
+      expect(nextRoundIssue).toMatchObject({ status: "in_review", assigneeAgentId: managedAgentIds.reviewer,
+        lastStatusDecisionId: resubmission.id,
+        executionState: expect.objectContaining({ status: "pending", currentStageId: reviewStageId,
+          currentParticipant: expect.objectContaining({ type: "agent", agentId: managedAgentIds.reviewer }) }) });
+      expect(nextRoundIssue!.statusVersion).toBeGreaterThan(reviewStageIssue!.statusVersion);
+      // The new round's own stage wake is delivered and its Reviewer turn ends
+      // before the stale control, so the dispatcher below sees only the stale row.
+      const nextStageWakes = await db.select().from(statusDecisionEffects)
+        .where(and(eq(statusDecisionEffects.companyId, companyId), eq(statusDecisionEffects.issueId, issueId),
+          eq(statusDecisionEffects.decisionId, resubmission.id), eq(statusDecisionEffects.effectKind, "execution_stage_wake")));
+      expect(nextStageWakes).toHaveLength(1);
+      let nextReviewerRunId: string | null = null;
+      await expect.poll(async () => {
+        const [intent] = await db.select().from(agentWakeupRequests)
+          .where(and(eq(agentWakeupRequests.companyId, companyId), eq(agentWakeupRequests.id, String(nextStageWakes[0]!.targetId)))).limit(1);
+        const [receipt] = await db.select().from(agentWakeupRequests).where(and(eq(agentWakeupRequests.companyId, companyId),
+          eq(agentWakeupRequests.requestedByActorType, "system"),
+          eq(agentWakeupRequests.requestedByActorId, `native-status-wake-dispatch:${nextStageWakes[0]!.targetId}`))).limit(1);
+        nextReviewerRunId = intent?.runId ?? receipt?.runId ?? null;
+        return nextReviewerRunId !== null;
+      }, { timeout: 60_000, interval: 100 }).toBe(true);
+      await waitForTerminalRun(nextReviewerRunId!);
+      await heartbeat.drainActiveRunExecutions();
+      await closeManagedAgentHostForRun(nextReviewerRunId!);
+      const [nextRoundSettled] = await db.select().from(issues).where(and(eq(issues.companyId, companyId), eq(issues.id, issueId))).limit(1);
+      expect(nextRoundSettled).toMatchObject({ status: "in_review", assigneeAgentId: managedAgentIds.reviewer,
+        lastStatusDecisionId: resubmission.id, statusVersion: nextRoundIssue!.statusVersion });
+      // The old round's wake source is no longer current.
       expect(await captureNativeExecutionStageTaskWakeSource(db, stageCaptureInput(reviewerContext, reviewerWake))).toBeNull();
+      const nextDecisionId = resubmission.id;
       const staleIntentId = randomUUID();
       const existingEffectOrdinals = await db.select({ ordinal: statusDecisionEffects.ordinal }).from(statusDecisionEffects)
         .where(and(eq(statusDecisionEffects.companyId, companyId), eq(statusDecisionEffects.decisionId, executorDecision!.id)));
@@ -809,11 +838,10 @@ it("denies an authenticated Reviewer's missing-comment decision on the actual st
       const [generationBoundIssue] = await db.select().from(issues)
         .where(and(eq(issues.companyId, companyId), eq(issues.id, issueId))).limit(1);
       expect(generationBoundIssue).toMatchObject({ status: "in_review", assigneeAgentId: managedAgentIds.reviewer,
-        lastStatusDecisionId: nextDecisionId,
-        executionState: expect.objectContaining({ status: "pending", currentStageId: reviewStageId,
-          currentParticipant: { type: "agent", agentId: managedAgentIds.reviewer },
-          reviewRequest: { instructions: "Review the resubmitted work in the same stage." },
-          lastDecisionOutcome: "changes_requested" }) });
+        lastStatusDecisionId: nextDecisionId, statusVersion: nextRoundSettled!.statusVersion,
+        executionState: nextRoundSettled!.executionState });
+      expect(generationBoundIssue!.executionState).toMatchObject({ status: "pending", currentStageId: reviewStageId,
+        currentParticipant: { type: "agent", agentId: managedAgentIds.reviewer } });
       expect((await db.select({ id: heartbeatRuns.id }).from(heartbeatRuns)
         .where(and(eq(heartbeatRuns.companyId, companyId), eq(heartbeatRuns.nativeIssueId, issueId))))
         .map(run => run.id).sort()).toEqual(runIdsBeforeStaleDispatch);
@@ -825,7 +853,7 @@ it("denies an authenticated Reviewer's missing-comment decision on the actual st
   });
   expect(issueId).toBeTruthy();
   completed = true;
-}, 600_000);
+}, 900_000);
 
 it("executes the declared Reviewer comment and terminal result from one actual managed model response", async()=>{
   completed=false;
