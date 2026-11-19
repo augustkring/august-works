@@ -576,15 +576,20 @@ it("denies an authenticated Reviewer's missing-comment decision on the actual st
       expect(await captureNativeFinalizedContinuationSummary({ db, companyId, issueId,
         agentId: reviewerRun!.agentId, receiverRunId: reviewerRun!.id, sourceRunId: executorRun!.id,
         reader: reviewerReader })).toBeNull();
+      // The owner binds the receiver's current row (its context is re-read and
+      // must be unchanged), as the dispatch recheck reads it.
+      const [liveReviewerRun] = await db.select().from(heartbeatRuns).where(and(eq(heartbeatRuns.companyId, companyId),
+        eq(heartbeatRuns.id, reviewerRun!.id))).limit(1);
+      expect(liveReviewerRun).toMatchObject({ status: "running" });
       const stageContinuation = await captureNativeStageContinuationForDispatch(db,{companyId,issueId,
-        receiver:reviewerRun!,reader:reviewerReader});
+        receiver:liveReviewerRun!,reader:reviewerReader});
       expect(stageContinuation).toMatchObject({trigger:{runId:reviewerRun!.id,executorRunId:executorRun!.id,
         executorAgentId:executorRun!.agentId},summary:{stageEntryRead:{kind:"stage_entry",runId:executorRun!.id,
           agentId:executorRun!.agentId}}});
-      expect(await captureNativeStageContinuationForDispatch(db,{companyId,issueId,receiver:reviewerRun!,
+      expect(await captureNativeStageContinuationForDispatch(db,{companyId,issueId,receiver:liveReviewerRun!,
         reader:{...reviewerReader,onBehalfOfUserId:randomUUID()}})).toBeNull();
       expect(await captureNativeStageContinuationForDispatch(db,{companyId,issueId,
-        receiver:{...reviewerRun!,responsibleUserId:randomUUID()},reader:reviewerReader})).toBeNull();
+        receiver:{...liveReviewerRun!,responsibleUserId:randomUUID()},reader:reviewerReader})).toBeNull();
       expect(await captureNativeFinalizedContinuationSummary({db,companyId,issueId,agentId:reviewerRun!.agentId,
         receiverRunId:reviewerRun!.id,sourceRunId:executorRun!.id,reader:reviewerReader,
         stageEntryRead:stageContinuation!.summary!.stageEntryRead,stageTrigger:{...stageContinuation!.trigger,chainHash:"0".repeat(64)}})).toBeNull();
@@ -666,7 +671,7 @@ it("denies an authenticated Reviewer's missing-comment decision on the actual st
       const [unchanged] = await db.select().from(issues).where(and(eq(issues.companyId, companyId), eq(issues.id, issueId))).limit(1);
       expect(unchanged).toMatchObject({ status: "in_review", assigneeAgentId: managedAgentIds.reviewer,
         executionState: expect.objectContaining({ status: "pending", currentStageId: reviewStageId,
-          currentParticipant: { type: "agent", agentId: managedAgentIds.reviewer } }) });
+          currentParticipant: expect.objectContaining({ type: "agent", agentId: managedAgentIds.reviewer }) }) });
       expect(factsForRun(reviewerRun!.id)).toMatchObject({ providerCallCount: 0,
         issuerFacts: [expect.objectContaining({ scope: "review_model", runId: reviewerRun!.id })] });
       // No Reviewer spend before its first model request reaches the gateway.
