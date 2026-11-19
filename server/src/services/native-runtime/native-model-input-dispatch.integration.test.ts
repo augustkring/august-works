@@ -243,7 +243,7 @@ describe("native model input dispatch intent", () => {
   function documentArgs(seeded: Awaited<ReturnType<typeof seed>>, source: DocumentRevisionSourceCapture | null = null) {
     const { turnInput: _turnInput, ...binding } = dispatchArgs(seeded, { message: { role: "user", text: "unused" } });
     return { ...binding, capture: { turnId: null as string | null, callId: "actual-document-read", tool: "read_document" as const,
-      resultDigest: nativeSha256({ document: null }), source } };
+      resultDigest: nativeSha256({ document: null }), resultCanonicalDigest: nativeSha256({ document: null }), source } };
   }
 
   function acknowledgementArgs(
@@ -735,9 +735,14 @@ describe("native model input dispatch intent", () => {
     expect(source).toMatchObject({ payloadSourceSnapshot: { version: 1, owner: { kind: "document_revision", companyId } } });
     const args = documentArgs(seeded, source);
     args.capture.resultDigest = createHash("sha256").update(JSON.stringify({ document: selected })).digest("hex");
+    args.capture.resultCanonicalDigest = nativeSha256({ document: selected });
+    // MS1f phase 4: a capture without a well-formed canonical digest is refused.
+    await expect(recordNativeDocumentToolResultIntent({ ...args, capture: { ...args.capture, resultCanonicalDigest: "x" } }))
+      .rejects.toThrow("native_document_tool_capture_binding_invalid");
     await recordNativeDocumentToolResultIntent(args);
     const [run] = await db.select().from(heartbeatRuns).where(eq(heartbeatRuns.id, seeded.runId));
-    expect(run!.runnerProfileJson!.nativeToolResultSourceCaptures).toEqual([expect.objectContaining({ responsibleUserId: userId, source })]);
+    expect(run!.runnerProfileJson!.nativeToolResultSourceCaptures).toEqual([expect.objectContaining({ responsibleUserId: userId, source,
+      resultCanonicalDigest: nativeSha256({ document: selected }) })]);
     const substituted = structuredClone(args.capture);
     substituted.source!.payloadSourceSnapshot!.owner.companyId = randomUUID();
     await expect(recordNativeDocumentToolResultIntent({ ...args, capture: substituted })).rejects.toThrow("native_document_tool_capture_binding_invalid");

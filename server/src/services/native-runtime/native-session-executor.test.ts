@@ -8782,7 +8782,7 @@ describe("runnerd provider runtime wiring", () => {
     const result = { document: { body: "PRIVATE_DOCUMENT_RESULT" } };
     const digest = createHash("sha256").update(JSON.stringify(result)).digest("hex");
     state.toolAuthorityExecute.mockReset().mockImplementation(async (_binding, call, options) => {
-      await options.onDocumentRead({ turnId: options.nativeToolCallIdentity?.turnId ?? null, callId: call.callId, tool: "read_document", resultDigest: digest, source: null });
+      await options.onDocumentRead({ turnId: options.nativeToolCallIdentity?.turnId ?? null, callId: call.callId, tool: "read_document", resultDigest: digest, resultCanonicalDigest: nativeSha256(result), source: null });
       return result;
     });
     state.execute.mockReset().mockImplementationOnce(async options => {
@@ -8795,7 +8795,7 @@ describe("runnerd provider runtime wiring", () => {
       expect(write).toBeDefined();
       const profile = write!.values.runnerProfileJson as Record<string, unknown>;
       expect(profile.nativeToolResultSourceCaptures).toEqual([expect.objectContaining({ callId: "model-document-read",
-        tool: "read_document", resultDigest: digest, source: null, responsibleUserId: null })]);
+        tool: "read_document", resultDigest: digest, resultCanonicalDigest: nativeSha256(result), source: null, responsibleUserId: null })]);
       expect(profile.nativeToolCallDispatchAssociations).toEqual([{
         dispatchId: "11111111-1111-4111-8111-111111111111", eventSeq: 1, attempt: 1,
         turnId: "provider-turn-call", callId: "model-document-read", tool: "read_document",

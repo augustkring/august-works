@@ -9622,7 +9622,8 @@ async function recordManagedOpenCodeToolResult(input: Parameters<typeof renewNat
         const documentResultDigest = createHash("sha256").update(JSON.stringify(input.result)).digest("hex");
         const readCaptures = Array.isArray(profile.nativeToolResultSourceCaptures)
           ? profile.nativeToolResultSourceCaptures.map(record).filter(value => value.managedOpenCode !== true &&
-              value.callId === input.callId && value.tool === input.tool && value.resultDigest === documentResultDigest)
+              value.callId === input.callId && value.tool === input.tool && value.resultDigest === documentResultDigest &&
+              value.resultCanonicalDigest === digest)
           : [];
         const readSource = record(readCaptures[0]?.source);
         const sourceInput = nativePayloadSourceInputSchema.safeParse(readSource.input);
@@ -10179,7 +10180,8 @@ async function persistNativeToolResultSourceCapture(input: Parameters<typeof ren
           pathAndQuery: capture.pathAndQuery, apiResultDigest: capture.apiResultDigest } : {};
       const captures = [...previous, { eventSeq: launch.seq, attempt: input.attempt, turnId: capture.turnId,
         nativeInputDispatch, responsibleUserId: run.responsibleUserId ?? null, callId: capture.callId,
-        tool: capture.tool, ...projectBinding, resultDigest: capture.resultDigest, source: capture.source }];
+        tool: capture.tool, ...projectBinding, resultDigest: capture.resultDigest,
+        ...(capture.tool === "read_document" ? { resultCanonicalDigest: capture.resultCanonicalDigest } : {}), source: capture.source }];
       if (Buffer.byteLength(JSON.stringify(captures)) > 2 * 1024 * 1024) throw new Error(budgetError);
       const nextProfile: Record<string, unknown> = { ...profile, nativeToolResultSourceCaptures: captures };
       delete nextProfile.nativeDocumentToolResultSources;
@@ -10204,6 +10206,7 @@ export async function recordNativeDocumentToolResultIntent(input: Parameters<typ
     const capture = input.capture;
     if (!Number.isSafeInteger(input.eventSeq) || input.eventSeq < 0 || capture.tool !== "read_document" ||
       !/^[\x21-\x7e]{1,240}$/.test(capture.callId) || !/^[0-9a-f]{64}$/.test(capture.resultDigest) ||
+      !/^[0-9a-f]{64}$/.test(capture.resultCanonicalDigest) ||
       capture.turnId !== null && (typeof capture.turnId !== "string" || !/^[\x21-\x7e]{1,240}$/.test(capture.turnId)))
       throw new Error("native_document_tool_capture_binding_invalid");
     let source: DocumentRevisionSourceCapture | null = null;

@@ -111,6 +111,7 @@ import { lockAnalyticalCompany } from "../analytical-privacy.js";
 import { instanceSettingsService } from "../instance-settings.js";
 import { nativeSha256 } from "./canonical.js";
 import { createToolGatewayService } from "../tool-gateway.js";
+import { lockNativeStageReviewerCommentPlan } from "../orchestration/native-tool-boundary.js";
 import { captureNativeStageContinuationOwner, nativeStageDeliveredReasonMatches, nativeStageIntentBoundToDeliveredRun,
   nativeStageReviewerRunCapturable, nativeStageReviewerRunUnselected } from "../native-stage-wake-source.js";
 import { policyFixture } from "../../__tests__/helpers/sandbox-fixture.js";
@@ -1057,6 +1058,32 @@ describeDb("execution-policy stage Reviewer lane under a plan (MS1f decision 4)"
         .where(eq(heartbeatRuns.id, ids.reviewerRun));
       await expect(resolve(ids, [binding])).rejects.toMatchObject({ status: 409,
         reasonCode: "sandbox_broker_connection_unavailable" });
+    });
+  });
+  // MS1f phase 4. The mutation lock of the declared Stage Reviewer's stage
+  // comment under a plan: its reviewer lane stands in for a worker attempt.
+  describe("stage-comment mutation lock under a plan (MS1f phase 4)", () => {
+    const lock = (ids: Ids) => db.transaction(tx => lockNativeStageReviewerCommentPlan(tx as never, { companyId: ids.company,
+      issueId: ids.issue, agentId: ids.reviewer, runId: ids.reviewerRun } as never));
+    it("locks for the current stage Reviewer with no worker attempt", async () => {
+      const ids = await seed();
+      await expect(lock(ids)).resolves.toBeNull();
+    });
+    it("refuses once the stage is no longer pending with this Reviewer", async () => {
+      const ids = await seed();
+      await db.update(issues).set({ executionState: stageState(ids, { status: "changes_requested" }) }).where(eq(issues.id, ids.issue));
+      await expect(lock(ids)).rejects.toThrow("The Stage Reviewer comment is no longer current for this Reviewer Run");
+    });
+    it("refuses a completion-review wake and a Run that has its own plan attempt", async () => {
+      const ids = await seed();
+      const run = await reviewerRunRow(ids);
+      await db.update(heartbeatRuns).set({ contextSnapshot: { ...(run.contextSnapshot as object),
+        nativeReviewInteractionId: randomUUID(), nativeReviewDecisionId: randomUUID() } }).where(eq(heartbeatRuns.id, ids.reviewerRun));
+      await expect(lock(ids)).rejects.toThrow("The Stage Reviewer comment is no longer current for this Reviewer Run");
+      const other = await seed();
+      await db.insert(orchestrationWorkerAttempts).values({ companyId: other.company, planId: other.plan, workerId: other.worker,
+        agentId: other.reviewer, runId: other.reviewerRun, attempt: 2, status: "running", executionManifestId: other.manifest });
+      await expect(lock(other)).rejects.toThrow("The Stage Reviewer comment is no longer current for this Reviewer Run");
     });
   });
 });
