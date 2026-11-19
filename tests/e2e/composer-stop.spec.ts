@@ -78,8 +78,22 @@ for (const adapterType of ["process", "paperclip_runner"] as const) {
       expect((await json(await request.get(`/api/issues/${parent.id}`))).status).not.toBe("cancelled");
       await menu(page, "Cancel subtree...");
       dialog = page.getByRole("dialog");
+      // The click resolves before the server applies the cancel. The route
+      // updates statuses before it answers, so read them after its answer;
+      // a status poll started at the click can expire on a slow runner while
+      // the cancel transaction is still open.
+      const cancelPath = new Set([`/api/issues/${parent.identifier}/tree-holds`, `/api/issues/${parent.id}/tree-holds`]);
+      const cancelResponse = page.waitForResponse(response => response.request().method() === "POST" &&
+        cancelPath.has(new URL(response.url()).pathname));
       await dialog.getByRole("button", { name: "Cancel 2 tasks", exact: true }).click();
-      for (const issue of [parent, child]) await expect.poll(async () => (await json(await request.get(`/api/issues/${issue.id}`))).status).toBe("cancelled");
+      const cancelled = await cancelResponse;
+      expect(cancelled.status(), await cancelled.text()).toBe(201);
+      const cancelHold: { hold: { mode: string; members: Array<{ issueId: string; skipped: boolean }> } } = await cancelled.json();
+      expect(cancelHold.hold.mode).toBe("cancel");
+      for (const issue of [parent, child]) {
+        expect(cancelHold.hold.members.find(member => member.issueId === issue.id)?.skipped).toBe(false);
+        expect((await json(await request.get(`/api/issues/${issue.id}`))).status).toBe("cancelled");
+      }
       expect((await json(await request.get(`/api/issues/${completed.id}`))).status).toBe("done");
       expect((await json(await request.get(`/api/issues/${other.id}`))).status).toBe("blocked");
       await expect(page.getByRole("button", { name: "Dismiss notification" })).toHaveCount(0);

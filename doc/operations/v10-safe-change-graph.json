@@ -35465,7 +35465,7 @@
         },
         {
           "path": "tests/e2e/composer-stop.spec.ts",
-          "sha256": "cec92575344831cc9c536ae3e992adc25bf61ef6ed854233554c5282b11283be"
+          "sha256": "56b7296df0e1fe5da817053c8eb7d3858593053900ee15c313e237069ac27c37"
         },
         {
           "path": "tests/e2e/conference-room-typing-intro.spec.ts",
@@ -74640,7 +74640,7 @@
       "id": "source:tests/e2e/composer-stop.spec.ts",
       "kind": "current_source_owner",
       "path": "tests/e2e/composer-stop.spec.ts",
-      "sha256": "cec92575344831cc9c536ae3e992adc25bf61ef6ed854233554c5282b11283be",
+      "sha256": "56b7296df0e1fe5da817053c8eb7d3858593053900ee15c313e237069ac27c37",
       "changeIds": [
         "SCR-V10-CUSTOMER-EXPERIENCE"
       ],
