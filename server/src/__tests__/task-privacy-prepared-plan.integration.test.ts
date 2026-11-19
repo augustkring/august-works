@@ -59,6 +59,21 @@ for (const prepare of [true, false]) {
       await expectRunParity(tx);
       expect((await canActorReadIssuePrivacyBatch(tx, alice, companyId, [task!.id])).get(task!.id)).toBe(true);
       expect((await canActorReadIssuePrivacyBatch(tx, bob, companyId, [task!.id])).get(task!.id)).toBe(false);
+      // F10c: single and batched Task reader probes of any size share one
+      // statement, so the large predicate is planned once per connection. The
+      // decisions stay per Task and per reader.
+      for (const actor of [alice, bob]) {
+        const pair = await canActorReadIssuePrivacyBatch(tx, actor, companyId, [task!.id, otherTask!.id, missingId]);
+        for (const row of [task!, otherTask!, { id: missingId, companyId }])
+          expect(pair.get(row.id)).toBe(await canActorReadIssuePrivacy(tx, actor, row));
+      }
+      expect([...(await canActorReadIssuePrivacyBatch(tx, alice, companyId, [task!.id, otherTask!.id])).values()]).toEqual([true, false]);
+      expect([...(await canActorReadIssuePrivacyBatch(tx, bob, companyId, [task!.id, otherTask!.id])).values()]).toEqual([false, true]);
+      const issueReaderPlans = await tx.execute<{ count: number }>(sql`
+        select count(*)::int as count from pg_prepared_statements
+        where length(statement)>50000 and statement like 'select "id" from "issues" %'
+      `);
+      expect(issueReaderPlans[0]?.count).toBe(prepare ? 1 : 0);
       await expect(tx.transaction(async nested => {
         await nested.update(companyMemberships).set({ status: "suspended" }).where(and(
           eq(companyMemberships.companyId, companyId), eq(companyMemberships.principalType, "user"),
