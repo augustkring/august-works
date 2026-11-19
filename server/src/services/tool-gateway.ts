@@ -1,7 +1,7 @@
 import { readSandboxBrokerAuthorityEnforcement } from "./runtime/control.js";
 import { SANDBOX_QUALIFICATION_BINDING_STATES } from "./execution-sandbox/backend.js";
 import { ToolModelEffectAdmissionError } from "./native-runtime/paid-transport-admission.js";
-import { currentNativeReviewerRun } from "./native-runtime/native-review-participant.js";
+import { currentNativeReviewerRun, readNativeStageReviewContext } from "./native-runtime/native-review-participant.js";
 import { currentResourcePolicy } from "./resource-governance.js";
 import { assertPackageExecution } from "./agent-packages/execution-gate.js";
 import { assertExecutionGovernance } from "./ai-governance/execution-gate.js";
@@ -10314,7 +10314,7 @@ export function createToolGatewayService(
     const [run] = await db.select({
       companyId: heartbeatRuns.companyId, agentId: heartbeatRuns.agentId,
       responsibleUserId: heartbeatRuns.responsibleUserId, status: heartbeatRuns.status,
-      issueId: heartbeatRuns.nativeIssueId,
+      issueId: heartbeatRuns.nativeIssueId, contextSnapshot: heartbeatRuns.contextSnapshot,
     }).from(heartbeatRuns).where(and(eq(heartbeatRuns.companyId, input.companyId), eq(heartbeatRuns.id, input.runId))).limit(1);
     if (!run || run.status !== "running" || run.agentId !== input.agentId || run.responsibleUserId !== input.responsibleUserId || !run.issueId) {
       throw new ToolGatewayHttpError(409, "Current responsible run is required for credential brokering", "sandbox_broker_run_changed");
@@ -10325,7 +10325,12 @@ export function createToolGatewayService(
     // MS1h2. The Task assignee, or the current Native completion Reviewer of
     // this exact Run. The Reviewer passes this owner check only to share the
     // sandbox lifecycle; it is issued no connection grant or credential.
-    const nativeReviewer = !!task && task.assigneeAgentId !== input.agentId && await currentNativeReviewerRun(db, {
+    // MS1f phase 4. An execution-policy stage Reviewer under a plan is the Task
+    // assignee and a kind of the same reviewer lane (decision 4), so it is
+    // issued no credential either. Only a stage Reviewer wake context checks
+    // the lane as assignee; every other assignee path is unchanged.
+    const nativeReviewer = !!task && (task.assigneeAgentId !== input.agentId ||
+      readNativeStageReviewContext(run.contextSnapshot) !== null) && await currentNativeReviewerRun(db, {
       companyId: input.companyId, agentId: input.agentId, runId: input.runId, issueId: run.issueId,
     });
     if (!task || (task.assigneeAgentId !== input.agentId && !nativeReviewer))

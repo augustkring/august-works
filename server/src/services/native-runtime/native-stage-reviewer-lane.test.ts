@@ -110,6 +110,7 @@ import { nativeStageReviewerOutcome } from "./native-run-finalizer.js";
 import { lockAnalyticalCompany } from "../analytical-privacy.js";
 import { instanceSettingsService } from "../instance-settings.js";
 import { nativeSha256 } from "./canonical.js";
+import { createToolGatewayService } from "../tool-gateway.js";
 import { captureNativeStageContinuationOwner, nativeStageDeliveredReasonMatches, nativeStageIntentBoundToDeliveredRun,
   nativeStageReviewerRunCapturable, nativeStageReviewerRunUnselected } from "../native-stage-wake-source.js";
 import { policyFixture } from "../../__tests__/helpers/sandbox-fixture.js";
@@ -1020,6 +1021,42 @@ describeDb("execution-policy stage Reviewer lane under a plan (MS1f decision 4)"
         { ...unselected, runtimeMode: "native" },
         { ...unselected, runtimeMode: "native", nativeIssueId: randomUUID() },
       ]) expect(nativeStageReviewerRunCapturable(run, issueId)).toBe(false);
+    });
+  });
+  // MS1f phase 4. A planned stage Reviewer is the Task assignee and a kind of
+  // the reviewer lane: like the completion Reviewer (MS1h2), it shares the
+  // sandbox lifecycle but is issued no credential binding.
+  describe("credential broker owner for the stage Reviewer (MS1f phase 4)", () => {
+    const binding = { connectionId: randomUUID(), grantVersionHash: "0".repeat(64), hostname: "provider.example.test", port: 443,
+      methods: ["POST"] as ["POST"], pathPrefixes: ["/mcp"], binary: "/usr/bin/curl", ttlSeconds: 120 };
+    const resolve = (ids: Ids, bindings: typeof binding[] = []) =>
+      createToolGatewayService(db as never).resolveSandboxCredentialBrokerPolicyBindings({ companyId: ids.company,
+        agentId: ids.reviewer, runId: ids.reviewerRun, responsibleUserId: ids.user, presenceId: randomUUID(), bindings });
+
+    it("admits the stage Reviewer with zero credential bindings and refuses any binding", async () => {
+      const ids = await seed();
+      await expect(resolve(ids)).resolves.toEqual({ authorizedConnectionGrantHashes: {}, bindings: [] });
+      await expect(resolve(ids, [binding])).rejects.toMatchObject({ status: 403,
+        reasonCode: "sandbox_broker_reviewer_credentials_denied" });
+    });
+
+    it("keeps the assignee path once the Run is no longer the current stage Reviewer", async () => {
+      const ids = await seed();
+      // No plan attempt for the source Run: not a planned stage Reviewer, so the
+      // ordinary assignee path applies (a missing connection still refuses).
+      await db.delete(orchestrationWorkerAttempts).where(eq(orchestrationWorkerAttempts.id, ids.attempt));
+      await expect(resolve(ids)).resolves.toEqual({ authorizedConnectionGrantHashes: {}, bindings: [] });
+      await expect(resolve(ids, [binding])).rejects.toMatchObject({ status: 409,
+        reasonCode: "sandbox_broker_connection_unavailable" });
+    });
+
+    it("keeps the assignee path for a Run whose wake is not a stage Reviewer wake", async () => {
+      const ids = await seed();
+      const run = await reviewerRunRow(ids);
+      await db.update(heartbeatRuns).set({ contextSnapshot: { ...(run.contextSnapshot as object), source: "issue.assignment" } })
+        .where(eq(heartbeatRuns.id, ids.reviewerRun));
+      await expect(resolve(ids, [binding])).rejects.toMatchObject({ status: 409,
+        reasonCode: "sandbox_broker_connection_unavailable" });
     });
   });
 });

@@ -734,12 +734,20 @@ export function openShellHostEngine({
   // shared `reviewModelBindingSchema`. The reviewer is this Run and its
   // agent, the manifest is this request's, and the reviewed source Run is
   // a different (committed) Run. Used by plain commands and model sessions.
+  // A completion binding names its review interaction and has no kind; an
+  // execution-policy stage binding (MS1f decision 4) has `kind:
+  // "execution_stage"` and names its stage instead (the shared
+  // `reviewModelBindingSchema`). Every other shape is refused.
+  const REVIEW_MODEL_SOURCE_KEYS = ["decisionId", "executionManifestId", "expectedPlanVersion", "issueId", "planId",
+    "reviewerAgentId", "reviewerRunId", "sourceAgentId", "sourceAttemptId", "sourceReceiptDigest",
+    "sourceResultCanonicalSha256", "sourceResultId", "sourceRunId", "sourceWorkerId"];
   function exactReviewModelClaims(decoded, request) {
     const b = decoded.review_model;
-    return closedModelClaims(decoded, "review_model") && closedRecord(b, ["decisionId", "executionManifestId",
-      "expectedPlanVersion", "interactionId", "issueId", "planId", "reviewerAgentId", "reviewerRunId", "sourceAgentId",
-      "sourceAttemptId", "sourceReceiptDigest", "sourceResultCanonicalSha256", "sourceResultId", "sourceRunId", "sourceWorkerId"]) &&
-      [b.planId, b.issueId, b.interactionId, b.decisionId, b.sourceRunId, b.sourceWorkerId, b.sourceAgentId, b.sourceAttemptId,
+    const completion = closedRecord(b, [...REVIEW_MODEL_SOURCE_KEYS, "interactionId"]) && isUuid(b.interactionId);
+    const stage = closedRecord(b, [...REVIEW_MODEL_SOURCE_KEYS, "kind", "stageId"]) && b.kind === "execution_stage" &&
+      isUuid(b.stageId);
+    return closedModelClaims(decoded, "review_model") && (completion || stage) &&
+      [b.planId, b.issueId, b.decisionId, b.sourceRunId, b.sourceWorkerId, b.sourceAgentId, b.sourceAttemptId,
         b.sourceResultId, b.reviewerAgentId, b.reviewerRunId, b.executionManifestId].every(isUuid) &&
       isHex64(b.sourceReceiptDigest) && typeof b.sourceResultCanonicalSha256 === "string" &&
       /^(?:sha256:)?[a-f0-9]{64}$/.test(b.sourceResultCanonicalSha256) &&
