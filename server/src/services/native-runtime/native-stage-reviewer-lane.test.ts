@@ -110,6 +110,8 @@ import { nativeStageReviewerOutcome } from "./native-run-finalizer.js";
 import { lockAnalyticalCompany } from "../analytical-privacy.js";
 import { instanceSettingsService } from "../instance-settings.js";
 import { nativeSha256 } from "./canonical.js";
+import { captureNativeStageContinuationOwner, nativeStageDeliveredReasonMatches, nativeStageIntentBoundToDeliveredRun,
+  nativeStageReviewerRunCapturable, nativeStageReviewerRunUnselected } from "../native-stage-wake-source.js";
 import { policyFixture } from "../../__tests__/helpers/sandbox-fixture.js";
 
 const support = await getEmbeddedPostgresTestSupport();
@@ -841,6 +843,183 @@ describeDb("execution-policy stage Reviewer lane under a plan (MS1f decision 4)"
       const ids = await seed({ preNative: true, selfReview: true });
       await expect(admit(ids)).rejects.toThrow("The execution-stage review is no longer current for this Reviewer Run");
       expect(await attempts(ids)).toEqual([]);
+    });
+  });
+  // MS1f phase 4. Bootstrap selects the stage continuation owner while it builds
+  // the Reviewer's first dispatch envelope: before `paperclipWake` is rendered
+  // into the Run context and before Native selection. The context's own stage
+  // and wake reason stand in only in that window; the stage Reviewer's
+  // dispatch receipt may be the promoted row of a deferred stage wake.
+  describe("stage continuation owner at bootstrap (MS1f phase 4)", () => {
+    const reader = (ids: Ids) => ({ type: "agent" as const, source: "agent_jwt" as const, companyId: ids.company,
+      agentId: ids.reviewer, runId: ids.reviewerRun, onBehalfOfUserId: ids.user });
+    const owner = async (ids: Ids, extra: Partial<Parameters<typeof captureNativeStageContinuationOwner>[1]> = {}) =>
+      (await captureNativeStageContinuationOwner(db as never, { companyId: ids.company, issueId: ids.issue,
+        receiver: await reviewerRunRow(ids), reader: reader(ids), ...extra }))?.trigger ?? null;
+    const setContext = async (ids: Ids, change: (context: Record<string, unknown>) => Record<string, unknown>) => {
+      const run = await reviewerRunRow(ids);
+      await db.update(heartbeatRuns).set({ contextSnapshot: change({ ...(run.contextSnapshot as Record<string, unknown>) }) })
+        .where(eq(heartbeatRuns.id, ids.reviewerRun));
+    };
+    const unrendered = ({ paperclipWake: _wake, ...context }: Record<string, unknown>) => context;
+    /** The pre-render, pre-selection Reviewer Run that bootstrap reads. */
+    const bootstrapSeed = async () => {
+      const ids = await seed({ preNative: true });
+      await setContext(ids, unrendered);
+      return ids;
+    };
+    /** The same Run after bootstrap rendered its wake and selected Native. */
+    const renderAndSelect = async (ids: Ids) => {
+      await setContext(ids, context => ({ ...context, paperclipWake: { reason: context.wakeReason,
+        executionStage: context.executionStage } }));
+      await db.update(heartbeatRuns).set({ runtimeMode: "native", nativeIssueId: ids.issue, runtimeModeResolvedAt: new Date() })
+        .where(eq(heartbeatRuns.id, ids.reviewerRun));
+    };
+    /** The dispatcher's deferred receipt, later promoted: the intent stays
+     * coalesced with no Run, and promotion rewrote the receipt's reason. */
+    const promoteReceipt = async (ids: Ids, receiptKey: string | null = `issue.execution_stage:${ids.issue}:${ids.decision}`) => {
+      await db.update(agentWakeupRequests).set({ status: "coalesced", runId: null }).where(eq(agentWakeupRequests.id, ids.intent));
+      await db.update(agentWakeupRequests).set({ reason: "issue_execution_promoted", idempotencyKey: receiptKey })
+        .where(eq(agentWakeupRequests.id, ids.delivered));
+    };
+
+    it("selects the owner from the unrendered context before Native selection, and the rendered selected Run agrees", async () => {
+      const ids = await bootstrapSeed();
+      const atBootstrap = await owner(ids);
+      expect(atBootstrap).toMatchObject({ runId: ids.reviewerRun, agentId: ids.reviewer, intentId: ids.intent,
+        decisionId: ids.decision, executorRunId: ids.sourceRun, executorAgentId: ids.executor,
+        reason: "execution_review_requested", stageHash: nativeSha256(ids.executionStage) });
+      await renderAndSelect(ids);
+      await expect(owner(ids)).resolves.toEqual(atBootstrap);
+    });
+
+    const unrenderedRefusals: Array<[string, (ids: Ids) => Promise<unknown>]> = [
+      ["a Run already selected for Native", ids => db.update(heartbeatRuns).set({ runtimeMode: "native", nativeIssueId: ids.issue,
+        runtimeModeResolvedAt: new Date() }).where(eq(heartbeatRuns.id, ids.reviewerRun))],
+      ["a Run resolved to the legacy runtime", ids => db.update(heartbeatRuns).set({ runtimeModeResolvedAt: new Date() })
+        .where(eq(heartbeatRuns.id, ids.reviewerRun))],
+      ["a legacy Run that names a Native Task", ids => db.update(heartbeatRuns).set({ nativeIssueId: ids.issue })
+        .where(eq(heartbeatRuns.id, ids.reviewerRun))],
+      ["a context stage that is not the intent's stage", ids => setContext(ids, context => ({ ...context,
+        executionStage: { ...ids.executionStage, allowedActions: ["approve"] } }))],
+      ["a context stage of another stage", ids => setContext(ids, context => ({ ...context,
+        executionStage: { ...ids.executionStage, stageId: randomUUID() } }))],
+      ["no context stage", ids => setContext(ids, ({ executionStage: _stage, ...context }) => context)],
+      ["a context wake reason of an approval", ids => setContext(ids, context => ({ ...context,
+        wakeReason: "execution_approval_requested" }))],
+      ["no context wake reason", ids => setContext(ids, ({ wakeReason: _reason, ...context }) => context)],
+      // A rendered key never falls back to the context, even before selection.
+      ["a rendered wake with no stage", ids => setContext(ids, context => ({ ...context,
+        paperclipWake: { reason: "execution_review_requested", executionStage: null } }))],
+      ["a rendered wake with another reason", ids => setContext(ids, context => ({ ...context,
+        paperclipWake: { reason: "issue_assigned", executionStage: ids.executionStage } }))],
+      ["a null rendered wake", ids => setContext(ids, context => ({ ...context, paperclipWake: null }))],
+    ];
+    for (const [name, change] of unrenderedRefusals) {
+      it(`refuses ${name}`, async () => {
+        const ids = await bootstrapSeed();
+        await expect(owner(ids)).resolves.not.toBeNull();
+        await change(ids);
+        await expect(owner(ids)).resolves.toBeNull();
+      });
+    }
+
+    it("refuses an unrendered context for a historical selection", async () => {
+      const ids = await bootstrapSeed();
+      await db.update(heartbeatRuns).set({ status: "succeeded", finishedAt: new Date() }).where(eq(heartbeatRuns.id, ids.reviewerRun));
+      await expect(owner(ids, { historicalConsumption: { runId: ids.reviewerRun } as never })).resolves.toBeNull();
+    });
+
+    it("binds a promoted dispatch receipt of a deferred stage wake to its intent", async () => {
+      const ids = await bootstrapSeed();
+      const before = await owner(ids);
+      await promoteReceipt(ids);
+      const promoted = await owner(ids);
+      expect(promoted).toMatchObject({ intentId: ids.intent, reason: "execution_review_requested",
+        stageHash: before!.stageHash, decisionId: ids.decision });
+      await renderAndSelect(ids);
+      await expect(owner(ids)).resolves.toEqual(promoted);
+    });
+
+    const promotedRefusals: Array<[string, (ids: Ids) => Promise<unknown>]> = [
+      ["a promoted receipt keyed to another stage decision", ids => promoteReceipt(ids, `issue.execution_stage:${ids.issue}:${randomUUID()}`)],
+      ["a promoted receipt with no key", ids => promoteReceipt(ids, null)],
+      ["an unpromoted receipt with a coalesced intent and no Run", ids => db.update(agentWakeupRequests)
+        .set({ status: "coalesced", runId: null }).where(eq(agentWakeupRequests.id, ids.intent))],
+      ["a receipt with another reason", ids => db.update(agentWakeupRequests).set({ reason: "issue_assigned" })
+        .where(eq(agentWakeupRequests.id, ids.delivered))],
+      ["a promoted receipt whose intent coalesced into another Run", async ids => {
+        await promoteReceipt(ids);
+        await db.update(agentWakeupRequests).set({ runId: ids.sourceRun }).where(eq(agentWakeupRequests.id, ids.intent));
+      }],
+      ["a promoted receipt whose intent is still queued", async ids => {
+        await promoteReceipt(ids);
+        await db.update(agentWakeupRequests).set({ status: "queued" }).where(eq(agentWakeupRequests.id, ids.intent));
+      }],
+      ["a promoted receipt whose intent changed reason", async ids => {
+        await promoteReceipt(ids);
+        await db.update(agentWakeupRequests).set({ reason: "issue_execution_promoted" }).where(eq(agentWakeupRequests.id, ids.intent));
+      }],
+    ];
+    for (const [name, change] of promotedRefusals) {
+      it(`refuses ${name}`, async () => {
+        const ids = await bootstrapSeed();
+        await expect(owner(ids)).resolves.not.toBeNull();
+        await change(ids);
+        await expect(owner(ids)).resolves.toBeNull();
+      });
+    }
+
+    it("matches a receipt reason and intent binding only for the intent's own reason or its exact promotion", () => {
+      const key = "issue.execution_stage:issue:decision";
+      const reason = "execution_review_requested";
+      expect(nativeStageDeliveredReasonMatches({ delivered: { reason, idempotencyKey: null }, intent: { idempotencyKey: key }, reason }))
+        .toBe(true);
+      expect(nativeStageDeliveredReasonMatches({ delivered: { reason: "issue_execution_promoted", idempotencyKey: key },
+        intent: { idempotencyKey: key }, reason })).toBe(true);
+      for (const delivered of [{ reason: "issue_execution_promoted", idempotencyKey: "other" },
+        { reason: "issue_execution_promoted", idempotencyKey: null }, { reason: "issue_assigned", idempotencyKey: key },
+        { reason: null, idempotencyKey: key }]) {
+        expect(nativeStageDeliveredReasonMatches({ delivered, intent: { idempotencyKey: key }, reason })).toBe(false);
+      }
+      expect(nativeStageDeliveredReasonMatches({ delivered: { reason: "issue_execution_promoted", idempotencyKey: "" },
+        intent: { idempotencyKey: "" }, reason })).toBe(false);
+      expect(nativeStageDeliveredReasonMatches({ delivered: { reason: "issue_execution_promoted", idempotencyKey: null },
+        intent: { idempotencyKey: null }, reason })).toBe(false);
+
+      const promoted = { reason: "issue_execution_promoted", idempotencyKey: key, runId: "run" };
+      const bound = (intent: { status: string; runId: string | null; idempotencyKey: string | null },
+        delivered: { reason: string | null; idempotencyKey: string | null; runId: string | null } = promoted) =>
+        nativeStageIntentBoundToDeliveredRun({ intent, delivered, runId: "run" });
+      expect(bound({ status: "coalesced", runId: "run", idempotencyKey: key }, { ...promoted, reason })).toBe(true);
+      expect(bound({ status: "claimed", runId: null, idempotencyKey: key }, { ...promoted, reason })).toBe(true);
+      expect(bound({ status: "coalesced", runId: null, idempotencyKey: key })).toBe(true);
+      expect(bound({ status: "coalesced", runId: null, idempotencyKey: key }, { ...promoted, reason })).toBe(false);
+      expect(bound({ status: "coalesced", runId: null, idempotencyKey: key }, { ...promoted, runId: "other" })).toBe(false);
+      expect(bound({ status: "coalesced", runId: null, idempotencyKey: key }, { ...promoted, idempotencyKey: "other" })).toBe(false);
+      expect(bound({ status: "coalesced", runId: null, idempotencyKey: null }, { ...promoted, idempotencyKey: null })).toBe(false);
+      expect(bound({ status: "coalesced", runId: "other", idempotencyKey: key })).toBe(false);
+      expect(bound({ status: "queued", runId: null, idempotencyKey: key })).toBe(false);
+      expect(bound({ status: "claimed", runId: "run", idempotencyKey: key })).toBe(false);
+    });
+
+    it("captures a stage Task wake only for the Native Run on this Task or its unselected running Run", () => {
+      const issueId = randomUUID();
+      const unselected = { status: "running", runtimeMode: "legacy", nativeIssueId: null, runtimeModeResolvedAt: null, issueId };
+      expect(nativeStageReviewerRunUnselected(unselected)).toBe(true);
+      expect(nativeStageReviewerRunCapturable(unselected, issueId)).toBe(true);
+      expect(nativeStageReviewerRunCapturable({ ...unselected, runtimeMode: "native", nativeIssueId: issueId,
+        runtimeModeResolvedAt: new Date(), status: "succeeded" }, issueId)).toBe(true);
+      for (const run of [
+        { ...unselected, issueId: randomUUID() },
+        { ...unselected, issueId: null },
+        { ...unselected, status: "queued" },
+        { ...unselected, status: "succeeded" },
+        { ...unselected, runtimeModeResolvedAt: new Date() },
+        { ...unselected, nativeIssueId: randomUUID() },
+        { ...unselected, runtimeMode: "native" },
+        { ...unselected, runtimeMode: "native", nativeIssueId: randomUUID() },
+      ]) expect(nativeStageReviewerRunCapturable(run, issueId)).toBe(false);
     });
   });
 });

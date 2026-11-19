@@ -169,6 +169,28 @@ describe("native bootstrap rendered-source closure", () => {
     for (const proof of [{...stageTrigger,runId:randomUUID()},{...stageTrigger,decisionId:"not-a-decision"},
       {...stageTrigger,stageHash:"not-a-hash"},{...stageTrigger,reason:"execution_approval_requested" as const}])
       expect(check(capture,proof)).toBeNull();
+    // MS1f phase 4: a stage dispatch receipt deferred behind the executor's
+    // execution lock is admitted with the promoted reason. Only the stage
+    // capture's verified receipt reason admits it, and only with a stage trigger.
+    const receipt = (value: NativeTaskContinuationCapture, stageReceiptReason: string | null | undefined,
+      proof: typeof stageTrigger | null = stageTrigger) => exactNativeTaskContinuation({
+      companyId,issueId,runId,agentId,responsibleUserId:humanId,wakeupRequestId:wakeId,wakeReason:reason,
+      value:value.envelope,capture:value,...(proof ? {stageTrigger:proof}: {}),
+      ...(stageReceiptReason !== undefined ? { stageReceiptReason } : {}) });
+    const promoted=structuredClone(capture);promoted.wake.reason="issue_execution_promoted";
+    expect(receipt(capture,reason)).toBe(capture);
+    expect(receipt(promoted,"issue_execution_promoted")).toBe(promoted);
+    expect(receipt(promoted,undefined)).toBeNull();
+    expect(receipt(promoted,reason)).toBeNull();
+    expect(receipt(capture,"issue_execution_promoted")).toBeNull();
+    expect(receipt(promoted,"issue_execution_promoted",null)).toBeNull();
+    expect(receipt(capture,reason,null)).toBeNull();
+    const otherReason=structuredClone(capture);otherReason.wake.reason="issue_assigned";
+    expect(receipt(otherReason,"issue_assigned")).toBeNull();
+    expect(receipt(capture,null)).toBeNull();
+    // A receipt reason never applies to a wake without a stage trigger.
+    expect(exactNativeTaskContinuation({ companyId, issueId, runId, agentId, responsibleUserId: humanId, wakeupRequestId: wakeId,
+      wakeReason: "issue_commented", value: explicit.envelope, capture: explicit, stageReceiptReason: "issue_commented" })).toBeNull();
     const producerRunId=randomUUID(),producerAgentId=randomUUID(),producerResultId=randomUUID(),producerDecisionId=randomUUID();
     const producerTaskInput={kind:"task" as const,issueId,sourceVersion:"1",contentHash:hash};
     const producerStageRead:import("../native-stage-task-body-source.js").NativeFinalizedStageTaskBodyRead={

@@ -25,6 +25,25 @@ export function nativeStageContinuationReaderMatches(input:{reader:Authorization
     reader.runId===receiver.id && reader.onBehalfOfUserId===receiver.responsibleUserId;
 }
 
+/** MS1f phase 4. A running Run that bootstrap has not yet selected for a
+ * runtime: still the legacy row its wake created, with no Native Task and no
+ * runtime resolution. Bootstrap captures a stage Reviewer's wake and
+ * continuation in this window, before Native selection. */
+export function nativeStageReviewerRunUnselected(run:{status:string;runtimeMode:string;nativeIssueId:string|null;
+  runtimeModeResolvedAt:Date|null}):boolean{
+  return run.status==="running" && run.runtimeMode==="legacy" && run.nativeIssueId===null && run.runtimeModeResolvedAt===null;
+}
+
+/** The Run a stage Reviewer's Task wake is captured for. Bootstrap captures
+ * the wake before Native selection, so the Run is either already Native on this
+ * Task (the dispatch recheck) or still the unselected running Run its wake
+ * created on this Task (MS1f phase 4). */
+export function nativeStageReviewerRunCapturable(run:{status:string;runtimeMode:string;nativeIssueId:string|null;
+  runtimeModeResolvedAt:Date|null;issueId:string|null},issueId:string):boolean{
+  return (run.runtimeMode==="native" && run.nativeIssueId===issueId) ||
+    (nativeStageReviewerRunUnselected(run) && run.issueId===issueId);
+}
+
 /** Select only the finalized Executor summary that belongs to this live Stage
  * wake. This runs while building the first dispatch envelope, before rendering;
  * it deliberately needs no Reviewer Native input receipt. */
@@ -41,7 +60,19 @@ export async function captureNativeStageContinuationOwner(db: Db | Transaction,i
   if(!currentReceiver || !isDeepStrictEqual(currentReceiver.contextSnapshot,input.receiver.contextSnapshot)) return null;
   if(history && (!currentReceiver.finishedAt || !["succeeded","failed","timed_out","cancelled"].includes(currentReceiver.status))) return null;
   const receiver=currentReceiver,context=record(receiver.contextSnapshot),intentId=nonEmpty(context?.nativeStatusWakeIntentId);
-  const stage=record(record(context?.paperclipWake)?.executionStage);
+  // MS1f phase 4. Bootstrap selects this owner while building the first
+  // dispatch envelope, before it renders `paperclipWake` from this same context
+  // (`buildPaperclipWakePayload` copies `executionStage` and `wakeReason`).
+  // Only in that window, a live Run not yet selected for any runtime, do the
+  // context's own stage and wake reason stand in for the unrendered wake. A
+  // selected Run and every historical selection still need the rendered wake.
+  // Both sources are still checked below against the outbox intent, effect,
+  // delivered receipt and the stage rebuilt from the current Task.
+  const wakeRendered=context!==null && Object.hasOwn(context,"paperclipWake");
+  if(!wakeRendered && (history || !nativeStageReviewerRunUnselected(receiver))) return null;
+  const renderedWake=wakeRendered ? record(context?.paperclipWake) : null;
+  const stage=record(wakeRendered ? renderedWake?.executionStage : context?.executionStage);
+  const wakeReason=wakeRendered ? renderedWake?.reason : context?.wakeReason;
   if(!receiver.responsibleUserId || !receiver.wakeupRequestId || receiver.agentId===null ||
     receiver.companyId!==input.companyId || context?.source!=="issue.execution_stage" ||
     context.statusDecisionSource!=="native_status_decision" || context.issueId!==input.issueId || context.taskId!==input.issueId ||
@@ -81,7 +112,7 @@ export async function captureNativeStageContinuationOwner(db: Db | Transaction,i
     deliveredPayload=record(delivered.payload);
   const canonical=buildExecutionStageWakeup({issueId:input.issueId,previousState:null,nextState:state,interruptedRunId:null,
     requestedByActorType:"agent",requestedByActorId:executor.agentId});
-  const intentBound=(intent.status==="coalesced" && intent.runId===receiver.id) || (intent.status==="claimed" && intent.runId===null);
+  const intentBound=nativeStageIntentBoundToDeliveredRun({intent,delivered,runId:receiver.id});
   if(!intentBound || !["claimed","completed"].includes(delivered.status) || intent.source!=="assignment" ||
     intent.requestedByActorType!=="agent" || intent.requestedByActorId!==executor.agentId ||
     intent.idempotencyKey!==`issue.execution_stage:${input.issueId}:${decision.id}` || intent.reason!==reason ||
@@ -89,10 +120,11 @@ export async function captureNativeStageContinuationOwner(db: Db | Transaction,i
     effect.effectKind!=="execution_stage_wake" || effect.targetType!=="agent_wakeup_request" || effect.targetId!==intent.id ||
     effectPayload?.agentId!==receiver.agentId || effectPayload.reason!==reason || effectPayload.source!=="assignment" ||
     effectPayload.requestedByActorType!=="agent" || effectPayload.requestedByActorId!==executor.agentId ||
-    decision.applicationState!=="applied" || decision.runId!==executor.id || delivered.reason!==reason ||
+    decision.applicationState!=="applied" || decision.runId!==executor.id ||
+    !nativeStageDeliveredReasonMatches({delivered,intent,reason}) ||
     delivered.requestedByActorType!=="system" || delivered.requestedByActorId!==`native-status-wake-dispatch:${intent.id}` ||
     delivered.source!=="assignment" || deliveredPayload?.mutation!=="update" ||
-    record(context.paperclipWake)?.reason!==reason || record(context.executionStage)===null || !sameStage(context.executionStage,stage) ||
+    wakeReason!==reason || record(context.executionStage)===null || !sameStage(context.executionStage,stage) ||
     !sameStage(intentPayload?.executionStage,stage) || !sameStage(intentContext?.executionStage,stage) ||
     !sameStage(effectPayload?.executionStage,stage) || deliveredPayload?.issueId!==input.issueId ||
     !sameStage(deliveredPayload?.executionStage,stage) || !canonical || !sameStage(canonical.wakeup.payload.executionStage,stage)) return null;
@@ -160,9 +192,9 @@ export async function captureNativeExecutionStageTaskWakeSource(db: Db | Transac
 
   const [reviewerRun] = await db.select().from(heartbeatRuns).where(and(
     eq(heartbeatRuns.companyId, input.companyId), eq(heartbeatRuns.id, input.runId),
-    eq(heartbeatRuns.runtimeMode, "native"), eq(heartbeatRuns.nativeIssueId, input.issueId),
   )).limit(1).for("share");
-  if (!reviewerRun || !reviewerRun.agentId || !reviewerRun.wakeupRequestId) return null;
+  if (!reviewerRun || !nativeStageReviewerRunCapturable(reviewerRun, input.issueId) ||
+    !reviewerRun.agentId || !reviewerRun.wakeupRequestId) return null;
   const reviewerContext = record(reviewerRun.contextSnapshot);
   if (reviewerContext?.nativeStatusWakeIntentId !== intentId || reviewerContext.source !== "issue.execution_stage" ||
     reviewerContext.statusDecisionSource !== "native_status_decision" || reviewerContext.issueId !== input.issueId ||
@@ -195,13 +227,13 @@ export async function captureNativeExecutionStageTaskWakeSource(db: Db | Transac
   const deliveredWake = await readNativeStatusWakeDispatchReceipt(db, { companyId: input.companyId,
     run: { id: reviewerRun.id, agentId: reviewerRun.agentId, wakeupRequestId: reviewerRun.wakeupRequestId }, intentId: intent.id });
   const deliveredPayload = record(deliveredWake?.payload);
-  if (!deliveredWake || !deliveredPayload || deliveredWake.source !== "assignment" || deliveredWake.reason !== intent.reason ||
+  if (!deliveredWake || !deliveredPayload || deliveredWake.source !== "assignment" ||
+    !nativeStageDeliveredReasonMatches({ delivered: deliveredWake, intent, reason: intent.reason }) ||
     deliveredPayload.issueId !== input.issueId || deliveredPayload.mutation !== "update" ||
     !sameStage(deliveredPayload.executionStage, stage)) return null;
-  const intentIsBoundToDeliveredRun = intent.status === "coalesced" && intent.runId === reviewerRun.id;
-  const intentIsInFlightForDeliveredRun = intent.status === "claimed" && intent.runId === null;
   const deliveredWakeIsCurrent = deliveredWake.status === "claimed" || deliveredWake.status === "completed";
-  if ((!intentIsBoundToDeliveredRun && !intentIsInFlightForDeliveredRun) || !deliveredWakeIsCurrent) return null;
+  if (!nativeStageIntentBoundToDeliveredRun({ intent, delivered: deliveredWake, runId: reviewerRun.id }) ||
+    !deliveredWakeIsCurrent) return null;
 
   const [effect] = await db.select().from(statusDecisionEffects).where(and(
     eq(statusDecisionEffects.companyId, input.companyId), eq(statusDecisionEffects.issueId, input.issueId),
@@ -260,19 +292,57 @@ export async function captureNativeExecutionStageTaskWakeSource(db: Db | Transac
   const closedContinuation = exactNativeTaskContinuation({ value: payload.executionContinuation,
     companyId: input.companyId, issueId: input.issueId, runId: reviewerRun.id, agentId: reviewerRun.agentId,
     responsibleUserId: reviewerRun.responsibleUserId, wakeupRequestId: reviewerRun.wakeupRequestId,
-    wakeReason: intent.reason, capture: input.continuationCapture, stageTrigger,
+    wakeReason: intent.reason, capture: input.continuationCapture, stageTrigger, stageReceiptReason: deliveredWake.reason,
     historicalPendingSources: input.historicalPendingSources });
   const normalizedPayload = { ...payload, executionStage: null };
   const source = captureNativeTaskWakeSource({
     companyId: input.companyId, runId: input.runId, issueId: input.issueId, sourceVersion: input.sourceVersion,
     task: input.task, persistedWakeReason: intent.reason, agentId: reviewerRun.agentId,
     responsibleUserId: reviewerRun.responsibleUserId, wakeupRequestId: reviewerRun.wakeupRequestId,
-    continuationCapture: closedContinuation, stageTrigger, historicalPendingSources: input.historicalPendingSources,
+    continuationCapture: closedContinuation, stageTrigger, stageReceiptReason: deliveredWake.reason,
+    historicalPendingSources: input.historicalPendingSources,
     workspaceCapture: input.workspaceCapture, checkoutRunId: input.checkoutRunId, commentSources: input.commentSources,
     payload: normalizedPayload,
   });
   if (source && closedContinuation) input.onContinuationCapture?.(closedContinuation);
   return source ? { ...source, contentHash: nativeSha256(input.payload) } : null;
+}
+
+/** MS1f phase 4 (the stage form of MS1h8). The reason of a stage Reviewer's
+ * dispatch receipt. When that receipt waits behind the executor's execution
+ * lock (its process cleanup is still pending when the stage wake dispatches),
+ * deferred-wake promotion rewrites the admitted row's `reason` to
+ * `issue_execution_promoted`; the stage intent keeps its stage reason. The
+ * receipt matches only with the intent's reason, or as that promotion of the
+ * dispatcher's receipt for this exact intent (the same
+ * `issue.execution_stage:<issue>:<decision>` idempotency key). Callers have
+ * already bound the row as the dispatcher's receipt for the intent
+ * (`native-status-wake-dispatch:<intent>`, this Run) and still check its
+ * source, payload and stage. Exported for regression tests. */
+export function nativeStageDeliveredReasonMatches(input: {
+  delivered: { reason: string | null; idempotencyKey: string | null };
+  intent: { idempotencyKey: string | null }; reason: string }): boolean {
+  if (input.delivered.reason === input.reason) return true;
+  return input.delivered.reason === "issue_execution_promoted" && typeof input.intent.idempotencyKey === "string" &&
+    input.intent.idempotencyKey.length > 0 && input.delivered.idempotencyKey === input.intent.idempotencyKey;
+}
+
+/** MS1f phase 4. A stage intent is bound to the Reviewer Run its dispatch
+ * receipt started: coalesced into that Run, or claimed while in flight (the
+ * dispatcher links it after enqueueWakeup returns), or, when that receipt was
+ * deferred behind the executor's execution lock, coalesced with no Run (the
+ * dispatcher leaves the intent so; `dispatchPendingNativeStatusWakeups`) while
+ * the receipt itself is the promoted row for this exact intent that started
+ * this Run. Exported for regression tests. */
+export function nativeStageIntentBoundToDeliveredRun(input: {
+  intent: { status: string; runId: string | null; idempotencyKey: string | null };
+  delivered: { reason: string | null; idempotencyKey: string | null; runId: string | null }; runId: string }): boolean {
+  const { intent, delivered, runId } = input;
+  if (intent.status === "coalesced" && intent.runId === runId) return true;
+  if (intent.status === "claimed" && intent.runId === null) return true;
+  return intent.status === "coalesced" && intent.runId === null && delivered.runId === runId &&
+    delivered.reason === "issue_execution_promoted" && typeof intent.idempotencyKey === "string" &&
+    intent.idempotencyKey.length > 0 && delivered.idempotencyKey === intent.idempotencyKey;
 }
 
 /** The exact delivered receipt of one native status wake intent: this Run's

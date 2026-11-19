@@ -203,6 +203,12 @@ export function exactNativeTaskContinuation(input: { value: unknown; companyId: 
   /** Optional objective from the already canonical safe Task projection. */
   taskObjective?: string;
   capture?: NativeTaskContinuationCapture | null; stageTrigger?: import("../execution-continuation.js").NativeStageTaskContinuationTrigger; historicalPendingSources?: readonly import("./native-interaction-bridge.js").NativeGovernedPendingInteractionCapture[];
+  /** MS1f phase 4. With `stageTrigger` only: the reason of this Run's admitted
+   * stage dispatch receipt as the stage capture verified it
+   * (`nativeStageDeliveredReasonMatches`): the intent's own reason, or
+   * `issue_execution_promoted` when that receipt was deferred behind the
+   * executor's execution lock and promoted. Every other wake keeps its reason. */
+  stageReceiptReason?: string | null;
   /** Server-captured bounded run-liveness continuation record for this exact Run. */
   livenessTrigger?: NativeRunLivenessContinuationTrigger }): NativeTaskContinuationCapture | null {
   const { capture } = input;
@@ -350,6 +356,9 @@ export function exactNativeTaskContinuation(input: { value: unknown; companyId: 
   if (hasExplicitHumanSource && !exactExplicitHumanSource) return null;
   const stageTrigger = input.stageTrigger;
   const hasStageTrigger = stageTrigger !== undefined;
+  if (input.stageReceiptReason !== undefined && (!hasStageTrigger ||
+    ![input.wakeReason, "issue_execution_promoted"].includes(input.stageReceiptReason))) return null;
+  const admittedWakeReason = hasStageTrigger && input.stageReceiptReason !== undefined ? input.stageReceiptReason : input.wakeReason;
   const assignment = capture.currentHumanAssignment;
   const assignmentRecord = assignment && typeof assignment === "object" && !Array.isArray(assignment) ? assignment : null;
   const currentHumanAssignmentMatches = Boolean(assignmentRecord &&
@@ -441,7 +450,7 @@ export function exactNativeTaskContinuation(input: { value: unknown; companyId: 
     (c.recoveryOutcomes !== undefined && (!Array.isArray(c.recoveryOutcomes) || c.recoveryOutcomes.length !== 0)) ||
     (c.completedActions !== undefined && (!Array.isArray(c.completedActions) || c.completedActions.length > 64)) ||
     (c.completedWork !== null && c.completedWork !== capture.summary?.rendition?.body && c.completedWork !== capture.finalizedSummary?.body) || !Array.isArray(c.unresolvedInteractionIds) || c.unresolvedInteractionIds.length > 256 ||
-    capture.commentSources.length !== c.messages.length || capture.wake.reason !== input.wakeReason ||
+    capture.commentSources.length !== c.messages.length || capture.wake.reason !== admittedWakeReason ||
     (!hasStageTrigger && !hasSummaryAssignment && !hasLivenessTrigger && (capture.wake.requestedByActorType !== "user" || !capture.wake.requestedByActorId))) return null;
   const adoption = capture.wake.manualQueueAdoption;
   if (adoption && (Object.keys(adoption).sort().join(",") !==
@@ -952,6 +961,8 @@ export function captureNativeTaskWakeSource(input: {
   continuationCapture?: NativeTaskContinuationCapture | null;
   ordinaryPlanRead?: NativeOrdinaryPlanReadCapture | null;
   stageTrigger?: import("../execution-continuation.js").NativeStageTaskContinuationTrigger;
+  /** With `stageTrigger` only; see `exactNativeTaskContinuation`. */
+  stageReceiptReason?: string | null;
   historicalPendingSources?: readonly import("./native-interaction-bridge.js").NativeGovernedPendingInteractionCapture[];
   /** Independently captured bounded run-liveness continuation record, never a wake flag. */
   livenessTrigger?: NativeRunLivenessContinuationTrigger;
@@ -1019,6 +1030,7 @@ export function captureNativeTaskWakeSource(input: {
     issueId: input.issueId, runId: input.runId, agentId: input.agentId, responsibleUserId: input.responsibleUserId,
     wakeupRequestId: input.wakeupRequestId, wakeReason: input.persistedWakeReason,
     taskObjective: input.task.description ?? input.task.title, capture: input.continuationCapture, stageTrigger: input.stageTrigger, historicalPendingSources: input.historicalPendingSources,
+    ...(input.stageReceiptReason !== undefined ? { stageReceiptReason: input.stageReceiptReason } : {}),
     ...(input.livenessTrigger ? { livenessTrigger: input.livenessTrigger } : {}) });
   const governedWake = closedContinuation?.governedInteractions?.length || closedContinuation?.acceptedPlanReview || closedContinuation?.answeredQuestions?.length || closedContinuation?.humanReviewWithdrawals?.length
     ? closedContinuation.wake.interaction ?? null : null;
@@ -1055,6 +1067,7 @@ export function captureNativeTaskWakeSource(input: {
       wakeReason: input.persistedWakeReason, taskObjective: input.task.description ?? input.task.title,
       capture: input.continuationCapture,
       stageTrigger: input.stageTrigger, historicalPendingSources: input.historicalPendingSources,
+      ...(input.stageReceiptReason !== undefined ? { stageReceiptReason: input.stageReceiptReason } : {}),
       ...(input.livenessTrigger ? { livenessTrigger: input.livenessTrigger } : {}) }) !== null,
     attachmentOmissions: Array.isArray(payload.attachmentOmissions) && payload.attachmentOmissions.length === 0,
     externalChatProvider: payload.externalChatProvider === (input.externalChatProvider ?? null),
