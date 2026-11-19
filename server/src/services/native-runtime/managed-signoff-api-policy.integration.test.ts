@@ -823,8 +823,12 @@ it("denies an authenticated Reviewer's missing-comment decision on the actual st
         nextReviewerRunId = intent?.runId ?? receipt?.runId ?? null;
         return nextReviewerRunId !== null;
       }, { timeout: 60_000, interval: 100 }).toBe(true);
-      await waitForTerminalRun(nextReviewerRunId!);
+      const nextReviewerTerminal = await waitForTerminalRun(nextReviewerRunId!);
       await heartbeat.drainActiveRunExecutions();
+      // The round's Reviewer turn runs on its own round runtime and ends
+      // without a decision, as in the first round.
+      expect(nextReviewerTerminal, JSON.stringify({ errorCode: nextReviewerTerminal.errorCode, error: nextReviewerTerminal.error }))
+        .toMatchObject({ status: "succeeded", runtimeMode: "native", agentId: managedAgentIds.reviewer, nativeIssueId: issueId });
       await closeManagedAgentHostForRun(nextReviewerRunId!);
       const [nextRoundSettled] = await db.select().from(issues).where(and(eq(issues.companyId, companyId), eq(issues.id, issueId))).limit(1);
       expect(nextRoundSettled).toMatchObject({ status: "in_review", assigneeAgentId: managedAgentIds.reviewer,

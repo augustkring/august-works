@@ -273,6 +273,7 @@ export async function captureNativeFinalizedContinuationSummary(input: {
   stageEntryRead?: import("./native-stage-task-body-source.js").NativeFinalizedStageTaskBodyRead;
   stageTrigger?: NativeStageTaskContinuationTrigger;
   historicalConsumption?: import("./native-stage-wake-source.js").NativeFinalizedStageConsumption;
+  historicalRoundTurn?: import("./native-stage-reviewer-round-turn.js").NativeStageReviewerRoundTurn;
   readWork?: () => void;
 }): Promise<NativeFinalizedContinuationSummaryCapture | null> {
   let receiver: typeof heartbeatRuns.$inferSelect | undefined;
@@ -286,13 +287,18 @@ export async function captureNativeFinalizedContinuationSummary(input: {
       input.stageTrigger.responsibleUserId!==receiver.responsibleUserId || input.stageTrigger.wakeupRequestId!==receiver.wakeupRequestId ||
       input.stageTrigger.executorRunId!==input.sourceRunId || input.stageEntryRead.runId!==input.sourceRunId ||
       input.stageEntryRead.agentId!==input.stageTrigger.executorAgentId ||
-      (input.historicalConsumption ? (!receiver.finishedAt || !["succeeded","failed","timed_out","cancelled"].includes(receiver.status)) : receiver.status!=="running")) return null;
+      ((input.historicalConsumption || input.historicalRoundTurn) ? (!receiver.finishedAt || !["succeeded","failed","timed_out","cancelled"].includes(receiver.status)) : receiver.status!=="running")) return null;
     const {captureNativeStageContinuationOwner}=await import("./native-stage-wake-source.js");
     const stageOwner=await captureNativeStageContinuationOwner(input.db,{companyId:input.companyId,issueId:input.issueId,
-      receiver,reader:input.reader,...(input.historicalConsumption ? {historicalConsumption:input.historicalConsumption,readWork:input.readWork} : {})});
+      receiver,reader:input.reader,...(input.historicalConsumption ? {historicalConsumption:input.historicalConsumption,readWork:input.readWork} :
+        input.historicalRoundTurn ? {historicalRoundTurn:input.historicalRoundTurn} : {})});
     const {nativeStageContinuationOwnerMatches}=await import("./native-stage-wake-source.js");
     if(!stageOwner || !nativeStageContinuationOwnerMatches({candidate:stageOwner.trigger,expected:input.stageTrigger,
       ...(input.historicalConsumption ? {historicalConsumption:input.historicalConsumption} : {})})) return null;
+    const roundTurn=input.historicalConsumption ? undefined : input.historicalRoundTurn;
+    if(roundTurn && (roundTurn.runId!==input.stageTrigger.runId || roundTurn.agentId!==input.stageTrigger.agentId ||
+      roundTurn.decisionId!==input.stageTrigger.decisionId || roundTurn.executorRunId!==input.stageTrigger.executorRunId ||
+      roundTurn.executorAgentId!==input.stageTrigger.executorAgentId)) return null;
     const { captureNativeFinalizedStageTaskBodyRead } = await import("./native-stage-task-body-source.js");
     const currentStageEntry = await captureNativeFinalizedStageTaskBodyRead(input.db, { companyId: input.companyId,
       issueId: input.issueId, runId: input.stageEntryRead.runId, reader: input.reader });

@@ -127,21 +127,10 @@ export async function captureNativeStageRoundReturnOwner(db: Db | Transaction, i
   }
   // The stage Reviewer Runs this decision's stage wake started on the returned
   // stage, ended before the return.
-  const candidates = await db.select().from(heartbeatRuns).where(and(eq(heartbeatRuns.companyId, input.companyId),
-    eq(heartbeatRuns.agentId, reviewerAgentId), eq(heartbeatRuns.nativeIssueId, input.issueId), eq(heartbeatRuns.runtimeMode, "native"),
-    inArray(heartbeatRuns.status, TERMINAL), isNotNull(heartbeatRuns.finishedAt), gte(heartbeatRuns.createdAt, decision.appliedAt!),
-    lte(heartbeatRuns.finishedAt, activity.createdAt))).orderBy(asc(heartbeatRuns.id)).limit(17).for("share");
-  if (candidates.length > 16) return null;
-  const { captureNativeStageOrigin } = await import("../native-stage-wake-source.js");
-  const reviewerRunIds: string[] = [];
-  for (const run of candidates) {
-    const context = record(run.contextSnapshot), stage = record(context?.executionStage);
-    if (context?.source !== "issue.execution_stage" || stage?.stageId !== stageId) continue;
-    const origin = await captureNativeStageOrigin(db, run);
-    if (!origin || origin.decisionId !== decision.id || origin.executorRunId !== executor.id ||
-      origin.executorAgentId !== receiver.agentId || !await canActorReadHeartbeatRunPrivacy(db, input.reader, run)) continue;
-    reviewerRunIds.push(run.id);
-  }
+  const reviewerRunIds = await nativeStageRoundReviewerRunIds(db, { companyId: input.companyId, issueId: input.issueId,
+    reviewerAgentId, stageId, decision: { id: decision.id, appliedAt: decision.appliedAt! }, executorRunId: executor.id,
+    executorAgentId: receiver.agentId, returnedAt: activity.createdAt, reader: input.reader });
+  if (!reviewerRunIds) return null;
   if (reviewTurnDecisions.some(row => !reviewerRunIds.includes(row.runId) || row.appliedAt! < decision.appliedAt!)) return null;
   if (reviewerRunIds.length === 0) return null;
   const owner: NativeStageRoundReturnOwner = { version: 1, companyId: input.companyId, issueId: input.issueId,
@@ -159,4 +148,29 @@ export async function captureNativeStageRoundReturnOwner(db: Db | Transaction, i
 /** The owner a dispatch recheck reads again must equal the saved bootstrap owner. */
 export function nativeStageRoundReturnOwnerMatches(current: NativeStageRoundReturnOwner | null, saved: unknown): boolean {
   return current !== null && isDeepStrictEqual(current, saved);
+}
+
+/** The stage Reviewer Runs a round's stage-pending decision started on that
+ * stage, ended before the board's return (shared by the board-return owner and
+ * the historical Reviewer turn). Null when the candidate set exceeds its bound. */
+export async function nativeStageRoundReviewerRunIds(db: Db | Transaction, input: {
+  companyId: string; issueId: string; reviewerAgentId: string; stageId: string; decision: { id: string; appliedAt: Date };
+  executorRunId: string; executorAgentId: string; returnedAt: Date; reader: AuthorizationActor;
+}): Promise<string[] | null> {
+  const candidates = await db.select().from(heartbeatRuns).where(and(eq(heartbeatRuns.companyId, input.companyId),
+    eq(heartbeatRuns.agentId, input.reviewerAgentId), eq(heartbeatRuns.nativeIssueId, input.issueId), eq(heartbeatRuns.runtimeMode, "native"),
+    inArray(heartbeatRuns.status, TERMINAL), isNotNull(heartbeatRuns.finishedAt), gte(heartbeatRuns.createdAt, input.decision.appliedAt),
+    lte(heartbeatRuns.finishedAt, input.returnedAt))).orderBy(asc(heartbeatRuns.id)).limit(17).for("share");
+  if (candidates.length > 16) return null;
+  const { captureNativeStageOrigin } = await import("../native-stage-wake-source.js");
+  const reviewerRunIds: string[] = [];
+  for (const run of candidates) {
+    const context = record(run.contextSnapshot), stage = record(context?.executionStage);
+    if (context?.source !== "issue.execution_stage" || stage?.stageId !== input.stageId) continue;
+    const origin = await captureNativeStageOrigin(db, run);
+    if (!origin || origin.decisionId !== input.decision.id || origin.executorRunId !== input.executorRunId ||
+      origin.executorAgentId !== input.executorAgentId || !await canActorReadHeartbeatRunPrivacy(db, input.reader, run)) continue;
+    reviewerRunIds.push(run.id);
+  }
+  return reviewerRunIds;
 }

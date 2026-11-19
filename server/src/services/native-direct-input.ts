@@ -3066,6 +3066,14 @@ async function assertNativeTaskWakeSourceCurrentInScope(db: Db | Transaction, sc
             agentId:run.agentId,receiverRunId:run.id,sourceRunId:String(nativeSourceRecord(savedStageTrigger).executorRunId),
             reader:input.actor,stageEntryRead:originalSummary.stageEntryRead,stageTrigger:savedStageTrigger as import("./execution-continuation.js").NativeStageTaskContinuationTrigger,
             historicalConsumption,readWork:()=>nativeSourceReadWork(scope)});
+        } else if(originalSummary?.stageEntryRead){
+          // MS1f (historical stage-wake owner). A parent decision-less stage
+          // Reviewer turn the board returned, on a parent-receipt walk only.
+          const roundTurn=await nativeHistoricalStageRoundTurn(db,input.actor,input.companyId,input.issueId,run.id);
+          if(roundTurn) selected=await captureNativeFinalizedContinuationSummary({db:db as Db,companyId:input.companyId,issueId:input.issueId,
+            agentId:run.agentId,receiverRunId:run.id,sourceRunId:String(nativeSourceRecord(savedStageTrigger).executorRunId),
+            reader:input.actor,stageEntryRead:originalSummary.stageEntryRead,stageTrigger:savedStageTrigger as import("./execution-continuation.js").NativeStageTaskContinuationTrigger,
+            historicalRoundTurn:roundTurn});
         }
       }
     } else {
@@ -3384,6 +3392,10 @@ async function assertNativeTaskWakeSourceCurrentInScope(db: Db | Transaction, sc
             value.kind === "comment"), continuationCapture,
           historicalPendingSources: input.historicalTransition ? pendingInteractions : undefined,
           historicalConsumption: input.historicalTransition?.stageReads?.find(value=>value.producer.runId === input.runId)?.producer,
+          ...(input.historicalTransition?.stageReads?.some(value=>value.producer.runId === input.runId) ? {} : await (async () => {
+            const roundTurn = await nativeHistoricalStageRoundTurn(db, input.actor, input.companyId, input.issueId, input.runId);
+            return roundTurn ? { historicalRoundTurn: roundTurn } : {};
+          })()),
           expectedStageTrigger: nativeSourceRecord(run.runnerProfileJson).nativeBootstrapStageTrigger as
             import("./execution-continuation.js").NativeStageTaskContinuationTrigger|undefined,
           reader:input.actor,
@@ -6905,6 +6917,16 @@ async function assertNativeFrozenTaskSnapshotCurrent(db: Db | Transaction, compa
   } finally {
     scope.active.delete(visitKey);
   }
+}
+
+/** MS1f (historical stage-wake owner). Only when an agent consumer walks a
+ * parent Run's receipt (never its own bootstrap or live sources). */
+async function nativeHistoricalStageRoundTurn(db: Db | Transaction, actor: AuthorizationActor, companyId: string,
+  issueId: string, runId: string) {
+  const { nativeParentReceiptRunId } = await import("./native-board-stage-return-source.js");
+  if (!nativeParentReceiptRunId(actor as { type: string; runId?: string | null }, runId)) return null;
+  const { captureNativeStageReviewerRoundTurn } = await import("./native-stage-reviewer-round-turn.js");
+  return captureNativeStageReviewerRoundTurn(db, { companyId, issueId, runId, reader: actor });
 }
 
 async function assertNativeTaskSourceInputCurrentInScope(db: Db | Transaction, companyId: string, actor: AuthorizationActor,

@@ -9,6 +9,7 @@ import { getEmbeddedPostgresTestSupport, startEmbeddedPostgresTestDatabase } fro
 import { issueService } from "../services/issues.js";
 import { nativeParentReceiptRunId, verifyNativeParentTaskCaptureLineage, verifyNativeRetainedTaskRoundSuffix } from "../services/native-board-stage-return-source.js";
 import { assertNativeContextTaskSourceCurrent } from "../services/native-direct-input.js";
+import { nativeStageReviewerRoundTurnState } from "../services/native-stage-reviewer-round-turn.js";
 import { nativeContextTaskEvidence, nativeContextTaskEvidenceHash } from "../services/context/context-task-evidence.js";
 
 // MS1f stop 5 (migration 0587). The board's PATCH override that returns a Task
@@ -403,6 +404,68 @@ describeDb("board_stage_return Task source transform (MS1f stop 5, 0587)", () =>
       expect(nativeParentReceiptRunId({ type: "agent", runId: "" }, parent)).toBeUndefined();
       expect(nativeParentReceiptRunId({ type: "board" }, parent)).toBeUndefined();
       expect(nativeParentReceiptRunId({ type: "board", runId: consumer }, parent)).toBeUndefined();
+    });
+  });
+  // MS1f (historical stage-wake owner). The admission rules for a decision-less
+  // stage Reviewer turn that the board returned.
+  describe("historical stage Reviewer round turn", () => {
+    const reviewerRun = randomUUID(), reviewer = randomUUID(), executor = randomUUID(), executorRun = randomUUID();
+    const stageId = randomUUID(), decisionId = randomUUID(), h = (c: string) => c.repeat(64);
+    const pending = { status: "pending", currentStageId: stageId, currentStageIndex: 0, currentStageType: "review",
+      currentParticipant: { type: "agent", agentId: reviewer, userId: null },
+      returnAssignee: { type: "agent", agentId: executor, userId: null }, reviewRequest: null,
+      completedStageIds: [], lastDecisionId: null, lastDecisionOutcome: null };
+    const entry = { kind: "native_stage_policy" as const, transitionId: randomUUID(), runId: executorRun, ownerKind: "native_status_decision" as const,
+      decisionId, receiptHash: h("1"), previousSnapshotDigest: h("2"), previousOwnerContentHash: h("3"), nextOwnerContentHash: h("4") };
+    const board = { kind: "board_stage_return" as const, transitionId: randomUUID(), activityId: randomUUID(), stageId,
+      participantAgentId: reviewer, executorAgentId: executor, decisionId, taskStatusVersion: 4,
+      previousSnapshotDigest: h("5"), previousOwnerContentHash: h("4"), nextOwnerContentHash: h("6") };
+    const base = { reviewer: { runId: reviewerRun, agentId: reviewer, contextStageId: stageId }, hasRecordedStageDecision: false,
+      origin: { decisionId, executorRunId: executorRun, executorAgentId: executor }, roundReviewerRunIds: [reviewerRun],
+      boardStep: board, boardFromState: pending, captureSteps: [entry], currentSteps: [entry, board],
+      stageEntryReceipt: { toExecutionState: pending } };
+    const state = (patch: Record<string, unknown> = {}) => nativeStageReviewerRoundTurnState({ ...base, ...patch } as never);
+
+    it("admits the Reviewer's own pending state when it equals the board return's from-state", () => {
+      expect(state()).toMatchObject({ status: "pending", currentStageId: stageId });
+    });
+    it("refuses a Run not in the round, another stage, another decision and a recorded stage decision", () => {
+      expect(state({ roundReviewerRunIds: [randomUUID()] })).toBeNull();
+      expect(state({ roundReviewerRunIds: null })).toBeNull();
+      expect(state({ reviewer: { ...base.reviewer, contextStageId: randomUUID() } })).toBeNull();
+      expect(state({ boardStep: { ...board, stageId: randomUUID() }, currentSteps: [entry, { ...board, stageId: randomUUID() }] })).toBeNull();
+      expect(state({ origin: { ...base.origin, decisionId: randomUUID() } })).toBeNull();
+      expect(state({ origin: { ...base.origin, executorRunId: randomUUID() } })).toBeNull();
+      expect(state({ origin: { ...base.origin, executorAgentId: randomUUID() } })).toBeNull();
+      expect(state({ origin: null })).toBeNull();
+      expect(state({ boardStep: { ...board, participantAgentId: randomUUID() } })).toBeNull();
+      expect(state({ hasRecordedStageDecision: true })).toBeNull();
+      // A recorded board step (right after the capture) of another decision, Reviewer or stage.
+      for (const patch of [{ decisionId: randomUUID() }, { participantAgentId: randomUUID() }, { stageId: randomUUID() }]) {
+        const other = { ...board, ...patch };
+        expect(state({ boardStep: other, currentSteps: [entry, other] }), JSON.stringify(Object.keys(patch))).toBeNull();
+      }
+    });
+    it("refuses a Reviewer state different from the board return's from-state and an intervening change", () => {
+      expect(state({ stageEntryReceipt: { toExecutionState: { ...pending, reviewRequest: { instructions: "Other" } } } })).toBeNull();
+      expect(state({ stageEntryReceipt: null })).toBeNull();
+      // Equal recorded states that are not this Reviewer's pending turn on this stage.
+      for (const recorded of [{ ...pending, status: "changes_requested" }, { ...pending, currentStageId: randomUUID() },
+        { ...pending, currentParticipant: { type: "user", agentId: null, userId: "someone" } }])
+        expect(state({ boardFromState: recorded, stageEntryReceipt: { toExecutionState: recorded } })).toBeNull();
+      expect(state({ boardFromState: { ...pending, currentParticipant: { type: "agent", agentId: randomUUID(), userId: null } },
+        stageEntryReceipt: { toExecutionState: { ...pending, currentParticipant: { type: "agent", agentId: randomUUID(), userId: null } } } })).toBeNull();
+      // Another transform between the Reviewer's capture and the board return.
+      const other = { ...entry, transitionId: randomUUID() };
+      expect(state({ currentSteps: [entry, other, board] })).toBeNull();
+      // A capture that is not an exact prefix, or that does not end at this round's stage entry.
+      expect(state({ currentSteps: [{ ...entry, receiptHash: h("9") }, board] })).toBeNull();
+      const otherEntry = { ...entry, decisionId: randomUUID() };
+      expect(state({ captureSteps: [otherEntry], currentSteps: [otherEntry, board] })).toBeNull();
+      const otherRunEntry = { ...entry, runId: randomUUID() };
+      expect(state({ captureSteps: [otherRunEntry], currentSteps: [otherRunEntry, board] })).toBeNull();
+      expect(state({ captureSteps: [], currentSteps: [board] })).toBeNull();
+      expect(state({ boardStep: null })).toBeNull();
     });
   });
 });
