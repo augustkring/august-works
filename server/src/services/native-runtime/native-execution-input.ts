@@ -1,4 +1,5 @@
 import type { NativeBlockedHumanInteraction, NativeTreeHoldInteractionSource } from "../native-direct-input.js";
+import { exactNativeStageRoundReturnOwner } from "./native-stage-round-return-source.js";
 import { exactNativeWorkspaceCoordination, type NativeWorkspaceCoordinationCapture } from "./native-workspace-coordination-source.js";
 import { askUserQuestionsResultSchema, issueExecutionStateSchema } from "@paperclipai/shared";
 import { PLAN_REVIEW_CONTEXT_LIMITS } from "../plan-review-context.js";
@@ -237,6 +238,7 @@ export function exactNativeTaskContinuation(input: { value: unknown; companyId: 
     ...(capture.stageActions !== undefined ? ["stageActions"] : []),
     ...(capture.summary !== undefined ? ["summary"] : []),
     ...(capture.currentHumanAssignment !== undefined ? ["currentHumanAssignment"] : []),
+    ...(capture.stageRoundReturn !== undefined ? ["stageRoundReturn"] : []),
     ...(capture.finalizedSummary !== undefined ? ["finalizedSummary"] : []),
     ...(capture.delivery !== undefined ? ["delivery"] : []),
     ...(capture.pendingInteractions !== undefined ? ["pendingInteractions"] : []),
@@ -386,6 +388,14 @@ export function exactNativeTaskContinuation(input: { value: unknown; companyId: 
   const hasSummaryAssignment = assignmentBase && Array.isArray(c?.messages) && c.messages.length <= 256 &&
     Array.isArray(capture.commentSources) && capture.commentSources.length === c.messages.length;
   if ((capture.currentHumanAssignment !== undefined || hasAdministrativeExpiries) && !hasSummaryAssignment) return null;
+  // MS1f stop 4 (returned-executor family). The board's return of this Task
+  // from a stage round to this executor, under a current Human assignment wake
+  // requested by that Human; never with a stage, liveness or resolution wake.
+  const roundReturn = capture.stageRoundReturn;
+  if (roundReturn !== undefined && (!hasSummaryAssignment || hasStageTrigger || input.livenessTrigger !== undefined ||
+    hasResolutionWake || !input.agentId || !input.responsibleUserId || !input.wakeupRequestId ||
+    !exactNativeStageRoundReturnOwner(roundReturn, { companyId: input.companyId, issueId: input.issueId, runId: input.runId,
+      agentId: input.agentId, responsibleUserId: input.responsibleUserId, wakeupRequestId: input.wakeupRequestId }))) return null;
   if (hasStageTrigger) {
     const id = /^[0-9a-f]{8}-[0-9a-f]{4}-[1-8][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i;
     if (!stageTrigger || Object.keys(stageTrigger).sort().join(",") !==
@@ -607,11 +617,16 @@ export function exactNativeTaskContinuation(input: { value: unknown; companyId: 
       const stageExecutorProducer = stageSummaryOwner !== null && message.createdByRunId === stageTrigger!.executorRunId &&
         message.authorId === stageTrigger!.executorAgentId && isDeepStrictEqual(presentationOwner.acceptedSummaryOwner, stageSummaryOwner);
       if (stageExecutorProducer) stagePresentationComments += 1;
+      // MS1f stop 4. A Reviewer Run of the returned stage round, under its own
+      // Run and Agent; never the receiving executor.
+      const roundReviewerProducer = roundReturn !== undefined && message.createdByRunId !== null &&
+        message.authorId === roundReturn.reviewerAgentId && roundReturn.reviewerRunIds.includes(message.createdByRunId);
       if ((!hasSummaryAssignment && !exactWithdrawalProducer && !livenessProducer && !stageExecutorProducer) || sourceSnapshot.success ||
           stagePresentationComments > 1 ||
           !exactNativeAcceptedPresentationCommentOwner(presentationOwner, {
             binding: { companyId: input.companyId, issueId: input.issueId,
-              agentId: stageExecutorProducer ? stageTrigger!.executorAgentId : input.agentId }, commentSource: sources[0]!.input,
+              agentId: stageExecutorProducer ? stageTrigger!.executorAgentId :
+                roundReviewerProducer ? roundReturn!.reviewerAgentId : input.agentId }, commentSource: sources[0]!.input,
           }) || presentationOwner.acceptedSummaryOwner.sourceRunId !== message.createdByRunId || message.authorType !== "agent") return null;
     }
   }
@@ -1294,6 +1309,10 @@ export function buildNativeBootstrapSourceSet(input: {
    * owner-bound stage trigger and its accepted summary). Only that Run's own
    * presentation comment is admitted under that Agent; never the receiver. */
   stageExecutorPresentation?: { agentId: string; runId: string } | null;
+  /** MS1f stop 4. A returned executor's stage round (from the closed
+   * continuation's board-return owner): only these Reviewer Runs' own
+   * presentation comments are admitted, under that Reviewer Agent. */
+  stageRoundReturnPresentation?: { agentId: string; runIds: readonly string[] } | null;
   interactionResponses?: readonly NativeInteractionResponseEnvelope[] | null;
   interactionSources?: readonly Extract<NativePayloadSourceInput, { kind: "interaction" }>[] | null;
   contextManifestIds: readonly { companyId: string; contextManifestId: string }[] | null;
@@ -1438,6 +1457,9 @@ export function buildNativeBootstrapSourceSet(input: {
   const stageExecutor = input.stageExecutorPresentation && input.stageExecutorPresentation.agentId !== input.agentId
     ? input.stageExecutorPresentation : null;
   if (input.stageExecutorPresentation && !stageExecutor) return reject("source_snapshot_invalid");
+  const roundReturn = input.stageRoundReturnPresentation && input.stageRoundReturnPresentation.agentId !== input.agentId &&
+    input.stageRoundReturnPresentation.runIds.length > 0 && !stageExecutor ? input.stageRoundReturnPresentation : null;
+  if (input.stageRoundReturnPresentation && !roundReturn) return reject("source_snapshot_invalid");
   let stagePresentationComments = 0;
   for (const candidate of input.taskWakeCommentCandidates ?? []) {
     if (candidate.kind !== "comment" || candidate.input.kind !== "comment" ||
@@ -1445,13 +1467,16 @@ export function buildNativeBootstrapSourceSet(input: {
     const stageExecutorComment = Boolean(stageExecutor && !candidate.payloadSourceSnapshot &&
       candidate.acceptedPresentationOwner?.acceptedSummaryOwner?.sourceRunId === stageExecutor.runId);
     if (stageExecutorComment) stagePresentationComments += 1;
+    const roundReviewerComment = Boolean(roundReturn && !candidate.payloadSourceSnapshot &&
+      roundReturn.runIds.includes(candidate.acceptedPresentationOwner?.acceptedSummaryOwner?.sourceRunId ?? ""));
     if (candidate.payloadSourceSnapshot) {
       if (candidate.acceptedPresentationOwner || !addSnapshotPolicy(candidate.payloadSourceSnapshot, { kind: "comment", id: candidate.id }))
         return reject("source_snapshot_invalid");
     } else if (!candidate.acceptedPresentationOwner || stagePresentationComments > 1 ||
       !exactNativeAcceptedPresentationCommentOwner(candidate.acceptedPresentationOwner, {
         binding: { companyId: input.companyId, issueId: input.issueId,
-          agentId: stageExecutorComment ? stageExecutor!.agentId : input.agentId }, commentSource: candidate.input,
+          agentId: stageExecutorComment ? stageExecutor!.agentId : roundReviewerComment ? roundReturn!.agentId : input.agentId },
+        commentSource: candidate.input,
       }) || !input.additionalPolicy?.runIds.includes(candidate.acceptedPresentationOwner.acceptedSummaryOwner.sourceRunId)) {
       return reject("source_snapshot_invalid");
     }

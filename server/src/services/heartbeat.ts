@@ -24907,6 +24907,14 @@ export function heartbeatService(
               closedTaskContinuation?.commentSources.some(source =>
                 source.acceptedPresentationOwner?.acceptedSummaryOwner.sourceRunId === stageTriggerForClosure.executorRunId)
               ? { agentId: stageTriggerForClosure.executorAgentId, runId: stageTriggerForClosure.executorRunId } : null;
+            // MS1f stop 4 (returned-executor family). The closed continuation's
+            // board-return owner names the round's Reviewer Agent and Runs; only
+            // their presentation comments join, under that Agent.
+            const roundReturnOwner = nativeTaskWakeSource && closedTaskContinuation?.currentHumanAssignment
+              ? closedTaskContinuation.stageRoundReturn : undefined;
+            const stageRoundReturnPresentation = roundReturnOwner && roundReturnOwner.agentId === agent.id &&
+              roundReturnOwner.receiverRunId === run.id
+              ? { agentId: roundReturnOwner.reviewerAgentId, runIds: roundReturnOwner.reviewerRunIds } : null;
             const presentationSourceRunIds = [...new Set([
               ...(stageExecutorPresentation ? [stageExecutorPresentation.runId] : []),
               ...(nativeBootstrapContinuationCapture?.currentHumanAssignment
@@ -24961,6 +24969,7 @@ export function heartbeatService(
                     input: treeHoldRootCapture.input, payloadSourceSnapshot: treeHoldRootCapture.payloadSourceSnapshot }] : []),
                 ],
                 ...(stageExecutorPresentation ? { stageExecutorPresentation } : {}),
+                ...(stageRoundReturnPresentation ? { stageRoundReturnPresentation } : {}),
                 taskWakeCommentCandidates: nativeTaskWakeSource && closedTaskContinuation
                   ? closedTaskContinuation.commentSources.map(capture => ({ kind: "comment" as const, id: capture.input.commentId,
                       input: capture.input, payloadSourceSnapshot: capture.payloadSourceSnapshot,
@@ -25202,6 +25211,7 @@ export function heartbeatService(
                   ...(lockedProfile.nativeExecutionInput ? {} : { nativeBootstrapInteractionSources }),
                   ...(lockedProfile.nativeExecutionInput ? {} : { nativeBootstrapFinalizedContinuationSummary: nativeBootstrapContinuationCapture?.finalizedSummary ?? null,
                     nativeBootstrapStageTrigger: nativeStageContinuationTrigger.value ?? null,
+                    nativeBootstrapStageRoundReturn: nativeBootstrapContinuationCapture?.stageRoundReturn ?? null,
                     nativeBootstrapStageActionSources: nativeBootstrapContinuationCapture?.stageActions ?? null,
                     nativeBootstrapContinuationSummaryDocument: nativeBootstrapContinuationCapture?.summary ?? null }),
                   ...(lockedProfile.nativeExecutionInput ? {} : { nativePreparedBootstrapSourceClosure:

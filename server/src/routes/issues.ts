@@ -13794,6 +13794,27 @@ export function issueRoutes(
           }
         : {};
       Object.assign(updateFields, transition.patch);
+      // MS1f stop 5 (0587). The board override that returns a Task from its
+      // pending execution stage to the round's executor: the stage cleared and
+      // the assignee moved from the stage participant to the return assignee.
+      // Only this board return may keep the Task's Native source, through one
+      // board_stage_return transform bound to the issue.updated activity this
+      // request writes in the same transaction (the service re-checks every
+      // fact under the Task's lock and otherwise drops the source as before).
+      const existingStageState = parseIssueExecutionState(existing.executionState);
+      const boardStageReturn =
+        req.actor.type === "board" && actor.actorType === "user" &&
+        existingStageState?.status === "pending" &&
+        existingStageState.currentParticipant?.type === "agent" &&
+        existingStageState.returnAssignee?.type === "agent" &&
+        existing.status === "in_review" &&
+        existing.assigneeAgentId === existingStageState.currentParticipant.agentId &&
+        transition.patch.executionState === null && !transition.decision &&
+        typeof updateFields.status === "string" &&
+        !["in_review", "done", "cancelled"].includes(updateFields.status as string) &&
+        updateFields.assigneeAgentId === existingStageState.returnAssignee.agentId
+          ? { userId: actor.actorId, activityId: randomUUID() }
+          : null;
 
       const nextStatus = updateFields.status ?? existing.status;
       if (updateFields.unblockDescriptor && nextStatus !== "blocked") {
@@ -14129,6 +14150,12 @@ export function issueRoutes(
       const shouldCollectTerminalIssueActions =
         updateFields.status === "done" || updateFields.status === "cancelled";
       const updateIssue = (tx?: Parameters<typeof svc.update>[2]) => {
+        if (tx && boardStageReturn) {
+          return svc.update(id, issueUpdateData, tx,
+            shouldCollectCompletionPublication ? postCommitActivityPublications : undefined,
+            shouldCollectCompletionPublication || shouldCollectTerminalIssueActions ? postCommitIssueActions : undefined,
+            { boardStageReturnSourceTransform: boardStageReturn });
+        }
         if (tx) {
           if (shouldCollectCompletionPublication) {
             return svc.update(
@@ -14185,7 +14212,7 @@ export function issueRoutes(
         tx: Parameters<typeof svc.update>[2],
         updated: NonNullable<Awaited<ReturnType<typeof svc.update>>>,
       ) => {
-        if (!persistReviewActivityTransactionally) return;
+        if (!persistReviewActivityTransactionally && !boardStageReturn) return;
         const changes = updated.changes ?? {};
         const previous = Object.fromEntries(
           Object.entries(changes).map(([key, change]) => [key, change.from]),
@@ -14193,6 +14220,7 @@ export function issueRoutes(
         await logActivity(
           tx as unknown as Db,
           {
+            ...(boardStageReturn ? { id: boardStageReturn.activityId } : {}),
             companyId: updated.companyId,
             actorType: actor.actorType,
             actorId: actor.actorId,
@@ -14274,6 +14302,7 @@ export function issueRoutes(
         Boolean(decision) ||
         shouldRelayStop ||
         persistReviewActivityTransactionally ||
+        Boolean(boardStageReturn) ||
         reviewPolicySensitiveMutationRequested;
       try {
         if (shouldUseTransactionalIssueUpdate) {
@@ -14570,7 +14599,7 @@ export function issueRoutes(
           activeRecoveryAction: null,
         };
       }
-      if (!persistReviewActivityTransactionally)
+      if (!persistReviewActivityTransactionally && !boardStageReturn)
         await logActivity(db, {
           companyId: issue.companyId,
           actorType: actor.actorType,

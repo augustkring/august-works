@@ -147,7 +147,17 @@ const nativeStagePolicyTransformSchema = z.object({
   receiptHash: sha256, previousSnapshotDigest: sha256,
   previousOwnerContentHash: sha256, nextOwnerContentHash: sha256,
 }).strict();
-export const nativePayloadSourceTransformSchema = z.discriminatedUnion("kind", [workspaceBindingTransformSchema, nativeStagePolicyTransformSchema]);
+/** MS1f stop 5 (0587). The board's return of a Task from a pending execution
+ * stage to the round's executor: execution_state to null and the assignee
+ * back to the executor, bound to the board's issue.updated activity and the
+ * resulting Task version. */
+const boardStageReturnTransformSchema = z.object({
+  kind: z.literal("board_stage_return"), transitionId: id, activityId: id, stageId: id,
+  participantAgentId: id, executorAgentId: id, decisionId: id, taskStatusVersion: z.number().int().positive(),
+  previousSnapshotDigest: sha256, previousOwnerContentHash: sha256, nextOwnerContentHash: sha256,
+}).strict();
+export const nativePayloadSourceTransformSchema = z.discriminatedUnion("kind", [workspaceBindingTransformSchema,
+  nativeStagePolicyTransformSchema, boardStageReturnTransformSchema]);
 export type NativePayloadSourceTransform = z.infer<typeof nativePayloadSourceTransformSchema>;
 const MAX_NATIVE_PAYLOAD_SOURCE_TRANSFORMS = 32;
 
@@ -193,7 +203,8 @@ export const nativePayloadSourceSnapshotSchema = z.object({
   if (snapshot.transforms?.length && snapshot.owner.kind !== "issue") {
     ctx.addIssue({ code: "custom", path: ["transforms"], message: "Only Task source snapshots can record machine-state source history." });
   }
-  const activityIds = snapshot.transforms?.flatMap(item => item.kind === "workspace_binding" ? [item.activityId] : []) ?? [];
+  const activityIds = snapshot.transforms?.flatMap(item =>
+    item.kind === "workspace_binding" || item.kind === "board_stage_return" ? [item.activityId] : []) ?? [];
   const transitionIds = snapshot.transforms?.map(item => item.transitionId) ?? [];
   if (new Set(activityIds).size !== activityIds.length || new Set(transitionIds).size !== transitionIds.length) {
     ctx.addIssue({ code: "custom", path: ["transforms"], message: "Duplicate source owner transition." });

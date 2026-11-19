@@ -2,6 +2,8 @@ import { randomUUID } from "node:crypto";
 import { and, eq, sql } from "drizzle-orm";
 import { afterAll, beforeAll, describe, expect, it, vi } from "vitest";
 import {
+  activityLog,
+  companyMemberships,
   agentExecutionManifests,
   agentPresenceRuntimeBindings,
   agentProviderBindings,
@@ -113,6 +115,7 @@ import { nativeSha256 } from "./canonical.js";
 import { createToolGatewayService } from "../tool-gateway.js";
 import { lockNativeStageReviewerCommentPlan } from "../orchestration/native-tool-boundary.js";
 import { assertCurrentWakeCommentsRead } from "./current-wake-comments.js";
+import { captureNativeStageRoundReturnOwner, exactNativeStageRoundReturnOwner, nativeStageRoundReturnOwnerMatches } from "./native-stage-round-return-source.js";
 import { captureNativeStageContinuationOwner, nativeStageDeliveredReasonMatches, nativeStageIntentBoundToDeliveredRun,
   nativeStageReviewerRunCapturable, nativeStageReviewerRunUnselected, nativeStageConsumptionModelCallBound } from "../native-stage-wake-source.js";
 import { policyFixture } from "../../__tests__/helpers/sandbox-fixture.js";
@@ -157,7 +160,7 @@ describeDb("execution-policy stage Reviewer lane under a plan (MS1f decision 4)"
    * the Reviewer, and the Reviewer's running Run holding the execution lease.
    * `selfReview`: the plan Worker (executor) is the Reviewer. `preNative`: the
    * Reviewer Run is still its unresolved pre-binding row (manifest admission). */
-  async function seed(variant: { selfReview?: true; preNative?: true; startedAt?: Date } = {}) {
+  async function seed(variant: { selfReview?: true; preNative?: true; startedAt?: Date; sealed?: true } = {}) {
     const ids = { company: randomUUID(), otherCompany: randomUUID(), executor: randomUUID(), reviewer: randomUUID(),
       outsider: randomUUID(), issue: randomUUID(), sourceRun: randomUUID(), reviewerRun: randomUUID(), decision: randomUUID(),
       stage: randomUUID(), intent: randomUUID(), delivered: randomUUID(), contract: randomUUID(), result: randomUUID(),
@@ -184,7 +187,14 @@ describeDb("execution-policy stage Reviewer lane under a plan (MS1f decision 4)"
       statusVersion: 1, lastStatusDecisionId: ids.decision, assigneeAgentId: ids.reviewer,
       executionPolicy: { mode: "normal", commentRequired: true, stages: [{ id: ids.stage, type: "review", approvalsNeeded: 1,
         participants: [{ id: randomUUID(), type: "agent", agentId: ids.reviewer, userId: null }] }] },
-      executionState: stageState(ids) });
+      executionState: stageState(ids), ...(variant.sealed ? { payloadSourceProtocolVersion: 1 } : {}) });
+    // MS1f stop 5: a sealed manual Task source (digest over the JSONB text).
+    if (variant.sealed) await db.execute(sql`with s as (select jsonb_build_object('version',1,'owner',jsonb_build_object('kind','issue',
+        'companyId',i.company_id::text,'id',i.id::text,'contentHash',public.aw_native_payload_body_hash('issue',to_jsonb(i))),
+        'policy',jsonb_build_object('issueIds','[]'::jsonb,'projectIds','[]'::jsonb,'runIds','[]'::jsonb,'memoryIds','[]'::jsonb,
+        'foundationRevisionIds','[]'::jsonb),'inputs','[]'::jsonb) as snap from issues i where i.id=${ids.issue}::uuid)
+      update issues set payload_source_snapshot = s.snap || jsonb_build_object('digest',encode(sha256(convert_to(s.snap::text,'UTF8')),'hex'))
+      from s where issues.id=${ids.issue}::uuid`);
     await db.insert(completionContracts).values({ id: ids.contract, companyId: ids.company, issueId: ids.issue, revision: 1,
       schemaVersion: "aw.completion-contract.v7", policyVersion: "test", risk: "low", completionAuthority: "server_arbiter",
       incompleteCriteriaPolicy: "block", contractJson: { objective: "Write the planned report",
@@ -1158,6 +1168,166 @@ describeDb("execution-policy stage Reviewer lane under a plan (MS1f decision 4)"
       expect(bound({ reservation, intent: workerIntent, dispatchSources: [reviewSource] })).toBe(false);
       expect(bound({ reservation, intent: { ...intent, modelPurpose: "conformance_model" }, dispatchSources: [source] })).toBe(false);
       expect(bound({ intent: { ...intent, modelPurpose: "worker_model" } })).toBe(false);
+    });
+  });
+  // MS1f stop 4. The board-return owner of a returned executor's continuation:
+  // the board's own PATCH override that returned the Task from the stage round,
+  // the Task version it produced, the round's stage-pending decision and the
+  // Reviewer Runs that decision's stage wake started on that stage.
+  describe("returned-executor board-return owner (MS1f stop 4)", () => {
+    async function returnRound(ids: Ids, variant: { reviewerDecision?: "round" | "foreign" } = {}) {
+      const base = Date.now() - 60_000, at = (offset: number) => new Date(base + offset);
+      const receiver = randomUUID(), wakeId = randomUUID(), activityId = randomUUID();
+      await db.update(statusDecisions).set({ appliedAt: at(0) }).where(eq(statusDecisions.id, ids.decision));
+      await db.update(heartbeatRuns).set({ finishedAt: at(1_000) }).where(eq(heartbeatRuns.id, ids.sourceRun));
+      await db.update(heartbeatRuns).set({ status: "succeeded", createdAt: at(2_000), finishedAt: at(10_000) })
+        .where(eq(heartbeatRuns.id, ids.reviewerRun));
+      if (variant.reviewerDecision) {
+        const assessment = randomUUID();
+        const runId = variant.reviewerDecision === "round" ? ids.reviewerRun : ids.sourceRun;
+        const resultId = variant.reviewerDecision === "round" ? randomUUID() : ids.result;
+        if (variant.reviewerDecision === "round") await db.update(heartbeatRuns).set({ completionContractId: ids.contract })
+          .where(eq(heartbeatRuns.id, ids.reviewerRun));
+        if (variant.reviewerDecision === "round") await db.insert(nativeRunResults).values({ id: resultId, companyId: ids.company,
+          issueId: ids.issue, runId, completionContractId: ids.contract, serverFingerprint: randomUUID(), schemaStatus: "accepted",
+          resultJson: {}, canonicalSha256: sourceCanonical });
+        await db.insert(workAssessments).values({ id: assessment, companyId: ids.company, issueId: ids.issue, runId,
+          contractId: ids.contract, resultId, triggerKind: "test", triggerActorCompanyId: ids.company,
+          priorIssueStatus: "in_review", priorStatusVersion: 1, policyVersion: "test", assessmentJson: {}, inputDigest: randomUUID() });
+        await db.insert(statusDecisions).values({ companyId: ids.company, issueId: ids.issue, runId, assessmentId: assessment,
+          decisionVersion: 2, policyVersion: "test", fromStatus: "in_review", toStatus: "in_review", reasonCode: "native_review_unresolved",
+          decisionJson: {}, decisionDigest: "f".repeat(64), applicationState: "applied", appliedAt: at(9_000) });
+      }
+      // The board's return under the real 0587 triggers: its issue.updated
+      // activity and the Task update with one board_stage_return step.
+      await db.insert(companyMemberships).values({ companyId: ids.company, principalType: "user", principalId: ids.user,
+        status: "active", membershipRole: "owner" }).onConflictDoNothing();
+      await db.update(issues).set({ responsibleUserId: ids.user }).where(eq(issues.id, ids.issue));
+      const [task] = await db.select().from(issues).where(eq(issues.id, ids.issue));
+      const changes = { status: { from: "in_review", to: "in_progress" }, assigneeAgentId: { from: ids.reviewer, to: ids.executor },
+        statusVersion: { from: task!.statusVersion, to: task!.statusVersion + 1 }, executionState: { from: stageState(ids), to: null } };
+      if (!task!.payloadSourceSnapshot) {
+        // An unsealed Task records no source transform for the return.
+        await db.insert(activityLog).values({ id: activityId, companyId: ids.company, actorType: "user", actorId: ids.user,
+          action: "issue.updated", entityType: "issue", entityId: ids.issue, createdAt: at(20_000), details: { changes } });
+        await db.update(issues).set({ status: "in_progress", assigneeAgentId: ids.executor, executionState: null })
+          .where(eq(issues.id, ids.issue));
+      }
+      const snapshot = (task!.payloadSourceSnapshot ?? { owner: {}, digest: "" }) as { owner: Record<string, unknown>; digest: string; transforms?: unknown[] };
+      const [hash] = await db.execute<{ next: string }>(sql`select public.aw_native_payload_body_hash('issue',
+        to_jsonb(i) || jsonb_build_object('execution_state',null::jsonb)) as next from issues i where i.id=${ids.issue}::uuid`);
+      const step = { kind: "board_stage_return", transitionId: randomUUID(), activityId, stageId: ids.stage,
+        participantAgentId: ids.reviewer, executorAgentId: ids.executor, decisionId: ids.decision,
+        taskStatusVersion: task!.statusVersion + 1, previousSnapshotDigest: snapshot.digest,
+        previousOwnerContentHash: snapshot.owner.contentHash, nextOwnerContentHash: hash!.next };
+      const { digest: _digest, ...unsealed } = snapshot;
+      const next = { ...unsealed, owner: { ...snapshot.owner, contentHash: hash!.next }, transforms: [...(snapshot.transforms ?? []), step] };
+      if (task!.payloadSourceSnapshot) await db.transaction(async tx => {
+        await tx.insert(activityLog).values({ id: activityId, companyId: ids.company, actorType: "user", actorId: ids.user,
+          action: "issue.updated", entityType: "issue", entityId: ids.issue, createdAt: at(20_000),
+          details: { status: "in_progress", previousStatus: "in_review", changes } });
+        await tx.execute(sql`with s as (select ${JSON.stringify(next)}::jsonb as snap)
+          update issues set status='in_progress', assignee_agent_id=${ids.executor}::uuid, execution_state=null,
+            payload_source_snapshot = s.snap || jsonb_build_object('digest',encode(sha256(convert_to(s.snap::text,'UTF8')),'hex'))
+          from s where issues.id=${ids.issue}::uuid`);
+      });
+      await db.insert(heartbeatRuns).values({ id: receiver, companyId: ids.company, agentId: ids.executor, status: "running",
+        runtimeMode: "legacy", scopeKind: "issue", issueId: ids.issue, responsibleUserId: ids.user, startedAt: at(21_000),
+        createdAt: at(21_000), contextSnapshot: { issueId: ids.issue, taskId: ids.issue, wakeReason: "issue_assigned", source: "issue.update" } });
+      await db.insert(agentWakeupRequests).values({ id: wakeId, companyId: ids.company, agentId: ids.executor, source: "assignment",
+        reason: "issue_assigned", payload: { issueId: ids.issue, mutation: "update" }, status: "claimed", requestedByActorType: "user",
+        requestedByActorId: ids.user, runId: receiver, requestedAt: at(20_500) });
+      await db.update(heartbeatRuns).set({ wakeupRequestId: wakeId }).where(eq(heartbeatRuns.id, receiver));
+      await db.update(issues).set({ executionRunId: receiver }).where(eq(issues.id, ids.issue));
+      return { receiver, wakeId, activityId };
+    }
+    const receiverRow = async (id: string) => (await db.select().from(heartbeatRuns).where(eq(heartbeatRuns.id, id)))[0]!;
+    const capture = async (ids: Ids, receiver: string) => captureNativeStageRoundReturnOwner(db as never, {
+      companyId: ids.company, issueId: ids.issue, receiver: await receiverRow(receiver),
+      reader: { type: "agent", source: "agent_jwt", companyId: ids.company, agentId: ids.executor, runId: receiver,
+        onBehalfOfUserId: ids.user } });
+
+    it("names the board's return, the Task version, the round decision and its Reviewer Run", async () => {
+      const ids = await seed({ sealed: true });
+      const { receiver, wakeId, activityId } = await returnRound(ids, { reviewerDecision: "round" });
+      const owner = await capture(ids, receiver);
+      expect(owner).toMatchObject({ version: 1, companyId: ids.company, issueId: ids.issue, receiverRunId: receiver,
+        agentId: ids.executor, responsibleUserId: ids.user, wakeupRequestId: wakeId, activityId, taskStatusVersion: 2,
+        stageId: ids.stage, stagePendingDecisionId: ids.decision, executorRunId: ids.sourceRun, reviewerAgentId: ids.reviewer,
+        reviewerRunIds: [ids.reviewerRun] });
+      expect(exactNativeStageRoundReturnOwner(owner, { companyId: ids.company, issueId: ids.issue, runId: receiver,
+        agentId: ids.executor, responsibleUserId: ids.user, wakeupRequestId: wakeId })).toBe(true);
+      expect(nativeStageRoundReturnOwnerMatches(await capture(ids, receiver), owner)).toBe(true);
+      expect(nativeStageRoundReturnOwnerMatches(null, owner)).toBe(false);
+      // A finished receiver re-reads the same immutable owner after the Task moves on.
+      await db.update(heartbeatRuns).set({ status: "succeeded", finishedAt: new Date() }).where(eq(heartbeatRuns.id, receiver));
+      await db.update(issues).set({ statusVersion: 3 }).where(eq(issues.id, ids.issue));
+      expect(await capture(ids, receiver)).toEqual(owner);
+    });
+
+    it("refuses without the board's return or with another Human, actor or wake", async () => {
+      const ids = await seed({ sealed: true });
+      const { receiver, wakeId, activityId } = await returnRound(ids);
+      expect(await capture(ids, receiver)).not.toBeNull();
+      await db.update(activityLog).set({ actorType: "agent", agentId: ids.executor }).where(eq(activityLog.id, activityId));
+      expect(await capture(ids, receiver)).toBeNull();
+      await db.update(activityLog).set({ actorType: "user", agentId: null, actorId: "other-human" }).where(eq(activityLog.id, activityId));
+      expect(await capture(ids, receiver)).toBeNull();
+      await db.delete(activityLog).where(eq(activityLog.id, activityId));
+      expect(await capture(ids, receiver)).toBeNull();
+      const other = await seed({ sealed: true });
+      const second = await returnRound(other);
+      await db.update(agentWakeupRequests).set({ requestedByActorType: "agent" }).where(eq(agentWakeupRequests.id, second.wakeId));
+      expect(await capture(other, second.receiver)).toBeNull();
+      await db.update(agentWakeupRequests).set({ requestedByActorType: "user", requestedByActorId: "other-human" })
+        .where(eq(agentWakeupRequests.id, second.wakeId));
+      expect(await capture(other, second.receiver)).toBeNull();
+      await db.update(agentWakeupRequests).set({ requestedByActorId: other.user, payload: { issueId: other.issue, mutation: "create" } })
+        .where(eq(agentWakeupRequests.id, second.wakeId));
+      expect(await capture(other, second.receiver)).toBeNull();
+      await db.update(agentWakeupRequests).set({ payload: { issueId: other.issue, mutation: "update" } })
+        .where(eq(agentWakeupRequests.id, second.wakeId));
+      expect(await capture(other, second.receiver)).not.toBeNull();
+      void wakeId;
+    });
+
+    it("refuses a return the Task source does not record (MS1f stop 5)", async () => {
+      const ids = await seed();
+      const { receiver } = await returnRound(ids);
+      expect(await capture(ids, receiver)).toBeNull();
+    });
+
+    it("refuses a different Task version or a later status decision", async () => {
+      const ids = await seed({ sealed: true });
+      const { receiver } = await returnRound(ids);
+      await db.update(issues).set({ statusVersion: 3 }).where(eq(issues.id, ids.issue));
+      expect(await capture(ids, receiver)).toBeNull();
+      await db.update(issues).set({ statusVersion: 2, lastStatusDecisionId: null }).where(eq(issues.id, ids.issue));
+      expect(await capture(ids, receiver)).toBeNull();
+    });
+
+    it("refuses a Reviewer Run of another stage, another Agent's Run, and a decision outside the round", async () => {
+      const ids = await seed({ sealed: true });
+      const { receiver } = await returnRound(ids);
+      const run = await reviewerRunRow(ids);
+      const context = run.contextSnapshot as Record<string, unknown>;
+      await db.update(heartbeatRuns).set({ contextSnapshot: { ...context, executionStage: { ...(context.executionStage as object),
+        stageId: randomUUID() } } }).where(eq(heartbeatRuns.id, ids.reviewerRun));
+      expect(await capture(ids, receiver)).toBeNull();
+      await db.update(heartbeatRuns).set({ contextSnapshot: context }).where(eq(heartbeatRuns.id, ids.reviewerRun));
+      expect(await capture(ids, receiver)).not.toBeNull();
+      // The round's Reviewer is the stage participant the board's return removed:
+      // another Agent named there has no Run of this round.
+      const [returned] = await db.select().from(activityLog).where(and(eq(activityLog.companyId, ids.company),
+        eq(activityLog.entityId, ids.issue), eq(activityLog.action, "issue.updated")));
+      const details = returned!.details as { changes: Record<string, unknown> };
+      await db.update(activityLog).set({ details: { ...details, changes: { ...details.changes,
+        assigneeAgentId: { from: ids.outsider, to: ids.executor },
+        executionState: { from: stageState({ ...ids, reviewer: ids.outsider }), to: null } } } }).where(eq(activityLog.id, returned!.id));
+      expect(await capture(ids, receiver)).toBeNull();
+      const foreign = await seed({ sealed: true });
+      const second = await returnRound(foreign, { reviewerDecision: "foreign" });
+      expect(await capture(foreign, second.receiver)).toBeNull();
     });
   });
 });

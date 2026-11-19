@@ -11876,7 +11876,12 @@ export function issueService(db: Db) {
       postCommitActivityPublications?: ActivityPublication[],
       postCommitActions?: IssuePostCommitAction[],
       options: { bindRuntimeSharedWorkspace?: boolean; nativeFailureRecoveryOwner?: { runId: string; agentId: string };
-        nativeStagePolicySourceTransform?: import("./native-stage-task-body-source.js").NativeStageTaskBodyOwner; workspaceBindingSourceTransform?: {
+        nativeStagePolicySourceTransform?: import("./native-stage-task-body-source.js").NativeStageTaskBodyOwner;
+        /** MS1f stop 5 (0587). Only the PATCH board override that returns a Task
+         * from a pending stage to its executor: the board user and the id of the
+         * issue.updated activity the caller writes in this transaction. */
+        boardStageReturnSourceTransform?: { userId: string; activityId: string };
+        workspaceBindingSourceTransform?: {
         agentId: string; runId: string; workspaceId: string; expectedPreviousSnapshotDigest: string;
         preparingControllerBootId?: string;
       } } = {},
@@ -12448,7 +12453,9 @@ export function issueService(db: Db) {
               ${is(value, SQL) ? sql`to_jsonb(${value})` : sql`${JSON.stringify(value)}::jsonb`})`), sql` || `);
           const binding = options.workspaceBindingSourceTransform;
           const stageBinding = options.nativeStagePolicySourceTransform;
+          const boardReturn = options.boardStageReturnSourceTransform;
           if (binding && stageBinding) throw unprocessable("Task source transforms require one exact owner");
+          if (boardReturn && (binding || stageBinding)) throw unprocessable("Task source transforms require one exact owner");
           const [body] = await tx.execute<{ changed: boolean; nextHash: string }>(sql`select
             public.aw_native_payload_body_hash('issue', to_jsonb(${issues})) is distinct from
             public.aw_native_payload_body_hash('issue', to_jsonb(jsonb_populate_record(
@@ -12472,7 +12479,22 @@ export function issueService(db: Db) {
                 nextUnblockDescriptor: patch.unblockDescriptor !== undefined ? patch.unblockDescriptor : receiptExisting.unblockDescriptor,
                 actualBodyPatch: bodyPatch});
             } else if (!binding) {
-              patch.payloadSourceSnapshot = null;
+              // MS1f stop 5 (0587). A board return from a pending stage keeps the
+              // Task source with one board_stage_return step, only for the board
+              // user named by the route and only when the return's facts hold and
+              // execution_state is the only body change; else as before.
+              const { nativeBoardStageReturnFacts, prepareNativeBoardStageReturnSnapshot } = boardReturn &&
+                currentActor?.type === "board" && currentActor.userId === boardReturn.userId &&
+                currentActor.source !== "local_implicit" ? await import("./native-board-stage-return-source.js") : {};
+              const facts = nativeBoardStageReturnFacts ? await nativeBoardStageReturnFacts(tx, { task: receiptExisting,
+                userId: boardReturn!.userId, nextExecutionState: patch.executionState,
+                nextAssigneeAgentId: patch.assigneeAgentId, nextAssigneeUserId: patch.assigneeUserId,
+                nextStatus: patch.status, nextLastStatusDecisionId: patch.lastStatusDecisionId }) : null;
+              const returned = facts && prepareNativeBoardStageReturnSnapshot
+                ? await prepareNativeBoardStageReturnSnapshot(tx, { task: receiptExisting, activityId: boardReturn!.activityId,
+                    facts, actualBodyPatch: bodyPatch }) : null;
+              if (returned) payloadSourceSnapshotSql = returned;
+              else patch.payloadSourceSnapshot = null;
             } else {
               const parsedSnapshot = nativePayloadSourceSnapshotSchema.safeParse(receiptExisting.payloadSourceSnapshot);
               const snapshot = parsedSnapshot.success ? parsedSnapshot.data : null;
