@@ -644,7 +644,12 @@ export async function buildExecutionContinuation(input: {
   // A canonical Human continuation deliberately starts a fresh session. Keep
   // its exact source envelope in full-history form instead of capturing a
   // provider-session delta that heartbeat will later discard.
-  const fullHistoryTurn = freshAssignmentUsesFullHistory || input.context.forceFreshSession === true;
+  // MS1f stop 7 (option A). A stage Reviewer wake (any round) judges the
+  // current round from the Task history and the earlier rounds' sealed
+  // comments; it never continues an earlier private session, so it carries no
+  // previous context and no resume delta.
+  const fullHistoryTurn = freshAssignmentUsesFullHistory || input.context.forceFreshSession === true ||
+    stageContinuation !== null;
   const effectiveSummary = assignmentFinalizedSummary || stageSummaryReplacesDocument ? null : input.summary;
   const messages = rows.map((row) => {
     const safe = input.exposeLowTrustRaw

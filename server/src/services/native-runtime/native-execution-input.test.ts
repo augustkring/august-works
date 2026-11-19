@@ -264,6 +264,17 @@ describe("native bootstrap rendered-source closure", () => {
       (v: NativeTaskContinuationCapture) => { v.explicitHumanSource!.sourceStopReceiptHash = "invalid"; },
     ]) { const changed = structuredClone(explicit); mutate(changed); expect(checkExplicit(changed)).toBeNull(); }
     expect(check()).toBe(capture);
+    // MS1f stop 7 (option A). A stage continuation never resumes an earlier
+    // session: a resume delta without a retained_run source is refused, with or
+    // without the previous context it would apply to.
+    const stageResume = structuredClone(capture), stageResumeBase = randomUUID();
+    stageResume.envelope.resumeDelta = { baseRunId: stageResumeBase, messages: structuredClone(capture.envelope.messages) };
+    stageResume.previousContext = { runId: stageResumeBase, messages: [] };
+    expect(check(stageResume)).toBeNull();
+    const stageDeltaOnly = structuredClone(stageResume); delete stageDeltaOnly.previousContext;
+    expect(check(stageDeltaOnly)).toBeNull();
+    const stagePreviousOnly = structuredClone(stageResume); delete stagePreviousOnly.envelope.resumeDelta;
+    expect(check(stagePreviousOnly)).toBeNull();
     expect(exactNativeTaskContinuation({companyId,issueId,runId,agentId,responsibleUserId:humanId,wakeupRequestId:wakeId,
       wakeReason:reason,value:capture.envelope,capture})).toBeNull();
     for (const mutate of [

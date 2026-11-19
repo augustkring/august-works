@@ -22189,10 +22189,14 @@ export function heartbeatService(
         preserveLegacySessionWithoutConfigMetadata:
           acceptedPlanContinuationWake && !acceptedPlanWakeRoutingDecision,
       });
+      // MS1f stop 7 (option A). A Native stage Reviewer wake (the builder
+      // captured its stage trigger) never resumes the earlier provider session.
+      const nativeStageReviewerFreshSession = nativeStageContinuationTrigger.value !== null;
       const resetTaskSession =
-        shouldResetTaskSessionForWake(context) || sessionConfigFreshness.reset;
+        shouldResetTaskSessionForWake(context) || sessionConfigFreshness.reset || nativeStageReviewerFreshSession;
       const sessionResetReason =
-        sessionConfigFreshness.reasons.join("; ") || null;
+        [...sessionConfigFreshness.reasons,
+          ...(nativeStageReviewerFreshSession ? ["a stage Reviewer wake starts a fresh session"] : [])].join("; ") || null;
       const taskSessionForRun = resetTaskSession ? null : taskSession;
       const previousSessionParams =
         explicitResumeSessionParams ??
