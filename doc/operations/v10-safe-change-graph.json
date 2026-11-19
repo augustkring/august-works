@@ -9288,7 +9288,7 @@
         },
         {
           "path": "server/src/services/native-direct-input.ts",
-          "sha256": "6f5f63fea1abcc65abf7d0a2215394f48bce44adf7b2a3fa4cc96a327748038b"
+          "sha256": "f0981fe74abf52d2a60df79442a5b84a596cc339d420debf24b2fcc21fa13574"
         },
         {
           "path": "server/src/services/native-project-output.ts",
@@ -24914,7 +24914,7 @@
         },
         {
           "path": "server/src/services/execution-continuation.ts",
-          "sha256": "527a47cd1071e494395b089377fbcea36db46b20bc67253210be2526e0617a6b"
+          "sha256": "5bd38575104af453586b5595061a0a2a73c6bc5faf6e53152addc7b056879254"
         },
         {
           "path": "server/src/services/execution-control-reconciliation.test.ts",
@@ -25066,7 +25066,7 @@
         },
         {
           "path": "server/src/services/native-runtime/managed-signoff-api-policy.integration.test.ts",
-          "sha256": "778001a235d56bf4718a6f0956dd7045c8185bc4b226e6828bf384d2fa38fd5a"
+          "sha256": "041e742a3a3b1181e70432c053e7ca9a62b8b11412ac9803409a9223c6075a97"
         },
         {
           "path": "server/src/services/native-runtime/management-analytical-tools.test.ts",
@@ -27593,7 +27593,7 @@
         },
         {
           "path": "server/src/services/native-stage-wake-source.ts",
-          "sha256": "8bf4fc11334bb7a1936a48bc93dff43958034351f59d7d6f18830ebe8bb9c7f6"
+          "sha256": "ce1874dc967795e34d9982a26c174c7305bf9f2481f95e9e6f3cc3fbdb85ed06"
         },
         {
           "path": "server/src/services/optimizer/optimizer-evaluation.ts",
@@ -50830,7 +50830,7 @@
       "id": "source:server/src/services/native-direct-input.ts",
       "kind": "current_source_owner",
       "path": "server/src/services/native-direct-input.ts",
-      "sha256": "6f5f63fea1abcc65abf7d0a2215394f48bce44adf7b2a3fa4cc96a327748038b",
+      "sha256": "f0981fe74abf52d2a60df79442a5b84a596cc339d420debf24b2fcc21fa13574",
       "changeIds": [
         "SCR-V10-HOTSPOT-06"
       ],
@@ -63418,7 +63418,7 @@
       "id": "source:server/src/services/execution-continuation.ts",
       "kind": "current_source_owner",
       "path": "server/src/services/execution-continuation.ts",
-      "sha256": "527a47cd1071e494395b089377fbcea36db46b20bc67253210be2526e0617a6b",
+      "sha256": "5bd38575104af453586b5595061a0a2a73c6bc5faf6e53152addc7b056879254",
       "changeIds": [
         "SCR-V10-NATIVE-RUNTIME-AND-AUTHORITY"
       ],
@@ -63973,7 +63973,7 @@
       "id": "source:server/src/services/native-runtime/managed-signoff-api-policy.integration.test.ts",
       "kind": "current_source_owner",
       "path": "server/src/services/native-runtime/managed-signoff-api-policy.integration.test.ts",
-      "sha256": "778001a235d56bf4718a6f0956dd7045c8185bc4b226e6828bf384d2fa38fd5a",
+      "sha256": "041e742a3a3b1181e70432c053e7ca9a62b8b11412ac9803409a9223c6075a97",
       "changeIds": [
         "SCR-V10-NATIVE-RUNTIME-AND-AUTHORITY"
       ],
@@ -67363,7 +67363,7 @@
       "id": "source:server/src/services/native-stage-wake-source.ts",
       "kind": "current_source_owner",
       "path": "server/src/services/native-stage-wake-source.ts",
-      "sha256": "8bf4fc11334bb7a1936a48bc93dff43958034351f59d7d6f18830ebe8bb9c7f6",
+      "sha256": "ce1874dc967795e34d9982a26c174c7305bf9f2481f95e9e6f3cc3fbdb85ed06",
       "changeIds": [
         "SCR-V10-UNCLASSIFIED-REGISTERED-OWNER"
       ],
