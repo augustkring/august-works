@@ -112,8 +112,9 @@ import { instanceSettingsService } from "../instance-settings.js";
 import { nativeSha256 } from "./canonical.js";
 import { createToolGatewayService } from "../tool-gateway.js";
 import { lockNativeStageReviewerCommentPlan } from "../orchestration/native-tool-boundary.js";
+import { assertCurrentWakeCommentsRead } from "./current-wake-comments.js";
 import { captureNativeStageContinuationOwner, nativeStageDeliveredReasonMatches, nativeStageIntentBoundToDeliveredRun,
-  nativeStageReviewerRunCapturable, nativeStageReviewerRunUnselected } from "../native-stage-wake-source.js";
+  nativeStageReviewerRunCapturable, nativeStageReviewerRunUnselected, nativeStageConsumptionModelCallBound } from "../native-stage-wake-source.js";
 import { policyFixture } from "../../__tests__/helpers/sandbox-fixture.js";
 
 const support = await getEmbeddedPostgresTestSupport();
@@ -1084,6 +1085,79 @@ describeDb("execution-policy stage Reviewer lane under a plan (MS1f decision 4)"
       await db.insert(orchestrationWorkerAttempts).values({ companyId: other.company, planId: other.plan, workerId: other.worker,
         agentId: other.reviewer, runId: other.reviewerRun, attempt: 2, status: "running", executionManifestId: other.manifest });
       await expect(lock(other)).rejects.toThrow("The Stage Reviewer comment is no longer current for this Reviewer Run");
+    });
+  });
+  // MS1f phase 4. The terminal current-wake fence: after its own stage decision
+  // hands the Task back to the plan Worker, exactly that deciding stage
+  // Reviewer Run may still finish; it does not regain task write access.
+  describe("terminal current-wake fence after the stage decision (MS1f phase 4)", () => {
+    const fence = (ids: Ids, runId = ids.reviewerRun, agentId = ids.reviewer) =>
+      assertCurrentWakeCommentsRead(db as never, { companyId: ids.company, issueId: ids.issue, runId, agentId });
+    it("lets the deciding stage Reviewer Run finish once the Task is back with the plan Worker", async () => {
+      const ids = await seed();
+      await expect(fence(ids)).resolves.toBeUndefined();
+      await recordStageDecision(ids);
+      await expect(fence(ids)).resolves.toBeUndefined();
+    });
+    it("refuses when the stage's last decision is not this Run's, or no decision was recorded", async () => {
+      const ids = await seed();
+      await db.update(issues).set({ assigneeAgentId: ids.executor }).where(eq(issues.id, ids.issue));
+      await expect(fence(ids)).rejects.toThrow("native_current_wake_comments_binding_changed");
+      const other = await seed();
+      await recordStageDecision(other, other.sourceRun);
+      await expect(fence(other)).rejects.toThrow("native_current_wake_comments_binding_changed");
+    });
+    it("refuses a Run whose wake is not a stage Reviewer wake once it is no longer the assignee", async () => {
+      const ids = await seed();
+      await recordStageDecision(ids);
+      const run = await reviewerRunRow(ids);
+      await db.update(heartbeatRuns).set({ contextSnapshot: { ...(run.contextSnapshot as object), source: "issue.assignment" } })
+        .where(eq(heartbeatRuns.id, ids.reviewerRun));
+      await expect(fence(ids)).rejects.toThrow("native_current_wake_comments_binding_changed");
+    });
+  });
+  // MS1f phase 4. The finalized stage consumption accepts the stage Reviewer's
+  // model call only when it is exactly this Run's `review_model` (planned) or
+  // `worker_model` (plan-less) reservation with the matching dispatch source.
+  describe("finalized stage consumption model-call binding (MS1f phase 4)", () => {
+    const run = { id: randomUUID(), agentId: randomUUID() };
+    const issueId = randomUUID(), stageId = randomUUID(), decisionId = randomUUID(), executorRunId = randomUUID();
+    const h = (c: string) => c.repeat(64);
+    const reviewReservation = { id: randomUUID(), purpose: "review_model", inputHash: h("a"), providerResponseHash: h("b"),
+      reviewRunId: run.id, reviewAgentId: run.agentId, reviewIssueId: issueId, reviewInteractionId: null,
+      reviewStageId: stageId, reviewDecisionId: decisionId, reviewSourceRunId: executorRunId };
+    const intent = { modelPurpose: "review_model", requestHash: h("a"), callId: "call-1", wireBodyHash: h("c") };
+    const reviewSource = { kind: "review_model_dispatch", reviewKind: "execution_stage", stageId, decisionId, issueId,
+      runId: run.id, reservationId: reviewReservation.id, callId: "call-1", requestHash: h("a"), wireBodyHash: h("c"), responseHash: h("b") };
+    const base = { reservation: reviewReservation, run, issueId, stageId, decisionId, executorRunId, intent, dispatchSources: [reviewSource] };
+    const bound = (patch: Record<string, unknown> = {}) => nativeStageConsumptionModelCallBound({ ...base, ...patch } as never);
+    it("accepts the planned stage Reviewer's own review_model call", () => {
+      expect(bound()).toBe(true);
+    });
+    it("refuses a review_model reservation bound to another Run, Agent, Task, interaction, stage, decision or executor", () => {
+      for (const [field, value] of [["reviewRunId", randomUUID()], ["reviewAgentId", randomUUID()], ["reviewIssueId", randomUUID()],
+        ["reviewInteractionId", randomUUID()], ["reviewStageId", randomUUID()], ["reviewDecisionId", randomUUID()],
+        ["reviewSourceRunId", randomUUID()], ["inputHash", h("d")], ["purpose", "worker_model"]] as const)
+        expect(bound({ reservation: { ...reviewReservation, [field]: value } }), field).toBe(false);
+    });
+    it("refuses a review_model call without the exact stage review dispatch source", () => {
+      for (const [field, value] of [["kind", "worker_model_dispatch"], ["reviewKind", "interaction"], ["stageId", randomUUID()],
+        ["decisionId", randomUUID()], ["issueId", randomUUID()], ["runId", randomUUID()], ["reservationId", randomUUID()],
+        ["callId", "call-2"], ["requestHash", h("d")], ["wireBodyHash", h("d")], ["responseHash", h("d")]] as const)
+        expect(bound({ dispatchSources: [{ ...reviewSource, [field]: value }] }), field).toBe(false);
+      expect(bound({ dispatchSources: [] })).toBe(false);
+    });
+    it("keeps the plan-less worker_model path exact and refuses other purposes", () => {
+      const reservation = { ...reviewReservation, purpose: "worker_model", reviewRunId: null, reviewAgentId: null, reviewIssueId: null,
+        reviewStageId: null, reviewDecisionId: null, reviewSourceRunId: null };
+      const source = { kind: "worker_model_dispatch", runId: run.id, reservationId: reservation.id, callId: "call-1",
+        requestHash: h("a"), wireBodyHash: h("c"), responseHash: h("b") };
+      const workerIntent = { ...intent, modelPurpose: "worker_model" };
+      expect(bound({ reservation, intent: workerIntent, dispatchSources: [source] })).toBe(true);
+      expect(bound({ reservation, intent: workerIntent, dispatchSources: [{ ...source, responseHash: h("d") }] })).toBe(false);
+      expect(bound({ reservation, intent: workerIntent, dispatchSources: [reviewSource] })).toBe(false);
+      expect(bound({ reservation, intent: { ...intent, modelPurpose: "conformance_model" }, dispatchSources: [source] })).toBe(false);
+      expect(bound({ intent: { ...intent, modelPurpose: "worker_model" } })).toBe(false);
     });
   });
 });

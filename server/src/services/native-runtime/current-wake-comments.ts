@@ -13,7 +13,8 @@ import type { SourceTrustMetadata } from "@paperclipai/shared";
 
 import { createRunSecretRedactionRegistry } from "../run-secret-redaction.js";
 import { sanitizeQuarantinedCommentForHigherTrust } from "../source-trust.js";
-import { getNativeReviewAssignment, readNativeReviewAssignmentContext } from "./native-review-participant.js";
+import { getNativeExecutionStageReviewAssignment, getNativeReviewAssignment, readNativeReviewAssignmentContext,
+  readNativeStageReviewContext } from "./native-review-participant.js";
 
 export const READ_CURRENT_WAKE_COMMENTS_TOOL_NAME =
   "read_current_wake_comments";
@@ -791,7 +792,17 @@ export async function assertCurrentWakeCommentsRead(
         throw new Error("native_current_wake_comments_binding_changed");
       }
     } else if (locked.issue.assigneeAgentId !== input.agentId || locked.issue.executionRunId !== input.runId) {
-      throw new Error("native_current_wake_comments_binding_changed");
+      // MS1f phase 4. A planned execution-policy stage Reviewer's own stage
+      // decision hands the Task back to the plan Worker (held in review for
+      // plan verification). That exact deciding Run may still finish (the
+      // stage assignment's recorded mode: its own decision is the stage's last
+      // one); it does not regain task write access. Anything else is refused.
+      const recordedStageReview = readNativeStageReviewContext(locked.run.contextSnapshot)
+        ? await getNativeExecutionStageReviewAssignment(tx as unknown as Db, { companyId: input.companyId,
+            issueId: input.issueId, agentId: input.agentId, run: locked.run, mode: "recorded" })
+        : null;
+      if (!recordedStageReview?.recordedDecision || recordedStageReview.recordedDecision.createdByRunId !== input.runId)
+        throw new Error("native_current_wake_comments_binding_changed");
     }
     const currentBinding = await resolveCurrentWakeCommentsBinding(
       tx as unknown as Db,

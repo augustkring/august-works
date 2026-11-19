@@ -548,6 +548,42 @@ export function nativeStageContinuationOwnerMatches(input:{candidate:NativeStage
 
 /** No status-only inference: both the original input and the actual policy API
  * receipt/result/decision must be bound to this same finalized Native Run. */
+type NativeStageConsumptionReservation = Pick<typeof orchestrationModelReservations.$inferSelect,
+  "id"|"purpose"|"inputHash"|"providerResponseHash"|"reviewRunId"|"reviewAgentId"|"reviewIssueId"|"reviewInteractionId"|
+  "reviewStageId"|"reviewDecisionId"|"reviewSourceRunId">;
+/**
+ * MS1f phase 4. The model call that carried a stage Reviewer's `call_api`
+ * comment is exactly this Run's: a `worker_model` reservation (plan-less
+ * Reviewer) or a `review_model` reservation bound to this Run, Agent, Task,
+ * the stage it decided and the executor's stage-pending decision, and the
+ * receipt carries the matching dispatch source of the same kind. Every field
+ * is compared exactly; anything else is refused.
+ */
+export function nativeStageConsumptionModelCallBound(input: {
+  reservation: NativeStageConsumptionReservation; run: { id: string; agentId: string }; issueId: string;
+  stageId: unknown; decisionId: unknown; executorRunId: unknown;
+  intent: { modelPurpose: unknown; requestHash: unknown; callId: unknown; wireBodyHash: unknown };
+  dispatchSources: ReadonlyArray<Record<string, unknown> & { kind: string }>;
+}): boolean {
+  const { reservation, run, intent } = input;
+  const reviewPurpose = intent.modelPurpose === "review_model";
+  if (!reviewPurpose && intent.modelPurpose !== "worker_model") return false;
+  if (reservation.purpose !== intent.modelPurpose || reservation.inputHash !== intent.requestHash) return false;
+  if (typeof input.stageId !== "string" || typeof input.decisionId !== "string" || typeof input.executorRunId !== "string") return false;
+  if (reviewPurpose && (reservation.reviewRunId !== run.id || reservation.reviewAgentId !== run.agentId ||
+    reservation.reviewIssueId !== input.issueId || reservation.reviewInteractionId !== null ||
+    reservation.reviewStageId !== input.stageId || reservation.reviewDecisionId !== input.decisionId ||
+    reservation.reviewSourceRunId !== input.executorRunId)) return false;
+  const exact = (value: Record<string, unknown>) =>
+    value.runId === run.id && value.reservationId === reservation.id && value.callId === intent.callId &&
+    value.requestHash === reservation.inputHash && value.wireBodyHash === intent.wireBodyHash &&
+    value.responseHash === reservation.providerResponseHash;
+  return input.dispatchSources.some(source => reviewPurpose
+    ? source.kind === "review_model_dispatch" && source.reviewKind === "execution_stage" &&
+      source.stageId === input.stageId && source.decisionId === input.decisionId && source.issueId === input.issueId && exact(source)
+    : source.kind === "worker_model_dispatch" && exact(source));
+}
+
 export async function captureNativeFinalizedStageConsumption(db: Db | Transaction, input: {
   companyId: string; issueId: string; runId: string; reader: AuthorizationActor; readWork?:()=>void;
 }): Promise<NativeFinalizedStageConsumption | null> {
@@ -660,16 +696,21 @@ export async function captureNativeFinalizedStageConsumption(db: Db | Transactio
     if (associations.length !== 1 || intents.length !== 1 || dispatches.length !== 1 || !onlyAssociation || !onlyIntent || !onlyDispatch ||
       typeof onlyAssociation.argumentsHash !== "string" || !/^[a-f0-9]{64}$/.test(onlyAssociation.argumentsHash) ||
       typeof onlyDispatch.turnInputDigest !== "string" || !/^[a-f0-9]{64}$/.test(onlyDispatch.turnInputDigest) ||
-      onlyIntent.sourceDispatchDigest !== onlyDispatch.turnInputDigest || onlyIntent.modelPurpose !== "worker_model" || typeof onlyIntent.reservationId !== "string") continue;
+      onlyIntent.sourceDispatchDigest !== onlyDispatch.turnInputDigest || typeof onlyIntent.reservationId !== "string" ||
+      !(onlyIntent.modelPurpose === "worker_model" || onlyIntent.modelPurpose === "review_model")) continue;
+    // MS1f phase 4. A planned stage Reviewer's model calls are `review_model`
+    // reservations bound to this Run, Agent, Task, the stage it decided and the
+    // executor's stage-pending decision (decision 4), with a stage review
+    // dispatch marker; a plan-less stage Reviewer keeps `worker_model`.
+    const reviewPurpose=onlyIntent.modelPurpose === "review_model";
     const [reservation]=await db.select().from(orchestrationModelReservations).where(and(eq(orchestrationModelReservations.companyId,input.companyId),
-      eq(orchestrationModelReservations.purpose,"worker_model"),eq(orchestrationModelReservations.id,onlyIntent.reservationId),
+      eq(orchestrationModelReservations.purpose,reviewPurpose ? "review_model" : "worker_model"),eq(orchestrationModelReservations.id,onlyIntent.reservationId),
       eq(orchestrationModelReservations.status,"completed"))).limit(1).for("share");
-    if (!reservation || reservation.inputHash !== onlyIntent.requestHash ||
-      onlyIntent.sourcePolicyHash !== nativeSha256(receipt.data.bootstrap) ||
-      !receipt.data.dispatches.some(dispatch=>dispatch.inputs.some(source=>source.kind === "worker_model_dispatch" &&
-        source.runId === run.id && source.reservationId === reservation.id && source.callId === onlyIntent.callId &&
-        source.requestHash === reservation.inputHash && source.wireBodyHash === onlyIntent.wireBodyHash &&
-        source.responseHash === reservation.providerResponseHash))) continue;
+    if (!reservation || onlyIntent.sourcePolicyHash !== nativeSha256(receipt.data.bootstrap) ||
+      !nativeStageConsumptionModelCallBound({reservation,run:{id:run.id,agentId:run.agentId},issueId:input.issueId,
+        stageId:fromState.currentStageId,decisionId:origin.decisionId,executorRunId:origin.executorRunId,
+        intent:{modelPurpose:onlyIntent.modelPurpose,requestHash:onlyIntent.requestHash,callId:onlyIntent.callId,wireBodyHash:onlyIntent.wireBodyHash},
+        dispatchSources:receipt.data.dispatches.flatMap(dispatch=>dispatch.inputs)})) continue;
     const action=await createRunSecretRedactionRegistry(db as Db).redactForIssue(input.companyId,input.issueId,
       {runId:run.id,receiptId,operationId:String(api.operationId),result:api.result});
     if (Buffer.byteLength(JSON.stringify(action),"utf8") > 64_000) continue;
