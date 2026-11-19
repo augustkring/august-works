@@ -9615,13 +9615,18 @@ async function recordManagedOpenCodeToolResult(input: Parameters<typeof renewNat
       let returnedDocumentSource: Extract<NativePayloadSourceInput, { kind: "document_revision" }> | null = null;
       if (input.tool === "read_document") {
         markResultPhase("document_task_source");
+        // MS1f phase 4. The document read owner records the returned DTO's
+        // digest as the SHA-256 of its JSON bytes (`returnedResultDigest`,
+        // `paperclip-runner-tool-authority.ts`); bind the capture with that same
+        // digest of this exact returned result, never the canonical hash.
+        const documentResultDigest = createHash("sha256").update(JSON.stringify(input.result)).digest("hex");
         const readCaptures = Array.isArray(profile.nativeToolResultSourceCaptures)
           ? profile.nativeToolResultSourceCaptures.map(record).filter(value => value.managedOpenCode !== true &&
-              value.callId === input.callId && value.tool === input.tool && value.resultDigest === digest)
+              value.callId === input.callId && value.tool === input.tool && value.resultDigest === documentResultDigest)
           : [];
         const readSource = record(readCaptures[0]?.source);
         const sourceInput = nativePayloadSourceInputSchema.safeParse(readSource.input);
-        if (readCaptures.length !== 1 || readSource.returnedResultDigest !== digest || !sourceInput.success ||
+        if (readCaptures.length !== 1 || readSource.returnedResultDigest !== documentResultDigest || !sourceInput.success ||
           sourceInput.data.kind !== "document_revision" || sourceInput.data.issueId !== input.issueId)
           throw new Error("managed_opencode_tool_result_binding_invalid");
         returnedDocumentSource = sourceInput.data;
