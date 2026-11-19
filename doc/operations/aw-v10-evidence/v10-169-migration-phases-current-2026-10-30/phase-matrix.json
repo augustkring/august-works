@@ -17,8 +17,8 @@
   "sourceBaseCommit": "81d3445b98b1cd80ff400ede6bd44ea71d88d735",
   "officialMigrationInterval": {
     "first": 502,
-    "last": 585,
-    "latestOfficialMigration": "0585_review_stage_reservation",
+    "last": 586,
+    "latestOfficialMigration": "0586_native_stage_source_owner_stage_id_text",
     "latestOfficialMigrationCommit": null,
     "journalSource": "packages/db/src/migrations/meta/_journal.json"
   },
@@ -49,9 +49,10 @@
         570,
         571,
         573,
-        575
+        575,
+        586
       ],
-      "purpose": "Native Project/Memory source provenance and payload Context binding, immutable source snapshots, reference retention, invalidation and dispatch receipt binding. Also inventories append-only workspace binding and Native Stage policy source transforms preserving the original Task literal and closure. Migration 0573 permits only the exact direct Human upload-to-first-comment source transition, with complete current attachment/asset/audit bindings and an unchanged Task body; all other source history containment and monotonic invalidation guards remain required. Migration 0575 binds a bounded set of unique remote attachment-stage receipts to current delivered attachment source captures and the exact dispatch intent; malformed, duplicate, stale, or mismatched receipts fail closed.",
+      "purpose": "Native Project/Memory source provenance and payload Context binding, immutable source snapshots, reference retention, invalidation and dispatch receipt binding. Also inventories append-only workspace binding and Native Stage policy source transforms preserving the original Task literal and closure. Migration 0573 permits only the exact direct Human upload-to-first-comment source transition, with complete current attachment/asset/audit bindings and an unchanged Task body; all other source history containment and monotonic invalidation guards remain required. Migration 0575 binds a bounded set of unique remote attachment-stage receipts to current delivered attachment source captures and the exact dispatch intent; malformed, duplicate, stale, or mismatched receipts fail closed. Migration 0586 corrects aw_issue_native_stage_source_owner() from 0571: the approval-comment branch compared the uuid issue_execution_decisions.stage_id with the text OLD.execution_state->>'currentStageId'; it now compares stage_id::text, so a Native stage Reviewer's approving comment can transform the Task source (otherwise identical; MS1f phase 4).",
       "authority": "Native owner services write source snapshots and source identities; PostgreSQL guards enforce immutable protocol bindings and monotonic invalidation. Unknown protocol/version 0 remains unqualified and is denied for private read admission; it is never inferred as verified.",
       "durableState": [
         "projects.source_project_ids and privacy-source lineage",
@@ -86,6 +87,7 @@
         "packages/db/src/migrations/0571_issue_native_stage_source_transform.sql",
         "packages/db/src/migrations/0573_native_conversation_upload_comment_transition.sql",
         "packages/db/src/migrations/0575_native_attachment_stage_remote_receipt_contract.sql",
+        "packages/db/src/migrations/0586_native_stage_source_owner_stage_id_text.sql",
         "packages/db/src/schema/memory.ts",
         "packages/shared/src/validators/native-payload-source-snapshot.ts",
         "server/src/services/analytical-context-authority.ts",
@@ -102,6 +104,7 @@
         "server/src/__tests__/native-payload-source-binding.integration.test.ts",
         "server/src/__tests__/native-payload-source-mutation-binding.integration.test.ts",
         "server/src/__tests__/native-payload-temporal-sources.integration.test.ts",
+        "server/src/__tests__/native-stage-source-owner-trigger.integration.test.ts",
         "server/src/__tests__/v10-private-payload.integration.test.ts",
         "server/src/services/context/context-manifest.test.ts",
         "server/src/services/native-runtime/native-model-input-dispatch.integration.test.ts",
@@ -1211,7 +1214,7 @@
     },
     {
       "path": "packages/db/src/migrations/meta/_journal.json",
-      "sha256": "02b9a90d913339a10f184e84a327afc4c57ca16b5ace69d492e6b57e7ce5f8ae"
+      "sha256": "b0b4c7292a22f77eb1b17e27e6a1285f2d2a74111532406411594efaa730e1fe"
     },
     {
       "path": "packages/db/src/native-input-source-protocol.test.ts",
@@ -1708,6 +1711,18 @@
     {
       "path": "packages/db/src/migrations/meta/0585_snapshot.json",
       "sha256": "ed61bc33851ca29725eff2a7080901974766c793c4d545c653a7abed5529c047"
+    },
+    {
+      "path": "packages/db/src/migrations/0586_native_stage_source_owner_stage_id_text.sql",
+      "sha256": "c8b76b460f8d591674c3261b9a28a82b2827250d1c84927d42b17f1ac05db5e1"
+    },
+    {
+      "path": "packages/db/src/migrations/meta/0586_snapshot.json",
+      "sha256": "ec1d64cb852ff091d04b5b6ae027b3aac97e6dc2a3524310328371eee08b979b"
+    },
+    {
+      "path": "server/src/__tests__/native-stage-source-owner-trigger.integration.test.ts",
+      "sha256": "f43a32df7a919fb112a73fa9631c86ea3adf3bac28791b51242c2671d82b59f0"
     }
   ],
   "sourcePinBasis": "Exact private composed source inventory anchored at sourceHead b1, not equality with its unchanged tree. Only two individually approved code/test pins and two own-documentation pins change from the recovered b1 index; original changed/retired pin history remains preserved. Hash equality is not behavioral or release qualification.",
@@ -1715,13 +1730,13 @@
     "baseCommit": "81d3445b98b1cd80ff400ede6bd44ea71d88d735",
     "command": "git diff --name-status 81d3445b98b1cd80ff400ede6bd44ea71d88d735 -- packages/db/src/migrations",
     "selection": "Union of added/modified/renamed-destination migration SQL files in the source-base git diff and all current journal entries absent from the source-base journal; this catches published journal entries whose SQL payload is still untracked.",
-    "currentAffectedCount": 84,
+    "currentAffectedCount": 85,
     "currentAffectedFirst": "0502_swift_maria_hill",
-    "currentAffectedLast": "0585_review_stage_reservation"
+    "currentAffectedLast": "0586_native_stage_source_owner_stage_id_text"
   },
   "sourcePinFinality": "Exact current source hashes after R622 actual PostgreSQL and R623 full typecheck/build; software scope only, no historical status promotion.",
   "latestMigrationPublication": {
-    "migration": "0585_review_stage_reservation",
+    "migration": "0586_native_stage_source_owner_stage_id_text",
     "sourceCommit": null,
     "sourceState": "Official generated source with exact current pins and local software receipts.",
     "qualificationScope": "Does not establish fleet cutover, deployed rollback/restore, provider/Host or Human qualification."
