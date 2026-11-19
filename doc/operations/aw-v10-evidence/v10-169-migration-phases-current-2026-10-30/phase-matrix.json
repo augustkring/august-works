@@ -1738,7 +1738,7 @@
     },
     {
       "path": "server/src/__tests__/native-board-stage-return-source.integration.test.ts",
-      "sha256": "7d75c24e65c00f6c19fff75e6a9369046cad4f5b4e9965ebb03c9faaa3978137"
+      "sha256": "1336f738c51af96ee5a32c1d6c22de2c5324111f3a24193c1cfa333ecb0c8dfd"
     },
     {
       "path": "server/src/services/native-board-stage-return-source.ts",
