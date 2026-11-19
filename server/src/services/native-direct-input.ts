@@ -4907,7 +4907,8 @@ async function assertNativePayloadSourceSetCurrentUncachedInScope(db: Db | Trans
   const contexts = inputs.data.filter((source): source is Extract<NativePayloadSourceInput, { kind: "context" }> => source.kind === "context");
   await assertNativeTemporalContextInputsCurrent(db as Db, input.companyId, contexts);
   await assertNativeContextInputOwnersCurrent(db as Db, input.companyId, input.actor, contexts, scope,
-    new Set(policy.data.memoryIds.filter(memoryId => !exactMemoryInputIds.has(memoryId))), completedTaskSourceProofs, siblingToolSourceProofs);
+    new Set(policy.data.memoryIds.filter(memoryId => !exactMemoryInputIds.has(memoryId))), completedTaskSourceProofs, siblingToolSourceProofs,
+    historicalTransition?.stageBodyReads);
   for (const source of inputs.data) {
     if (source.kind === "task" || source.kind === "project" || source.kind === "project_workspace" || source.kind === "context") continue;
     if ((source.kind === "worker_model_dispatch" || source.kind === "conversation_model_dispatch" || source.kind === "review_model_dispatch") &&
@@ -6928,6 +6929,43 @@ async function assertNativePresentationCommentSourceCurrent(db: Db | Transaction
   if (!owner || !isDeepStrictEqual(owner.commentSourceIdentity, input.source) ||
       owner.acceptedSummaryOwner.sourceRunId !== input.comment.createdByRunId) return false;
   const accepted = owner.acceptedSummaryOwner;
+  // MS1f phase 4 (stage-executor provenance family). The stage executor Run's
+  // own presentation comment in this receiving stage Reviewer's continuation.
+  // Its owner must be exactly the stage summary this Run saved at bootstrap,
+  // and its receipt is walked as the stage summary's receipt is: the executor's
+  // current stage-entry read (equal to the saved one) carries the Task input
+  // across the stage entry's transform. Only for the receiver's saved stage
+  // trigger's executor Agent and Run; every other presentation comment is
+  // walked exactly as before.
+  let historicalTransition: NativeHistoricalPendingTransitionContext | undefined;
+  const receiver = input.actor.type === "agent" && input.actor.runId
+    ? await nativeSourceReadRun(db, input.companyId, input.actor.runId, scope) : null;
+  const receiverProfile = nativeSourceRecord(receiver?.runnerProfileJson);
+  const savedStageTrigger = nativeSourceRecord(receiverProfile.nativeBootstrapStageTrigger);
+  const savedStageSummary = nativeSourceRecord(receiverProfile.nativeBootstrapFinalizedContinuationSummary);
+  if (receiver && receiver.agentId && savedStageTrigger.runId === receiver.id &&
+      savedStageTrigger.executorRunId === accepted.sourceRunId && savedStageTrigger.executorAgentId === input.comment.authorAgentId &&
+      savedStageTrigger.executorAgentId !== receiver.agentId && savedStageSummary.sourceRunId === accepted.sourceRunId &&
+      savedStageSummary.stageEntryRead) {
+    const savedOwner: Record<string, unknown> = { ...savedStageSummary };
+    delete savedOwner.receiverRunId; delete savedOwner.stageEntryRead;
+    if (!isDeepStrictEqual(accepted, savedOwner) || accepted.body !== input.comment.body) return false;
+    const { captureNativeFinalizedStageTaskBodyRead } = await import("./native-stage-task-body-source.js");
+    const producer = await captureNativeFinalizedStageTaskBodyRead(db, { companyId: input.companyId, issueId: input.issueId,
+      runId: accepted.sourceRunId, reader: input.actor });
+    if (!producer || producer.kind !== "stage_entry" || !isDeepStrictEqual(producer, savedStageSummary.stageEntryRead)) return false;
+    historicalTransition = { stageBodyReads: [{ producer, edgeKind: "finalized_summary",
+      edgeDigest: nativeSha256({ commentId: input.comment.id, sourceRunId: accepted.sourceRunId, receiverRunId: receiver.id,
+        reader: scope.actorKey }) }] };
+  }
+  if (historicalTransition) {
+    for (const set of [accepted.parentReceipt.bootstrap, ...accepted.parentReceipt.dispatches, ...accepted.parentReceipt.additionalInputs]) {
+      await assertNativePayloadSourceSetCurrentInScope(db, { companyId: input.companyId, issueId: input.issueId,
+        runId: accepted.sourceRunId, actor: input.actor, policy: set.policy, inputs: set.inputs }, scope,
+        undefined, undefined, new Map(), undefined, 0, historicalTransition);
+    }
+    return true;
+  }
   for (const set of [accepted.parentReceipt.bootstrap, ...accepted.parentReceipt.dispatches, ...accepted.parentReceipt.additionalInputs]) {
     await assertNativePayloadSourceSetCurrentInScope(db, { companyId: input.companyId, issueId: input.issueId,
       runId: accepted.sourceRunId, actor: input.actor, policy: set.policy, inputs: set.inputs }, scope);
@@ -7220,9 +7258,45 @@ async function assertNativeAnalyticalResultContextCurrent(db:Db,companyId:string
  return true;
 }
 
+/** MS1f phase 4. A stage executor's retained Context Task item, read through
+ * a stage Reviewer's continuation after the stage entry transformed the Task.
+ * The same lineage the stage Task input uses (`stageBodyReads`): the
+ * executor Run's current stage-entry read equals the one on this path, the
+ * Context item captured exactly that read's Task snapshot, and the Task's
+ * transforms lead from that snapshot to its current owner. Only reads that a
+ * stage path put on the walk reach here; every other Context Task item keeps
+ * its ordinary check. */
+async function nativeContextTaskStageLineageCurrent(db: Db, input: { companyId: string; issueId: string; actor: AuthorizationActor;
+  manifest: typeof contextManifests.$inferSelect; item: typeof contextManifestItems.$inferSelect;
+  stageBodyReads?: NativeHistoricalPendingTransitionContext["stageBodyReads"] }): Promise<boolean> {
+  const { companyId, issueId, actor, manifest, item } = input;
+  const reads = (input.stageBodyReads ?? []).filter(read => read.producer.kind === "stage_entry" &&
+    read.producer.companyId === companyId && read.producer.issueId === issueId && read.producer.runId === manifest.runId &&
+    read.producer.agentId === manifest.agentId);
+  if (reads.length !== 1 || manifest.companyId !== companyId || manifest.issueId !== issueId) return false;
+  const producer = reads[0]!.producer;
+  const { captureNativeFinalizedStageTaskBodyRead } = await import("./native-stage-task-body-source.js");
+  const current = await captureNativeFinalizedStageTaskBodyRead(db, { companyId, issueId, runId: producer.runId, reader: actor });
+  if (!current || !isDeepStrictEqual(current, producer) ||
+      !isDeepStrictEqual(item.payloadSourceSnapshot, producer.taskCapture.payloadSourceSnapshot)) return false;
+  const [owner] = await db.select({ snapshot: issues.payloadSourceSnapshot, invalidated: issues.payloadSourceSnapshotInvalidated,
+    bodyHash: sql<string>`public.aw_native_payload_body_hash('issue',to_jsonb(${issues}))` })
+    .from(issues).where(and(eq(issues.companyId, companyId), eq(issues.id, issueId))).for("share");
+  const snapshot = nativePayloadSourceSnapshotSchema.safeParse(owner?.snapshot);
+  if (!owner || owner.invalidated || !snapshot.success || snapshot.data.owner.contentHash !== owner.bodyHash) return false;
+  let prefixDigest = producer.taskCapture.payloadSourceSnapshot.digest;
+  let prefixHash = producer.taskCapture.input.contentHash, matched = false;
+  for (const step of snapshot.data.transforms ?? []) {
+    if (!matched && step.previousSnapshotDigest === prefixDigest && step.previousOwnerContentHash === prefixHash) matched = true;
+    if (matched) prefixHash = step.nextOwnerContentHash;
+  }
+  return matched && prefixHash === snapshot.data.owner.contentHash;
+}
+
 async function assertNativeContextInputOwnersCurrent(db: Db, companyId: string, actor: AuthorizationActor,
   inputs: Extract<NativePayloadSourceInput, { kind: "context" }>[], scope: NativeSourceReadScope,
-  alreadyValidatedMemoryIds: ReadonlySet<string> = new Set(), completedTaskSourceProofs?: NativeCompletedTaskSourceProofs, siblingToolSourceProofs: NativeSiblingToolSourceProofs = new Map()) {
+  alreadyValidatedMemoryIds: ReadonlySet<string> = new Set(), completedTaskSourceProofs?: NativeCompletedTaskSourceProofs, siblingToolSourceProofs: NativeSiblingToolSourceProofs = new Map(),
+  stageBodyReads?: NativeHistoricalPendingTransitionContext["stageBodyReads"]) {
   if (!inputs.length) return;
   const ids = [...new Set(inputs.map(source => source.manifestId))];
   if (ids.length !== inputs.length) throw forbidden("A Native Context manifest source is ambiguous");
@@ -7277,7 +7351,8 @@ async function assertNativeContextInputOwnersCurrent(db: Db, companyId: string, 
           snapshot.data.owner.kind !== "issue" || snapshot.data.owner.companyId !== companyId ||
           snapshot.data.owner.id !== match[1]! || snapshot.data.owner.contentHash !== ownerHash.hash ||
           owner.payloadSourceProtocolVersion === 1 && !ownerHash.snapshotDigestValid ||
-          !item.sourceVersion || !contextTaskCurrent)
+          !item.sourceVersion || (!contextTaskCurrent && !(match && await nativeContextTaskStageLineageCurrent(db, {
+            companyId, issueId: match[1]!, actor, manifest, item, stageBodyReads }))))
           throw forbidden("A Native Context Task source changed or was erased");
         if (owner.payloadSourceProtocolVersion === 1) {
           legacyTaskIssueIds.delete(match[1]!);

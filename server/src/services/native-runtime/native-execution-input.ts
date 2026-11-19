@@ -534,7 +534,12 @@ export function exactNativeTaskContinuation(input: { value: unknown; companyId: 
     if ((!hasGoverned && !(hasStageTrigger && stageEntry) && !hasSummaryAssignment && !reviewWithdrawalSummary && !acceptedPlanSummary &&
         !retainedResumeSummary) || capture.summary ||
       Object.keys(value).sort().join(",") !== expectedKeys ||
-      value.companyId !== input.companyId || value.issueId !== input.issueId || value.agentId !== input.agentId ||
+      // MS1f phase 4. A stage entry's accepted summary is owned by the stage
+      // trigger's executor Agent (as its parent receipt, below), never by the
+      // receiving Reviewer, who must not be that executor.
+      value.companyId !== input.companyId || value.issueId !== input.issueId ||
+      value.agentId !== (hasStageTrigger && stageEntry ? stageTrigger!.executorAgentId : input.agentId) ||
+      (hasStageTrigger && stageEntry && stageTrigger!.executorAgentId === input.agentId) ||
       value.receiverRunId !== input.runId || value.sourceRunId !== (hasStageTrigger ? stageTrigger!.executorRunId :
         retainedResumeSummary ? retainedSource!.runId : c.trigger.sourceRunId) ||
       ![value.sourceRunId,value.resultId,value.assessmentId,value.decisionId].every(id => typeof id === "string" && uuid.test(id)) ||
@@ -564,6 +569,13 @@ export function exactNativeTaskContinuation(input: { value: unknown; companyId: 
         !receipt.data.bootstrap.inputs.some(source=>isDeepStrictEqual(source,stageEntry.taskCapture.input)))) || (!hasStageTrigger && stageEntry)) return null;
   }
   const ids = new Set<string>();
+  // MS1f phase 4 (stage-executor provenance family): in a stage continuation
+  // carrying the executor's accepted summary, at most one comment joins: that
+  // executor Run's own presentation comment, under exactly that summary owner.
+  const stageSummaryOwner = hasStageTrigger && capture.finalizedSummary?.stageEntryRead &&
+    capture.finalizedSummary.sourceRunId === stageTrigger!.executorRunId && stageTrigger!.executorAgentId !== input.agentId
+    ? (({ receiverRunId: _receiverRunId, stageEntryRead: _stageEntryRead, ...owner }) => owner)(capture.finalizedSummary) : null;
+  let stagePresentationComments = 0;
   for (const message of c.messages) {
     if (!message || Object.keys(message).sort().join(",") !==
       "authorId,authorType,body,createdAt,createdByRunId,deleted,id,sourceTrust,updatedAt" ||
@@ -592,9 +604,14 @@ export function exactNativeTaskContinuation(input: { value: unknown; companyId: 
         value.projection.owner.sourceRunId === message.createdByRunId);
       // A liveness continuation's own source Run, bound by its record.
       const livenessProducer = hasLivenessTrigger && message.createdByRunId === livenessTrigger!.sourceRunId;
-      if ((!hasSummaryAssignment && !exactWithdrawalProducer && !livenessProducer) || sourceSnapshot.success ||
+      const stageExecutorProducer = stageSummaryOwner !== null && message.createdByRunId === stageTrigger!.executorRunId &&
+        message.authorId === stageTrigger!.executorAgentId && isDeepStrictEqual(presentationOwner.acceptedSummaryOwner, stageSummaryOwner);
+      if (stageExecutorProducer) stagePresentationComments += 1;
+      if ((!hasSummaryAssignment && !exactWithdrawalProducer && !livenessProducer && !stageExecutorProducer) || sourceSnapshot.success ||
+          stagePresentationComments > 1 ||
           !exactNativeAcceptedPresentationCommentOwner(presentationOwner, {
-            binding: { companyId: input.companyId, issueId: input.issueId, agentId: input.agentId }, commentSource: sources[0]!.input,
+            binding: { companyId: input.companyId, issueId: input.issueId,
+              agentId: stageExecutorProducer ? stageTrigger!.executorAgentId : input.agentId }, commentSource: sources[0]!.input,
           }) || presentationOwner.acceptedSummaryOwner.sourceRunId !== message.createdByRunId || message.authorType !== "agent") return null;
     }
   }
@@ -1273,6 +1290,10 @@ export function buildNativeBootstrapSourceSet(input: {
   taskWakeInteractionStateOwner?: NativeTaskWakeInteractionStateOwner | null;
   taskWakeDocumentCandidates?: readonly NativePreparedSourceCandidate[];
   additionalPolicy?: NativePayloadSourcePolicy | null;
+  /** MS1f phase 4. A stage continuation's executor Agent and Run (from the
+   * owner-bound stage trigger and its accepted summary). Only that Run's own
+   * presentation comment is admitted under that Agent; never the receiver. */
+  stageExecutorPresentation?: { agentId: string; runId: string } | null;
   interactionResponses?: readonly NativeInteractionResponseEnvelope[] | null;
   interactionSources?: readonly Extract<NativePayloadSourceInput, { kind: "interaction" }>[] | null;
   contextManifestIds: readonly { companyId: string; contextManifestId: string }[] | null;
@@ -1414,15 +1435,24 @@ export function buildNativeBootstrapSourceSet(input: {
   if ((input.taskWakeCommentCandidates?.length ?? 0) > 0 &&
     input.additionalInputs?.filter(source => source.kind === "native_task_wake" &&
       source.runId === input.runId && source.issueId === input.issueId).length !== 1) return reject("source_snapshot_invalid");
+  const stageExecutor = input.stageExecutorPresentation && input.stageExecutorPresentation.agentId !== input.agentId
+    ? input.stageExecutorPresentation : null;
+  if (input.stageExecutorPresentation && !stageExecutor) return reject("source_snapshot_invalid");
+  let stagePresentationComments = 0;
   for (const candidate of input.taskWakeCommentCandidates ?? []) {
     if (candidate.kind !== "comment" || candidate.input.kind !== "comment" ||
       candidate.input.commentId !== candidate.id || candidate.input.issueId !== input.issueId) return reject("source_snapshot_invalid");
+    const stageExecutorComment = Boolean(stageExecutor && !candidate.payloadSourceSnapshot &&
+      candidate.acceptedPresentationOwner?.acceptedSummaryOwner?.sourceRunId === stageExecutor.runId);
+    if (stageExecutorComment) stagePresentationComments += 1;
     if (candidate.payloadSourceSnapshot) {
       if (candidate.acceptedPresentationOwner || !addSnapshotPolicy(candidate.payloadSourceSnapshot, { kind: "comment", id: candidate.id }))
         return reject("source_snapshot_invalid");
-    } else if (!candidate.acceptedPresentationOwner || !exactNativeAcceptedPresentationCommentOwner(candidate.acceptedPresentationOwner, {
-      binding: { companyId: input.companyId, issueId: input.issueId, agentId: input.agentId }, commentSource: candidate.input,
-    }) || !input.additionalPolicy?.runIds.includes(candidate.acceptedPresentationOwner.acceptedSummaryOwner.sourceRunId)) {
+    } else if (!candidate.acceptedPresentationOwner || stagePresentationComments > 1 ||
+      !exactNativeAcceptedPresentationCommentOwner(candidate.acceptedPresentationOwner, {
+        binding: { companyId: input.companyId, issueId: input.issueId,
+          agentId: stageExecutorComment ? stageExecutor!.agentId : input.agentId }, commentSource: candidate.input,
+      }) || !input.additionalPolicy?.runIds.includes(candidate.acceptedPresentationOwner.acceptedSummaryOwner.sourceRunId)) {
       return reject("source_snapshot_invalid");
     }
     append(candidate.input);

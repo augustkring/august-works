@@ -493,6 +493,10 @@ export async function buildExecutionContinuation(input: {
   let outcomeReader: AuthorizationActor = { type: "none" };
   let stageContinuation: { trigger: NativeStageTaskContinuationTrigger;
     summary: NativeFinalizedContinuationSummaryCapture | null } | null = null;
+  // MS1f phase 4 (stage-executor provenance family). True only when the
+  // stage executor's sealed, accepted summary replaces the unsealed
+  // server-written continuation summary document.
+  let stageSummaryReplacesDocument = false;
   const [receiver] = input.runId ? await db.select().from(heartbeatRuns).where(and(
     eq(heartbeatRuns.id, input.runId), eq(heartbeatRuns.companyId, companyId),
     eq(heartbeatRuns.agentId, input.agentId), eq(heartbeatRuns.status, "running"),
@@ -506,7 +510,19 @@ export async function buildExecutionContinuation(input: {
     if (outcomeReader.type === "agent") {
       const { captureNativeStageContinuationForDispatch } = await import("./native-stage-wake-source.js");
       const selected = await captureNativeStageContinuationForDispatch(db, { companyId, issueId, receiver, reader });
-      stageContinuation = selected ? { ...selected, summary: input.summary === null ? selected.summary : null } : null;
+      // MS1f phase 4. In a stage continuation only (the owner-bound trigger for
+      // this exact intent, pending stage and applied stage-pending decision, and
+      // the executor's committed, accepted summary read through its stage entry),
+      // an unsealed continuation summary document is never a Native source: it
+      // is ignored and the executor's sealed summary stands. A sealed document
+      // and every other path keep their precedence.
+      const stageSummary = selected?.summary?.stageEntryRead && selected.summary.sourceRunId === selected.trigger.executorRunId &&
+        selected.summary.agentId === selected.trigger.executorAgentId && selected.trigger.executorAgentId !== input.agentId
+        ? selected.summary : null;
+      stageSummaryReplacesDocument = Boolean(stageSummary && input.summary !== null && input.summaryDocument &&
+        !input.summaryDocument.source.payloadSourceSnapshot && input.summary === input.summaryDocument.value.body);
+      stageContinuation = selected ? { ...selected,
+        summary: input.summary === null || stageSummaryReplacesDocument ? selected.summary : null } : null;
       if (stageContinuation) input.onStageTriggerCapture?.(stageContinuation.trigger);
     }
   }
@@ -611,7 +627,7 @@ export async function buildExecutionContinuation(input: {
   // its exact source envelope in full-history form instead of capturing a
   // provider-session delta that heartbeat will later discard.
   const fullHistoryTurn = freshAssignmentUsesFullHistory || input.context.forceFreshSession === true;
-  const effectiveSummary = assignmentFinalizedSummary ? null : input.summary;
+  const effectiveSummary = assignmentFinalizedSummary || stageSummaryReplacesDocument ? null : input.summary;
   const messages = rows.map((row) => {
     const safe = input.exposeLowTrustRaw
       ? row
@@ -840,7 +856,13 @@ export async function buildExecutionContinuation(input: {
       };
       let selectedCapture = capture;
       const closedWithdrawalProducer = selected.createdByRunId !== null && withdrawalProducerRunIds.has(selected.createdByRunId);
-      if ((assignmentSummarySelected || closedWithdrawalProducer) && !selected.payloadSourceSnapshot &&
+      // MS1f phase 4. Only the stage executor Run's own presentation comment,
+      // under the accepted summary the stage continuation carries.
+      const stageSummaryOwner = stageContinuation?.summary?.stageEntryRead ? stageContinuation.summary : null;
+      const stageExecutorProducer = Boolean(stageSummaryOwner) && selected.createdByRunId !== null &&
+        selected.createdByRunId === stageContinuation?.trigger.executorRunId && selected.createdByRunId === stageSummaryOwner?.sourceRunId &&
+        selected.authorAgentId === stageContinuation?.trigger.executorAgentId && selected.authorAgentId !== input.agentId;
+      if ((assignmentSummarySelected || closedWithdrawalProducer || stageExecutorProducer) && !selected.payloadSourceSnapshot &&
           selected.authorType === "agent" && selected.createdByRunId && outcomeReader.type === "agent") {
         const acceptedPresentationOwner = await captureNativeAcceptedFinalizedPresentationCommentOwner({ db, companyId, issueId,
           commentId: selected.id, reader: outcomeReader });
