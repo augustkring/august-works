@@ -4513,11 +4513,11 @@
         },
         {
           "path": "server/src/services/orchestration/native-tool-boundary.ts",
-          "sha256": "7b825870fcc22a125b41ea850ca7d9f7e0675a87701482d88fbe21943ea213cd"
+          "sha256": "4aab4743ce4c6ca202826069d6f9d787a214d342caf958c44f32ac6c307f3a20"
         },
         {
           "path": "server/src/services/orchestration/worker-model-gateway.ts",
-          "sha256": "fa6e04a7f1c89c03fa2c2840a6edd2e50f4d9b87d622c105314840af8335f122"
+          "sha256": "19abad650769411504120846e9c63119b607004e18e7845d2de8a3f701903ce2"
         },
         {
           "path": "server/src/services/tool-gateway.ts",
@@ -5895,7 +5895,7 @@
         },
         {
           "path": "server/src/services/native-runtime/native-model-input-dispatch.integration.test.ts",
-          "sha256": "97bd262fe5fbde0877b0a2f8ccb6406acbd68a3b1ecca96380f24e48b8ce7e1d"
+          "sha256": "100575bd6b208691d800fd708901f488d8a27fe0b0a725851a741d630ec9d729"
         },
         {
           "path": "server/src/services/native-runtime/native-opencode-managed-channel-conversation.integration.test.ts",
@@ -5911,7 +5911,7 @@
         },
         {
           "path": "server/src/services/native-runtime/paperclip-runner-tool-authority.test.ts",
-          "sha256": "68afff8d84ecc8ea8db7ae0b2c663fd2d8914546b16b9f431f1fdc270ff198c8"
+          "sha256": "5d285c7d2529c98a115de19832ca3a07c690a3273f9c6eb811be03f7d1f0c711"
         },
         {
           "path": "server/src/services/platform-skill-admission.ts",
@@ -7263,7 +7263,7 @@
         },
         {
           "path": "server/src/services/native-runtime/native-model-input-dispatch.integration.test.ts",
-          "sha256": "97bd262fe5fbde0877b0a2f8ccb6406acbd68a3b1ecca96380f24e48b8ce7e1d"
+          "sha256": "100575bd6b208691d800fd708901f488d8a27fe0b0a725851a741d630ec9d729"
         },
         {
           "path": "server/src/services/native-runtime/native-opencode-managed-conversation-frame.integration.test.ts",
@@ -7666,7 +7666,7 @@
         },
         {
           "path": "server/src/services/native-runtime/native-model-input-dispatch.integration.test.ts",
-          "sha256": "97bd262fe5fbde0877b0a2f8ccb6406acbd68a3b1ecca96380f24e48b8ce7e1d"
+          "sha256": "100575bd6b208691d800fd708901f488d8a27fe0b0a725851a741d630ec9d729"
         },
         {
           "path": "server/src/services/native-runtime/native-opencode-managed-channel-conversation.integration.test.ts",
@@ -7682,11 +7682,11 @@
         },
         {
           "path": "server/src/services/native-runtime/native-session-executor.test.ts",
-          "sha256": "5df36ea9b2b2dcc035570085e2e817bb2fae2fef834e0e891438c8de527cf157"
+          "sha256": "d79bf0a14d85ef26959bccace11f3854c47a31ed1f9e92be3dc72fc51ceda0d8"
         },
         {
           "path": "server/src/services/native-runtime/native-session-executor.ts",
-          "sha256": "306a617535dcde92c57f8650e31e58d97ff8dfcbeee04062b1060dcdc72360b4"
+          "sha256": "fad653799d969fac84a6f6c059039387d3ecde0ce8df779d1446d976ff4713a1"
         },
         {
           "path": "server/src/services/native-runtime/native-session-resume.test.ts",
@@ -7698,7 +7698,7 @@
         },
         {
           "path": "server/src/services/native-runtime/paperclip-runner-tool-authority.test.ts",
-          "sha256": "68afff8d84ecc8ea8db7ae0b2c663fd2d8914546b16b9f431f1fdc270ff198c8"
+          "sha256": "5d285c7d2529c98a115de19832ca3a07c690a3273f9c6eb811be03f7d1f0c711"
         },
         {
           "path": "server/src/services/native-runtime/status-arbiter.test.ts",
@@ -9328,7 +9328,7 @@
         },
         {
           "path": "server/src/services/native-runtime/native-model-input-dispatch.integration.test.ts",
-          "sha256": "97bd262fe5fbde0877b0a2f8ccb6406acbd68a3b1ecca96380f24e48b8ce7e1d"
+          "sha256": "100575bd6b208691d800fd708901f488d8a27fe0b0a725851a741d630ec9d729"
         },
         {
           "path": "server/src/services/native-runtime/native-opencode-managed-channel-conversation.integration.test.ts",
@@ -9360,11 +9360,11 @@
         },
         {
           "path": "server/src/services/native-runtime/native-session-executor.test.ts",
-          "sha256": "5df36ea9b2b2dcc035570085e2e817bb2fae2fef834e0e891438c8de527cf157"
+          "sha256": "d79bf0a14d85ef26959bccace11f3854c47a31ed1f9e92be3dc72fc51ceda0d8"
         },
         {
           "path": "server/src/services/native-runtime/native-session-executor.ts",
-          "sha256": "306a617535dcde92c57f8650e31e58d97ff8dfcbeee04062b1060dcdc72360b4"
+          "sha256": "fad653799d969fac84a6f6c059039387d3ecde0ce8df779d1446d976ff4713a1"
         },
         {
           "path": "server/src/services/native-runtime/native-tool-task-privacy.integration.test.ts",
@@ -9372,11 +9372,11 @@
         },
         {
           "path": "server/src/services/native-runtime/paperclip-runner-tool-authority.test.ts",
-          "sha256": "68afff8d84ecc8ea8db7ae0b2c663fd2d8914546b16b9f431f1fdc270ff198c8"
+          "sha256": "5d285c7d2529c98a115de19832ca3a07c690a3273f9c6eb811be03f7d1f0c711"
         },
         {
           "path": "server/src/services/native-runtime/paperclip-runner-tool-authority.ts",
-          "sha256": "e883c3df7073d0e134902941237d393d7f5711eaa2bc20c4274d9909104450e3"
+          "sha256": "bfce75354ebd96c0fb8c5a64d4a6362b8d8c3c59d4033431e5298f40cb45a86e"
         },
         {
           "path": "server/src/services/native-runtime/status-decision-committer.ts",
@@ -10361,11 +10361,11 @@
         },
         {
           "path": "server/src/services/native-runtime/paperclip-runner-tool-authority.test.ts",
-          "sha256": "68afff8d84ecc8ea8db7ae0b2c663fd2d8914546b16b9f431f1fdc270ff198c8"
+          "sha256": "5d285c7d2529c98a115de19832ca3a07c690a3273f9c6eb811be03f7d1f0c711"
         },
         {
           "path": "server/src/services/native-runtime/paperclip-runner-tool-authority.ts",
-          "sha256": "e883c3df7073d0e134902941237d393d7f5711eaa2bc20c4274d9909104450e3"
+          "sha256": "bfce75354ebd96c0fb8c5a64d4a6362b8d8c3c59d4033431e5298f40cb45a86e"
         },
         {
           "path": "server/src/services/native-runtime/task-reassignment.test.ts",
@@ -10373,11 +10373,11 @@
         },
         {
           "path": "server/src/services/orchestration/native-tool-boundary.ts",
-          "sha256": "7b825870fcc22a125b41ea850ca7d9f7e0675a87701482d88fbe21943ea213cd"
+          "sha256": "4aab4743ce4c6ca202826069d6f9d787a214d342caf958c44f32ac6c307f3a20"
         },
         {
           "path": "server/src/services/orchestration/worker-model-gateway.ts",
-          "sha256": "fa6e04a7f1c89c03fa2c2840a6edd2e50f4d9b87d622c105314840af8335f122"
+          "sha256": "19abad650769411504120846e9c63119b607004e18e7845d2de8a3f701903ce2"
         },
         {
           "path": "server/src/services/platform-skill-admission.ts",
@@ -25066,7 +25066,7 @@
         },
         {
           "path": "server/src/services/native-runtime/managed-signoff-api-policy.integration.test.ts",
-          "sha256": "0c5699cc2210efcbbe87b5912e693d6290c0e7e3a33c16b2ac046301e7ab365f"
+          "sha256": "364ab82342b6d2ccd149e1eea731283cf163fcf231caff4ec61fd512f952f714"
         },
         {
           "path": "server/src/services/native-runtime/management-analytical-tools.test.ts",
@@ -27577,11 +27577,11 @@
         },
         {
           "path": "server/src/services/native-stage-comment-api.test.ts",
-          "sha256": "43a81da112833a1a45489d53fc318aa628e3db5860a60332cbb28d5379b873e0"
+          "sha256": "79a91b4c17f58a87539a7ee90495bf1abf5486c52feeaf6b824eebb5b529f79b"
         },
         {
           "path": "server/src/services/native-stage-comment-api.ts",
-          "sha256": "94b04a95596f1c19d8fef1ac86da9169f13ba8238def8a55badb927932fe7354"
+          "sha256": "487aa6da80bf76663ae530501d5e5048a529fe29f25b99eca74f6319a2d5a762"
         },
         {
           "path": "server/src/services/native-stage-task-body-source.test.ts",
@@ -47104,7 +47104,7 @@
       "id": "source:server/src/services/orchestration/native-tool-boundary.ts",
       "kind": "current_source_owner",
       "path": "server/src/services/orchestration/native-tool-boundary.ts",
-      "sha256": "7b825870fcc22a125b41ea850ca7d9f7e0675a87701482d88fbe21943ea213cd",
+      "sha256": "4aab4743ce4c6ca202826069d6f9d787a214d342caf958c44f32ac6c307f3a20",
       "changeIds": [
         "SCR-V10-HOTSPOT-01",
         "SCR-V10-HOTSPOT-07"
@@ -47120,7 +47120,7 @@
       "id": "source:server/src/services/orchestration/worker-model-gateway.ts",
       "kind": "current_source_owner",
       "path": "server/src/services/orchestration/worker-model-gateway.ts",
-      "sha256": "fa6e04a7f1c89c03fa2c2840a6edd2e50f4d9b87d622c105314840af8335f122",
+      "sha256": "19abad650769411504120846e9c63119b607004e18e7845d2de8a3f701903ce2",
       "changeIds": [
         "SCR-V10-HOTSPOT-01",
         "SCR-V10-HOTSPOT-07"
@@ -48460,7 +48460,7 @@
       "id": "source:server/src/services/native-runtime/native-model-input-dispatch.integration.test.ts",
       "kind": "current_source_owner",
       "path": "server/src/services/native-runtime/native-model-input-dispatch.integration.test.ts",
-      "sha256": "97bd262fe5fbde0877b0a2f8ccb6406acbd68a3b1ecca96380f24e48b8ce7e1d",
+      "sha256": "100575bd6b208691d800fd708901f488d8a27fe0b0a725851a741d630ec9d729",
       "changeIds": [
         "SCR-V10-HOTSPOT-02",
         "SCR-V10-HOTSPOT-04",
@@ -48510,7 +48510,7 @@
       "id": "source:server/src/services/native-runtime/paperclip-runner-tool-authority.test.ts",
       "kind": "current_source_owner",
       "path": "server/src/services/native-runtime/paperclip-runner-tool-authority.test.ts",
-      "sha256": "68afff8d84ecc8ea8db7ae0b2c663fd2d8914546b16b9f431f1fdc270ff198c8",
+      "sha256": "5d285c7d2529c98a115de19832ca3a07c690a3273f9c6eb811be03f7d1f0c711",
       "changeIds": [
         "SCR-V10-HOTSPOT-02",
         "SCR-V10-HOTSPOT-05",
@@ -49831,7 +49831,7 @@
       "id": "source:server/src/services/native-runtime/native-session-executor.test.ts",
       "kind": "current_source_owner",
       "path": "server/src/services/native-runtime/native-session-executor.test.ts",
-      "sha256": "5df36ea9b2b2dcc035570085e2e817bb2fae2fef834e0e891438c8de527cf157",
+      "sha256": "d79bf0a14d85ef26959bccace11f3854c47a31ed1f9e92be3dc72fc51ceda0d8",
       "changeIds": [
         "SCR-V10-HOTSPOT-05",
         "SCR-V10-HOTSPOT-06"
@@ -49847,7 +49847,7 @@
       "id": "source:server/src/services/native-runtime/native-session-executor.ts",
       "kind": "current_source_owner",
       "path": "server/src/services/native-runtime/native-session-executor.ts",
-      "sha256": "306a617535dcde92c57f8650e31e58d97ff8dfcbeee04062b1060dcdc72360b4",
+      "sha256": "fad653799d969fac84a6f6c059039387d3ecde0ce8df779d1446d976ff4713a1",
       "changeIds": [
         "SCR-V10-HOTSPOT-05",
         "SCR-V10-HOTSPOT-06"
@@ -50992,7 +50992,7 @@
       "id": "source:server/src/services/native-runtime/paperclip-runner-tool-authority.ts",
       "kind": "current_source_owner",
       "path": "server/src/services/native-runtime/paperclip-runner-tool-authority.ts",
-      "sha256": "e883c3df7073d0e134902941237d393d7f5711eaa2bc20c4274d9909104450e3",
+      "sha256": "bfce75354ebd96c0fb8c5a64d4a6362b8d8c3c59d4033431e5298f40cb45a86e",
       "changeIds": [
         "SCR-V10-HOTSPOT-06",
         "SCR-V10-HOTSPOT-07"
@@ -63953,7 +63953,7 @@
       "id": "source:server/src/services/native-runtime/managed-signoff-api-policy.integration.test.ts",
       "kind": "current_source_owner",
       "path": "server/src/services/native-runtime/managed-signoff-api-policy.integration.test.ts",
-      "sha256": "0c5699cc2210efcbbe87b5912e693d6290c0e7e3a33c16b2ac046301e7ab365f",
+      "sha256": "364ab82342b6d2ccd149e1eea731283cf163fcf231caff4ec61fd512f952f714",
       "changeIds": [
         "SCR-V10-NATIVE-RUNTIME-AND-AUTHORITY"
       ],
@@ -67283,7 +67283,7 @@
       "id": "source:server/src/services/native-stage-comment-api.test.ts",
       "kind": "current_source_owner",
       "path": "server/src/services/native-stage-comment-api.test.ts",
-      "sha256": "43a81da112833a1a45489d53fc318aa628e3db5860a60332cbb28d5379b873e0",
+      "sha256": "79a91b4c17f58a87539a7ee90495bf1abf5486c52feeaf6b824eebb5b529f79b",
       "changeIds": [
         "SCR-V10-UNCLASSIFIED-REGISTERED-OWNER"
       ],
@@ -67298,7 +67298,7 @@
       "id": "source:server/src/services/native-stage-comment-api.ts",
       "kind": "current_source_owner",
       "path": "server/src/services/native-stage-comment-api.ts",
-      "sha256": "94b04a95596f1c19d8fef1ac86da9169f13ba8238def8a55badb927932fe7354",
+      "sha256": "487aa6da80bf76663ae530501d5e5048a529fe29f25b99eca74f6319a2d5a762",
       "changeIds": [
         "SCR-V10-UNCLASSIFIED-REGISTERED-OWNER"
       ],
