@@ -1082,15 +1082,15 @@ describeDb("current Native completion Reviewer sandbox owner (MS1h2)", () => {
      * source Run's succeeded attempt, and (unless `none`) the Reviewer Run's
      * `review_model` reservation in the given state. */
     async function reviewedPlan(ids: Ids, reservation: "completed" | "dispatched" | "none" = "completed",
-      options: { reviewerWorkerAttempt?: true } = {}) {
+      options: { reviewerWorkerAttempt?: true; contract?: string } = {}) {
       const plan = randomUUID(), worker = randomUUID(), attempt = randomUUID();
       await db.insert(orchestrationPlans).values({ id: plan, companyId: ids.company, issueId: ids.issue,
-        completionContractId: ids.contract, mode: "single_worker", actionClass: "internal_draft", riskClass: "C0",
+        completionContractId: options.contract ?? ids.contract, mode: "single_worker", actionClass: "internal_draft", riskClass: "C0",
         supervisionMode: "none", verificationMode: "deterministic", humanOversightMode: "human_review", createdBy: ids.user,
         budgets: { maxWorkerCount: 2, maxParallelWorkers: 2, maxDelegationDepth: 1, maxRetries: 0, maxWallClockSeconds: 3600,
           maxToolActions: 5, maxModelCostMinor: 1000 } });
       await db.insert(orchestrationWorkers).values({ id: worker, companyId: ids.company, planId: plan, issueId: ids.issue,
-        agentId: ids.executor, completionContractId: ids.contract, workerKey: "writer", dependsOn: [],
+        agentId: ids.executor, completionContractId: options.contract ?? ids.contract, workerKey: "writer", dependsOn: [],
         status: "running", attemptCount: 1 });
       // One worker per plan Task: the Reviewer's worker is on the other Task.
       const reviewerWorker = randomUUID(), reviewerContract = randomUUID();
@@ -1208,6 +1208,46 @@ describeDb("current Native completion Reviewer sandbox owner (MS1h2)", () => {
         runId: ids.reviewerRun }, { tool: "read_document", callId: "read", arguments: {} }, effect)).rejects.toThrow(unadmitted);
       expect(effect).not.toHaveBeenCalled();
       expect(await ledger(ids, plan)).toMatchObject({ used: 0, charges: [], invocations: [] });
+    });
+
+    it("admits and charges the completion Reviewer's read of a declared output document once (MS1f decision 6)", async () => {
+      const ids = await seed({ resultCanonicalSha256: sourceCanonical });
+      // The reviewed Task's retained V7 contract declares one Task document output.
+      const v7 = randomUUID();
+      await db.insert(completionContracts).values({ id: v7, companyId: ids.company, issueId: ids.issue, revision: 2,
+        schemaVersion: "aw.completion-contract.v7", policyVersion: "test", risk: "low", completionAuthority: "server_arbiter",
+        incompleteCriteriaPolicy: "block", contractJson: { objective: "Write the planned report", criteria: [],
+          v7: { objective: "Write the planned report for this Task", requiredOutputs: [{ kind: "task_document", key: "report",
+            jsonSchema: null }], businessInvariants: ["The report is accurate"], evidenceRequirements: [], prohibitedOutcomes: [],
+            requiredPostconditions: [] } }, canonicalSha256: randomUUID(), createdByActorType: "agent", createdByActorId: ids.executor });
+      const { plan } = await reviewedPlan(ids, "completed", { contract: v7 });
+      const binding = { companyId: ids.company, issueId: ids.issue, agentId: ids.reviewer, runId: ids.reviewerRun };
+      const read = vi.fn(async () => ({ document: { key: "report", body: "Report" } }));
+      await withOrchestrationNativeTool(db as never, binding, { tool: "read_document", callId: "read-report", arguments: { key: "report" } }, read);
+      expect(read).toHaveBeenCalledTimes(1);
+      const reads = await db.select().from(toolInvocations).where(and(eq(toolInvocations.companyId, ids.company),
+        eq(toolInvocations.toolName, "read_document")));
+      expect(reads).toEqual([expect.objectContaining({ runId: ids.reviewerRun, agentId: ids.reviewer, issueId: ids.issue,
+        status: "succeeded", riskLevel: "read", idempotencyKey: `aw-native-tool:${ids.reviewerRun}:read-report`,
+        argumentsHash: nativeSha256({ key: "report" }) })]);
+      expect(await ledger(ids, plan)).toMatchObject({ used: 1, charges: [reads[0]!.id] });
+      // Every other read and tool stays refused, and is never charged.
+      for (const call of [{ tool: "read_document", arguments: { key: "notes" } }, { tool: "read_document", arguments: {} },
+        { tool: "read_document", arguments: { key: "report", revision: 1 } }, { tool: "list_documents", arguments: {} },
+        { tool: "get_task_context", arguments: {} }]) {
+        const effect = vi.fn(async () => "effect-ran");
+        await expect(withOrchestrationNativeTool(db as never, binding, { ...call, callId: `other-${randomUUID()}` }, effect))
+          .rejects.toThrow(unadmitted);
+        expect(effect).not.toHaveBeenCalled();
+      }
+      // The trigger mirror refuses an undeclared read row written directly.
+      const direct = await db.insert(toolInvocations).values({ companyId: ids.company, runId: ids.reviewerRun, issueId: ids.issue,
+        agentId: ids.reviewer, actorType: "agent", actorId: ids.reviewer, idempotencyKey: `aw-native-tool:${ids.reviewerRun}:direct`,
+        idempotencyRequestHash: randomUUID(), toolName: "read_document", argumentsHash: nativeSha256({ key: "notes" }),
+        riskLevel: "read", policyDecision: "allow", approvalState: "not_required", status: "executing", startedAt: new Date() })
+        .then(() => "inserted", (error: { cause?: { message?: string } }) => error.cause?.message);
+      expect(direct).toBe("orchestration_tool_requires_admitted_attempt");
+      expect(await ledger(ids, plan)).toMatchObject({ used: 1 });
     });
 
     it.each(refusalCases)("refuses resolve_review from %s", async (_name, arrange) => {

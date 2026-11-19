@@ -2,7 +2,7 @@ import { createHash } from "node:crypto";
 
 /** Private failure-only projection: closed enums, booleans, counts and message digest metadata only. */
 const outcomes = ["accepted", "missing", "rejected", "unverifiable"] as const;
-const kinds = ["event", "work_product", "approval", "interaction", "attachment", "unknown"] as const;
+const kinds = ["event", "work_product", "approval", "interaction", "attachment", "document", "unknown"] as const;
 const claims = ["satisfied", "not_satisfied", "unknown"] as const;
 const dispositions = ["done", "blocked", "needs_review", "yielded"] as const;
 const verificationStatuses = ["passed", "failed", "not_run"] as const;
@@ -28,6 +28,10 @@ const assessmentReasons = [
   "criterion_claim_not_satisfied", "criterion_evidence_missing", "criterion_evidence_rejected", "criterion_evidence_unverifiable",
   "criterion_evidence_accepted", "verification_reported_failed", "verification_not_run",
   "verification_has_no_durable_reference", "verification_evidence_accepted",
+  "document_missing", "document_output_not_declared", "document_output_missing", "document_revision_not_latest",
+  "document_revision_not_current", "document_schema_mismatch", "document_revision_not_from_run",
+  "document_write_not_charged", "task_document_output_current", "document_evidence_other_criterion",
+  "document_evidence_not_verification",
 ] as const;
 const safeErrorClasses = ["TypeError", "RangeError", "ReferenceError", "SyntaxError", "PostgresError", "DatabaseError", "Error"] as const;
 const safeErrorCodes = ["ERR_INVALID_ARG_TYPE", "ERR_INVALID_ARG_VALUE", "ERR_OUT_OF_RANGE"] as const;

@@ -7,6 +7,7 @@ import type {
   PersistedNativeSession,
 } from "../../vendor/paperclip-runner/index.js";
 import { parseNativeExecutionInput } from "../../vendor/paperclip-runner/index.js";
+import { reviewModelDispatchMarker } from "../orchestration/review-model-binding.js";
 import { nativePayloadSourceInputSchema, nativePayloadSourcePolicySchema, nativeRunInputSourceReceiptSchema, reviewModelBindingSchema,
   type NativePayloadSourceInput } from "@paperclipai/shared";
 import { nativeSha256 } from "./canonical.js";
@@ -368,15 +369,13 @@ export function nativeRetainedRunResumeWitness(input: {
             marker.executionManifestId === record(intent.conversationModelBinding).executionManifestId &&
             marker.executionManifestHash === record(intent.conversationModelBinding).executionManifestHash :
             intent.modelPurpose === "review_model" && (() => {
+              // MS1f decision 4. The marker of either review kind is exactly the
+              // one its intent's binding and this dispatch name.
               const binding = reviewModelBindingSchema.safeParse(intent.reviewModelBinding);
-              return binding.success && marker.planId === binding.data.planId && marker.issueId === binding.data.issueId &&
-                marker.interactionId === binding.data.interactionId && marker.decisionId === binding.data.decisionId &&
-                marker.sourceRunId === binding.data.sourceRunId && marker.sourceWorkerId === binding.data.sourceWorkerId &&
-                marker.sourceAgentId === binding.data.sourceAgentId && marker.sourceResultId === binding.data.sourceResultId &&
-                marker.sourceAttemptId === binding.data.sourceAttemptId && marker.sourceReceiptDigest === binding.data.sourceReceiptDigest &&
-                marker.sourceResultCanonicalSha256 === binding.data.sourceResultCanonicalSha256 &&
-                marker.reviewerAgentId === binding.data.reviewerAgentId && marker.runId === binding.data.reviewerRunId &&
-                marker.executionManifestId === binding.data.executionManifestId && marker.expectedPlanVersion === binding.data.expectedPlanVersion;
+              return binding.success && marker.runId === binding.data.reviewerRunId &&
+                isDeepStrictEqual(marker, reviewModelDispatchMarker(binding.data, { runId: marker.runId,
+                  reservationId: marker.reservationId, callId: marker.callId, requestHash: marker.requestHash,
+                  wireBodyHash: marker.wireBodyHash, responseHash: marker.responseHash }));
             })()) &&
         dispatch.inputs.length === inputs.data.length + 1 &&
         isDeepStrictEqual(dispatch.inputs.slice(0, -1), inputs.data) &&

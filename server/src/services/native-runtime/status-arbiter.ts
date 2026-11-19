@@ -78,6 +78,31 @@ export type NativeStatusEffect =
     }
   | { kind: "release_checkout" };
 
+/**
+ * MS1f decision 1. An executor's terminal claim on a plan-covered Task that may
+ * hand off to the Task's declared execution-policy stage instead of `done`:
+ * reported done against the current contract revision with the objective
+ * claimed; every criterion reported `satisfied` or `unknown` (a Reviewer's later
+ * decision is `unknown` to the executor) and none rejected; every `output_*`
+ * criterion accepted from this Run's current Task document under that output's
+ * key; no failed or rejected verification, attention request or blocking work.
+ */
+export function nativeExecutionStageHandoffClaimed(assessment: NativeEvidenceAssessment): boolean {
+  const outputs = assessment.criterionAssessments.filter((entry) => entry.criterionId.startsWith("output_"));
+  return assessment.reportedDisposition === "done" &&
+    assessment.contractRevisionMatches &&
+    assessment.objectiveClaimSatisfied &&
+    assessment.criterionAssessments.every((entry) =>
+      (entry.claimStatus === "satisfied" || entry.claimStatus === "unknown") && entry.outcome !== "rejected") &&
+    outputs.length > 0 &&
+    outputs.every((entry) => entry.outcome === "accepted" && entry.evidenceRefs.some((ref) =>
+      ref.kind === "document" && ref.outcome === "accepted" && entry.criterionId === `output_${ref.outputKey}`)) &&
+    !assessment.hasFailedVerification &&
+    assessment.verificationAssessments.every((entry) => entry.outcome !== "rejected") &&
+    assessment.attentionRequests.length === 0 &&
+    !assessment.hasBlockingRemainingWork;
+}
+
 export interface NativeStatusDecision {
   policyVersion: typeof NATIVE_STATUS_ARBITER_POLICY_VERSION;
   statusAction: NativeAuthoritativeIssueStatus | "preserve";
@@ -115,6 +140,12 @@ export function arbitrateNativeStatus(input: {
   reviewOwnerUserId?: string | null;
   /** Review decisions own task state; a reviewer's finish report cannot override them. */
   nativeReviewOutcome?: "resolved" | "pending" | "stale";
+  /**
+   * MS1f decision 1. Finalizer fact, never model input: a V7 contract, a plan
+   * covering the Task, and a dry run of the executor's `done` transition that
+   * would enter a pending execution-policy stage.
+   */
+  executionStageHandoffAvailable?: boolean;
   agentId: string;
   priorIssueStatus: NativeAuthoritativeIssueStatus;
 }): NativeStatusDecision {
@@ -378,6 +409,24 @@ export function arbitrateNativeStatus(input: {
           action: input.assessment.blocker.unblockAction,
         },
       ],
+    };
+  }
+  // MS1f decision 1. The declared stage Reviewer is the independent check of
+  // a planned executor's claim. The committer applies the stage transition and
+  // records the existing execution_policy_stage_pending decision, or falls back
+  // to the decision below this branch; a handoff never becomes done.
+  if (
+    input.executionStageHandoffAvailable === true &&
+    input.completionClaimPolicyAccepted !== true &&
+    nativeExecutionStageHandoffClaimed(input.assessment)
+  ) {
+    return {
+      policyVersion: NATIVE_STATUS_ARBITER_POLICY_VERSION,
+      statusAction: "in_review",
+      toStatus: "in_review",
+      reasonCode: "execution_policy_stage_handoff",
+      unblockDescriptor: null,
+      effects: [{ kind: "release_checkout" }],
     };
   }
   if (

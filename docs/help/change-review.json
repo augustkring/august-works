@@ -582,33 +582,33 @@
       "source": "ui/src/pages/ExperienceWork.tsx",
       "articleId": "create-and-track-work",
       "sourceSha256": "2d0092d35f217b44b0ef9ec9b0d38a22887ddf31e7dc7b4846f9e0c5b0d3829b",
-      "articleSha256": "0890c3b3c1ec06b659825f598c9c8c458105182ea76cb70fa0fb62c5d64445e9",
+      "articleSha256": "e08d017550dda25a9e6185a4478026f2affd445e16a1d10dff2464761537b328",
       "decision": "updated",
-      "rationale": "2026-11-18 MS1f phase 1 review: the In review paragraph now also says that, when a bounded plan covers the Task, the final approval in the Task\u2019s review and approval steps is recorded but does not complete the Task, which stays in review until a person verifies the plan, and that the plan can be verified only after every review and approval step has approved the result (a waiting step or one that asked for changes blocks it). This source is unchanged by MS1f; the article sentence follows the server change in server/src/routes/issues.ts and verification-service.ts."
+      "rationale": "2026-11-18 MS1f phase 3 review: the In review paragraph now also says that a Co-worker that reviews a Task covered by a bounded plan, in a completion review or a review step, works under the same plan: its model use, its review decision and each read of the Task\u2019s required documents count toward the plan\u2019s limits, it can read no other documents, and in a review step it cannot be the Co-worker that did the work. This source is unchanged by MS1f phase 3; the article sentence follows the server change in server/src/services (native-runtime/native-review-participant.ts, orchestration/orchestration-admission.ts, orchestration/native-tool-boundary.ts, orchestration/worker-model-gateway.ts) and migration 0585."
     },
     {
       "source": "ui/src/pages/IssueDetail.tsx",
       "articleId": "create-and-track-work",
       "sourceSha256": "2fa0c7388af830553a6d1a259c22824c35ccde9487d4c4a0228cbbba132717ce",
-      "articleSha256": "0890c3b3c1ec06b659825f598c9c8c458105182ea76cb70fa0fb62c5d64445e9",
+      "articleSha256": "e08d017550dda25a9e6185a4478026f2affd445e16a1d10dff2464761537b328",
       "decision": "updated",
-      "rationale": "2026-11-18 MS1f phase 1 review: the In review paragraph now also says that, when a bounded plan covers the Task, the final approval in the Task\u2019s review and approval steps is recorded but does not complete the Task, which stays in review until a person verifies the plan, and that the plan can be verified only after every review and approval step has approved the result (a waiting step or one that asked for changes blocks it). This source is unchanged by MS1f; the article sentence follows the server change in server/src/routes/issues.ts and verification-service.ts."
+      "rationale": "2026-11-18 MS1f phase 3 review: the In review paragraph now also says that a Co-worker that reviews a Task covered by a bounded plan, in a completion review or a review step, works under the same plan: its model use, its review decision and each read of the Task\u2019s required documents count toward the plan\u2019s limits, it can read no other documents, and in a review step it cannot be the Co-worker that did the work. This source is unchanged by MS1f phase 3; the article sentence follows the server change in server/src/services (native-runtime/native-review-participant.ts, orchestration/orchestration-admission.ts, orchestration/native-tool-boundary.ts, orchestration/worker-model-gateway.ts) and migration 0585."
     },
     {
       "source": "ui/src/pages/ExperienceWork.tsx",
       "articleId": "create-and-track-work-da",
       "sourceSha256": "2d0092d35f217b44b0ef9ec9b0d38a22887ddf31e7dc7b4846f9e0c5b0d3829b",
-      "articleSha256": "59bf03286b514756664c8652045c5ba648fdfacf4e6c78e9e687c998f2792134",
+      "articleSha256": "b36d116837115a674b3751f11ae3dcdd1a7fdcd9f31d26206feeec490f715e29",
       "decision": "updated",
-      "rationale": "2026-11-18 MS1f fase 1-gennemgang: Afsnittet om Til gennemgang siger nu ogs\u00e5, at n\u00e5r en afgr\u00e6nset plan d\u00e6kker opgaven, registreres den sidste godkendelse i opgavens gennemgangs- og godkendelsestrin, men den fuldf\u00f8rer ikke opgaven, som forbliver til gennemgang, indtil en person har verificeret planen, og at planen f\u00f8rst kan verificeres, n\u00e5r alle gennemgangs- og godkendelsestrin har godkendt resultatet (et trin, der afventer eller har bedt om \u00e6ndringer, blokerer den). Denne kilde er u\u00e6ndret af MS1f; artiklens s\u00e6tning f\u00f8lger server\u00e6ndringen i server/src/routes/issues.ts og verification-service.ts."
+      "rationale": "2026-11-18 MS1f phase 3 review: the In review paragraph now also says that a Co-worker that reviews a Task covered by a bounded plan, in a completion review or a review step, works under the same plan: its model use, its review decision and each read of the Task\u2019s required documents count toward the plan\u2019s limits, it can read no other documents, and in a review step it cannot be the Co-worker that did the work. This source is unchanged by MS1f phase 3; the article sentence follows the server change in server/src/services (native-runtime/native-review-participant.ts, orchestration/orchestration-admission.ts, orchestration/native-tool-boundary.ts, orchestration/worker-model-gateway.ts) and migration 0585."
     },
     {
       "source": "ui/src/pages/IssueDetail.tsx",
       "articleId": "create-and-track-work-da",
       "sourceSha256": "2fa0c7388af830553a6d1a259c22824c35ccde9487d4c4a0228cbbba132717ce",
-      "articleSha256": "59bf03286b514756664c8652045c5ba648fdfacf4e6c78e9e687c998f2792134",
+      "articleSha256": "b36d116837115a674b3751f11ae3dcdd1a7fdcd9f31d26206feeec490f715e29",
       "decision": "updated",
-      "rationale": "2026-11-18 MS1f fase 1-gennemgang: Afsnittet om Til gennemgang siger nu ogs\u00e5, at n\u00e5r en afgr\u00e6nset plan d\u00e6kker opgaven, registreres den sidste godkendelse i opgavens gennemgangs- og godkendelsestrin, men den fuldf\u00f8rer ikke opgaven, som forbliver til gennemgang, indtil en person har verificeret planen, og at planen f\u00f8rst kan verificeres, n\u00e5r alle gennemgangs- og godkendelsestrin har godkendt resultatet (et trin, der afventer eller har bedt om \u00e6ndringer, blokerer den). Denne kilde er u\u00e6ndret af MS1f; artiklens s\u00e6tning f\u00f8lger server\u00e6ndringen i server/src/routes/issues.ts og verification-service.ts."
+      "rationale": "2026-11-18 MS1f phase 3 review: the In review paragraph now also says that a Co-worker that reviews a Task covered by a bounded plan, in a completion review or a review step, works under the same plan: its model use, its review decision and each read of the Task\u2019s required documents count toward the plan\u2019s limits, it can read no other documents, and in a review step it cannot be the Co-worker that did the work. This source is unchanged by MS1f phase 3; the article sentence follows the server change in server/src/services (native-runtime/native-review-participant.ts, orchestration/orchestration-admission.ts, orchestration/native-tool-boundary.ts, orchestration/worker-model-gateway.ts) and migration 0585."
     },
     {
       "source": "cli/src/index.ts",
@@ -949,10 +949,10 @@
     {
       "source": "server/src/services/company-search-help.generated.ts",
       "articleId": "help-and-human-support",
-      "sourceSha256": "d7d59fc7eea42b9bd7f87b1e2be48e774d89bce77c66759d92c14d49283143e5",
+      "sourceSha256": "fcec4f2eba7a1ff795825af6d07f195f40f52b9ef012844260f7f3e87123ddda",
       "articleSha256": "bec6b2b830586252df7700cc8b8f23018da446ede36284d98e53f8db2b049a1b",
       "decision": "no_change",
-      "rationale": "2026-11-18 MS1f phase 1 review: regenerated search entries only pick up the Create and track work guide sentences that the final approval in a Task\u2019s review and approval steps under a bounded plan waits for the plan\u2019s verification, and that the plan can be verified only after every step has approved the result (English and Danish). Support intake, contacts, recovery actions and Help navigation are unchanged, so the existing guidance remains accurate."
+      "rationale": "2026-11-18 MS1f phase 3 review: regenerated search entries only pick up the Create and track work guide sentence that a Co-worker reviewing a plan-covered Task works under the same plan (its model use, review decision and required-document reads count toward the plan\u2019s limits; it reads no other documents; in a review step it is not the Co-worker that did the work) (English and Danish). The Help and human support article is unchanged."
     },
     {
       "source": "server/src/services/company-search.ts",
@@ -1029,10 +1029,10 @@
     {
       "source": "server/src/services/orchestration/model-reservations.ts",
       "articleId": "help-and-human-support",
-      "sourceSha256": "273816228660e576f99a9abbebc6454996738129b9a449642c00bffeff2c4a66",
+      "sourceSha256": "871425c65f323e7dc83a2662124843e121daafd9c35f6f6c3fbad97e9043f90b",
       "articleSha256": "bec6b2b830586252df7700cc8b8f23018da446ede36284d98e53f8db2b049a1b",
       "decision": "no_change",
-      "rationale": "2026-11-18 MS1h11 review: the plan-reservation wire receipt call-id rule (string call id for worker, review and conversation model dispatches, null for every other purpose) moved unchanged into one exported check, and the database receipt guard now also requires the string call id for review_model dispatches. Support Assistant company-purpose funding, its separate receipt rule, approved package/provider, read-only excerpts, consent and no-fallback behavior are unchanged; no article change needed. Reviewed complete English/Danish article against the separate review_model reservation lane. The changed plan-reservation path retains bounded Human authority and actual quotes; it does not change Support Assistant company-purpose funding, approved package/provider, read-only excerpts, consent, or no-fallback behavior."
+      "rationale": "2026-11-18 MS1f phase 3 review: review_model reservations now name either a review interaction or an execution-policy review stage (columns written and the one-unresolved-charge rule per review subject); plan model funding, purposes and the wire receipt call-id rule are unchanged. Nothing the Help and human support article says about support funding, limits or charges changes."
     },
     {
       "source": "server/src/services/orchestration/read-only-model-transport.ts",
@@ -1261,10 +1261,10 @@
     {
       "source": "server/src/services/company-search-help.generated.ts",
       "articleId": "help-and-human-support-da",
-      "sourceSha256": "d7d59fc7eea42b9bd7f87b1e2be48e774d89bce77c66759d92c14d49283143e5",
+      "sourceSha256": "fcec4f2eba7a1ff795825af6d07f195f40f52b9ef012844260f7f3e87123ddda",
       "articleSha256": "2c92acfc98fc458e84cf4bf6fc421119816d6f471922dceee726e311804bf6b5",
       "decision": "no_change",
-      "rationale": "2026-11-18 MS1f phase 1 review: regenerated search entries only pick up the Create and track work guide sentences that the final approval in a Task\u2019s review and approval steps under a bounded plan waits for the plan\u2019s verification, and that the plan can be verified only after every step has approved the result (English and Danish). Support intake, contacts, recovery actions and Help navigation are unchanged, so the existing guidance remains accurate."
+      "rationale": "2026-11-18 MS1f phase 3 review: regenerated search entries only pick up the Create and track work guide sentence that a Co-worker reviewing a plan-covered Task works under the same plan (its model use, review decision and required-document reads count toward the plan\u2019s limits; it reads no other documents; in a review step it is not the Co-worker that did the work) (English and Danish). The Help and human support article is unchanged."
     },
     {
       "source": "server/src/services/company-search.ts",
@@ -1341,10 +1341,10 @@
     {
       "source": "server/src/services/orchestration/model-reservations.ts",
       "articleId": "help-and-human-support-da",
-      "sourceSha256": "273816228660e576f99a9abbebc6454996738129b9a449642c00bffeff2c4a66",
+      "sourceSha256": "871425c65f323e7dc83a2662124843e121daafd9c35f6f6c3fbad97e9043f90b",
       "articleSha256": "2c92acfc98fc458e84cf4bf6fc421119816d6f471922dceee726e311804bf6b5",
       "decision": "no_change",
-      "rationale": "2026-11-18 MS1h11 review: the plan-reservation wire receipt call-id rule (string call id for worker, review and conversation model dispatches, null for every other purpose) moved unchanged into one exported check, and the database receipt guard now also requires the string call id for review_model dispatches. Support Assistant company-purpose funding, its separate receipt rule, approved package/provider, read-only excerpts, consent and no-fallback behavior are unchanged; no article change needed. Reviewed complete English/Danish article against the separate review_model reservation lane. The changed plan-reservation path retains bounded Human authority and actual quotes; it does not change Support Assistant company-purpose funding, approved package/provider, read-only excerpts, consent, or no-fallback behavior."
+      "rationale": "2026-11-18 MS1f phase 3 review: review_model reservations now name either a review interaction or an execution-policy review stage (columns written and the one-unresolved-charge rule per review subject); plan model funding, purposes and the wire receipt call-id rule are unchanged. Nothing the Help and human support article says about support funding, limits or charges changes."
     },
     {
       "source": "server/src/services/orchestration/read-only-model-transport.ts",
@@ -2774,65 +2774,65 @@
       "source": "server/src/services/agent-conversations.ts",
       "articleId": "create-and-track-work",
       "sourceSha256": "b20ae01f1974dd72d1b402f61938b74d4e5e496b1c2281fa4e555145d2f3d8f9",
-      "articleSha256": "0890c3b3c1ec06b659825f598c9c8c458105182ea76cb70fa0fb62c5d64445e9",
+      "articleSha256": "e08d017550dda25a9e6185a4478026f2affd445e16a1d10dff2464761537b328",
       "decision": "updated",
-      "rationale": "2026-11-18 MS1f phase 1 review: the In review paragraph now also says that, when a bounded plan covers the Task, the final approval in the Task\u2019s review and approval steps is recorded but does not complete the Task, which stays in review until a person verifies the plan, and that the plan can be verified only after every review and approval step has approved the result (a waiting step or one that asked for changes blocks it). This source is unchanged by MS1f; the article sentence follows the server change in server/src/routes/issues.ts and verification-service.ts."
+      "rationale": "2026-11-18 MS1f phase 3 review: the In review paragraph now also says that a Co-worker that reviews a Task covered by a bounded plan, in a completion review or a review step, works under the same plan: its model use, its review decision and each read of the Task\u2019s required documents count toward the plan\u2019s limits, it can read no other documents, and in a review step it cannot be the Co-worker that did the work. This source is unchanged by MS1f phase 3; the article sentence follows the server change in server/src/services (native-runtime/native-review-participant.ts, orchestration/orchestration-admission.ts, orchestration/native-tool-boundary.ts, orchestration/worker-model-gateway.ts) and migration 0585."
     },
     {
       "source": "server/src/services/agent-conversations.ts",
       "articleId": "create-and-track-work-da",
       "sourceSha256": "b20ae01f1974dd72d1b402f61938b74d4e5e496b1c2281fa4e555145d2f3d8f9",
-      "articleSha256": "59bf03286b514756664c8652045c5ba648fdfacf4e6c78e9e687c998f2792134",
+      "articleSha256": "b36d116837115a674b3751f11ae3dcdd1a7fdcd9f31d26206feeec490f715e29",
       "decision": "updated",
-      "rationale": "2026-11-18 MS1f fase 1-gennemgang: Afsnittet om Til gennemgang siger nu ogs\u00e5, at n\u00e5r en afgr\u00e6nset plan d\u00e6kker opgaven, registreres den sidste godkendelse i opgavens gennemgangs- og godkendelsestrin, men den fuldf\u00f8rer ikke opgaven, som forbliver til gennemgang, indtil en person har verificeret planen, og at planen f\u00f8rst kan verificeres, n\u00e5r alle gennemgangs- og godkendelsestrin har godkendt resultatet (et trin, der afventer eller har bedt om \u00e6ndringer, blokerer den). Denne kilde er u\u00e6ndret af MS1f; artiklens s\u00e6tning f\u00f8lger server\u00e6ndringen i server/src/routes/issues.ts og verification-service.ts."
+      "rationale": "2026-11-18 MS1f phase 3 review: the In review paragraph now also says that a Co-worker that reviews a Task covered by a bounded plan, in a completion review or a review step, works under the same plan: its model use, its review decision and each read of the Task\u2019s required documents count toward the plan\u2019s limits, it can read no other documents, and in a review step it cannot be the Co-worker that did the work. This source is unchanged by MS1f phase 3; the article sentence follows the server change in server/src/services (native-runtime/native-review-participant.ts, orchestration/orchestration-admission.ts, orchestration/native-tool-boundary.ts, orchestration/worker-model-gateway.ts) and migration 0585."
     },
     {
       "source": "server/src/services/heartbeat.ts",
       "articleId": "create-and-track-work",
       "sourceSha256": "b86a130d66ece5257d5a6471a67246ff373e587b6d81653721c238f5641c316e",
-      "articleSha256": "0890c3b3c1ec06b659825f598c9c8c458105182ea76cb70fa0fb62c5d64445e9",
-      "decision": "no_change",
-      "rationale": "2026-11-18 MS1f phase 1 review: the In review paragraph now also says that, when a bounded plan covers the Task, the final approval in the Task\u2019s review and approval steps is recorded but does not complete the Task, which stays in review until a person verifies the plan, and that the plan can be verified only after every review and approval step has approved the result (a waiting step or one that asked for changes blocks it). This source is unchanged by MS1f; the article sentence follows the server change in server/src/routes/issues.ts and verification-service.ts."
+      "articleSha256": "e08d017550dda25a9e6185a4478026f2affd445e16a1d10dff2464761537b328",
+      "decision": "updated",
+      "rationale": "2026-11-18 MS1f phase 3 review: the In review paragraph now also says that a Co-worker that reviews a Task covered by a bounded plan, in a completion review or a review step, works under the same plan: its model use, its review decision and each read of the Task\u2019s required documents count toward the plan\u2019s limits, it can read no other documents, and in a review step it cannot be the Co-worker that did the work. This source is unchanged by MS1f phase 3; the article sentence follows the server change in server/src/services (native-runtime/native-review-participant.ts, orchestration/orchestration-admission.ts, orchestration/native-tool-boundary.ts, orchestration/worker-model-gateway.ts) and migration 0585."
     },
     {
       "source": "server/src/services/heartbeat.ts",
       "articleId": "create-and-track-work-da",
       "sourceSha256": "b86a130d66ece5257d5a6471a67246ff373e587b6d81653721c238f5641c316e",
-      "articleSha256": "59bf03286b514756664c8652045c5ba648fdfacf4e6c78e9e687c998f2792134",
-      "decision": "no_change",
-      "rationale": "2026-11-18 MS1f fase 1-gennemgang: Afsnittet om Til gennemgang siger nu ogs\u00e5, at n\u00e5r en afgr\u00e6nset plan d\u00e6kker opgaven, registreres den sidste godkendelse i opgavens gennemgangs- og godkendelsestrin, men den fuldf\u00f8rer ikke opgaven, som forbliver til gennemgang, indtil en person har verificeret planen, og at planen f\u00f8rst kan verificeres, n\u00e5r alle gennemgangs- og godkendelsestrin har godkendt resultatet (et trin, der afventer eller har bedt om \u00e6ndringer, blokerer den). Denne kilde er u\u00e6ndret af MS1f; artiklens s\u00e6tning f\u00f8lger server\u00e6ndringen i server/src/routes/issues.ts og verification-service.ts."
+      "articleSha256": "b36d116837115a674b3751f11ae3dcdd1a7fdcd9f31d26206feeec490f715e29",
+      "decision": "updated",
+      "rationale": "2026-11-18 MS1f phase 3 review: the In review paragraph now also says that a Co-worker that reviews a Task covered by a bounded plan, in a completion review or a review step, works under the same plan: its model use, its review decision and each read of the Task\u2019s required documents count toward the plan\u2019s limits, it can read no other documents, and in a review step it cannot be the Co-worker that did the work. This source is unchanged by MS1f phase 3; the article sentence follows the server change in server/src/services (native-runtime/native-review-participant.ts, orchestration/orchestration-admission.ts, orchestration/native-tool-boundary.ts, orchestration/worker-model-gateway.ts) and migration 0585."
     },
     {
       "source": "ui/src/pages/Orchestration.tsx",
       "articleId": "create-and-track-work",
       "sourceSha256": "2c092e1b0beba303adbae2e26ef837b67401b6b08d91d377e98c45e3dc58bc12",
-      "articleSha256": "0890c3b3c1ec06b659825f598c9c8c458105182ea76cb70fa0fb62c5d64445e9",
+      "articleSha256": "e08d017550dda25a9e6185a4478026f2affd445e16a1d10dff2464761537b328",
       "decision": "updated",
-      "rationale": "2026-11-18 MS1f phase 1 review: the In review paragraph now also says that, when a bounded plan covers the Task, the final approval in the Task\u2019s review and approval steps is recorded but does not complete the Task, which stays in review until a person verifies the plan, and that the plan can be verified only after every review and approval step has approved the result (a waiting step or one that asked for changes blocks it). This source is unchanged by MS1f; the article sentence follows the server change in server/src/routes/issues.ts and verification-service.ts."
+      "rationale": "2026-11-18 MS1f phase 3 review: the In review paragraph now also says that a Co-worker that reviews a Task covered by a bounded plan, in a completion review or a review step, works under the same plan: its model use, its review decision and each read of the Task\u2019s required documents count toward the plan\u2019s limits, it can read no other documents, and in a review step it cannot be the Co-worker that did the work. This source is unchanged by MS1f phase 3; the article sentence follows the server change in server/src/services (native-runtime/native-review-participant.ts, orchestration/orchestration-admission.ts, orchestration/native-tool-boundary.ts, orchestration/worker-model-gateway.ts) and migration 0585."
     },
     {
       "source": "ui/src/pages/Orchestration.tsx",
       "articleId": "create-and-track-work-da",
       "sourceSha256": "2c092e1b0beba303adbae2e26ef837b67401b6b08d91d377e98c45e3dc58bc12",
-      "articleSha256": "59bf03286b514756664c8652045c5ba648fdfacf4e6c78e9e687c998f2792134",
+      "articleSha256": "b36d116837115a674b3751f11ae3dcdd1a7fdcd9f31d26206feeec490f715e29",
       "decision": "updated",
-      "rationale": "2026-11-18 MS1f fase 1-gennemgang: Afsnittet om Til gennemgang siger nu ogs\u00e5, at n\u00e5r en afgr\u00e6nset plan d\u00e6kker opgaven, registreres den sidste godkendelse i opgavens gennemgangs- og godkendelsestrin, men den fuldf\u00f8rer ikke opgaven, som forbliver til gennemgang, indtil en person har verificeret planen, og at planen f\u00f8rst kan verificeres, n\u00e5r alle gennemgangs- og godkendelsestrin har godkendt resultatet (et trin, der afventer eller har bedt om \u00e6ndringer, blokerer den). Denne kilde er u\u00e6ndret af MS1f; artiklens s\u00e6tning f\u00f8lger server\u00e6ndringen i server/src/routes/issues.ts og verification-service.ts."
+      "rationale": "2026-11-18 MS1f phase 3 review: the In review paragraph now also says that a Co-worker that reviews a Task covered by a bounded plan, in a completion review or a review step, works under the same plan: its model use, its review decision and each read of the Task\u2019s required documents count toward the plan\u2019s limits, it can read no other documents, and in a review step it cannot be the Co-worker that did the work. This source is unchanged by MS1f phase 3; the article sentence follows the server change in server/src/services (native-runtime/native-review-participant.ts, orchestration/orchestration-admission.ts, orchestration/native-tool-boundary.ts, orchestration/worker-model-gateway.ts) and migration 0585."
     },
     {
       "source": "ui/src/i18n/experience/en.json",
       "articleId": "create-and-track-work",
       "sourceSha256": "34fe43a721fc99bf145665c5f772c6677ff123b19e1b7b78ecc9d1e14b64923b",
-      "articleSha256": "0890c3b3c1ec06b659825f598c9c8c458105182ea76cb70fa0fb62c5d64445e9",
+      "articleSha256": "e08d017550dda25a9e6185a4478026f2affd445e16a1d10dff2464761537b328",
       "decision": "updated",
-      "rationale": "2026-11-18 MS1f phase 1 review: the In review paragraph now also says that, when a bounded plan covers the Task, the final approval in the Task\u2019s review and approval steps is recorded but does not complete the Task, which stays in review until a person verifies the plan, and that the plan can be verified only after every review and approval step has approved the result (a waiting step or one that asked for changes blocks it). This source is unchanged by MS1f; the article sentence follows the server change in server/src/routes/issues.ts and verification-service.ts."
+      "rationale": "2026-11-18 MS1f phase 3 review: the In review paragraph now also says that a Co-worker that reviews a Task covered by a bounded plan, in a completion review or a review step, works under the same plan: its model use, its review decision and each read of the Task\u2019s required documents count toward the plan\u2019s limits, it can read no other documents, and in a review step it cannot be the Co-worker that did the work. This source is unchanged by MS1f phase 3; the article sentence follows the server change in server/src/services (native-runtime/native-review-participant.ts, orchestration/orchestration-admission.ts, orchestration/native-tool-boundary.ts, orchestration/worker-model-gateway.ts) and migration 0585."
     },
     {
       "source": "ui/src/i18n/experience/da.json",
       "articleId": "create-and-track-work-da",
       "sourceSha256": "228aa7e60a1b5d40bdd314badc7a17dabaffe3a97e5093453997f8f5515df2b1",
-      "articleSha256": "59bf03286b514756664c8652045c5ba648fdfacf4e6c78e9e687c998f2792134",
+      "articleSha256": "b36d116837115a674b3751f11ae3dcdd1a7fdcd9f31d26206feeec490f715e29",
       "decision": "updated",
-      "rationale": "2026-11-18 MS1f fase 1-gennemgang: Afsnittet om Til gennemgang siger nu ogs\u00e5, at n\u00e5r en afgr\u00e6nset plan d\u00e6kker opgaven, registreres den sidste godkendelse i opgavens gennemgangs- og godkendelsestrin, men den fuldf\u00f8rer ikke opgaven, som forbliver til gennemgang, indtil en person har verificeret planen, og at planen f\u00f8rst kan verificeres, n\u00e5r alle gennemgangs- og godkendelsestrin har godkendt resultatet (et trin, der afventer eller har bedt om \u00e6ndringer, blokerer den). Denne kilde er u\u00e6ndret af MS1f; artiklens s\u00e6tning f\u00f8lger server\u00e6ndringen i server/src/routes/issues.ts og verification-service.ts."
+      "rationale": "2026-11-18 MS1f phase 3 review: the In review paragraph now also says that a Co-worker that reviews a Task covered by a bounded plan, in a completion review or a review step, works under the same plan: its model use, its review decision and each read of the Task\u2019s required documents count toward the plan\u2019s limits, it can read no other documents, and in a review step it cannot be the Co-worker that did the work. This source is unchanged by MS1f phase 3; the article sentence follows the server change in server/src/services (native-runtime/native-review-participant.ts, orchestration/orchestration-admission.ts, orchestration/native-tool-boundary.ts, orchestration/worker-model-gateway.ts) and migration 0585."
     },
     {
       "source": "ui/src/pages/Auth.tsx",

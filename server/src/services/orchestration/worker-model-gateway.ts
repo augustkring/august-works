@@ -20,6 +20,8 @@ import {
   issueThreadInteractions,
   issueComments,
   issueDocuments,
+  issueExecutionDecisions,
+  orchestrationToolCharges,
   documents,
   orchestrationPlans,
   orchestrationWorkers,
@@ -44,6 +46,9 @@ import {
   type WorkerModelBinding,
   type ReviewModelBinding,
   reviewModelBindingSchema,
+  orchestrationCompletionSchema,
+  type CompletionReviewModelBinding,
+  type ExecutionStageReviewModelBinding,
   type ConversationModelBinding,
   type WorkerModelCall,
   type NativePayloadSourceInput,
@@ -62,7 +67,10 @@ import { agentProviderBindingService } from "../agent-provider-bindings.js";
 import { assertV7Authorization, assertV7Enabled } from "../v7-authorization.js";
 import type { AuthorizationActor } from "../authorization.js";
 import { nativeSha256 } from "../native-runtime/canonical.js";
-import { captureNativeReviewWakeWitness, getNativeReviewAssignment, readNativeReviewAssignmentContext } from "../native-runtime/native-review-participant.js";
+import { captureNativeReviewWakeWitness, captureNativeStageReviewSourceWitness, getNativeExecutionStageReviewAssignment,
+  getNativeReviewAssignment, readNativeReviewAssignmentContext, readNativeStageReviewContext } from "../native-runtime/native-review-participant.js";
+import { reviewModelBindingKind, reviewModelDispatchMarker, reviewModelIdempotencySubject,
+  reviewModelReservationMatches } from "./review-model-binding.js";
 import { retainedOrchestrationContract } from "./orchestration-contracts.js";
 import { isCurrentConversationModelRoot, isCurrentWorkerConversationRoot } from "../native-runtime/worker-conversation-root.js";
 import { readNativeChannelConversationScope } from "../native-runtime/native-channel-conversation-owner.js";
@@ -162,15 +170,10 @@ export function exactManagedAssistantHistoryPrefix(input: {
   const conversationBinding = conversationModelBindingSchema.safeParse(input.intent.conversationModelBinding);
   const reviewBinding = reviewModelBindingSchema.safeParse(input.intent.reviewModelBinding);
   const markerValue = input.intent.modelPurpose === "review_model"
-    ? reviewBinding.success ? { kind: "review_model_dispatch", runId: input.runId, reservationId: input.intent.reservationId,
-      planId: reviewBinding.data.planId, issueId: reviewBinding.data.issueId, interactionId: reviewBinding.data.interactionId,
-      decisionId: reviewBinding.data.decisionId, sourceRunId: reviewBinding.data.sourceRunId,
-      sourceWorkerId: reviewBinding.data.sourceWorkerId, sourceAgentId: reviewBinding.data.sourceAgentId,
-      sourceResultId: reviewBinding.data.sourceResultId, sourceAttemptId: reviewBinding.data.sourceAttemptId,
-      sourceReceiptDigest: reviewBinding.data.sourceReceiptDigest, sourceResultCanonicalSha256: reviewBinding.data.sourceResultCanonicalSha256,
-      reviewerAgentId: reviewBinding.data.reviewerAgentId, executionManifestId: reviewBinding.data.executionManifestId,
-      expectedPlanVersion: reviewBinding.data.expectedPlanVersion, callId: input.intent.callId, requestHash: input.intent.requestHash, wireBodyHash: input.intent.wireBodyHash,
-      responseHash: input.providerResponseHash } : null
+    ? reviewBinding.success ? reviewModelDispatchMarker(reviewBinding.data, { runId: input.runId,
+      reservationId: input.intent.reservationId as string, callId: input.intent.callId as string,
+      requestHash: input.intent.requestHash as string, wireBodyHash: input.intent.wireBodyHash as string,
+      responseHash: input.providerResponseHash }) : null
     : input.intent.modelPurpose === "conversation_model"
     ? conversationBinding.success ? { kind: "conversation_model_dispatch", runId: input.runId,
       agentId: input.intent.agentId, issueId: conversationBinding.data.issueId,
@@ -704,6 +707,95 @@ export function managedReviewDecisionResultExact(input: {
     isDeepStrictEqual(consumedEntry.policy, { issueIds: [], projectIds: [], runIds: [], memoryIds: [], foundationRevisionIds: [] });
 }
 
+/** MS1f decision 4. An execution-policy stage Reviewer's stage-comment
+ * `call_api` result may enter its next model input only as its exact current
+ * receipt, mirroring MS1h16: a `review_model` credential with a stage binding;
+ * the managed tool-result capture for this call and its exact provider
+ * arguments, whose stage-comment capture equals the committed route
+ * acknowledgement re-read now (`readNativeManagedStageCommentCapture`: API
+ * receipt, stage transition, comment, and the stage decision this Run recorded,
+ * from this Run's stage-bound review dispatch); the decision is on the bound
+ * stage, by this Run and Agent; the HTTP result is the comment this Run
+ * created on the bound Task; the succeeded `call_api` plan invocation of this
+ * Run, keyed to this tool use, bound to the provider arguments and the exact
+ * result, and charged to the bound plan; and a consumed source entry that is
+ * exactly that one tool-result source with an empty source policy. Exported
+ * for regression tests. */
+export function managedStageReviewCommentResultExact(input: {
+  claims: { scope: string; run_id: string; sub: string; responsible_user_id: string; review_model?: ReviewModelBinding | null };
+  toolUseId: string;
+  providerArgumentsHash: string;
+  capture: Record<string, unknown>;
+  source: Record<string, unknown>;
+  apiResult: unknown;
+  currentCapture: Record<string, unknown> | null;
+  decision: { id: string; issueId: string; stageId: string; createdByRunId: string | null; actorAgentId: string | null;
+    actorUserId: string | null; outcome: string } | null | undefined;
+  invocation: { id: string; issueId: string | null; runId: string | null; agentId: string | null; toolName: string;
+    status: string; idempotencyKey: string | null; argumentsHash: string | null; resultHash: string | null } | null | undefined;
+  chargedPlanId: string | null;
+  consumedEntry: { responsibleUserId: string; policy: unknown; inputs: unknown[] } | null | undefined;
+}): boolean {
+  const { claims, invocation, consumedEntry, decision, currentCapture } = input;
+  const bound = claims.scope === "review_model" && claims.review_model ? claims.review_model : null;
+  const review = bound && reviewModelBindingKind(bound) === "execution_stage" ? bound as ExecutionStageReviewModelBinding : null;
+  if (!review || !invocation || !consumedEntry || !decision || !currentCapture) return false;
+  const stageComment = managedRecord(input.capture.stageComment);
+  const result = managedRecord(input.apiResult), data = managedRecord(result.data);
+  return input.capture.managedOpenCode === true && input.capture.callId === input.toolUseId &&
+    input.capture.tool === "call_api" && input.capture.argumentsHash === input.providerArgumentsHash &&
+    isDeepStrictEqual(stageComment, currentCapture) && currentCapture.callId === input.toolUseId &&
+    currentCapture.argumentsHash === input.providerArgumentsHash &&
+    currentCapture.operationId === "POST /api/issues/{id}/comments" && currentCapture.commentId === data.id &&
+    result.ok === true && result.status === 201 && result.apiOperationId === "POST /api/issues/{id}/comments" &&
+    data.issueId === review.issueId && data.createdByRunId === claims.run_id &&
+    decision.issueId === review.issueId && decision.stageId === review.stageId && decision.createdByRunId === claims.run_id &&
+    decision.actorAgentId === claims.sub && decision.actorUserId === null &&
+    (decision.outcome === "approved" || decision.outcome === "changes_requested") &&
+    invocation.issueId === review.issueId && invocation.runId === claims.run_id && invocation.agentId === claims.sub &&
+    invocation.toolName === "call_api" && invocation.status === "succeeded" &&
+    invocation.idempotencyKey === `aw-native-tool:${claims.run_id}:${input.toolUseId}` &&
+    invocation.argumentsHash === input.providerArgumentsHash && invocation.resultHash === nativeSha256(input.apiResult) &&
+    input.chargedPlanId === review.planId &&
+    input.source.kind === "tool_result" && input.source.runId === claims.run_id && input.source.callId === input.toolUseId &&
+    input.source.toolName === "call_api" && input.source.invocationId === null &&
+    consumedEntry.responsibleUserId === claims.responsible_user_id &&
+    isDeepStrictEqual(consumedEntry.inputs, [input.source]) &&
+    isDeepStrictEqual(consumedEntry.policy, { issueIds: [], projectIds: [], runIds: [], memoryIds: [], foundationRevisionIds: [] });
+}
+
+/** MS1f decision 6 (MS1h12b). A Reviewer's `read_document` result may enter
+ * its next model input only as the exact receipt of one declared
+ * required-output document revision of the reviewed Task: a `review_model`
+ * credential; the original read captured a `document_revision` source of the
+ * bound review Task; the document is linked to that Task under a declared
+ * `task_document` output key equal to the provider arguments (exactly `{ key }`);
+ * and the succeeded `read_document` plan invocation of this Run is keyed to
+ * this tool use, bound to the provider arguments and charged to the bound plan.
+ * The generic invocation, result-hash and consumed-source checks still apply.
+ * Exported for regression tests. */
+export function managedReviewerDocumentReadExact(input: {
+  claims: { scope: string; run_id: string; sub: string; review_model?: ReviewModelBinding | null };
+  toolUseId: string;
+  providerArgumentsHash: string;
+  readSource: Record<string, unknown>;
+  linkedKey: string | null;
+  declaredKeys: readonly string[];
+  invocation: { issueId: string | null; runId: string | null; agentId: string | null; toolName: string; status: string;
+    idempotencyKey: string | null; argumentsHash: string | null } | null | undefined;
+  chargedPlanId: string | null;
+}): boolean {
+  const review = input.claims.scope === "review_model" && input.claims.review_model ? input.claims.review_model : null;
+  if (!review || !input.invocation || input.linkedKey === null) return false;
+  return input.readSource.kind === "document_revision" && input.readSource.issueId === review.issueId &&
+    input.declaredKeys.includes(input.linkedKey) && nativeSha256({ key: input.linkedKey }) === input.providerArgumentsHash &&
+    input.invocation.issueId === review.issueId && input.invocation.runId === input.claims.run_id &&
+    input.invocation.agentId === input.claims.sub && input.invocation.toolName === "read_document" &&
+    input.invocation.status === "succeeded" &&
+    input.invocation.idempotencyKey === `aw-native-tool:${input.claims.run_id}:${input.toolUseId}` &&
+    input.invocation.argumentsHash === input.providerArgumentsHash && input.chargedPlanId === review.planId;
+}
+
 export async function managedOpenCodeRequestOwnMessages(input: {
   db: Db;
   claims: ManagedModelClaims;
@@ -1055,16 +1147,9 @@ async function assertManagedOpenCodeRequestSources(db: Db, claims: ManagedModelC
           reservation.conversationSessionGeneration === conversationBinding.conversationSessionGeneration &&
           reservation.executionManifestId === conversationBinding.executionManifestId &&
           reservation.executionManifestHash === conversationBinding.executionManifestHash);
-        const exactReviewReservation = !reviewBinding || (reservation?.planId === reviewBinding.planId &&
-          reservation.reviewIssueId === reviewBinding.issueId && reservation.reviewInteractionId === reviewBinding.interactionId &&
-          reservation.reviewDecisionId === reviewBinding.decisionId && reservation.reviewSourceRunId === reviewBinding.sourceRunId &&
-          reservation.reviewSourceResultId === reviewBinding.sourceResultId && reservation.reviewSourceAttemptId === reviewBinding.sourceAttemptId &&
-          reservation.reviewSourceReceiptDigest === reviewBinding.sourceReceiptDigest &&
-          reservation.reviewSourceResultCanonicalSha256 === reviewBinding.sourceResultCanonicalSha256 &&
-          reservation.reviewSourceWorkerId === reviewBinding.sourceWorkerId && reservation.reviewSourceAgentId === reviewBinding.sourceAgentId &&
-          reservation.reviewPlanVersion === reviewBinding.expectedPlanVersion && reservation.workerId === null && reservation.workerAttemptId === null &&
-          reservation.reviewAgentId === claims.sub && reservation.reviewRunId === claims.run_id &&
-          reservation.reviewExecutionManifestId === reviewBinding.executionManifestId);
+        const exactReviewReservation = !reviewBinding || (!!reservation && reviewModelReservationMatches(reservation, reviewBinding) &&
+          reservation.workerId === null && reservation.workerAttemptId === null &&
+          reservation.reviewAgentId === claims.sub && reservation.reviewRunId === claims.run_id);
         if (reservation?.status === "completed" && exactConversationReservation && exactReviewReservation && typeof reservation.providerResponseHash === "string")
           qualifiedIntents.push({ intent, providerResponseHash: reservation.providerResponseHash });
       }
@@ -1413,6 +1498,46 @@ async function assertManagedOpenCodeRequestSources(db: Db, claims: ManagedModelC
         // Only inspect the nested HTTP result after the exact provider envelope,
         // receipt digest, and current dispatch identity have all matched.
         const apiResult = toolName === "call_api" ? apiEnvelope.result : result;
+        if (toolName === "call_api" && claims.scope === "review_model" &&
+          reviewModelBindingKind((claims as ReviewClaims).review_model) === "execution_stage") {
+          // MS1f decision 4. Only the stage Reviewer's exact current stage-comment
+          // receipt; any other call_api result of a stage review credential keeps the 403.
+          const reviewBinding = (claims as ReviewClaims).review_model as ExecutionStageReviewModelBinding;
+          const stageCapture = managedRecord(capture.stageComment);
+          const outputCapture = managedRecord(stageCapture.outputCapture) as unknown as NativeModelOutputCapture;
+          const { readNativeManagedStageCommentCapture } = await import("../native-stage-comment-api.js");
+          const currentCapture = capture.stageComment && typeof capture.stageComment === "object"
+            ? await readNativeManagedStageCommentCapture(db, { companyId: claims.company_id, issueId: reviewBinding.issueId,
+                runId: claims.run_id, agentId: claims.sub, callId: block.tool_use_id, argumentsHash: providerUse.argumentsHash,
+                result: apiResult, outputCapture, reader: sourceActor }).catch(() => null) : null;
+          const transitions = managedRecord(managedRecord(run.resultJson).nativeStagePolicyTransitions);
+          const transition = managedRecord(transitions[createHash("sha256").update(block.tool_use_id).digest("hex")]);
+          const [stageDecision] = typeof transition.stageDecisionId === "string" ? await db.select().from(issueExecutionDecisions)
+            .where(and(eq(issueExecutionDecisions.companyId, claims.company_id), eq(issueExecutionDecisions.issueId, reviewBinding.issueId),
+              eq(issueExecutionDecisions.id, transition.stageDecisionId))).limit(1) : [];
+          const [stageInvocation] = await db.select().from(toolInvocations).where(and(
+            eq(toolInvocations.companyId, claims.company_id), eq(toolInvocations.runId, claims.run_id),
+            eq(toolInvocations.agentId, claims.sub), eq(toolInvocations.idempotencyKey,
+              `aw-native-tool:${claims.run_id}:${block.tool_use_id}`))).limit(1);
+          const [stageCharge] = stageInvocation ? await db.select({ planId: orchestrationToolCharges.planId })
+            .from(orchestrationToolCharges).where(and(eq(orchestrationToolCharges.companyId, claims.company_id),
+              eq(orchestrationToolCharges.invocationId, stageInvocation.id))).limit(1) : [];
+          const stageEntries = receipt.data.additionalInputs.filter(entry => entry.inputs.some(value =>
+            value.kind === "tool_result" && isDeepStrictEqual(value, source)));
+          const conflictingStageCopies = receipt.data.additionalInputs.some(entry => entry.inputs.some(value =>
+            value.kind === "tool_result" && value.callId === source.callId && !isDeepStrictEqual(value, source)));
+          if (stageEntries.length !== 1 || conflictingStageCopies || content !== JSON.stringify(result) ||
+            !managedStageReviewCommentResultExact({ claims: { scope: claims.scope, run_id: claims.run_id, sub: claims.sub,
+              responsible_user_id: claims.responsible_user_id, review_model: reviewBinding }, toolUseId: block.tool_use_id,
+              providerArgumentsHash: providerUse.argumentsHash, capture, source, apiResult,
+              currentCapture: currentCapture ? managedRecord(JSON.parse(JSON.stringify(currentCapture))) : null,
+              decision: stageDecision, invocation: stageInvocation, chargedPlanId: stageCharge?.planId ?? null,
+              consumedEntry: stageEntries[0] }))
+            throw forbidden("Managed OpenCode stage review comment result is not its exact current receipt");
+          consumedSourceComponents.push({ kind: "additional_input", responsibleUserId: stageEntries[0]!.responsibleUserId,
+            policy: stageEntries[0]!.policy, inputs: stageEntries[0]!.inputs });
+          continue;
+        }
         if (toolName === "call_api") {
           const createCapture = managedRecord(capture.projectCreate);
           const createReceipt = managedRecord(createCapture.receipt);
@@ -1945,7 +2070,10 @@ async function assertManagedOpenCodeRequestSources(db: Db, claims: ManagedModelC
           // MS1h16. Only a review_model credential, and only its exact current
           // decision receipt; every other credential family and any mismatch
           // keeps the 403.
-          const reviewBinding = claims.scope === "review_model" ? (claims as ReviewClaims).review_model : null;
+          const claimsBinding = claims.scope === "review_model" ? (claims as ReviewClaims).review_model : null;
+          // MS1f decision 4. Only the completion kind names a review interaction.
+          const reviewBinding = claimsBinding && reviewModelBindingKind(claimsBinding) === "completion"
+            ? claimsBinding as CompletionReviewModelBinding : null;
           const [decision] = reviewBinding ? await db.select({ id: issueThreadInteractions.id,
             issueId: issueThreadInteractions.issueId, status: issueThreadInteractions.status,
             resolvedByRunId: issueThreadInteractions.resolvedByRunId, resolvedByAgentId: issueThreadInteractions.resolvedByAgentId })
@@ -2065,6 +2193,25 @@ async function assertManagedOpenCodeRequestSources(db: Db, claims: ManagedModelC
             if (inputSource.kind !== "document_revision" || inputSource.issueId !== run.nativeIssueId ||
               readSource.returnedResultDigest !== returnedResultDigest) throw forbidden("Managed OpenCode document source capture is incomplete");
             documentRef = { issueId: inputSource.issueId, documentId: inputSource.documentId, revisionId: inputSource.revisionId };
+            if (claims.scope === "review_model") {
+              // MS1f decision 6 (MS1h12b). A Reviewer's read only as the receipt
+              // of one declared required-output document of the reviewed Task.
+              const reviewBinding = (claims as ReviewClaims).review_model;
+              const [linked] = typeof inputSource.documentId === "string" ? await db.select({ key: issueDocuments.key })
+                .from(issueDocuments).where(and(eq(issueDocuments.companyId, claims.company_id),
+                  eq(issueDocuments.issueId, reviewBinding.issueId), eq(issueDocuments.documentId, inputSource.documentId))).limit(1) : [];
+              const retained = await retainedOrchestrationContract(db, claims.company_id, reviewBinding.issueId).catch(() => null);
+              const contract = retained ? orchestrationCompletionSchema.safeParse(retained.row.contractJson.v7) : null;
+              const [readCharge] = await db.select({ planId: orchestrationToolCharges.planId }).from(orchestrationToolCharges)
+                .where(and(eq(orchestrationToolCharges.companyId, claims.company_id),
+                  eq(orchestrationToolCharges.invocationId, invocation.id))).limit(1);
+              if (!managedReviewerDocumentReadExact({ claims: { scope: claims.scope, run_id: claims.run_id, sub: claims.sub,
+                review_model: reviewBinding }, toolUseId: block.tool_use_id, providerArgumentsHash: providerUse.argumentsHash,
+                readSource: inputSource, linkedKey: linked?.key ?? null,
+                declaredKeys: contract?.success ? contract.data.requiredOutputs.filter(output => output.kind === "task_document")
+                  .map(output => output.key) : [], invocation, chargedPlanId: readCharge?.planId ?? null }))
+                throw forbidden("Managed OpenCode Reviewer document read is not a declared output receipt");
+            }
           } else {
             const ref = managedRecord(capture.documentRevision);
             if (ref.issueId !== run.nativeIssueId || typeof ref.documentId !== "string" || typeof ref.revisionId !== "string")
@@ -2120,7 +2267,10 @@ export function workerModelGateway(db: Db, options: Options) {
   async function currentReview(tx: Db, claims: ReviewClaims, requireInputReceipt = true, preNativeIssueId?: string,
     preNativeReviewerContract?: { id: string; sha256: string }, preNativeAdmission = false,
     runGate: "write" | "caller_transaction" = "write") {
-    const b = claims.review_model, now = new Date();
+    // MS1f decision 4. An execution-policy stage binding has its own owner facts.
+    if (claims.scope === "review_model" && claims.review_model && reviewModelBindingKind(claims.review_model) === "execution_stage")
+      return currentStageReview(tx, claims, requireInputReceipt, preNativeIssueId, preNativeAdmission, runGate);
+    const b = claims.review_model as CompletionReviewModelBinding, now = new Date();
     if (claims.scope !== "review_model" || claims.exp * 1000 <= now.getTime() || b.reviewerAgentId !== claims.sub || b.reviewerRunId !== claims.run_id)
       throw forbidden("Current run-scoped assigned Reviewer model capability required");
     await assertV7Enabled(tx, "orchestration_v7");
@@ -2287,6 +2437,136 @@ export function workerModelGateway(db: Db, options: Options) {
       credentialSha256: qualified.credentialSha256, authorityHash, actor, plan, binding, run, assignment };
   }
 
+  /** MS1f decision 4. Current execution-policy stage Reviewer authority under
+   * the reviewed plan, the stage kind of `currentReview`: the same plan,
+   * source attempt, topology, Human, deadline, manifest, authorization, gate,
+   * input-receipt, transport and budget checks, with the stage owner facts
+   * (`getNativeExecutionStageReviewAssignment`) in place of the review
+   * interaction, and the committed stage source witness
+   * (`captureNativeStageReviewSourceWitness`) in place of the request card. The
+   * pending path requires this Run to hold the Task's execution lease; after
+   * its own stage decision (`recorded`) it may finish its turn, as the
+   * completion kind may after `resolve_review` (MS1h16). */
+  async function currentStageReview(tx: Db, claims: ReviewClaims, requireInputReceipt: boolean, preNativeIssueId: string | undefined,
+    preNativeAdmission: boolean, runGate: "write" | "caller_transaction") {
+    const b = claims.review_model as ExecutionStageReviewModelBinding, now = new Date();
+    if (claims.scope !== "review_model" || claims.exp * 1000 <= now.getTime() || b.reviewerAgentId !== claims.sub || b.reviewerRunId !== claims.run_id)
+      throw forbidden("Current run-scoped assigned Reviewer model capability required");
+    await assertV7Enabled(tx, "orchestration_v7");
+    const [run] = await tx.select().from(heartbeatRuns).where(and(eq(heartbeatRuns.companyId, claims.company_id),
+      eq(heartbeatRuns.agentId, claims.sub), eq(heartbeatRuns.id, claims.run_id)));
+    const [manifest] = await tx.select().from(agentExecutionManifests).where(and(eq(agentExecutionManifests.companyId, claims.company_id),
+      eq(agentExecutionManifests.id, b.executionManifestId), eq(agentExecutionManifests.agentId, claims.sub), eq(agentExecutionManifests.runId, claims.run_id)));
+    const [task] = await tx.select().from(issues).where(and(eq(issues.companyId, claims.company_id), eq(issues.id, b.issueId)));
+    const stageContext = readNativeStageReviewContext(run?.contextSnapshot);
+    const preNativeBinding = preNativeIssueId === b.issueId && run?.nativeIssueId === null;
+    const pending = run && stageContext ? await getNativeExecutionStageReviewAssignment(tx, { companyId: claims.company_id,
+      issueId: b.issueId, agentId: claims.sub, run, executionRun: true }) : null;
+    const recorded = !pending && run && stageContext && !preNativeBinding ? await getNativeExecutionStageReviewAssignment(tx, {
+      companyId: claims.company_id, issueId: b.issueId, agentId: claims.sub, run, mode: "recorded" }) : null;
+    const assignment = pending ?? recorded;
+    const reviewStillPending = !!pending && task?.status === "in_review" && task.executionRunId === claims.run_id;
+    const reviewResolvedByThisRun = !!recorded;
+    // MS1e. Only the same-transaction manifest admission preflight accepts the
+    // unresolved pre-binding Run, and only for its pending stage review.
+    const preNativeAdmissionRun = preNativeAdmission && preNativeBinding && !!run && !!stageContext && !!manifest &&
+      run.runtimeMode === "legacy" && run.runtimeModeResolvedAt === null && run.nativeIssueId === null &&
+      reviewStillPending && stageContext.stageId === b.stageId && stageContext.issueId === b.issueId &&
+      manifest.id === b.executionManifestId && manifest.runId === run.id && manifest.agentId === claims.sub;
+    if (!run || run.status !== "running" || (run.runtimeMode !== "native" && !preNativeAdmissionRun) ||
+      (run.nativeIssueId !== b.issueId && !preNativeBinding) || run.responsibleUserId !== claims.responsible_user_id || !manifest ||
+      manifest.manifest.responsibleUserId !== claims.responsible_user_id || !task || !assignment ||
+      !(reviewStillPending || reviewResolvedByThisRun) || assignment.stageId !== b.stageId ||
+      assignment.sourceDecision.id !== b.decisionId || assignment.sourceRun.id !== b.sourceRunId ||
+      assignment.sourceRun.agentId !== b.sourceAgentId || assignment.sourceAttempt.id !== b.sourceAttemptId ||
+      assignment.sourceWorker.id !== b.sourceWorkerId || assignment.sourceAttempt.planId !== b.planId)
+      throw forbidden("The exact current execution-stage review and committed source are required");
+    const { sourceAttempt: attempt, sourceWorker: worker } = assignment;
+    const [plan] = await tx.select().from(orchestrationPlans).where(and(eq(orchestrationPlans.companyId, claims.company_id),
+      eq(orchestrationPlans.id, attempt.planId)));
+    if (!plan) throw forbidden("The committed source must belong to its exact successful plan attempt");
+    if (plan.mode === "single_worker" && (task.id !== plan.issueId || worker.issueId !== plan.issueId))
+      throw forbidden("The single-worker plan no longer owns this exact review Task");
+    if (plan.mode === "planned_parallel") {
+      if (!plan.acceptedPlanRevisionId) throw forbidden("The accepted decomposition revision is unavailable");
+      const [accepted] = await tx.select().from(issuePlanDecompositions).where(and(
+        eq(issuePlanDecompositions.companyId, claims.company_id), eq(issuePlanDecompositions.sourceIssueId, plan.issueId),
+        eq(issuePlanDecompositions.acceptedPlanRevisionId, plan.acceptedPlanRevisionId!)));
+      const [currentPlanDoc] = await tx.select({ revisionId: documents.latestRevisionId }).from(issueDocuments)
+        .innerJoin(documents, and(eq(documents.companyId, issueDocuments.companyId), eq(documents.id, issueDocuments.documentId)))
+        .where(and(eq(issueDocuments.companyId, claims.company_id), eq(issueDocuments.issueId, plan.issueId), eq(issueDocuments.key, "plan")));
+      const [confirmation] = accepted?.acceptedInteractionId ? await tx.select().from(issueThreadInteractions).where(and(
+        eq(issueThreadInteractions.companyId, claims.company_id), eq(issueThreadInteractions.id, accepted.acceptedInteractionId))) : [];
+      if (!accepted || accepted.status !== "completed" || currentPlanDoc?.revisionId !== plan.acceptedPlanRevisionId || confirmation?.status !== "accepted")
+        throw forbidden("The accepted decomposition and Human Plan confirmation changed");
+    }
+    const [otherLiveAttempt] = await tx.select({ id: orchestrationWorkerAttempts.id }).from(orchestrationWorkerAttempts).where(and(
+      eq(orchestrationWorkerAttempts.companyId, claims.company_id), eq(orchestrationWorkerAttempts.planId, plan.id),
+      eq(orchestrationWorkerAttempts.status, "running"), ne(orchestrationWorkerAttempts.id, b.sourceAttemptId))).limit(1);
+    if (otherLiveAttempt) throw forbidden("Another plan attempt is active during the assigned review");
+    if (plan.status !== "running" || plan.erasedAt || plan.executionPrincipal?.type !== "user" ||
+      plan.executionPrincipal.userId !== claims.responsible_user_id || plan.actionClass !== "internal_draft" ||
+      !["C0", "C1"].includes(plan.riskClass) || plan.budgets.maxModelCostMinor === null || !plan.startedAt ||
+      now.getTime() >= plan.startedAt.getTime() + plan.budgets.maxWallClockSeconds * 1000 ||
+      plan.version !== b.expectedPlanVersion || !attempt.executionManifestId)
+      throw forbidden("The accepted plan, source attempt, Human principal or deadline changed");
+    const witness = await captureNativeStageReviewSourceWitness(tx, { companyId: claims.company_id, issueId: b.issueId, assignment });
+    if (!witness || witness.sourceReceiptDigest !== b.sourceReceiptDigest ||
+      witness.sourceResultCanonicalSha256 !== b.sourceResultCanonicalSha256 || witness.sourceResultId !== b.sourceResultId ||
+      witness.sourceRunId !== b.sourceRunId || witness.decisionId !== b.decisionId)
+      throw forbidden("The current committed execution-stage review source changed");
+    const [currentManifest] = await tx.select({ id: agentExecutionManifests.id }).from(agentExecutionManifests).where(and(
+      eq(agentExecutionManifests.companyId, claims.company_id), eq(agentExecutionManifests.id, b.executionManifestId),
+      eq(agentExecutionManifests.agentId, claims.sub), eq(agentExecutionManifests.runId, claims.run_id)));
+    if (!currentManifest) throw forbidden("The current Reviewer run requires its own Runtime Fabric manifest");
+    const principal: AuthorizationActor = { type: "board", source: "session", userId: claims.responsible_user_id };
+    const rootTask = await tx.select().from(issues).where(and(eq(issues.companyId, claims.company_id), eq(issues.id, plan.issueId))).then(rows => rows[0]);
+    if (!rootTask || rootTask.hiddenAt || rootTask.status === "cancelled" || rootTask.status === "done" || task.hiddenAt ||
+      task.requestDepth < rootTask.requestDepth || task.requestDepth - rootTask.requestDepth > plan.budgets.maxDelegationDepth ||
+      (plan.mode === "planned_parallel" && (task.parentId !== rootTask.id || task.projectId !== rootTask.projectId)))
+      throw forbidden("The original accepted plan Task topology is unavailable");
+    await assertV7Authorization(tx, principal, claims.company_id, "issue:mutate", { type: "issue", companyId: claims.company_id,
+      issueId: task.id, projectId: task.projectId, parentIssueId: task.parentId, assigneeAgentId: task.assigneeAgentId,
+      assigneeUserId: task.assigneeUserId, status: task.status });
+    await assertV7Authorization(tx, principal, claims.company_id, "issue:read", { type: "issue", companyId: claims.company_id,
+      issueId: rootTask.id, projectId: rootTask.projectId });
+    if (!await retainedOrchestrationContract(tx, claims.company_id, task.id)) throw forbidden("The accepted completion contract changed");
+    const actor: AuthorizationActor = { type: "agent", source: "agent_jwt", companyId: claims.company_id,
+      agentId: claims.sub, runId: claims.run_id, onBehalfOfUserId: claims.responsible_user_id };
+    await assertV7Authorization(tx, actor, claims.company_id, "issue:read", { type: "issue", companyId: claims.company_id,
+      issueId: task.id, projectId: task.projectId, parentIssueId: task.parentId, assigneeAgentId: task.assigneeAgentId,
+      assigneeUserId: task.assigneeUserId, status: task.status });
+    // MS1g, MS1h4: the same run gates as the completion kind.
+    if (preNativeAdmissionRun || runGate === "caller_transaction")
+      await assertAgentRunPolicyAllowed(tx, claims.company_id, { agentId: claims.sub, runId: claims.run_id });
+    else await assertAgentRunWriteAllowed(tx, claims.company_id, { agentId: claims.sub, runId: claims.run_id });
+    if (requireInputReceipt && (run.nativeInputSourceProtocolVersion !== 1 ||
+      !nativeRunInputSourceReceiptSchema.safeParse(managedRecord(run.runnerProfileJson).nativeInputSourceReceipt).success))
+      throw forbidden("The Reviewer Native input receipt is unavailable");
+    const qualified = await qualifyWorkerTransport(tx, { companyId: claims.company_id, agentId: claims.sub,
+      responsibleUserId: claims.responsible_user_id }, true);
+    if (reviewStillPending && plan.toolActionsUsed >= plan.budgets.maxToolActions)
+      throw forbidden("The original accepted plan has no remaining review tool-action budget");
+    const binding = reviewModelBindingSchema.parse({ kind: "execution_stage", planId: plan.id, issueId: task.id,
+      stageId: assignment.stageId, decisionId: assignment.sourceDecision.id, sourceRunId: assignment.sourceRun.id,
+      sourceWorkerId: worker.id, sourceAgentId: assignment.sourceRun.agentId, sourceAttemptId: attempt.id,
+      sourceResultId: witness.sourceResultId, sourceReceiptDigest: witness.sourceReceiptDigest,
+      sourceResultCanonicalSha256: witness.sourceResultCanonicalSha256, reviewerAgentId: claims.sub, reviewerRunId: run.id,
+      executionManifestId: manifest.id, expectedPlanVersion: b.expectedPlanVersion });
+    const authorityHash = nativeSha256({ binding, planVersion: plan.version, principal: plan.executionPrincipal,
+      task: { id: task.id, status: task.status, statusVersion: task.statusVersion, assigneeAgentId: task.assigneeAgentId },
+      stage: { state: assignment.state, recordedDecisionId: assignment.recordedDecision?.id ?? null },
+      decision: assignment.sourceDecision, witness,
+      manifestHash: manifest.hash, reviewerProfileId: qualified.profileId, maximumMinor: qualified.maximumMinor,
+      connection: { id: qualified.selection.connection.id, config: qualified.selection.connection.config,
+        updatedAt: qualified.selection.connection.updatedAt },
+      grant: { id: qualified.selection.grant.id, updatedAt: qualified.selection.grant.updatedAt,
+        refs: qualified.selection.grant.credentialSecretRefs },
+      credentialVersion: qualified.credentialVersion });
+    return { profile: qualified.profile, qualification: qualified, selection: qualified.selection,
+      credentialSha256: qualified.credentialSha256, authorityHash, actor, plan, binding, run, assignment };
+  }
+
   /** The exact current assigned completion review binding of a Reviewer Run,
    * read through `reader` without writing or minting. issueForReviewRun mints
    * from it on the gateway connection; currentReviewBinding (MS1h4) compares a
@@ -2302,6 +2582,29 @@ export function workerModelGateway(db: Db, options: Options) {
     if (!issueId || (input.preNativeBinding && (run?.nativeIssueId !== null || contextIssueId !== issueId)) ||
       (!input.preNativeBinding && run?.nativeIssueId !== issueId))
       throw forbidden("The persisted Native review wake must bind this exact Task");
+    // MS1f decision 4. An execution-policy stage Reviewer binds its pending
+    // stage, the executor's stage-pending decision and the committed source.
+    if (run && readNativeStageReviewContext(run.contextSnapshot)) {
+      const assignment = await getNativeExecutionStageReviewAssignment(reader, { companyId: input.companyId, issueId,
+        agentId: input.agentId, run, executionRun: true });
+      const [manifest] = await reader.select().from(agentExecutionManifests).where(and(eq(agentExecutionManifests.companyId, input.companyId),
+        eq(agentExecutionManifests.agentId, input.agentId), eq(agentExecutionManifests.runId, run.id)));
+      const [plan] = assignment ? await reader.select().from(orchestrationPlans).where(and(
+        eq(orchestrationPlans.companyId, input.companyId), eq(orchestrationPlans.id, assignment.sourceAttempt.planId))) : [];
+      if (!assignment || !manifest || !plan || run.responsibleUserId !== input.responsibleUserId ||
+        !assignment.sourceAttempt.executionManifestId || !run.completionContractId || !run.completionContractSha256)
+        throw forbidden("One exact current execution-stage review and committed source are required");
+      const witness = await captureNativeStageReviewSourceWitness(reader, { companyId: input.companyId, issueId, assignment });
+      if (!witness) throw forbidden("The current committed execution-stage review source is unavailable");
+      const binding = reviewModelBindingSchema.parse({ kind: "execution_stage", planId: plan.id, issueId,
+        stageId: assignment.stageId, decisionId: assignment.sourceDecision.id, sourceRunId: assignment.sourceRun.id,
+        sourceWorkerId: assignment.sourceWorker.id, sourceResultId: witness.sourceResultId,
+        sourceAgentId: assignment.sourceAttempt.agentId, sourceAttemptId: assignment.sourceAttempt.id,
+        sourceReceiptDigest: witness.sourceReceiptDigest, sourceResultCanonicalSha256: witness.sourceResultCanonicalSha256,
+        reviewerAgentId: input.agentId, reviewerRunId: run.id, executionManifestId: manifest.id,
+        expectedPlanVersion: plan.version });
+      return { binding, issueId };
+    }
     const assignment = issueId && run && context ? await getNativeReviewAssignment(reader, { companyId: input.companyId,
       issueId, agentId: input.agentId, contextSnapshot: context,
       ...(!input.preNativeBinding ? { actingRunId: run.id } : {}) }) : null;
@@ -2340,6 +2643,8 @@ export function workerModelGateway(db: Db, options: Options) {
       eq(heartbeatRuns.agentId, input.agentId), eq(heartbeatRuns.id, input.runId)));
     const context = readNativeReviewAssignmentContext(run?.contextSnapshot);
     const contextIssueId = managedRecord(run?.contextSnapshot).issueId ?? managedRecord(run?.contextSnapshot).nativeIssueId;
+    if (run && run.nativeIssueId === null && contextIssueId === input.issueId && readNativeStageReviewContext(run.contextSnapshot))
+      return qualifyStageReviewInTransaction(tx, run, input);
     if (!run || run.nativeIssueId !== null || contextIssueId !== input.issueId || !context)
       throw forbidden("The persisted pre-Native Reviewer wake must bind this exact Task");
     const [task] = await tx.select().from(issues).where(and(eq(issues.companyId, input.companyId), eq(issues.id, input.issueId)));
@@ -2380,6 +2685,45 @@ export function workerModelGateway(db: Db, options: Options) {
       sourceResultId: witness.sourceResultId, sourceReceiptDigest: witness.sourceReceiptDigest,
       sourceResultCanonicalSha256: witness.sourceResultCanonicalSha256, reviewerAgentId: input.agentId,
       reviewerRunId: input.runId, executionManifestId: manifest.id, expectedPlanVersion: lockedPlan.version });
+    const claims = { scope: "review_model", company_id: input.companyId, sub: input.agentId, run_id: input.runId,
+      responsible_user_id: input.responsibleUserId, exp: Math.floor(Date.now() / 1000) + 60, review_model: binding } as ReviewClaims;
+    const qualified = await currentReview(tx, claims, false, input.issueId,
+      { id: contract.row.id, sha256: contract.row.canonicalSha256 }, true);
+    if (qualified.plan.modelCostReserved + qualified.qualification.maximumMinor > qualified.plan.budgets.maxModelCostMinor!)
+      throw forbidden("The accepted plan has insufficient remaining model budget for the qualified Reviewer call");
+    return qualified;
+  }
+
+  /** MS1f decision 4. The stage kind of `qualifyReviewInTransaction`: the
+   * same-transaction pre-Native preflight of an execution-policy stage Reviewer
+   * under the reviewed plan. It issues no token, creates no plan worker attempt
+   * and borrows none (brief RT-03: one charge identity under the root plan). */
+  async function qualifyStageReviewInTransaction(tx: Db, run: typeof heartbeatRuns.$inferSelect, input: { companyId: string;
+    agentId: string; runId: string; issueId: string; responsibleUserId: string }) {
+    const assignment = await getNativeExecutionStageReviewAssignment(tx, { companyId: input.companyId, issueId: input.issueId,
+      agentId: input.agentId, run, executionRun: true });
+    const [manifest] = await tx.select().from(agentExecutionManifests).where(and(
+      eq(agentExecutionManifests.companyId, input.companyId), eq(agentExecutionManifests.agentId, input.agentId),
+      eq(agentExecutionManifests.runId, input.runId)));
+    const contract = await retainedOrchestrationContract(tx, input.companyId, input.issueId);
+    const hasPinnedContractId = run.completionContractId !== null;
+    const hasPinnedContractSha = run.completionContractSha256 !== null;
+    if (!assignment || !manifest || !contract || run.responsibleUserId !== input.responsibleUserId ||
+      hasPinnedContractId !== hasPinnedContractSha ||
+      (hasPinnedContractId && (run.completionContractId !== contract.row.id || run.completionContractSha256 !== contract.row.canonicalSha256)))
+      throw forbidden("The current stage Reviewer source, manifest or retained completion contract is unavailable");
+    const [lockedPlan] = await tx.select().from(orchestrationPlans).where(and(
+      eq(orchestrationPlans.companyId, input.companyId), eq(orchestrationPlans.id, assignment.sourceAttempt.planId))).for("update");
+    if (!lockedPlan) throw forbidden("The accepted plan changed during Reviewer preflight");
+    const witness = await captureNativeStageReviewSourceWitness(tx, { companyId: input.companyId, issueId: input.issueId, assignment });
+    if (!witness) throw forbidden("The current committed execution-stage review source is unavailable");
+    const binding = reviewModelBindingSchema.parse({ kind: "execution_stage", planId: lockedPlan.id, issueId: input.issueId,
+      stageId: assignment.stageId, decisionId: assignment.sourceDecision.id, sourceRunId: assignment.sourceRun.id,
+      sourceWorkerId: assignment.sourceWorker.id, sourceAgentId: assignment.sourceAttempt.agentId,
+      sourceAttemptId: assignment.sourceAttempt.id, sourceResultId: witness.sourceResultId,
+      sourceReceiptDigest: witness.sourceReceiptDigest, sourceResultCanonicalSha256: witness.sourceResultCanonicalSha256,
+      reviewerAgentId: input.agentId, reviewerRunId: input.runId, executionManifestId: manifest.id,
+      expectedPlanVersion: lockedPlan.version });
     const claims = { scope: "review_model", company_id: input.companyId, sub: input.agentId, run_id: input.runId,
       responsible_user_id: input.responsibleUserId, exp: Math.floor(Date.now() / 1000) + 60, review_model: binding } as ReviewClaims;
     const qualified = await currentReview(tx, claims, false, input.issueId,
@@ -3673,7 +4017,7 @@ export function workerModelGateway(db: Db, options: Options) {
       }) : review ? await reservations.reserve(state.actor, {
         companyId: claims.company_id, planId: review.review_model.planId, workerId: null, workerAttemptId: null,
         expectedPlanVersion: review.review_model.expectedPlanVersion, purpose: "review_model", reviewBinding: review.review_model,
-        idempotencyKey: `review-model-messages:${review.review_model.interactionId}:${inputHash}`, inputHash,
+        idempotencyKey: `review-model-messages:${reviewModelIdempotencySubject(review.review_model)}:${inputHash}`, inputHash,
         authorityHash: state.authorityHash, inputTokensUpperBound: state.profile.inputTokensUpperBound,
         maxOutputTokens: qualifiedInput.request.max_tokens,
       }) : await reservations.reserveConversation(state.actor, {
@@ -3903,16 +4247,9 @@ export function workerModelGateway(db: Db, options: Options) {
           const providerDispatch = nativePayloadSourceInputSchema.parse(bound ? { kind: "worker_model_dispatch",
             runId: claims.run_id, reservationId: reservation.id, callId: existing.callId,
             requestHash: existing.requestHash, wireBodyHash: existing.wireBodyHash, responseHash: result.responseHash }
-            : review ? { kind: "review_model_dispatch", runId: claims.run_id, reservationId: reservation.id,
-              planId: review.review_model.planId, issueId: review.review_model.issueId,
-              interactionId: review.review_model.interactionId, decisionId: review.review_model.decisionId,
-              sourceRunId: review.review_model.sourceRunId, sourceWorkerId: review.review_model.sourceWorkerId,
-              sourceAgentId: review.review_model.sourceAgentId, sourceResultId: review.review_model.sourceResultId,
-              sourceAttemptId: review.review_model.sourceAttemptId, sourceReceiptDigest: review.review_model.sourceReceiptDigest,
-              sourceResultCanonicalSha256: review.review_model.sourceResultCanonicalSha256,
-              reviewerAgentId: review.review_model.reviewerAgentId, executionManifestId: review.review_model.executionManifestId,
-              expectedPlanVersion: review.review_model.expectedPlanVersion, callId: existing.callId,
-              requestHash: existing.requestHash, wireBodyHash: existing.wireBodyHash, responseHash: result.responseHash }
+            : review ? reviewModelDispatchMarker(review.review_model, { runId: claims.run_id, reservationId: reservation.id,
+              callId: existing.callId as string, requestHash: existing.requestHash as string,
+              wireBodyHash: existing.wireBodyHash as string, responseHash: result.responseHash })
             : { kind: "conversation_model_dispatch", runId: claims.run_id, agentId: claims.sub,
               issueId: conversation!.conversation_model.issueId,
               conversationSessionGeneration: conversation!.conversation_model.conversationSessionGeneration,

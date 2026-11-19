@@ -87,11 +87,18 @@ export const nativePayloadSourceInputSchema = z.discriminatedUnion("kind", [
     origin: z.enum(["execution_workspace", "agent_home", "task_session"]), sourceVersion: text, contentHash: sha256 }).strict(),
   z.object({ kind: z.literal("worker_model_dispatch"), runId: id, reservationId: id, callId: text,
     requestHash: sha256, wireBodyHash: sha256, responseHash: sha256 }).strict(),
+  // MS1f decision 4. A completion review marker names its interaction; an
+  // execution-policy stage review marker names `reviewKind` and its stage
+  // instead (never both, never neither).
   z.object({ kind: z.literal("review_model_dispatch"), runId: id, reservationId: id, callId: text,
-    planId: id, issueId: id, interactionId: id, decisionId: id, sourceRunId: id, sourceWorkerId: id, sourceAgentId: id,
+    planId: id, issueId: id, interactionId: id.optional(), reviewKind: z.literal("execution_stage").optional(), stageId: id.optional(),
+    decisionId: id, sourceRunId: id, sourceWorkerId: id, sourceAgentId: id,
     sourceResultId: id, sourceAttemptId: id, expectedPlanVersion: z.number().int().positive(),
     sourceReceiptDigest: sha256, sourceResultCanonicalSha256: nativeResultSha256, reviewerAgentId: id, executionManifestId: id,
-    requestHash: sha256, wireBodyHash: sha256, responseHash: sha256 }).strict(),
+    requestHash: sha256, wireBodyHash: sha256, responseHash: sha256 }).strict()
+    .refine(value => value.interactionId !== undefined
+      ? value.reviewKind === undefined && value.stageId === undefined
+      : value.reviewKind === "execution_stage" && value.stageId !== undefined, "A review dispatch names exactly one review subject"),
   z.object({ kind: z.literal("conversation_model_dispatch"), runId: id, agentId: id, issueId: id,
     conversationSessionGeneration: z.number().int().nonnegative(), executionManifestId: id, executionManifestHash: sha256,
     reservationId: id, callId: text, requestHash: sha256, wireBodyHash: sha256, responseHash: sha256 }).strict(),

@@ -1,6 +1,6 @@
 import { createHash, randomUUID } from "node:crypto";
 import { describe, expect, it } from "vitest";
-import { reviewModelBindingSchema } from "./worker-model-gateway.js";
+import { reviewModelBindingKind, reviewModelBindingSchema } from "./worker-model-gateway.js";
 
 // native_run_results.canonical_sha256 has two writers: the ControlPlanePort
 // stores a plain lower-hex digest (nativeSha256) and the durable coordinator
@@ -28,5 +28,18 @@ describe("review model binding", () => {
   it("rejects other prefixes, uppercase and short hashes", () => {
     for (const value of [`sha512:${digest}`, `sha256:sha256:${digest}`, digest.toUpperCase(), digest.slice(1)])
       expect(reviewModelBindingSchema.safeParse(binding(value)).success).toBe(false);
+  });
+
+  it("names exactly one review subject: a completion interaction (no kind) or an execution stage (MS1f decision 4)", () => {
+    const { interactionId, ...source } = binding(digest);
+    const completion = reviewModelBindingSchema.parse({ ...source, interactionId });
+    expect(reviewModelBindingKind(completion)).toBe("completion");
+    expect(completion).not.toHaveProperty("kind");
+    const stage = reviewModelBindingSchema.parse({ ...source, kind: "execution_stage", stageId: randomUUID() });
+    expect(reviewModelBindingKind(stage)).toBe("execution_stage");
+    for (const value of [{ ...source }, { ...source, kind: "execution_stage", stageId: randomUUID(), interactionId },
+      { ...source, stageId: randomUUID() }, { ...source, kind: "execution_stage" }, { ...source, kind: "completion", interactionId },
+      { ...source, kind: "execution_stage", stageId: "not-a-uuid" }])
+      expect(reviewModelBindingSchema.safeParse(value).success).toBe(false);
   });
 });

@@ -40,6 +40,7 @@ import { enqueueSupervisionStop } from "../supervision/supervision-outbox.js";
 import { withV7ActivityTransaction, logActivity } from "../v7-mutations.js";
 import { resolveDelegatedContextManifestBindings } from "../context/delegated-context-binding.js";
 import { nativeReviewerLaneRun } from "../native-runtime/native-review-participant.js";
+import { nativeStageCommentApiDecisionCurrent } from "../native-stage-comment-api.js";
 import type { AuthorizationActor } from "../authorization.js";
 
 type Binding = {
@@ -147,8 +148,10 @@ async function scope(db: Db, b: Binding) {
 export type NativeReviewerActionGuard = (tx: Db) => Promise<void>;
 
 /** MS1h12. The reviewer lane (`nativeReviewerLaneRun`) of this exact Run,
- * Agent and Task, with the Run's own execution manifest (one per Run). */
-async function nativeReviewerToolLane(db: Db, b: Binding): Promise<boolean> {
+ * Agent and Task, with the Run's own execution manifest (one per Run),
+ * restricted to one review kind when `kind` is given (MS1f decision 4). */
+async function nativeReviewerToolLane(db: Db, b: Binding,
+  kind?: "completion" | "execution_stage"): Promise<boolean> {
   const [row] = await db
     .select({ contextSnapshot: heartbeatRuns.contextSnapshot, manifestId: agentExecutionManifests.id })
     .from(heartbeatRuns)
@@ -176,6 +179,7 @@ async function nativeReviewerToolLane(db: Db, b: Binding): Promise<boolean> {
     issueId: b.issueId,
     manifestId: row.manifestId,
     contextSnapshot: row.contextSnapshot,
+    ...(kind ? { kind } : {}),
   });
 }
 
@@ -217,13 +221,88 @@ async function withNativeReviewerAction(
   const guard: NativeReviewerActionGuard = async (tx) => {
     await lockAnalyticalCompany(tx, b.companyId);
     await lockMemoryPrivacy(tx, b.companyId);
-    if ((await planScope(tx, b)) !== "unadmitted" || !(await nativeReviewerToolLane(tx, b)))
+    if ((await planScope(tx, b)) !== "unadmitted" || !(await nativeReviewerToolLane(tx, b, "completion")))
       throw forbidden("The Native completion review action is no longer current for this Reviewer Run");
   };
   try {
     return await effect(guard);
   } catch (error) {
     throw nativeReviewerActionChargeError(error) ?? error;
+  }
+}
+
+/** MS1f decision 6 (MS1h12b). A Reviewer reads what it reviews: a
+ * `read_document` call whose arguments are exactly `{ key }`, naming one
+ * declared `task_document` required output of the reviewed Task's retained
+ * completion contract. The 0585 tool-charge trigger binds the same arguments
+ * hash to the same declared outputs. */
+async function nativeReviewerDeclaredOutputRead(db: Db, b: Binding, args: unknown): Promise<boolean> {
+  if (!args || typeof args !== "object" || Array.isArray(args) || Object.keys(args).join(",") !== "key") return false;
+  const key = (args as { key: unknown }).key;
+  if (typeof key !== "string") return false;
+  const retained = await retainedOrchestrationContract(db, b.companyId, b.issueId).catch(() => null);
+  const contract = retained ? orchestrationCompletionSchema.safeParse(retained.row.contractJson.v7) : null;
+  return !!contract?.success && contract.data.requiredOutputs.some(output => output.kind === "task_document" && output.key === key);
+}
+
+/** MS1f decisions 4 and 6. A Reviewer's metered plan tool action (a stage
+ * Reviewer's stage-comment `call_api`, or either Reviewer kind's declared
+ * output `read_document`): inside one transaction, after the shared analytical
+ * and Memory locks, re-check that the Task still has an active plan this Run
+ * has no worker attempt in, the Run's reviewer lane of `kind` and the action's
+ * own qualification, then write the action's tool invocation, which the 0585
+ * tool-charge trigger binds to the reviewed plan through the Run's completed
+ * `review_model` reservation and charges as one plan tool action (or refuses).
+ * The effect runs after that commit, and its outcome settles the invocation. */
+async function withNativeReviewerMeteredTool(db: Db, b: Binding, call: Call, input: {
+  kind: "completion" | "execution_stage" | "any"; riskLevel: "read" | "low";
+  qualify: (tx: Db) => Promise<boolean>; effect: () => Promise<unknown>;
+}): Promise<unknown> {
+  if (!/^[\x21-\x7e]{1,240}$/.test(call.callId))
+    throw badRequest("Native tool call identity must be bounded");
+  if (Buffer.byteLength(JSON.stringify(call.arguments) ?? "", "utf8") > 256000)
+    throw badRequest("Native tool arguments exceed the bounded envelope");
+  const inputHash = nativeSha256({ runId: b.runId, tool: call.tool, arguments: call.arguments });
+  const idempotencyKey = `aw-native-tool:${b.runId}:${call.callId}`;
+  let invocation: typeof toolInvocations.$inferSelect;
+  try {
+    invocation = await db.transaction(async (tx) => {
+      const t = tx as unknown as Db;
+      await lockAnalyticalCompany(t, b.companyId);
+      await lockMemoryPrivacy(t, b.companyId);
+      if ((await planScope(t, b)) !== "unadmitted" ||
+        !(await nativeReviewerToolLane(t, b, input.kind === "any" ? undefined : input.kind)) || !(await input.qualify(t)))
+        throw forbidden("The Native review tool action is no longer current for this Reviewer Run");
+      const [existing] = await t.select().from(toolInvocations).where(and(
+        eq(toolInvocations.companyId, b.companyId), eq(toolInvocations.idempotencyKey, idempotencyKey)));
+      if (existing) {
+        if (existing.idempotencyRequestHash !== inputHash) throw conflict("Native tool call identity changed");
+        throw conflict("Native tool dispatch is already committed; use retained protocol results");
+      }
+      const [receipt] = await t.insert(toolInvocations).values({
+        companyId: b.companyId, runId: b.runId, issueId: b.issueId, agentId: b.agentId,
+        actorType: "agent", actorId: b.agentId, idempotencyKey, idempotencyRequestHash: inputHash,
+        toolName: call.tool, argumentsHash: nativeSha256(call.arguments), riskLevel: input.riskLevel,
+        policyDecision: "allow", approvalState: "not_required", status: "executing", startedAt: new Date(),
+      }).returning();
+      return receipt!;
+    });
+  } catch (error) {
+    throw nativeReviewerActionChargeError(error) ?? error;
+  }
+  try {
+    const result = nativeToolWireResult(await input.effect());
+    const denied = !!result && typeof result === "object" && "ok" in result && result.ok === false;
+    await db.update(toolInvocations).set({ status: denied ? "failed" : "succeeded",
+      errorCode: denied ? "native_tool_denied" : null, resultHash: nativeSha256(result),
+      completedAt: new Date(), updatedAt: new Date() })
+      .where(and(eq(toolInvocations.companyId, b.companyId), eq(toolInvocations.id, invocation.id)));
+    return result;
+  } catch (error) {
+    await db.update(toolInvocations).set({ status: "failed", errorCode: "native_tool_result_unsettled",
+      completedAt: new Date(), updatedAt: new Date() })
+      .where(and(eq(toolInvocations.companyId, b.companyId), eq(toolInvocations.id, invocation.id)));
+    throw error;
   }
 }
 
@@ -638,8 +717,24 @@ export async function withOrchestrationNativeTool(
 ): Promise<unknown> {
   const planned = await planScope(db, b);
   if (planned === "unadmitted") {
-    if (call.tool === "resolve_review" && !externallyMetered && (await nativeReviewerToolLane(db, b)))
+    if (call.tool === "resolve_review" && !externallyMetered && (await nativeReviewerToolLane(db, b, "completion")))
       return withNativeReviewerAction(b, effect);
+    // MS1f decision 4. The stage Reviewer's approval comment, only while it is
+    // the current stage-comment decision of this Run (the comment route's own
+    // parser and policy projection).
+    const stageComment = async (tx: Db) => nativeStageCommentApiDecisionCurrent(tx, { companyId: b.companyId,
+      issueId: b.issueId, runId: b.runId, agentId: b.agentId, arguments: call.arguments });
+    if (call.tool === "call_api" && !externallyMetered && (await nativeReviewerToolLane(db, b, "execution_stage")) &&
+      (await stageComment(db)))
+      return withNativeReviewerMeteredTool(db, b, call, { kind: "execution_stage", riskLevel: "low",
+        qualify: stageComment, effect: () => effect() });
+    // MS1f decision 6 (MS1h12b). Either Reviewer kind may read the reviewed
+    // Task's declared required-output documents, each read charged once.
+    const declaredRead = async (tx: Db) => nativeReviewerDeclaredOutputRead(tx, b, call.arguments);
+    if (call.tool === "read_document" && !externallyMetered && (await nativeReviewerToolLane(db, b)) &&
+      (await declaredRead(db)))
+      return withNativeReviewerMeteredTool(db, b, call, { kind: "any", riskLevel: "read",
+        qualify: declaredRead, effect: () => effect() });
     throw forbidden("Native tools require the plan's admitted worker attempt");
   }
   const preliminary = planned;

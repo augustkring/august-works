@@ -10,7 +10,8 @@ import type { ActivityPublication } from "../activity-log.js";
 import { logActivity } from "../v7-mutations.js";
 import { retainedOrchestrationContract } from "./orchestration-contracts.js";
 import { qualifyNativeDraftWorker, qualifyNativeReviewRun } from "./native-draft-runtime.js";
-import { getNativeReviewSourceAssignment, readNativeReviewAssignmentContext } from "../native-runtime/native-review-participant.js";
+import { getNativeExecutionStageReviewAssignment, getNativeReviewSourceAssignment, readNativeReviewAssignmentContext,
+  readNativeStageReviewContext } from "../native-runtime/native-review-participant.js";
 import { nativeDraftToolActionBudgetFits } from "./native-draft-output-capability.js";
 
 type Plan = typeof orchestrationPlans.$inferSelect;
@@ -68,6 +69,29 @@ async function admit(tx: Db, input: { companyId: string; issueId: string; actor:
       // This qualifies current review owner, source witness, manifest, provider,
       // accepted plan, Human ACL and residual shared plan budgets. It creates no
       // orchestrationWorkerAttempt and never borrows the source writer attempt.
+      await qualifyNativeReviewRun(rootDb, tx, { companyId: input.companyId, agentId: reviewAgentId,
+        runId: input.runId, issueId: input.issueId, responsibleUserId: reviewRun.responsibleUserId });
+      return null;
+    }
+    // MS1f decision 4. An execution-policy stage Reviewer of a planned Task is
+    // the stage participant (the Task assignee while the stage is pending),
+    // never the plan's canonical worker. It is qualified as the stage kind of
+    // the reviewer lane under the reviewed plan, before the worker scope below,
+    // and creates no worker attempt; a stage Reviewer wake that is not exactly
+    // current (including a Reviewer who is the plan Worker) is refused.
+    if (readNativeStageReviewContext(reviewRun?.contextSnapshot)) {
+      const stageContext = readNativeStageReviewContext(reviewRun!.contextSnapshot)!;
+      if (!rootDb || !reviewRun?.responsibleUserId || stageContext.issueId !== input.issueId)
+        throw forbidden("The exact persisted execution-stage Reviewer wake and original Human are required");
+      const assignment = await getNativeExecutionStageReviewAssignment(tx, { companyId: input.companyId, issueId: input.issueId,
+        agentId: reviewAgentId, run: reviewRun, executionRun: true });
+      if (!assignment) throw forbidden("The execution-stage review is no longer current for this Reviewer Run");
+      if (assignment.sourceAttempt.status === "running" &&
+        ["succeeded", "failed", "cancelled", "timed_out"].includes(assignment.sourceRun.status)) {
+        const [sourcePlan] = await tx.select().from(orchestrationPlans).where(and(
+          eq(orchestrationPlans.companyId, input.companyId), eq(orchestrationPlans.id, assignment.sourceAttempt.planId))).for("update");
+        if (sourcePlan) await reconcileOrchestrationAttempts(tx, sourcePlan);
+      }
       await qualifyNativeReviewRun(rootDb, tx, { companyId: input.companyId, agentId: reviewAgentId,
         runId: input.runId, issueId: input.issueId, responsibleUserId: reviewRun.responsibleUserId });
       return null;

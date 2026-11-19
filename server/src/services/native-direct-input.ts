@@ -15,7 +15,7 @@ import { activityLog, agents, issues, projects, projectWorkspaces, issueRelation
   orchestrationWorkers, issuePlanDecompositions, type Db } from "@paperclipai/db";
 import { toolInvocations, toolMcpGateways, toolConnections, toolActionRequests, toolCatalogEntries } from "@paperclipai/db";
 import { nativePayloadSourceInputSchema, nativePayloadSourcePolicySchema, nativePayloadSourceSnapshotSchema, nativeRunInputSourceReceiptSchema,
-  unionNativePayloadSourceInputs, AUTHORED_AGENT_DEFINITION_KEY, conversationModelBindingSchema, reviewModelBindingSchema,
+  unionNativePayloadSourceInputs, AUTHORED_AGENT_DEFINITION_KEY, conversationModelBindingSchema, reviewModelBindingSchema, completionReviewModelBindingSchema, type ReviewModelBinding,
   type NativePayloadSourceInput, type NativePayloadSourcePolicy,
   type NativePayloadSourceSnapshot, type NativeRunInputSourceReceipt } from "@paperclipai/shared";
 import { HttpError, forbidden } from "../errors.js";
@@ -53,7 +53,9 @@ import { closeNativeExactCallSourceProofs, createNativeExactCallSourceProofStore
 import { captureNativeTaskWakeSource, type NativeConsumedSourceComponent, type NativeModelOutputCapture,
   type NativePayloadSourceSet } from "./native-runtime/native-execution-input.js";
 import { captureNativeReviewWakeWitness, getNativeReviewAssignment, getNativeReviewSourceAssignment,
-  readNativeReviewAssignmentContext } from "./native-runtime/native-review-participant.js";
+  readNativeReviewAssignmentContext, readNativeStageReviewContext, captureNativeStageReviewSourceWitness } from "./native-runtime/native-review-participant.js";
+import { reviewModelBindingFromMarker, reviewModelBindingKind, reviewModelIdempotencySubject,
+  reviewModelReservationMatches } from "./orchestration/review-model-binding.js";
 import { assertV7Authorization } from "./v7-authorization.js";
 import { captureNativeExecutionStageTaskWakeSource, nativeTaskWakeReason } from "./native-stage-wake-source.js";
 import { isCurrentConversationModelRoot } from "./native-runtime/worker-conversation-root.js";
@@ -1919,6 +1921,9 @@ export function nativeReviewMarkerRecordedOnce(
 
 async function assertNativeReviewModelDispatchCurrentInScope(db: Db | Transaction, companyId: string,
   marker: Extract<NativePayloadSourceInput, { kind: "review_model_dispatch" }>, scope: NativeSourceReadScope): Promise<void> {
+  // MS1f decision 4. An execution-policy stage review marker has its own owners.
+  if (marker.reviewKind === "execution_stage")
+    return assertNativeStageReviewModelDispatchCurrentInScope(db, companyId, marker, scope);
   const dispatchRun = await nativeSourceReadRun(db, companyId, marker.runId, scope);
   const profile = dispatchRun?.runnerProfileJson && typeof dispatchRun.runnerProfileJson === "object" && !Array.isArray(dispatchRun.runnerProfileJson)
     ? dispatchRun.runnerProfileJson as Record<string, unknown> : null;
@@ -1932,7 +1937,7 @@ async function assertNativeReviewModelDispatchCurrentInScope(db: Db | Transactio
   const assignment = dispatchRun && context ? await getNativeReviewSourceAssignment(db, {
     companyId, issueId: marker.issueId, reviewerAgentId: marker.reviewerAgentId, contextSnapshot: dispatchRun.contextSnapshot,
   }) : null;
-  const binding = reviewModelBindingSchema.parse({ planId: marker.planId, issueId: marker.issueId,
+  const binding = completionReviewModelBindingSchema.parse({ planId: marker.planId, issueId: marker.issueId,
     interactionId: marker.interactionId, decisionId: marker.decisionId, sourceRunId: marker.sourceRunId,
     sourceWorkerId: marker.sourceWorkerId, sourceAgentId: marker.sourceAgentId, sourceAttemptId: marker.sourceAttemptId,
     sourceResultId: marker.sourceResultId, sourceReceiptDigest: marker.sourceReceiptDigest,
@@ -1978,6 +1983,81 @@ async function assertNativeReviewModelDispatchCurrentInScope(db: Db | Transactio
     intent?.endpoint !== "https://api.anthropic.com/v1/messages" || intent?.method !== "POST" ||
     reservation.idempotencyKey !== `review-model-messages:${binding.interactionId}:${marker.requestHash}`)
     throw forbidden("A Native completion-review model dispatch changed");
+  await assertNativeReviewDispatchPlanCurrentInScope(db, companyId, { binding, task,
+    dispatchRun: dispatchRun as typeof dispatchRun & { responsibleUserId: string }, reservation }, scope);
+}
+
+/** MS1f decision 4. A retained execution-policy stage review dispatch is
+ * historical registered output of the exact stage Reviewer Run: its persisted
+ * stage Reviewer wake and immutable stage origin (intent, effect, the
+ * executor's applied stage-pending decision, executor Run, delivered wake),
+ * the committed source witness, the Run's single registered wire intent with
+ * this exact stage binding, the marker recorded once (MS1h19), and its
+ * completed stage-bound reservation. The live stage state is not required (the
+ * Reviewer may have recorded its decision); paid admission rechecks it. */
+async function assertNativeStageReviewModelDispatchCurrentInScope(db: Db | Transaction, companyId: string,
+  marker: Extract<NativePayloadSourceInput, { kind: "review_model_dispatch" }>, scope: NativeSourceReadScope): Promise<void> {
+  const dispatchRun = await nativeSourceReadRun(db, companyId, marker.runId, scope);
+  const profile = dispatchRun?.runnerProfileJson && typeof dispatchRun.runnerProfileJson === "object" && !Array.isArray(dispatchRun.runnerProfileJson)
+    ? dispatchRun.runnerProfileJson as Record<string, unknown> : null;
+  const receipt = profile && nativeRunInputSourceReceiptSchema.safeParse(profile.nativeInputSourceReceipt);
+  const task = await db.select().from(issues).where(and(eq(issues.companyId, companyId), eq(issues.id, marker.issueId))).for("share").then(rows => rows[0]);
+  const [manifest] = await db.select().from(agentExecutionManifests).where(and(
+    eq(agentExecutionManifests.companyId, companyId), eq(agentExecutionManifests.id, marker.executionManifestId),
+    eq(agentExecutionManifests.agentId, marker.reviewerAgentId), eq(agentExecutionManifests.runId, marker.runId))).for("share");
+  const binding = reviewModelBindingFromMarker(marker);
+  const stage = readNativeStageReviewContext(dispatchRun?.contextSnapshot);
+  const { captureNativeStageOrigin } = await import("./native-stage-wake-source.js");
+  const origin = dispatchRun && stage ? await captureNativeStageOrigin(db, { ...dispatchRun, nativeIssueId: marker.issueId }) : null;
+  const [decision] = origin ? await db.select().from(statusDecisions).where(and(eq(statusDecisions.companyId, companyId),
+    eq(statusDecisions.issueId, marker.issueId), eq(statusDecisions.id, origin.decisionId))).for("share") : [];
+  const [sourceRun] = origin ? await db.select().from(heartbeatRuns).where(and(eq(heartbeatRuns.companyId, companyId),
+    eq(heartbeatRuns.id, origin.executorRunId), eq(heartbeatRuns.agentId, origin.executorAgentId))).for("share") : [];
+  const witness = decision && sourceRun ? await captureNativeStageReviewSourceWitness(db, { companyId, issueId: marker.issueId,
+    assignment: { sourceRun, sourceDecision: decision } }) : null;
+  const intents = Array.isArray(profile?.nativeAwModelWireIntents) ? profile.nativeAwModelWireIntents.filter(value =>
+    value && typeof value === "object" && !Array.isArray(value) && nativeSourceRecord(value).reservationId === marker.reservationId &&
+    nativeSourceRecord(value).modelPurpose === "review_model") as Record<string, unknown>[] : [];
+  const intent = intents[0];
+  const reservation = await nativeSourceReadReservation(db, companyId, marker.reservationId, scope);
+  const intentBinding = reviewModelBindingSchema.safeParse(intent?.reviewModelBinding);
+  const exactBinding = intentBinding.success && isDeepStrictEqual(intentBinding.data, binding);
+  const recordedOnce = !!receipt?.success && !!intent &&
+    nativeReviewMarkerRecordedOnce(receipt.data.dispatches, marker, intent.sourceDispatchDigest);
+  if (!dispatchRun || dispatchRun.runtimeMode !== "native" || reviewModelBindingKind(binding) !== "execution_stage" ||
+    dispatchRun.nativeIssueId !== marker.issueId || dispatchRun.agentId !== marker.reviewerAgentId || !dispatchRun.responsibleUserId ||
+    !receipt?.success || !stage || stage.stageId !== marker.stageId || stage.issueId !== marker.issueId ||
+    !origin || origin.intentId !== stage.nativeStatusWakeIntentId || origin.decisionId !== marker.decisionId ||
+    origin.executorRunId !== marker.sourceRunId || origin.executorAgentId !== marker.sourceAgentId ||
+    marker.sourceAgentId === marker.reviewerAgentId || !decision || decision.applicationState !== "applied" ||
+    decision.reasonCode !== "execution_policy_stage_pending" || decision.toStatus !== "in_review" ||
+    !sourceRun || sourceRun.nativeIssueId !== marker.issueId || !task || task.hiddenAt ||
+    !manifest || manifest.manifest.responsibleUserId !== dispatchRun.responsibleUserId || !witness ||
+    witness.sourceResultId !== marker.sourceResultId || witness.sourceReceiptDigest !== marker.sourceReceiptDigest ||
+    witness.sourceResultCanonicalSha256 !== marker.sourceResultCanonicalSha256 || witness.sourceRunId !== marker.sourceRunId ||
+    witness.decisionId !== marker.decisionId ||
+    intents.length !== 1 || !exactBinding || !recordedOnce || !reservation || reservation.purpose !== "review_model" ||
+    reservation.status !== "completed" || reservation.workerId !== null || reservation.workerAttemptId !== null ||
+    !reviewModelReservationMatches(reservation, binding) ||
+    reservation.inputHash !== marker.requestHash || reservation.providerResponseHash !== marker.responseHash ||
+    intent?.callId !== marker.callId || intent?.requestHash !== marker.requestHash || intent?.wireBodyHash !== marker.wireBodyHash ||
+    intent?.responseContentHash === undefined || !/^[0-9a-f]{64}$/.test(String(intent.responseContentHash)) ||
+    intent?.endpoint !== "https://api.anthropic.com/v1/messages" || intent?.method !== "POST" ||
+    reservation.idempotencyKey !== `review-model-messages:${reviewModelIdempotencySubject(binding)}:${marker.requestHash}`)
+    throw forbidden("A Native execution-stage review model dispatch changed");
+  await assertNativeReviewDispatchPlanCurrentInScope(db, companyId, { binding, task,
+    dispatchRun: dispatchRun as typeof dispatchRun & { responsibleUserId: string }, reservation }, scope);
+}
+
+/** The plan, source attempt, topology and Human part shared by the retained
+ * review dispatch rechecks of both review kinds (unchanged from the completion
+ * recheck). */
+async function assertNativeReviewDispatchPlanCurrentInScope(db: Db | Transaction, companyId: string, input: {
+  binding: ReviewModelBinding; task: typeof issues.$inferSelect;
+  dispatchRun: NonNullable<Awaited<ReturnType<typeof nativeSourceReadRun>>> & { responsibleUserId: string };
+  reservation: NonNullable<Awaited<ReturnType<typeof nativeSourceReadReservation>>>;
+}, scope: NativeSourceReadScope): Promise<void> {
+  const { binding, task, dispatchRun, reservation } = input;
   const [plan] = await db.select().from(orchestrationPlans).where(and(
     eq(orchestrationPlans.companyId, companyId), eq(orchestrationPlans.id, binding.planId))).for("share");
   const sourceAttemptRows = await db.select({ attempt: orchestrationWorkerAttempts, worker: orchestrationWorkers })
@@ -3578,7 +3658,7 @@ async function assertNativeModelOutputCaptureCurrentInScope(db: Db | Transaction
   const expectedIdempotencyKey = capture.dispatch.kind === "worker_model_dispatch"
     ? `worker-model-messages:${capture.runId}:${capture.dispatch.requestHash}`
     : capture.dispatch.kind === "review_model_dispatch"
-      ? `review-model-messages:${capture.dispatch.interactionId}:${capture.dispatch.requestHash}`
+      ? `review-model-messages:${reviewModelIdempotencySubject(reviewModelBindingFromMarker(capture.dispatch))}:${capture.dispatch.requestHash}`
       : `conversation-model-messages:${capture.runId}:${capture.dispatch.requestHash}`;
   const conversationBinding = nativeSourceRecord(wire?.conversationModelBinding);
   const [conversationIssue] = capture.dispatch.kind === "conversation_model_dispatch"

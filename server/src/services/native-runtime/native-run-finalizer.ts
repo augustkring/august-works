@@ -4,7 +4,9 @@ import { captureNativeBlockedHumanInteraction } from "../native-direct-input.js"
 import { nativeStageTaskBodyResultProjection } from "../native-stage-task-body-source.js";
 import { settleSlackConversation } from "../slack-conversation-lifecycle.js";
 import { dismissAutomaticCompletionReviews } from "./automatic-completion-reviews.js";
-import { getNativeReviewAssignment, readNativeReviewAssignmentContext } from "./native-review-participant.js";
+import { getNativeExecutionStageReviewAssignment, getNativeReviewAssignment, readNativeReviewAssignmentContext,
+  readNativeStageReviewContext } from "./native-review-participant.js";
+import { activePlanCoveringTask } from "../orchestration/plan-coverage.js";
 import { conversationNativeDecision, isConversation } from "../agent-conversations.js";
 import { randomUUID } from "node:crypto";
 import { and, eq, inArray, isNotNull, isNull, or, sql } from "drizzle-orm";
@@ -14,6 +16,7 @@ import {
   agentWakeupRequests,
   completionContracts,
   heartbeatRuns,
+  orchestrationWorkerAttempts,
   heartbeatRunEvents,
   issueApprovals,
   issueThreadInteractions,
@@ -32,6 +35,8 @@ import {
   type NativeGovernanceGate,
 } from "./status-arbiter.js";
 import { recordNativeWorkAssessment } from "./work-assessments.js";
+import { nativeExecutionStageHandoffAvailable } from "./native-stage-handoff.js";
+import { V7_COMPLETION_SCHEMA } from "../orchestration/orchestration-contracts.js";
 import {
   commitNativeStatusDecision,
   NativeStatusRaceError,
@@ -1201,6 +1206,12 @@ export async function finalizeNativeRun(input: {
       companyId: run.companyId, issueId: authoritativeIssue.id, agentId: run.agentId,
       contextSnapshot: reviewContext, allowResolvedByRunId: run.id,
     }) : null;
+    // MS1f decision 4. An execution-policy stage Reviewer of a planned Task
+    // (its stage Reviewer wake, no plan worker attempt, a covering plan) is on
+    // the reviewer lane: its own result preserves the Task status, as a
+    // completion Reviewer's does (no same-agent continuation of the plan's
+    // Task). Plan-less stage Reviewers keep the ordinary arbiter.
+    const stageReviewOutcome = !reviewContext ? await nativeStageReviewerOutcome(input.db, run, authoritativeIssue.id) : null;
     let readonlyDependencyInteraction = false;
     if (terminalState === "succeeded" && authoritativeIssue.status === "blocked" &&
         result.reportedWorkDisposition === "blocked" && record(result.completionClaim).objectiveSatisfied === false) {
@@ -1216,10 +1227,23 @@ export async function finalizeNativeRun(input: {
         readonlyDependencyInteraction = true;
       }
     }
-    const proposedDecision = resolveNativeFinalizerStatus({
+    // MS1f decision 1. A planned executor's claim may hand off to the Task's
+    // declared execution-policy stage: V7 server-arbiter contract, a covering
+    // plan, and a dry run of its `done` transition entering a pending stage.
+    // The arbiter's earlier branches own failed runs, review Runs and pending
+    // gates; conversation turns never commit a handoff (conversationNativeDecision).
+    const executionStageHandoffAvailable =
+      contractRow.schemaVersion === V7_COMPLETION_SCHEMA &&
+      contractRow.completionAuthority === "server_arbiter" &&
+      (await nativeExecutionStageHandoffAvailable(input.db, {
+        companyId: run.companyId,
+        issue: authoritativeIssue,
+        agentId: run.agentId,
+      }));
+    const arbiterInput: Parameters<typeof resolveNativeFinalizerStatus>[0] = {
       ...(reviewContext ? { nativeReviewOutcome: nativeReview
         ? nativeReview.interaction.status === "pending" ? "pending" as const : "resolved" as const
-        : "stale" as const } : {}),
+        : "stale" as const } : stageReviewOutcome ? { nativeReviewOutcome: stageReviewOutcome } : {}),
       assessment,
       terminalState: terminalState as "succeeded" | "failed" | "cancelled",
       workspaceFinalizeStatus: input.workspaceFinalizeStatus,
@@ -1241,6 +1265,10 @@ export async function finalizeNativeRun(input: {
         null,
       agentId: run.agentId,
       priorIssueStatus: authoritativeStatus(authoritativeIssue.status),
+    };
+    const proposedDecision = resolveNativeFinalizerStatus({
+      ...arbiterInput,
+      executionStageHandoffAvailable,
     });
     const decision = conversationNativeDecision({
       conversation: isConversation(authoritativeIssue), terminalState,
@@ -1301,6 +1329,10 @@ export async function finalizeNativeRun(input: {
           decision.reasonCode === "external_chat_response_waiting"
             ? { agentId: run.agentId }
             : undefined,
+        stageHandoffFallback:
+          decision.reasonCode === "execution_policy_stage_handoff"
+            ? resolveNativeFinalizerStatus(arbiterInput)
+            : undefined,
         reviewResponsePresentation:
           decision.reasonCode === "governed_response_waiting" &&
           governanceGate?.kind === "interaction" &&
@@ -1314,7 +1346,12 @@ export async function finalizeNativeRun(input: {
         failpoint: input.failpoint,
       });
       const now = new Date();
-      const finalizationFailed = decision.effects.some(
+      // A stage handoff commits as the stage-pending decision or its fallback.
+      const appliedDecision =
+        decision.reasonCode === "execution_policy_stage_handoff"
+          ? committed.effectiveDecision
+          : decision;
+      const finalizationFailed = appliedDecision.effects.some(
         (effect) => effect.kind === "record_finalization_error",
       );
       const finalizationPhase = finalizationFailed
@@ -1324,7 +1361,7 @@ export async function finalizeNativeRun(input: {
       // Its "cancel_continuations" effect (status-decision-committer.ts) writes a
       // terminal status to this same run and emits for it. Skip the emit here in
       // that case so one run reaching a terminal state emits exactly one event.
-      const alreadyEmittedByCommittedDecision = decision.effects.some(
+      const alreadyEmittedByCommittedDecision = appliedDecision.effects.some(
         (effect) => effect.kind === "cancel_continuations",
       );
       const [updatedRun] = await input.db
@@ -1433,4 +1470,22 @@ export async function finalizeNativeRun(input: {
     }
   }
   throw new Error("native_finalization_status_race");
+}
+
+/** MS1f decision 4. The reviewer-lane outcome of an execution-policy stage
+ * Reviewer Run on a planned Task, or null when the Run is not one (no stage
+ * Reviewer wake, a plan worker attempt of its own, or no covering plan):
+ * `resolved` once this Run recorded its decision on the stage, `pending` while
+ * the stage is still pending with this Reviewer, otherwise `stale`. */
+export async function nativeStageReviewerOutcome(db: Db, run: typeof heartbeatRuns.$inferSelect,
+  issueId: string): Promise<"resolved" | "pending" | "stale" | null> {
+  const stage = readNativeStageReviewContext(run.contextSnapshot);
+  if (!stage || !run.agentId || stage.issueId !== issueId) return null;
+  const [attempt] = await db.select({ id: orchestrationWorkerAttempts.id }).from(orchestrationWorkerAttempts).where(and(
+    eq(orchestrationWorkerAttempts.companyId, run.companyId), eq(orchestrationWorkerAttempts.runId, run.id))).limit(1);
+  if (attempt || !await activePlanCoveringTask(db, run.companyId, issueId)) return null;
+  const input = { companyId: run.companyId, issueId, agentId: run.agentId, run };
+  if (await getNativeExecutionStageReviewAssignment(db, { ...input, mode: "recorded" })) return "resolved";
+  if (await getNativeExecutionStageReviewAssignment(db, input)) return "pending";
+  return "stale";
 }

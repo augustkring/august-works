@@ -1,5 +1,6 @@
 import { isDeepStrictEqual } from "node:util";
-import { and, asc, eq, inArray, lte } from "drizzle-orm";
+import { and, asc, eq, inArray, isNull, lte } from "drizzle-orm";
+import { reviewModelBindingFromReservation, reviewModelBindingKind, reviewModelReservationColumns } from "./review-model-binding.js";
 import {
   issues,
   companies,
@@ -131,10 +132,7 @@ type ConversationRequest = z.infer<typeof conversationRequestSchema>;
 type Reservation = typeof orchestrationModelReservations.$inferSelect;
 function reviewBindingFromReservation(row: Reservation): ReviewModelBinding | undefined {
   if (row.purpose !== "review_model") return undefined;
-  const parsed = reviewModelBindingSchema.safeParse({ planId: row.planId, issueId: row.reviewIssueId, interactionId: row.reviewInteractionId,
-    decisionId: row.reviewDecisionId, sourceRunId: row.reviewSourceRunId, sourceResultId: row.reviewSourceResultId, sourceWorkerId: row.reviewSourceWorkerId, sourceAgentId: row.reviewSourceAgentId, sourceAttemptId: row.reviewSourceAttemptId,
-    sourceReceiptDigest: row.reviewSourceReceiptDigest, sourceResultCanonicalSha256: row.reviewSourceResultCanonicalSha256, reviewerAgentId: row.reviewAgentId, reviewerRunId: row.reviewRunId,
-    executionManifestId: row.reviewExecutionManifestId, expectedPlanVersion: row.reviewPlanVersion });
+  const parsed = reviewModelBindingFromReservation(row);
   if (!parsed.success) throw forbidden("Persisted review model reservation binding is incomplete");
   return parsed.data;
 }
@@ -986,7 +984,13 @@ export function modelReservationService(
           const [unresolved] = await tx.select({ id: orchestrationModelReservations.id }).from(orchestrationModelReservations).where(and(
             eq(orchestrationModelReservations.companyId, input.companyId),
             eq(orchestrationModelReservations.planId, input.planId),
-            eq(orchestrationModelReservations.reviewInteractionId, input.reviewBinding!.interactionId),
+            // MS1f decision 4. One unresolved charge per review subject: the
+            // review interaction, or the reviewed stage of the stage-pending decision.
+            ...(reviewModelBindingKind(input.reviewBinding!) === "execution_stage"
+              ? [isNull(orchestrationModelReservations.reviewInteractionId),
+                eq(orchestrationModelReservations.reviewStageId, (input.reviewBinding as { stageId: string }).stageId),
+                eq(orchestrationModelReservations.reviewDecisionId, input.reviewBinding!.decisionId)]
+              : [eq(orchestrationModelReservations.reviewInteractionId, (input.reviewBinding as { interactionId: string }).interactionId)]),
             inArray(orchestrationModelReservations.status, ["reserved", "dispatched", "unknown"]),
           )).for("update");
           if (unresolved) throw conflict("The assigned review already has an unresolved model charge");
@@ -1016,13 +1020,7 @@ export function modelReservationService(
             planId: input.planId,
             workerId: input.workerId,
             workerAttemptId: input.workerAttemptId,
-            ...(input.reviewBinding ? { reviewIssueId: input.reviewBinding.issueId, reviewInteractionId: input.reviewBinding.interactionId,
-              reviewDecisionId: input.reviewBinding.decisionId, reviewSourceRunId: input.reviewBinding.sourceRunId, reviewSourceResultId: input.reviewBinding.sourceResultId,
-              reviewSourceWorkerId: input.reviewBinding.sourceWorkerId, reviewSourceAgentId: input.reviewBinding.sourceAgentId,
-              reviewSourceAttemptId: input.reviewBinding.sourceAttemptId, reviewSourceReceiptDigest: input.reviewBinding.sourceReceiptDigest,
-              reviewSourceResultCanonicalSha256: input.reviewBinding.sourceResultCanonicalSha256,
-              reviewAgentId: input.reviewBinding.reviewerAgentId, reviewRunId: input.reviewBinding.reviewerRunId,
-              reviewExecutionManifestId: input.reviewBinding.executionManifestId, reviewPlanVersion: input.reviewBinding.expectedPlanVersion } : {}),
+            ...(input.reviewBinding ? reviewModelReservationColumns(input.reviewBinding) : {}),
             purpose: input.purpose,
             principalUserId: userId,
             idempotencyKey: input.idempotencyKey,

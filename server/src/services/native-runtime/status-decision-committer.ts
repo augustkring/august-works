@@ -39,11 +39,8 @@ import {
   resolveExternalChatResponseWaitAuthorizationInTransaction,
 } from "./chat-attachment-reuse.js";
 import { issueService } from "../issues.js";
-import {
-  applyIssueExecutionPolicyTransition,
-  normalizeIssueExecutionPolicy,
-  parseIssueExecutionState,
-} from "../issue-execution-policy.js";
+import { parseIssueExecutionState } from "../issue-execution-policy.js";
+import { nativeExecutorDoneTransition, nativeExecutorStageHandoffTransition } from "./native-stage-handoff.js";
 import { buildExecutionStageWakeup } from "../issue-execution-stage-wakeup.js";
 import { activePlanCoveringTask } from "../orchestration/plan-coverage.js";
 import { issueThreadInteractionService } from "../issue-thread-interactions.js";
@@ -1551,6 +1548,35 @@ async function materializeDecisionEffect(input: {
   return assertNeverEffect(effect);
 }
 
+/** The executor Run whose terminal claim requests the Task's execution-policy
+ * transition (`done`, and the MS1f stage handoff): this Task's Native Run, and
+ * its execution Run when one is bound. Otherwise the decision is stale. */
+async function currentNativeExecutorRun(
+  tx: Db,
+  input: { companyId: string; issueId: string; runId: string },
+  issue: { executionRunId: string | null },
+) {
+  const nativeRun = await tx
+    .select({
+      agentId: heartbeatRuns.agentId,
+      nativeIssueId: heartbeatRuns.nativeIssueId,
+      runtimeMode: heartbeatRuns.runtimeMode,
+    })
+    .from(heartbeatRuns)
+    .where(and(eq(heartbeatRuns.id, input.runId), eq(heartbeatRuns.companyId, input.companyId)))
+    .limit(1)
+    .then((rows) => rows[0] ?? null);
+  if (
+    !nativeRun ||
+    nativeRun.runtimeMode !== "native" ||
+    nativeRun.nativeIssueId !== input.issueId
+  )
+    throw new NativeStatusRaceError();
+  if (issue.executionRunId && issue.executionRunId !== input.runId)
+    throw new NativeStatusRaceError();
+  return nativeRun;
+}
+
 export async function commitNativeStatusDecision(input: {
   db: Db;
   companyId: string;
@@ -1572,6 +1598,14 @@ export async function commitNativeStatusDecision(input: {
     resultId: string;
     gateId: string;
   };
+  /**
+   * MS1f decision 1. Required with an `execution_policy_stage_handoff`
+   * decision: the arbiter's decision for the same facts without the handoff
+   * (`completion_evidence_incomplete`, or `prior_status_preserved_no_live_path`
+   * after a used incomplete continuation). Committed when no stage would become
+   * pending in this transaction; never `done`.
+   */
+  stageHandoffFallback?: NativeStatusDecision;
 }) {
   if (input.decision.reasonCode === null) {
     throw new Error("native_status_reason_code_required");
@@ -1661,39 +1695,10 @@ export async function commitNativeStatusDecision(input: {
       // of allowing the executor's old result to bypass the reviewer.
       if (previousExecutionState?.status === "pending")
         throw new NativeStatusRaceError();
-      const nativeRun = await tx
-        .select({
-          agentId: heartbeatRuns.agentId,
-          nativeIssueId: heartbeatRuns.nativeIssueId,
-          runtimeMode: heartbeatRuns.runtimeMode,
-        })
-        .from(heartbeatRuns)
-        .where(and(eq(heartbeatRuns.id, input.runId), eq(heartbeatRuns.companyId, input.companyId)))
-        .limit(1)
-        .then((rows) => rows[0] ?? null);
-      if (
-        !nativeRun ||
-        nativeRun.runtimeMode !== "native" ||
-        nativeRun.nativeIssueId !== input.issueId
-      )
-        throw new NativeStatusRaceError();
-      if (issue.executionRunId && issue.executionRunId !== input.runId)
-        throw new NativeStatusRaceError();
-      const policy = normalizeIssueExecutionPolicy(issue.executionPolicy ?? null);
-      const transition = applyIssueExecutionPolicyTransition({
-        issue,
-        policy,
-        previousPolicy: policy,
-        requestedStatus: "done",
-        requestedAssigneePatch: {},
-        actor: { agentId: nativeRun.agentId, userId: null },
-        allowBoardOverride: false,
-      });
+      const nativeRun = await currentNativeExecutorRun(tx as unknown as Db, input, issue);
+      // The same transition the finalizer's stage handoff dry run evaluates.
+      const { transition, nextExecutionState } = nativeExecutorDoneTransition(issue, nativeRun.agentId);
       executionPolicyPatch = transition.patch;
-      const nextExecutionStateValue = Object.hasOwn(transition.patch, "executionState")
-        ? transition.patch.executionState
-        : issue.executionState;
-      const nextExecutionState = parseIssueExecutionState(nextExecutionStateValue);
       executionStageWakeup = buildExecutionStageWakeup({
         issueId: input.issueId,
         previousState: previousExecutionState,
@@ -1749,6 +1754,57 @@ export async function commitNativeStatusDecision(input: {
             },
           };
         }
+      }
+      if (input.decision.reasonCode === null) throw new Error("native_status_reason_code_required");
+      reasonCode = input.decision.reasonCode;
+    } else if (input.decision.reasonCode === "execution_policy_stage_handoff") {
+      // MS1f decision 1. The executor's claim hands off to the Task's declared
+      // stage: the same transition as `done`, applied only when it enters a
+      // pending stage under a covering plan, recorded as the existing
+      // execution_policy_stage_pending decision (stage wakes, the stage source
+      // and the 0571 checks key on it). Otherwise (policy or plan changed after
+      // arbitration) the arbiter's fallback is committed. Never `done`.
+      const fallback = input.stageHandoffFallback;
+      if (
+        !fallback ||
+        fallback.statusAction === "done" ||
+        fallback.toStatus === "done" ||
+        (fallback.reasonCode !== "completion_evidence_incomplete" &&
+          fallback.reasonCode !== "prior_status_preserved_no_live_path")
+      )
+        throw new Error("native_stage_handoff_decision_invalid");
+      const previousExecutionState = parseIssueExecutionState(issue.executionState);
+      if (previousExecutionState?.status === "pending")
+        throw new NativeStatusRaceError();
+      const nativeRun = await currentNativeExecutorRun(tx as unknown as Db, input, issue);
+      const handoff =
+        !issue.conversationAgentId &&
+        (await activePlanCoveringTask(tx as unknown as Db, input.companyId, input.issueId)) !== null
+          ? nativeExecutorStageHandoffTransition(issue, nativeRun.agentId)
+          : null;
+      if (handoff) {
+        executionPolicyPatch = handoff.transition.patch;
+        executionStageWakeup = buildExecutionStageWakeup({
+          issueId: input.issueId,
+          previousState: previousExecutionState,
+          nextState: handoff.nextExecutionState,
+          interruptedRunId: null,
+          requestedByActorType: "agent",
+          requestedByActorId: nativeRun.agentId,
+        });
+        input = {
+          ...input,
+          decision: {
+            ...input.decision,
+            statusAction: "in_review",
+            toStatus: "in_review",
+            reasonCode: "execution_policy_stage_pending",
+            unblockDescriptor: null,
+            effects: input.decision.effects.filter((effect) => effect.kind === "release_checkout"),
+          },
+        };
+      } else {
+        input = { ...input, decision: fallback };
       }
       if (input.decision.reasonCode === null) throw new Error("native_status_reason_code_required");
       reasonCode = input.decision.reasonCode;

@@ -8,7 +8,7 @@ import { nativeContinuationMessageHash, nativeCommentProjectionHash, nativeSha25
 import type { NativeTaskContinuationCapture } from "../execution-continuation.js";
 import { buildNativeContinuationPrompt } from "./native-continuation.js";
 import { buildNativeReviewRequest } from "./native-review-prompt.js";
-import type { NativeReviewAssignment, NativeReviewWakeWitness } from "./native-review-participant.js";
+import type { NativeCompletionReviewAssignment as NativeReviewAssignment, NativeReviewWakeWitness } from "./native-review-participant.js";
 import type {
   NativeAcpxAgent,
   NativeAcpxPermissionMode,
