@@ -936,11 +936,18 @@ const support = await getEmbeddedPostgresTestSupport();
     const [otherTask]=await db.insert(issues).values({companyId,title:"Unrelated Task"}).returning(),contexts=await db.select().from(contextManifests).where(eq(contextManifests.companyId,companyId));
     await expect(contextManifestService(db).create({...input,issueId:otherTask!.id,policySnapshot:{intent:input.intent},selected:assembled.decisions.map(decision=>({decision}))})).rejects.toMatchObject({status:403,message:"Context task does not match its actual run"});
     expect(await db.select().from(contextManifests).where(eq(contextManifests.companyId,companyId))).toHaveLength(contexts.length);expect(await db.select().from(analyticalContextRoots).where(eq(analyticalContextRoots.companyId,companyId))).toHaveLength(1);
+    // F10c: the mandatory Task provider's own privacy check, under its planner
+    // setting, denies with 403 by itself instead of relying on Foundation.
+    const taskProviderCheck=()=>db.transaction(async tx=>{await tx.execute(sql`set local jit='off'`);await tx.execute(sql`set local plan_cache_mode=force_generic_plan`);
+      await assertAnalyticalContextPayloadAccess(tx as unknown as typeof db,companyId,actualActor,{issueId:task!.id},"task",{privacyLockMode:"read"});});
+    await expect(taskProviderCheck()).resolves.toBeUndefined();
     await db.update(issues).set({hiddenAt:new Date()}).where(eq(issues.id,signal.sourceId));await expect(assertNativeAnalyticalRunPayloadAccess(db,companyId,run!.id)).rejects.toMatchObject({details:{code:"analytical_source_access_lost"}});
+    await expect(taskProviderCheck()).rejects.toMatchObject({status:403,details:{code:"analytical_source_access_lost"}});
     const before=await db.select().from(contextManifests).where(eq(contextManifests.companyId,companyId));
     await expect(contextEngineService(db).assemble(input)).rejects.toMatchObject({status:403,details:{code:"analytical_source_access_lost"}});
     expect(await db.select().from(contextManifests).where(eq(contextManifests.companyId,companyId))).toHaveLength(before.length);
     await db.update(issues).set({hiddenAt:null}).where(eq(issues.id,signal.sourceId));await expect(assertNativeAnalyticalRunPayloadAccess(db,companyId,run!.id)).resolves.toBeUndefined();
+    await expect(taskProviderCheck()).resolves.toBeUndefined();
     await db.update(heartbeatRuns).set({...(stage==="native"?{runtimeMode:"native" as const,runtimeModeResolvedAt:new Date(),nativeIssueId:task!.id}:{}),resultJson:{procedure:"Copied original learned procedure"}}).where(eq(heartbeatRuns.id,run!.id));
     await instanceSettingsService(db).updateExperimental({learning_engine_v7:false,cognitive_memory_v7:false,memory_observations_v7:false,management_reviews_v8:false,business_metrics_v8:false,analytical_lineage_v8:false,enableCollectiveMemoryV1:false,enablePrivateAgentMemoryV1:false});await db.update(companies).set({status:"paused"}).where(eq(companies.id,companyId));
     await db.delete(issues).where(eq(issues.id,signal.sourceId));await memoryJobService(db).tick({limit:100});

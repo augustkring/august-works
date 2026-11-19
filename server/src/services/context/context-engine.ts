@@ -601,6 +601,13 @@ function taskProvider(db: Db, timeoutMs = DEFAULT_CONTEXT_PROVIDER_TIMEOUT_MS): 
         const txDb = tx as unknown as Db;
         // Native retained-source privacy predicates do not benefit from JIT.
         await txDb.execute(sql`set local jit='off'`);
+        // Plan the large Task reader predicate once per connection instead of
+        // custom-planning it (about 100 ms) for each of the first five uses of
+        // each statement on every connection, which pushed the privacy check past
+        // this provider's 900 ms slice (F10c). The setting chooses plans only: every
+        // reader and source query still runs against current rows in this
+        // transaction, as the Memory privacy reader already does on its own.
+        await txDb.execute(sql`set local plan_cache_mode=force_generic_plan`);
         const refreshStatementBudget = async () => {
           if (signal.aborted || providerDeadlineAt <= Date.now())
             throw signal.reason ?? new ProviderDeadlineError("task");

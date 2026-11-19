@@ -670,6 +670,23 @@ async function issueReadSqlConditionInMemoryScope(db: Db | DbTransaction, actor:
       diagnostic, ignoreCorruptForDiagnostic);
 }
 
+/** One statement text for every exact-id Task reader probe. The Task reader
+ * predicate is about 230 KB of SQL, and PostgreSQL spends about 100 ms planning
+ * it. The single-Task and batched probes used different texts (`id = $1 ...
+ * limit` and `id in ($2, ...)` per batch size), so one Context assembly
+ * custom-planned the same predicate six times across three texts (F10c). With
+ * one text, `executePrivacyIdSelect`
+ * reuses one server plan per connection for every probe and batch size. Only
+ * the plan is shared: each call still evaluates the predicate against current
+ * rows in its own transaction. Every id must already match `privacyUuid`, so
+ * the array literal holds exactly the given ids. */
+function exactIssueReaderQuery(db: Db | DbTransaction, companyId: string, ids: readonly string[], condition: SQL) {
+  if (!ids.length || ids.some(id => !privacyUuid.test(id)))
+    throw forbidden("The complete current Task reader set is unavailable");
+  return db.select({ id: issues.id }).from(issues).where(and(eq(issues.companyId, companyId),
+    sql`${issues.id} = any(${`{${ids.join(",")}}`}::uuid[])`, condition));
+}
+
 /** Evaluate the current Task reader predicate for an exact bounded set in one
  * query per frozen Memory Context scope. Callers must hold the source locks and
  * owner-row locks for this set; the result is transaction-local and must be
@@ -700,8 +717,7 @@ export async function canActorReadIssuePrivacyBatch(db: Db | DbTransaction, acto
         actor, group.contextIds);
     for (let offset = 0; offset < group.ids.length; offset += 256) {
       const chunk = group.ids.slice(offset, offset + 256);
-      const rows = await executePrivacyIdSelect(db, db.select({ id: issues.id }).from(issues).where(and(
-        eq(issues.companyId, companyId), inArray(issues.id, chunk), condition)));
+      const rows = await executePrivacyIdSelect(db, exactIssueReaderQuery(db, companyId, chunk, condition));
       for (const row of rows) readable.set(row.id, true);
     }
   }
@@ -1588,8 +1604,10 @@ export async function canActorReadIssuePrivacy(db: Db | DbTransaction, actor: Au
   }
   const temporalScope = memoryTemporalReadScopes.getStore();
   const readCondition = await issueReadSqlConditionInMemoryScope(db, actor, issue.id);
-  const readQuery = db.select({ id: issues.id }).from(issues).where(and(eq(issues.id, issue.id), eq(issues.companyId, issue.companyId),
-    readCondition)).limit(1);
+  // A non-UUID id keeps its original query and its original database error.
+  const readQuery = privacyUuid.test(issue.id) ? exactIssueReaderQuery(db, issue.companyId, [issue.id], readCondition)
+    : db.select({ id: issues.id }).from(issues).where(and(eq(issues.id, issue.id), eq(issues.companyId, issue.companyId),
+      readCondition)).limit(1);
   const readable = (await executePrivacyIdSelect(db, readQuery)).length > 0;
   if (!readable && process.env.PAPERCLIP_NATIVE_SOURCE_CLOSURE_DIAGNOSTICS === "1" &&
       temporalScope?.active && temporalScope.companyId === issue.companyId &&

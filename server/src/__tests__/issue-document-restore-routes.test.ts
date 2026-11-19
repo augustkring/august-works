@@ -193,6 +193,9 @@ function createEmptyIssueRouteDb() {
         where: vi.fn(() => ({
           orderBy: vi.fn(async () => []),
           limit: vi.fn(async () => [{ id: issueId, companyId, projectId: null, parentId: null, assigneeAgentId: null, assigneeUserId: null, status: "todo" }]),
+          // The exact-id Task reader probe has no limit (one statement text for
+          // single and batched probes), so it awaits the filtered select itself.
+          then: async (resolve: (rows: unknown[]) => unknown) => resolve([{ id: issueId }]),
         })),
       })),
     })),
