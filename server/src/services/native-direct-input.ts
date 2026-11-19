@@ -4877,7 +4877,9 @@ async function assertNativePayloadSourceSetCurrentUncachedInScope(db: Db | Trans
           readerSelection: { context: scope.context, sets: new Map(), complete: true } };
         taskProofStack.push(taskFrame);
         try {
-          const snapshotDigest = await assertNativeTaskSourceInputCurrentInScope(db, input.companyId, input.actor, source, scope, siblingToolSourceProofs, historicalTransition);
+          const { nativeParentReceiptRunId } = await import("./native-board-stage-return-source.js");
+          const snapshotDigest = await assertNativeTaskSourceInputCurrentInScope(db, input.companyId, input.actor, source, scope, siblingToolSourceProofs, historicalTransition,
+            nativeParentReceiptRunId(input.actor, input.runId));
           if (proofIdentity && snapshotDigest) completedTaskSourceProofs!.set(proofIdentity, {
             key: nativeManagedConsumedTaskSourceProofKey(input.companyId, input.actor, source, snapshotDigest,
               scope.context.memoryTemporalIdentity), descendants: taskFrame.descendants, mutableSources: taskFrame.mutableSources,
@@ -6906,7 +6908,8 @@ async function assertNativeFrozenTaskSnapshotCurrent(db: Db | Transaction, compa
 }
 
 async function assertNativeTaskSourceInputCurrentInScope(db: Db | Transaction, companyId: string, actor: AuthorizationActor,
-  source: Extract<NativePayloadSourceInput, { kind: "task" }>, scope: NativeSourceReadScope, siblingToolSourceProofs: NativeSiblingToolSourceProofs = new Map(), historicalTransition?: NativeHistoricalPendingTransitionContext): Promise<string | null> {
+  source: Extract<NativePayloadSourceInput, { kind: "task" }>, scope: NativeSourceReadScope, siblingToolSourceProofs: NativeSiblingToolSourceProofs = new Map(), historicalTransition?: NativeHistoricalPendingTransitionContext,
+  parentReceiptRunId?: string): Promise<string | null> {
   nativeSourceReadWork(scope);
   const [task] = await db.select({ id: issues.id, companyId: issues.companyId, identifier: issues.identifier,
     title: issues.title, description: issues.description, workMode: issues.workMode, status: issues.status,
@@ -6941,6 +6944,16 @@ async function assertNativeTaskSourceInputCurrentInScope(db: Db | Transaction, c
       historicalTask=true;
     }
     disableNativeSourceGraphCheckpoints(scope);
+  }
+  // MS1f (option A′). A parent Run's exact saved Task capture across a later
+  // verified stage round and board return that changed only execution_state.
+  if (task && !historicalTask && parentReceiptRunId && task.ownerBodyHash !== source.contentHash &&
+      bodyHash !== source.contentHash && ancestorHash !== source.contentHash) {
+    const { verifyNativeParentTaskCaptureLineage } = await import("./native-board-stage-return-source.js");
+    if (await verifyNativeParentTaskCaptureLineage(db, { companyId, issueId: source.issueId, parentRunId: parentReceiptRunId, source })) {
+      historicalTask = true;
+      disableNativeSourceGraphCheckpoints(scope);
+    }
   }
   if (!task || (!historicalTask && task.ownerBodyHash !== source.contentHash &&
       bodyHash !== source.contentHash && ancestorHash !== source.contentHash)) throw forbidden("A Native source Task changed");

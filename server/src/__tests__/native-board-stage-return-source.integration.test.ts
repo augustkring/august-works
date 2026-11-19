@@ -7,7 +7,7 @@ import { activityLog, agents, authUsers, companies, companyMemberships, completi
   nativeRunResults, statusDecisions, workAssessments } from "@paperclipai/db";
 import { getEmbeddedPostgresTestSupport, startEmbeddedPostgresTestDatabase } from "./helpers/embedded-postgres.js";
 import { issueService } from "../services/issues.js";
-import { verifyNativeRetainedTaskRoundSuffix } from "../services/native-board-stage-return-source.js";
+import { nativeParentReceiptRunId, verifyNativeParentTaskCaptureLineage, verifyNativeRetainedTaskRoundSuffix } from "../services/native-board-stage-return-source.js";
 import { assertNativeContextTaskSourceCurrent } from "../services/native-direct-input.js";
 import { nativeContextTaskEvidence, nativeContextTaskEvidenceHash } from "../services/context/context-task-evidence.js";
 
@@ -316,6 +316,93 @@ describeDb("board_stage_return Task source transform (MS1f stop 5, 0587)", () =>
           issueId: issue, manifest, item, consumption: "retained" })).resolves.toBe(false);
         throw rollback;
       })).rejects.toBe(rollback);
+    });
+  });
+  // MS1f (option A′). A parent Run's exact saved Task capture across the later
+  // verified board return, for parent-receipt walks only.
+  describe("parent receipt Task capture lineage across the board return", () => {
+    async function returnedWithCapture() {
+      const seeded = await seed();
+      const [before] = await db.select({ snapshot: issues.payloadSourceSnapshot }).from(issues).where(eq(issues.id, seeded.ids.issue));
+      const saved = before!.snapshot as { owner: { contentHash: string } };
+      const source = { kind: "task" as const, issueId: seeded.ids.issue, sourceVersion: "1", contentHash: saved.owner.contentHash };
+      // A parent Run (distinct from the round's executor Run) that saved this capture.
+      const parentRun = randomUUID();
+      await db.insert(heartbeatRuns).values({ id: parentRun, companyId: seeded.ids.company, agentId: seeded.ids.reviewer,
+        status: "succeeded", runtimeMode: "native", scopeKind: "issue", issueId: seeded.ids.issue, nativeIssueId: seeded.ids.issue,
+        responsibleUserId: seeded.ids.user, finishedAt: new Date(),
+        runnerProfileJson: { nativeBootstrapTaskSource: { input: source, payloadSourceSnapshot: before!.snapshot } } });
+      const step = await rawReturn(seeded);
+      return { seeded: { ...seeded, parentRun }, source, saved: before!.snapshot as Record<string, unknown>, step };
+    }
+    const lineage = (seeded: Seeded & { parentRun: string }, source: { kind: "task"; issueId: string; sourceVersion: string; contentHash: string },
+      parentRunId = seeded.parentRun, db_: Db = db) => verifyNativeParentTaskCaptureLineage(db_ as never, {
+        companyId: seeded.ids.company, issueId: seeded.ids.issue, parentRunId, source });
+
+    it("accepts the parent's exact saved capture and refuses another source, another Run or a changed prefix", async () => {
+      const { seeded, source, saved } = await returnedWithCapture();
+      expect(await lineage(seeded, source)).toBe(true);
+      // Not that Run's saved capture.
+      expect(await lineage(seeded, { ...source, sourceVersion: "2" })).toBe(false);
+      expect(await lineage(seeded, source, randomUUID())).toBe(false);
+      const rollback = new Error("rollback");
+      // A saved capture whose snapshot is not an exact prefix of the current history.
+      for (const tampered of [
+        { ...saved, policy: { ...(saved.policy as object), runIds: [randomUUID()] } },
+        { ...saved, digest: "c".repeat(64) },
+        { ...saved, transforms: [{ kind: "board_stage_return", transitionId: randomUUID(), activityId: randomUUID(), stageId: randomUUID(),
+          participantAgentId: randomUUID(), executorAgentId: randomUUID(), decisionId: randomUUID(), taskStatusVersion: 2,
+          previousSnapshotDigest: "1".repeat(64), previousOwnerContentHash: "2".repeat(64), nextOwnerContentHash: "3".repeat(64) }] },
+      ]) {
+        await expect(db.transaction(async tx => {
+          await tx.update(heartbeatRuns).set({ runnerProfileJson: { nativeBootstrapTaskSource: { input: source, payloadSourceSnapshot: tampered } } })
+            .where(eq(heartbeatRuns.id, seeded.parentRun));
+          expect(await lineage(seeded, source, seeded.parentRun, tx as never)).toBe(false);
+          throw rollback;
+        })).rejects.toBe(rollback);
+      }
+      // A parent Run on another Task.
+      await expect(db.transaction(async tx => {
+        await tx.execute(sql`set local session_replication_role = replica`);
+        await tx.update(heartbeatRuns).set({ nativeIssueId: randomUUID() }).where(eq(heartbeatRuns.id, seeded.parentRun));
+        expect(await lineage(seeded, source, seeded.parentRun, tx as never)).toBe(false);
+        throw rollback;
+      })).rejects.toBe(rollback);
+      // A saved capture whose input names a content hash its own snapshot does not have.
+      const misnamed = { ...source, contentHash: "9".repeat(64) };
+      await expect(db.transaction(async tx => {
+        await tx.update(heartbeatRuns).set({ runnerProfileJson: { nativeBootstrapTaskSource: { input: misnamed, payloadSourceSnapshot: saved } } })
+          .where(eq(heartbeatRuns.id, seeded.parentRun));
+        expect(await lineage(seeded, misnamed, seeded.parentRun, tx as never)).toBe(false);
+        throw rollback;
+      })).rejects.toBe(rollback);
+      expect(await lineage(seeded, source)).toBe(true);
+    });
+
+    it("refuses an unverified suffix step and a user-authored change", async () => {
+      const { seeded, source, step } = await returnedWithCapture();
+      const rollback = new Error("rollback");
+      await expect(db.transaction(async tx => {
+        await tx.update(activityLog).set({ details: { changes: {} } }).where(eq(activityLog.id, step.activityId));
+        expect(await lineage(seeded, source, seeded.parentRun, tx as never)).toBe(false);
+        throw rollback;
+      })).rejects.toBe(rollback);
+      await expect(db.transaction(async tx => {
+        await tx.execute(sql`set local session_replication_role = replica`);
+        await tx.execute(sql`update issues set description = 'Edited by a person' where id = ${seeded.ids.issue}::uuid`);
+        expect(await lineage(seeded, source, seeded.parentRun, tx as never)).toBe(false);
+        throw rollback;
+      })).rejects.toBe(rollback);
+    });
+
+    it("applies only to a parent receipt of the consuming agent Run, never its own sources", () => {
+      const consumer = randomUUID(), parent = randomUUID();
+      expect(nativeParentReceiptRunId({ type: "agent", runId: consumer }, parent)).toBe(parent);
+      expect(nativeParentReceiptRunId({ type: "agent", runId: consumer }, consumer)).toBeUndefined();
+      expect(nativeParentReceiptRunId({ type: "agent", runId: null }, parent)).toBeUndefined();
+      expect(nativeParentReceiptRunId({ type: "agent", runId: "" }, parent)).toBeUndefined();
+      expect(nativeParentReceiptRunId({ type: "board" }, parent)).toBeUndefined();
+      expect(nativeParentReceiptRunId({ type: "board", runId: consumer }, parent)).toBeUndefined();
     });
   });
 });

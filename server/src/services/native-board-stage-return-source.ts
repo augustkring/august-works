@@ -1,4 +1,5 @@
 import { randomUUID } from "node:crypto";
+import { isDeepStrictEqual } from "node:util";
 import { and, eq, sql, type SQL } from "drizzle-orm";
 import { activityLog, companyMemberships, heartbeatRuns, instanceUserRoles, issues, statusDecisions, type Db } from "@paperclipai/db";
 import { nativePayloadSourceSnapshotSchema, type NativePayloadSourceTransform } from "@paperclipai/shared";
@@ -163,4 +164,51 @@ export async function verifyNativeRetainedTaskRoundSuffix(db: Db | Transaction, 
   const values = hashes?.values ?? [];
   return values.length === pairs.length && pairs.every((pair, index) =>
     values[index]?.previous === pair.previous && values[index]?.next === pair.next);
+}
+
+/**
+ * MS1f (option A′, parent receipts only). An older Task source in a parent
+ * Run's receipt stays current only when it is exactly that Run's saved
+ * bootstrap Task capture, the capture's saved snapshot (valid digest) is an
+ * exact prefix of the Task's current source history (the next step names the
+ * saved digest and owner hash), and the rest of the history is a verified
+ * stage-round suffix that changed only execution_state.
+ */
+export async function verifyNativeParentTaskCaptureLineage(db: Db | Transaction, input: {
+  companyId: string; issueId: string; parentRunId: string;
+  source: { kind: "task"; issueId: string; sourceVersion: string; contentHash: string };
+}): Promise<boolean> {
+  const record = (value: unknown) => value && typeof value === "object" && !Array.isArray(value) ? value as Record<string, unknown> : null;
+  const [parent] = await db.select({ runnerProfileJson: heartbeatRuns.runnerProfileJson, nativeIssueId: heartbeatRuns.nativeIssueId })
+    .from(heartbeatRuns).where(and(eq(heartbeatRuns.companyId, input.companyId), eq(heartbeatRuns.id, input.parentRunId)))
+    .limit(1).for("share");
+  const capture = record(record(parent?.runnerProfileJson)?.nativeBootstrapTaskSource);
+  if (!parent || parent.nativeIssueId !== input.issueId || !capture || !isDeepStrictEqual(capture.input, input.source)) return false;
+  const saved = nativePayloadSourceSnapshotSchema.safeParse(capture.payloadSourceSnapshot);
+  if (!saved.success || saved.data.owner.kind !== "issue" || saved.data.owner.companyId !== input.companyId ||
+    saved.data.owner.id !== input.issueId || saved.data.owner.contentHash !== input.source.contentHash) return false;
+  const { digest: savedDigest, ...savedBody } = saved.data;
+  const [row] = await db.execute<{ savedDigest: string; bodyHash: string; snapshot: unknown; invalidated: boolean }>(sql`select
+      encode(sha256(convert_to(${JSON.stringify(savedBody)}::jsonb::text,'UTF8')),'hex') as "savedDigest",
+      public.aw_native_payload_body_hash('issue',to_jsonb(i)) as "bodyHash", i.payload_source_snapshot as snapshot,
+      i.payload_source_snapshot_invalidated as invalidated
+    from issues i where i.company_id=${input.companyId}::uuid and i.id=${input.issueId}::uuid`);
+  const current = nativePayloadSourceSnapshotSchema.safeParse(row?.snapshot);
+  if (!row || row.invalidated || row.savedDigest !== savedDigest || !current.success ||
+    current.data.owner.contentHash !== row.bodyHash || !isDeepStrictEqual(current.data.policy, saved.data.policy) ||
+    !isDeepStrictEqual(current.data.inputs, saved.data.inputs)) return false;
+  const savedSteps = saved.data.transforms ?? [], currentSteps = current.data.transforms ?? [];
+  const next = currentSteps[savedSteps.length];
+  if (currentSteps.length <= savedSteps.length || !isDeepStrictEqual(currentSteps.slice(0, savedSteps.length), savedSteps) ||
+    !next || next.previousSnapshotDigest !== savedDigest || next.previousOwnerContentHash !== saved.data.owner.contentHash) return false;
+  return verifyNativeRetainedTaskRoundSuffix(db, { companyId: input.companyId, issueId: input.issueId,
+    suffix: currentSteps.slice(savedSteps.length), prefixOwnerHash: saved.data.owner.contentHash,
+    currentOwnerHash: current.data.owner.contentHash });
+}
+
+/** The Run whose receipt a source set belongs to, when it is a parent of the
+ * consuming Run (never the consumer's own bootstrap or live sources). */
+export function nativeParentReceiptRunId(actor: { type: string; runId?: string | null }, setRunId: string): string | undefined {
+  return actor.type === "agent" && typeof actor.runId === "string" && actor.runId.length > 0 && setRunId !== actor.runId
+    ? setRunId : undefined;
 }
