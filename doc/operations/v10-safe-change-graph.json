@@ -9288,7 +9288,7 @@
         },
         {
           "path": "server/src/services/native-direct-input.ts",
-          "sha256": "e10122ccfe6d5b8eaa9d405244fb5e5cd99d2388c89c25085fa2277531ad2801"
+          "sha256": "6f5f63fea1abcc65abf7d0a2215394f48bce44adf7b2a3fa4cc96a327748038b"
         },
         {
           "path": "server/src/services/native-project-output.ts",
@@ -50830,7 +50830,7 @@
       "id": "source:server/src/services/native-direct-input.ts",
       "kind": "current_source_owner",
       "path": "server/src/services/native-direct-input.ts",
-      "sha256": "e10122ccfe6d5b8eaa9d405244fb5e5cd99d2388c89c25085fa2277531ad2801",
+      "sha256": "6f5f63fea1abcc65abf7d0a2215394f48bce44adf7b2a3fa4cc96a327748038b",
       "changeIds": [
         "SCR-V10-HOTSPOT-06"
       ],
