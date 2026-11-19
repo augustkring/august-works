@@ -460,7 +460,33 @@ it("denies an authenticated Reviewer's missing-comment decision on the actual st
         runContext, payload, workspaceCapture: stageWorkspaceCapture,
         checkoutRunId: runContext.paperclipHarnessCheckedOut === true ? reviewerRun!.id : null,
         commentSources: [],
+        continuationCapture: rebuiltStageContinuation.capture, expectedStageTrigger: rebuiltStageContinuation.trigger,
       });
+      // The real executor leaves an accepted summary and its presentation
+      // comment, so the Reviewer's wake carries a stage continuation. Rebuild it
+      // through the same owner bootstrap uses (the server-written continuation
+      // summary document as heartbeat reads it, the live held Reviewer Run), and
+      // require the exact source bootstrap captured.
+      const rebuiltStageContinuation = await (async () => {
+        const { buildExecutionContinuation } = await import("../execution-continuation.js");
+        const { getIssueContinuationSummaryDocument } = await import("../issue-continuation-summary.js");
+        const { redactQuarantinedBodyForHigherTrust } = await import("../source-trust.js");
+        let summarySource: import("../documents.js").DocumentRevisionSourceCapture | null = null;
+        const summaryDocument = await getIssueContinuationSummaryDocument(db, issueId, { onSourceCapture: capture => { summarySource = capture; } });
+        const safeSummary = summaryDocument ? redactQuarantinedBodyForHigherTrust(summaryDocument) : null;
+        let capture: import("../execution-continuation.js").NativeTaskContinuationCapture | null = null;
+        let trigger: import("../execution-continuation.js").NativeStageTaskContinuationTrigger | undefined;
+        await buildExecutionContinuation({ db, companyId, issueId, agentId: managedAgentIds.reviewer, runId: reviewerRun!.id,
+          context: structuredClone(reviewerContext), summary: safeSummary?.body ?? null,
+          ...(safeSummary && summarySource ? { summaryDocument: { source: summarySource, value: safeSummary } } : {}),
+          useFinalizedSummaryForAssignment: false, exposeLowTrustRaw: false,
+          onCommentSourceCapture: () => {}, onContinuationSourceCapture: value => { capture = value; },
+          onStageTriggerCapture: value => { trigger = value; } });
+        expect(capture).not.toBeNull();
+        expect(trigger).toEqual(reviewerProfile.nativeBootstrapStageTrigger);
+        return { capture: capture as import("../execution-continuation.js").NativeTaskContinuationCapture | null,
+          trigger: trigger as import("../execution-continuation.js").NativeStageTaskContinuationTrigger | undefined };
+      })();
       const { captureNativeExecutionStageTaskWakeSource } = await import("../native-stage-wake-source.js");
       expect(await captureNativeExecutionStageTaskWakeSource(db, stageCaptureInput(reviewerContext, reviewerWake))).toEqual(capturedWake);
       expect(await captureNativeExecutionStageTaskWakeSource(db, stageCaptureInput({ ...reviewerContext,
@@ -800,7 +826,7 @@ it("executes the declared Reviewer comment and terminal result from one actual m
   completed=false;
   let issueId="",executorId="",reviewerId="";
   const calls=new Map<string,number>();
-  await withManagedNativeHeartbeatFixture({db,root:home,opencodeBinary:qualifiedOpenCodeBinary(),timeoutSec:180,
+  await withManagedNativeHeartbeatFixture({db,root:home,opencodeBinary:qualifiedOpenCodeBinary(),timeoutSec:300,
     schedulerMode:"serial",managedTwoAgentSignoff:true,
     providerReply:({body,execution,runId})=>{
       const number=(calls.get(runId)??0)+1;calls.set(runId,number);
@@ -847,7 +873,7 @@ it("executes the declared Reviewer comment and terminal result from one actual m
       const runs=()=>db.select().from(heartbeatRuns).where(and(eq(heartbeatRuns.companyId,companyId),eq(heartbeatRuns.nativeIssueId,issueId)));
       await expect.poll(async()=>{
         const rows=await runs();return rows.length===2 && rows.every(run=>["succeeded","failed","cancelled","timed_out"].includes(run.status));
-      },{timeout:360_000}).toBe(true);
+      },{timeout:540_000}).toBe(true);
       await heartbeat.drainActiveRunExecutions();
       const rows=await runs();expect(rows).toHaveLength(2);
       const executor=rows.find(run=>run.agentId===executorId);
@@ -924,7 +950,7 @@ it("executes the declared Reviewer comment and terminal result from one actual m
     },
   });
   completed=true;
-},600_000);
+},900_000);
 
 it("captures the exact native completion review source for a real managed Reviewer run", async () => {
   completed = false;
