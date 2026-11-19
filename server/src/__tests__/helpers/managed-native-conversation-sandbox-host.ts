@@ -741,7 +741,7 @@ async function installManagedSandboxInfrastructure(input: ManagedSandboxHostInpu
     return { canary, canarySecretValue };
   };
   return Object.freeze({ hostKeys, host, cell, environment, conversationHostCapacity, payerUserId, fixtureImageNode, sandboxQualificationOperator,
-    runtimeConnection, runtimePresence, createCanary, providerImageHome, fixtureToolAccess, runtimeSecretValue,
+    runtimeConnection, runtimeToolProfileId: runtimeToolProfile.id, runtimePresence, createCanary, providerImageHome, fixtureToolAccess, runtimeSecretValue,
     assertInstalledProfileCurrent: () => registration.assertCurrent(input, input.profile),
     restoreEnvironment: sharedImage.restoreEnvironment, retireData: sharedImage.retireData,
     retainData: sharedImage.retainData });
@@ -1048,7 +1048,8 @@ async function configureManagedRunSandboxHost(
     },
     conformanceObservations: () => collectRetainedConformanceObservations(retainedHosts),
     facts: () => ({ mode: `controlled_signed_host_relay_${admissionMode}`, hostId: infrastructure.host.id, cellId: infrastructure.cell.id,
-      environmentId: infrastructure.environment.id, runs: [...hostAdmissionByRun].map(([runId, entry]) =>
+      environmentId: infrastructure.environment.id, runtimeCredentialConnectionId: infrastructure.runtimeConnection.connection.id,
+      runtimeToolProfileId: infrastructure.runtimeToolProfileId, runs: [...hostAdmissionByRun].map(([runId, entry]) =>
         ({ runId, leaseId: entry.leaseId, retired: entry.closed })) }),
     close: async () => {
       closing = true;
