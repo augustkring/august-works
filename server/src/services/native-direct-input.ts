@@ -3114,6 +3114,19 @@ async function assertNativeTaskWakeSourceCurrentInScope(db: Db | Transaction, sc
         responsibleUserId: run.responsibleUserId };
     }
   }
+  // MS1f stop 4 (returned-executor family). The board-return owner is read
+  // again from the database and must equal the one bootstrap saved.
+  let stageRoundReturn: NativeTaskContinuationCapture["stageRoundReturn"];
+  const savedRoundReturn = nativeSourceRecord(run?.runnerProfileJson).nativeBootstrapStageRoundReturn;
+  if (run && currentHumanAssignment && savedRoundReturn !== undefined && savedRoundReturn !== null) {
+    const { captureNativeStageRoundReturnOwner, nativeStageRoundReturnOwnerMatches } =
+      await import("./native-runtime/native-stage-round-return-source.js");
+    const current = await captureNativeStageRoundReturnOwner(db, { companyId: input.companyId, issueId: input.issueId,
+      receiver: run, reader: input.actor });
+    if (!nativeStageRoundReturnOwnerMatches(current, savedRoundReturn))
+      throw forbidden("The Native stage round return owner changed");
+    stageRoundReturn = current!;
+  }
   // The same persisted bounded run-liveness continuation record the bootstrap
   // owner read; it is re-read here, never taken from the saved wake.
   const { captureNativeRunLivenessContinuationTrigger } = await import("./native-runtime/native-liveness-continuation-source.js");
@@ -3250,6 +3263,7 @@ async function assertNativeTaskWakeSourceCurrentInScope(db: Db | Transaction, sc
       ...(pendingInteractions?.length ? { pendingInteractions } : {}),
       ...(summary ? { summary } : {}),
       ...(currentHumanAssignment ? { currentHumanAssignment } : {}),
+      ...(stageRoundReturn ? { stageRoundReturn } : {}),
       ...(finalizedSummary ? { finalizedSummary } : {}),
       ...(explicitHumanSource ? { explicitHumanSource } : {}),
       ...(previousContext && retainedSource ? { previousContext, retainedSource } :

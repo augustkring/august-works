@@ -85,6 +85,49 @@ describe("native bootstrap rendered-source closure", () => {
     expect(build({ taskWakeCommentCandidates: [comment(owner(agentId, otherRunId))], stageExecutorPresentation: stage })).not.toBeNull();
   });
 
+  it("admits a returned stage round's Reviewer presentation comments only under that Reviewer Agent (MS1f stop 4)", () => {
+    const wake: NativePayloadSourceInput = { kind: "native_task_wake", runId, issueId, sourceVersion: "1", contentHash: hash };
+    const reviewerAgentId = randomUUID(), reviewerRunId = randomUUID(), laterReviewerRunId = randomUUID();
+    const otherAgentId = randomUUID(), outsideRunId = randomUUID();
+    const owner = (ownerAgentId: string, ownerRunId: string) => ({ companyId, issueId, agentId: ownerAgentId,
+      sourceRunId: ownerRunId, resultId: randomUUID(), resultCanonicalSha256: "f".repeat(64), resultCreatedAt: "2026-10-01T00:00:00.000Z",
+      finalizationVersion: "2026-10-01T00:00:01.000Z", assessmentId: randomUUID(), decisionId: randomUUID(),
+      decisionDigest: "a".repeat(64), decisionSnapshotHash: "d".repeat(64), body: "The Reviewer's accepted summary.",
+      parentReceipt: { version: 1 as const, binding: { companyId, issueId, agentId: ownerAgentId, runId: ownerRunId,
+        responsibleUserId: "stage-human" }, bootstrap: { executionInputDigest: "b".repeat(64), policy,
+        inputs: [{ kind: "task" as const, issueId, sourceVersion: "1", contentHash: hash }] }, dispatches: [], additionalInputs: [],
+        digest: "c".repeat(64) } });
+    const comment = (acceptedSummaryOwner: ReturnType<typeof owner>) => {
+      const source = { kind: "comment" as const, issueId, commentId: randomUUID(), sourceVersion: "1", contentHash: hash };
+      return { kind: "comment" as const, id: source.commentId, input: source, payloadSourceSnapshot: null,
+        acceptedPresentationOwner: { commentSourceIdentity: source, acceptedSummaryOwner } };
+    };
+    const round = { agentId: reviewerAgentId, runIds: [reviewerRunId, laterReviewerRunId].sort() };
+    const build = (overrides: Partial<Parameters<typeof buildNativeBootstrapSourceSet>[0]>) => input({ additionalInputs: [wake],
+      additionalPolicy: { ...policy, runIds: [reviewerRunId, laterReviewerRunId, outsideRunId].sort() }, ...overrides });
+    expect(build({ taskWakeCommentCandidates: [comment(owner(reviewerAgentId, reviewerRunId)),
+      comment(owner(reviewerAgentId, laterReviewerRunId))], stageRoundReturnPresentation: round })).not.toBeNull();
+    // Without the round family the Reviewer's comment stays bound to the receiver.
+    expect(build({ taskWakeCommentCandidates: [comment(owner(reviewerAgentId, reviewerRunId))] })).toBeNull();
+    // A Reviewer Run outside the round, another Agent's Run, a family naming the
+    // receiving Agent, an empty family, or a Run outside the policy.
+    expect(build({ taskWakeCommentCandidates: [comment(owner(reviewerAgentId, outsideRunId))], stageRoundReturnPresentation: round })).toBeNull();
+    expect(build({ taskWakeCommentCandidates: [comment(owner(otherAgentId, reviewerRunId))], stageRoundReturnPresentation: round })).toBeNull();
+    expect(build({ taskWakeCommentCandidates: [comment(owner(agentId, reviewerRunId))],
+      stageRoundReturnPresentation: { agentId, runIds: [reviewerRunId] } })).toBeNull();
+    expect(build({ taskWakeCommentCandidates: [], stageRoundReturnPresentation: { agentId: reviewerAgentId, runIds: [] } })).toBeNull();
+    expect(build({ taskWakeCommentCandidates: [comment(owner(reviewerAgentId, reviewerRunId))], stageRoundReturnPresentation: round,
+      additionalPolicy: { ...policy, runIds: [outsideRunId] } })).toBeNull();
+    // An unsealed Reviewer comment: no payload snapshot and no accepted presentation owner.
+    const unsealed = comment(owner(reviewerAgentId, reviewerRunId)) as Record<string, unknown>; delete unsealed.acceptedPresentationOwner;
+    expect(build({ taskWakeCommentCandidates: [unsealed as never], stageRoundReturnPresentation: round })).toBeNull();
+    // Never together with the stage-executor family.
+    expect(build({ taskWakeCommentCandidates: [comment(owner(reviewerAgentId, reviewerRunId))], stageRoundReturnPresentation: round,
+      stageExecutorPresentation: { agentId: otherAgentId, runId: outsideRunId } })).toBeNull();
+    // The receiver's own presentation comment keeps its ordinary binding.
+    expect(build({ taskWakeCommentCandidates: [comment(owner(agentId, outsideRunId))], stageRoundReturnPresentation: round })).not.toBeNull();
+  });
+
   it("binds external chat guidance to one exact Task wake source and keeps other unknowns closed", () => {
     const wake: NativePayloadSourceInput = { kind: "native_task_wake", runId, issueId, sourceVersion: "1",
       contentHash: hash, externalChatProvider: "slack" };
@@ -1026,6 +1069,61 @@ describe("native bootstrap rendered-source closure", () => {
     const forgedPresentationIdentity = structuredClone(finalizedAssignment);
     forgedPresentationIdentity.commentSources[0]!.acceptedPresentationOwner!.commentSourceIdentity.commentId = randomUUID();
     expect(captureAssignment(forgedPresentationIdentity, finalizedAssignmentPayload)).toBeNull();
+    // MS1f stop 4 (returned-executor family). The board returned the Task from
+    // a stage round to this executor: the round's Reviewer Run presentation
+    // comment joins only under the board-return owner, that Reviewer Agent and Run.
+    const reviewerAgentId = randomUUID(), reviewerRunId = randomUUID(), reviewerCommentId = randomUUID();
+    const reviewerMessage = { id: reviewerCommentId, authorId: reviewerAgentId, authorType: "agent" as const,
+      body: "Inspected the stage without recording a decision.", createdAt: "2026-10-01T00:00:03.000Z",
+      updatedAt: "2026-10-01T00:00:03.000Z", deleted: false, createdByRunId: reviewerRunId, sourceTrust: null };
+    const reviewerSource = { kind: "comment" as const, issueId, commentId: reviewerCommentId, sourceVersion: "1",
+      contentHash: nativeContinuationMessageHash(reviewerMessage) };
+    const reviewerOwner = { ...structuredClone(acceptedSummaryOwner), agentId: reviewerAgentId, sourceRunId: reviewerRunId,
+      body: reviewerMessage.body };
+    reviewerOwner.parentReceipt.binding = { ...reviewerOwner.parentReceipt.binding, agentId: reviewerAgentId, runId: reviewerRunId };
+    const roundReturn = { version: 1 as const, companyId, issueId, receiverRunId: runId, agentId, responsibleUserId: humanId,
+      wakeupRequestId: wakeId, activityId: randomUUID(), activityHash: "e".repeat(64), taskStatusVersion: 4, stageId: randomUUID(),
+      stagePendingDecisionId: randomUUID(), executorRunId: acceptedSummaryRunId, reviewerAgentId, reviewerRunIds: [reviewerRunId] };
+    const returned = structuredClone(finalizedAssignment);
+    returned.envelope.messages.push(reviewerMessage);
+    returned.envelope.coverage = { kind: "full_task_history", throughCommentId: reviewerCommentId, summaryThroughCommentId: null };
+    returned.commentSources.push({ input: reviewerSource, payloadSourceSnapshot: null,
+      acceptedPresentationOwner: { commentSourceIdentity: reviewerSource, acceptedSummaryOwner: reviewerOwner } });
+    returned.stageRoundReturn = roundReturn;
+    expect(captureAssignment(returned, finalizedAssignmentPayload)).toMatchObject({ kind: "native_task_wake", runId, issueId });
+    // No board return: the Reviewer's comment stays bound to the receiving executor.
+    const noReturn = structuredClone(returned); delete noReturn.stageRoundReturn;
+    expect(captureAssignment(noReturn, finalizedAssignmentPayload)).toBeNull();
+    // A Reviewer Run outside the round (another stage or round), or another
+    // Agent's Run presented under the round's Reviewer.
+    const otherRound = structuredClone(returned); otherRound.stageRoundReturn!.reviewerRunIds = [randomUUID()];
+    expect(captureAssignment(otherRound, finalizedAssignmentPayload)).toBeNull();
+    const otherAgent = structuredClone(returned), otherAgentId = randomUUID();
+    otherAgent.envelope.messages[1]!.authorId = otherAgentId;
+    otherAgent.commentSources[1]!.input.contentHash = nativeContinuationMessageHash(otherAgent.envelope.messages[1]!);
+    otherAgent.commentSources[1]!.acceptedPresentationOwner!.commentSourceIdentity = otherAgent.commentSources[1]!.input;
+    expect(captureAssignment(otherAgent, finalizedAssignmentPayload)).toBeNull();
+    const otherAgentReceipt = structuredClone(returned);
+    otherAgentReceipt.commentSources[1]!.acceptedPresentationOwner!.acceptedSummaryOwner.agentId = otherAgentId;
+    otherAgentReceipt.commentSources[1]!.acceptedPresentationOwner!.acceptedSummaryOwner.parentReceipt.binding.agentId = otherAgentId;
+    expect(captureAssignment(otherAgentReceipt, finalizedAssignmentPayload)).toBeNull();
+    // An edited Reviewer comment no longer matches its sealed presentation owner
+    // (an unsealed one is refused by the source closure; see the round test above).
+    const edited = structuredClone(returned); edited.envelope.messages[1]!.body = "Edited after the turn.";
+    edited.envelope.messages[1]!.updatedAt = "2026-10-01T00:00:09.000Z";
+    edited.commentSources[1] = { ...edited.commentSources[1]!, input: { ...edited.commentSources[1]!.input,
+      contentHash: nativeContinuationMessageHash(edited.envelope.messages[1]!) } };
+    expect(captureAssignment(edited, finalizedAssignmentPayload)).toBeNull();
+    // The owner binds this receiver Run, Human and wake, and a Human wake only.
+    for (const [key, value] of Object.entries({ receiverRunId: randomUUID(), agentId: reviewerAgentId, responsibleUserId: "other-human",
+      wakeupRequestId: randomUUID(), companyId: randomUUID(), issueId: randomUUID(), taskStatusVersion: 0, extra: true })) {
+      const changed = structuredClone(returned); (changed.stageRoundReturn as Record<string, unknown>)[key] = value;
+      expect(captureAssignment(changed, finalizedAssignmentPayload), key).toBeNull();
+    }
+    const agentRequested = structuredClone(returned); agentRequested.wake.requestedByActorType = "agent";
+    expect(captureAssignment(agentRequested, finalizedAssignmentPayload)).toBeNull();
+    const noHumanAssignment = structuredClone(returned); delete noHumanAssignment.currentHumanAssignment;
+    expect(captureAssignment(noHumanAssignment, finalizedAssignmentPayload)).toBeNull();
     const expiredConfirmationId = randomUUID();
     const expiredConfirmationResult = { version: 1, outcome: "issue_closed", reason: null };
     const expiredConfirmationOutcome = { id: expiredConfirmationId, kind: "request_confirmation", status: "expired",

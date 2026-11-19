@@ -51,6 +51,9 @@ export type NativeTaskContinuationCapture = {
     rendition: { key: string; title: string | null; body: string;
       sourceTrust: import("@paperclipai/shared").SourceTrustMetadata | null; updatedAt: string } };
   currentHumanAssignment?: { companyId: string; issueId: string; agentId: string; responsibleUserId: string };
+  /** MS1f stop 4. The board's return of this Task from a pending stage round to
+   * this executor; admits that round's Reviewer presentation comments. */
+  stageRoundReturn?: import("./native-runtime/native-stage-round-return-source.js").NativeStageRoundReturnOwner;
   stageActions?: import("./native-stage-wake-source.js").NativeFinalizedStageConsumption[];
   pendingInteractions?: import("./native-runtime/native-interaction-bridge.js").NativeGovernedPendingInteractionCapture[];
   governedInteractions?: import("./native-runtime/native-interaction-bridge.js").NativeGovernedInteractionContinuationCapture[];
@@ -1017,6 +1020,12 @@ export async function buildExecutionContinuation(input: {
       receiver.responsibleUserId && issue.assigneeAgentId === input.agentId &&
       issue.responsibleUserId === receiver.responsibleUserId
       ? { companyId, issueId, agentId: input.agentId, responsibleUserId: receiver.responsibleUserId } : undefined;
+    // MS1f stop 4 (returned-executor family): only for a current Human
+    // assignment whose wake is the board's return from a stage round.
+    const stageRoundReturn = currentHumanAssignment && wake && envelope.messages.some(message =>
+      message.authorType === "agent" && message.createdByRunId !== null && message.authorId !== input.agentId)
+      ? await (await import("./native-runtime/native-stage-round-return-source.js")).captureNativeStageRoundReturnOwner(db, {
+          companyId, issueId, receiver, reader: outcomeReader }) : null;
     if (wake) input.onContinuationSourceCapture(structuredClone({ companyId, issueId, agentId: input.agentId, runId: receiver.id,
       responsibleUserId: receiver.responsibleUserId, wakeupRequestId: wake.id, envelope, commentSources: finalCommentSources,
       ...(governedInteractions.length ? { governedInteractions } : {}),
@@ -1028,6 +1037,7 @@ export async function buildExecutionContinuation(input: {
       ...(pendingInteractions.length ? { pendingInteractions } : {}),
       ...(summary ? { summary } : {}),
       ...(currentHumanAssignment ? { currentHumanAssignment } : {}),
+      ...(stageRoundReturn ? { stageRoundReturn } : {}),
       ...(finalizedSummary ? { finalizedSummary } : {}),
       ...(explicitHumanSource ? { explicitHumanSource } : {}),
       ...(!fullHistoryTurn && input.previousContextRunId && deliveredMessages?.length ? { previousContext: { runId: input.previousContextRunId,

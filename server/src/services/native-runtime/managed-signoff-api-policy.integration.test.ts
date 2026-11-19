@@ -757,7 +757,11 @@ it("denies an authenticated Reviewer's missing-comment decision on the actual st
         return fresh.length;
       }, { timeout: 60_000, interval: 100 }).toBe(1);
       const secondExecutorTerminal = await waitForTerminalRun(secondExecutorRunId!);
-      expect(secondExecutorTerminal, JSON.stringify({ errorCode: secondExecutorTerminal.errorCode, error: secondExecutorTerminal.error }))
+      const [returnedTaskSource] = await db.select({ invalidated: issues.payloadSourceSnapshotInvalidated,
+        snapshotPresent: sql<boolean>`${issues.payloadSourceSnapshot} is not null` }).from(issues)
+        .where(and(eq(issues.companyId, companyId), eq(issues.id, issueId))).limit(1);
+      expect(secondExecutorTerminal, JSON.stringify({ errorCode: secondExecutorTerminal.errorCode, error: secondExecutorTerminal.error,
+        returnedTaskSource }))
         .toMatchObject({ status: "succeeded", runtimeMode: "native", agentId: managedAgentIds.executor, nativeIssueId: issueId });
       await expect.poll(async () => (await db.select({ pending: heartbeatRuns.nativeProcessCleanupPending }).from(heartbeatRuns)
         .where(eq(heartbeatRuns.id, secondExecutorRunId!)).limit(1))[0]?.pending, { timeout: 120_000, interval: 100 }).toBe(false);
