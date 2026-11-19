@@ -378,6 +378,23 @@ export async function lockNativeToolPlan(db: Db, b: Binding) {
   return { ...bound, plan: plan! };
 }
 
+/** MS1f phase 4. The plan step of the mutation lock for a declared Stage
+ * Reviewer's stage-comment `call_api` under a plan. That Reviewer has no plan
+ * worker attempt (`planScope` is "unadmitted"), so `lockNativeToolPlan` would
+ * refuse it. The tool boundary admitted this exact call on the stage kind of
+ * the reviewer lane and charged its invocation to the plan
+ * (`withNativeReviewerMeteredTool`); this re-checks that same lane and locks
+ * the Task's active plan rows in the shared order. The caller already holds
+ * the analytical and Memory locks. Anything else is refused. */
+export async function lockNativeStageReviewerCommentPlan(db: Db, b: Binding): Promise<null> {
+  if ((await planScope(db, b)) !== "unadmitted" || !(await nativeReviewerToolLane(db, b, "execution_stage")))
+    throw forbidden("The Stage Reviewer comment is no longer current for this Reviewer Run");
+  await db.select({ id: orchestrationPlans.id }).from(orchestrationPlans).where(and(
+    eq(orchestrationPlans.companyId, b.companyId), eq(orchestrationPlans.issueId, b.issueId),
+    sql`${orchestrationPlans.status} not in ('completed','cancelled','failed')`)).for("update");
+  return null;
+}
+
 /** Reused inside the existing Native mutation transaction, after its locks. */
 export async function assertNativeToolPlanCurrent(
   db: Db,

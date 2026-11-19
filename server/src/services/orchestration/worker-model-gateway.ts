@@ -774,6 +774,25 @@ export function managedStageReviewCommentResultExact(input: {
  * this tool use, bound to the provider arguments and charged to the bound plan.
  * The generic invocation, result-hash and consumed-source checks still apply.
  * Exported for regression tests. */
+/** MS1f phase 4. The document source of a managed OpenCode `read_document`
+ * tool result, for any lane. The read capture records the owner-order JSON
+ * digest of the returned result (`resultDigest`, equal to its source's
+ * `returnedResultDigest`) and the canonical digest of the same result
+ * (`resultCanonicalDigest`, `nativeSha256`). The provider-visible result is
+ * canonical JSON, so its bytes cannot reproduce the owner-order digest; it is
+ * bound by its canonical hash. Null refuses. */
+export function managedDocumentReadCaptureSource(input: { priorRead: unknown; contentHash: string; issueId: string | null }):
+  Record<string, unknown> | null {
+  const read = managedRecord(input.priorRead);
+  const readSource = managedRecord(read.source);
+  const inputSource = managedRecord(readSource.input);
+  if (read.tool !== "read_document" || inputSource.kind !== "document_revision" || input.issueId === null ||
+    inputSource.issueId !== input.issueId || typeof readSource.returnedResultDigest !== "string" ||
+    !/^[0-9a-f]{64}$/.test(readSource.returnedResultDigest) || read.resultDigest !== readSource.returnedResultDigest ||
+    typeof read.resultCanonicalDigest !== "string" || read.resultCanonicalDigest !== input.contentHash) return null;
+  return inputSource;
+}
+
 export function managedReviewerDocumentReadExact(input: {
   claims: { scope: string; run_id: string; sub: string; review_model?: ReviewModelBinding | null };
   toolUseId: string;
@@ -1341,7 +1360,6 @@ async function assertManagedOpenCodeRequestSources(db: Db, claims: ManagedModelC
         let result: unknown;
         try { result = JSON.parse(content); } catch { throw forbidden("Managed OpenCode tool result is not its canonical source result"); }
         const contentHash = nativeSha256(result);
-        const returnedResultDigest = createHash("sha256").update(JSON.stringify(result), "utf8").digest("hex");
         const invocationId = source.invocationId;
         const projectReadSource = nativePayloadSourceInputSchema.safeParse(capture.projectSource);
         const apiEnvelope = managedRecord(result);
@@ -2188,10 +2206,8 @@ async function assertManagedOpenCodeRequestSources(db: Db, claims: ManagedModelC
           let documentRef: Record<string, unknown>;
           if (toolName === "read_document") {
             const priorRead = captures.find((item) => item.managedOpenCode !== true && item.callId === block.tool_use_id && item.tool === "read_document");
-            const readSource = managedRecord(priorRead?.source);
-            const inputSource = managedRecord(readSource.input);
-            if (inputSource.kind !== "document_revision" || inputSource.issueId !== run.nativeIssueId ||
-              readSource.returnedResultDigest !== returnedResultDigest) throw forbidden("Managed OpenCode document source capture is incomplete");
+            const inputSource = managedDocumentReadCaptureSource({ priorRead, contentHash, issueId: run.nativeIssueId });
+            if (!inputSource) throw forbidden("Managed OpenCode document source capture is incomplete");
             documentRef = { issueId: inputSource.issueId, documentId: inputSource.documentId, revisionId: inputSource.revisionId };
             if (claims.scope === "review_model") {
               // MS1f decision 6 (MS1h12b). A Reviewer's read only as the receipt

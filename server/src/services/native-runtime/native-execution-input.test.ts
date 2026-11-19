@@ -50,6 +50,41 @@ describe("native bootstrap rendered-source closure", () => {
     }
   });
 
+  it("admits only the stage executor Run's own presentation comment under that executor Agent (MS1f phase 4)", () => {
+    const wake: NativePayloadSourceInput = { kind: "native_task_wake", runId, issueId, sourceVersion: "1", contentHash: hash };
+    const executorAgentId = randomUUID(), executorRunId = randomUUID(), otherAgentId = randomUUID(), otherRunId = randomUUID();
+    const owner = (ownerAgentId = executorAgentId, ownerRunId = executorRunId) => ({ companyId, issueId, agentId: ownerAgentId,
+      sourceRunId: ownerRunId, resultId: randomUUID(), resultCanonicalSha256: "f".repeat(64), resultCreatedAt: "2026-10-01T00:00:00.000Z",
+      finalizationVersion: "2026-10-01T00:00:01.000Z", assessmentId: randomUUID(), decisionId: randomUUID(),
+      decisionDigest: "a".repeat(64), decisionSnapshotHash: "d".repeat(64), body: "The executor's accepted summary.",
+      parentReceipt: { version: 1 as const, binding: { companyId, issueId, agentId: ownerAgentId, runId: ownerRunId,
+        responsibleUserId: "stage-human" }, bootstrap: { executionInputDigest: "b".repeat(64), policy,
+        inputs: [{ kind: "task" as const, issueId, sourceVersion: "1", contentHash: hash }] }, dispatches: [], additionalInputs: [],
+        digest: "c".repeat(64) } });
+    const comment = (acceptedSummaryOwner: ReturnType<typeof owner>) => {
+      const source = { kind: "comment" as const, issueId, commentId: randomUUID(), sourceVersion: "1", contentHash: hash };
+      return { kind: "comment" as const, id: source.commentId, input: source, payloadSourceSnapshot: null,
+        acceptedPresentationOwner: { commentSourceIdentity: source, acceptedSummaryOwner } };
+    };
+    const stage = { agentId: executorAgentId, runId: executorRunId };
+    const build = (overrides: Partial<Parameters<typeof buildNativeBootstrapSourceSet>[0]>) => input({ additionalInputs: [wake],
+      additionalPolicy: { ...policy, runIds: [executorRunId, otherRunId].sort() }, ...overrides });
+    expect(build({ taskWakeCommentCandidates: [comment(owner())], stageExecutorPresentation: stage })).not.toBeNull();
+    // Without the stage family the comment stays bound to the receiving Agent.
+    expect(build({ taskWakeCommentCandidates: [comment(owner())] })).toBeNull();
+    // A second executor comment, another Agent's comment, a stage family that
+    // names the receiving Agent, or an executor Run outside the policy.
+    expect(build({ taskWakeCommentCandidates: [comment(owner()), comment(owner())], stageExecutorPresentation: stage })).toBeNull();
+    expect(build({ taskWakeCommentCandidates: [comment(owner(otherAgentId, otherRunId))], stageExecutorPresentation: stage })).toBeNull();
+    expect(build({ taskWakeCommentCandidates: [comment(owner(otherAgentId))], stageExecutorPresentation: stage })).toBeNull();
+    expect(build({ taskWakeCommentCandidates: [comment(owner(agentId, executorRunId))],
+      stageExecutorPresentation: { agentId, runId: executorRunId } })).toBeNull();
+    expect(build({ taskWakeCommentCandidates: [comment(owner())], stageExecutorPresentation: stage,
+      additionalPolicy: { ...policy, runIds: [otherRunId] } })).toBeNull();
+    // The receiver's own presentation comment of another Run keeps its ordinary binding.
+    expect(build({ taskWakeCommentCandidates: [comment(owner(agentId, otherRunId))], stageExecutorPresentation: stage })).not.toBeNull();
+  });
+
   it("binds external chat guidance to one exact Task wake source and keeps other unknowns closed", () => {
     const wake: NativePayloadSourceInput = { kind: "native_task_wake", runId, issueId, sourceVersion: "1",
       contentHash: hash, externalChatProvider: "slack" };
@@ -169,6 +204,28 @@ describe("native bootstrap rendered-source closure", () => {
     for (const proof of [{...stageTrigger,runId:randomUUID()},{...stageTrigger,decisionId:"not-a-decision"},
       {...stageTrigger,stageHash:"not-a-hash"},{...stageTrigger,reason:"execution_approval_requested" as const}])
       expect(check(capture,proof)).toBeNull();
+    // MS1f phase 4: a stage dispatch receipt deferred behind the executor's
+    // execution lock is admitted with the promoted reason. Only the stage
+    // capture's verified receipt reason admits it, and only with a stage trigger.
+    const receipt = (value: NativeTaskContinuationCapture, stageReceiptReason: string | null | undefined,
+      proof: typeof stageTrigger | null = stageTrigger) => exactNativeTaskContinuation({
+      companyId,issueId,runId,agentId,responsibleUserId:humanId,wakeupRequestId:wakeId,wakeReason:reason,
+      value:value.envelope,capture:value,...(proof ? {stageTrigger:proof}: {}),
+      ...(stageReceiptReason !== undefined ? { stageReceiptReason } : {}) });
+    const promoted=structuredClone(capture);promoted.wake.reason="issue_execution_promoted";
+    expect(receipt(capture,reason)).toBe(capture);
+    expect(receipt(promoted,"issue_execution_promoted")).toBe(promoted);
+    expect(receipt(promoted,undefined)).toBeNull();
+    expect(receipt(promoted,reason)).toBeNull();
+    expect(receipt(capture,"issue_execution_promoted")).toBeNull();
+    expect(receipt(promoted,"issue_execution_promoted",null)).toBeNull();
+    expect(receipt(capture,reason,null)).toBeNull();
+    const otherReason=structuredClone(capture);otherReason.wake.reason="issue_assigned";
+    expect(receipt(otherReason,"issue_assigned")).toBeNull();
+    expect(receipt(capture,null)).toBeNull();
+    // A receipt reason never applies to a wake without a stage trigger.
+    expect(exactNativeTaskContinuation({ companyId, issueId, runId, agentId, responsibleUserId: humanId, wakeupRequestId: wakeId,
+      wakeReason: "issue_commented", value: explicit.envelope, capture: explicit, stageReceiptReason: "issue_commented" })).toBeNull();
     const producerRunId=randomUUID(),producerAgentId=randomUUID(),producerResultId=randomUUID(),producerDecisionId=randomUUID();
     const producerTaskInput={kind:"task" as const,issueId,sourceVersion:"1",contentHash:hash};
     const producerStageRead:import("../native-stage-task-body-source.js").NativeFinalizedStageTaskBodyRead={
@@ -178,7 +235,9 @@ describe("native bootstrap rendered-source closure", () => {
       taskCapture:{input:producerTaskInput,payloadSourceSnapshot:snapshot()}};
     const stageWithSummary=structuredClone(capture);
     stageWithSummary.envelope.completedWork="Executor's accepted Stage summary.";
-    stageWithSummary.finalizedSummary={companyId,issueId,agentId,receiverRunId:runId,sourceRunId:producerRunId,
+    // MS1f phase 4: the accepted summary owner is the stage executor Agent,
+    // as the producer records it (and as its parent receipt is bound).
+    stageWithSummary.finalizedSummary={companyId,issueId,agentId:producerAgentId,receiverRunId:runId,sourceRunId:producerRunId,
       resultId:producerResultId,resultCanonicalSha256:producerStageRead.resultHash,resultCreatedAt:"2026-10-01T00:00:00.000Z",
       finalizationVersion:producerStageRead.finalizationVersion,assessmentId:randomUUID(),decisionId:producerDecisionId,
       decisionDigest:"f".repeat(64),decisionSnapshotHash:"9".repeat(64),
@@ -187,6 +246,65 @@ describe("native bootstrap rendered-source closure", () => {
       body:stageWithSummary.envelope.completedWork,stageEntryRead:producerStageRead};
     const stageTriggerWithSummary={...stageTrigger,executorRunId:producerRunId,executorAgentId:producerAgentId};
     expect(check(stageWithSummary,stageTriggerWithSummary)).toBe(stageWithSummary);
+    // The summary is never owned by the receiving Reviewer, and a Reviewer that
+    // is the stage executor is refused.
+    const receiverOwnedSummary=structuredClone(stageWithSummary);receiverOwnedSummary.finalizedSummary!.agentId=agentId;
+    expect(check(receiverOwnedSummary,stageTriggerWithSummary)).toBeNull();
+    const selfReviewSummary=structuredClone(stageWithSummary);
+    selfReviewSummary.finalizedSummary!.agentId=agentId;selfReviewSummary.finalizedSummary!.stageEntryRead!.agentId=agentId;
+    selfReviewSummary.finalizedSummary!.parentReceipt.binding.agentId=agentId;
+    expect(check(selfReviewSummary,{...stageTriggerWithSummary,executorAgentId:agentId})).toBeNull();
+    // An unsealed summary document never joins a stage continuation's accepted summary.
+    const unsealedSummary=structuredClone(stageWithSummary) as NativeTaskContinuationCapture;
+    unsealedSummary.summary={source:{input:{kind:"document_revision",issueId,documentId:randomUUID(),revisionId:randomUUID(),
+      sourceVersion:"1",contentHash:hash},payloadSourceSnapshot:null},rawTrustHash:hash,
+      rendition:{key:"continuation-summary",title:"Continuation Summary",body:stageWithSummary.envelope.completedWork!,sourceTrust:null,
+        updatedAt:"2026-10-01T00:00:00.000Z"}} as never;
+    expect(check(unsealedSummary,stageTriggerWithSummary)).toBeNull();
+
+    // MS1f phase 4 (stage-executor provenance family): exactly the stage
+    // executor Run's own presentation comment, under exactly that accepted
+    // summary owner and that executor Agent.
+    const stageOwner=(({receiverRunId:_r,stageEntryRead:_s,...owner})=>owner)(stageWithSummary.finalizedSummary!);
+    const executorComment=nativeContinuationCommentProjection({id:randomUUID(),authorType:"agent",authorUserId:null,
+      authorAgentId:producerAgentId,createdByRunId:producerRunId,body:stageWithSummary.envelope.completedWork!,
+      createdAt:new Date("2026-10-01T00:02:00Z"),updatedAt:new Date("2026-10-01T00:02:00Z"),deletedAt:null,sourceTrust:null});
+    const withExecutorComment=(base:NativeTaskContinuationCapture,comment=executorComment,owner:Record<string,unknown>=stageOwner)=>{
+      const value=structuredClone(base);
+      value.envelope.messages=[...value.envelope.messages,comment];
+      value.envelope.coverage.throughCommentId=comment.id;
+      const source={kind:"comment" as const,issueId,commentId:comment.id,sourceVersion:"1",contentHash:nativeContinuationMessageHash(comment)};
+      value.commentSources=[...value.commentSources,{input:source,payloadSourceSnapshot:null,
+        acceptedPresentationOwner:{commentSourceIdentity:source,acceptedSummaryOwner:structuredClone(owner) as never}}];
+      return value;
+    };
+    const presented=withExecutorComment(stageWithSummary);
+    expect(check(presented,stageTriggerWithSummary)).toBe(presented);
+    // Refused: a second executor comment; a comment by another Agent or Run;
+    // an owner that is not exactly the stage summary owner; an owner bound to
+    // the receiving Reviewer; no stage trigger; a Reviewer that is the executor.
+    const secondComment=nativeContinuationCommentProjection({...executorComment,id:randomUUID(),authorType:"agent",authorUserId:null,
+      authorAgentId:producerAgentId,createdByRunId:producerRunId,createdAt:new Date("2026-10-01T00:03:00Z"),
+      updatedAt:new Date("2026-10-01T00:03:00Z"),deletedAt:null,sourceTrust:null});
+    expect(check(withExecutorComment(presented,secondComment),stageTriggerWithSummary)).toBeNull();
+    const otherAgentId=randomUUID(),otherRunId=randomUUID();
+    const otherAgentComment=nativeContinuationCommentProjection({...executorComment,id:randomUUID(),authorType:"agent",authorUserId:null,
+      authorAgentId:otherAgentId,createdByRunId:otherRunId,createdAt:new Date("2026-10-01T00:03:00Z"),
+      updatedAt:new Date("2026-10-01T00:03:00Z"),deletedAt:null,sourceTrust:null});
+    const otherOwner={...stageOwner,agentId:otherAgentId,sourceRunId:otherRunId,
+      parentReceipt:{...stageOwner.parentReceipt,binding:{...stageOwner.parentReceipt.binding,agentId:otherAgentId,runId:otherRunId}}};
+    expect(check(withExecutorComment(stageWithSummary,otherAgentComment,otherOwner),stageTriggerWithSummary)).toBeNull();
+    const sameRunOtherAgent=nativeContinuationCommentProjection({...executorComment,id:randomUUID(),authorType:"agent",authorUserId:null,
+      authorAgentId:otherAgentId,createdByRunId:producerRunId,createdAt:new Date("2026-10-01T00:03:00Z"),
+      updatedAt:new Date("2026-10-01T00:03:00Z"),deletedAt:null,sourceTrust:null});
+    expect(check(withExecutorComment(stageWithSummary,sameRunOtherAgent),stageTriggerWithSummary)).toBeNull();
+    expect(check(withExecutorComment(stageWithSummary,executorComment,{...stageOwner,resultId:randomUUID()}),stageTriggerWithSummary)).toBeNull();
+    expect(check(withExecutorComment(stageWithSummary,executorComment,{...stageOwner,body:"A changed summary."}),stageTriggerWithSummary)).toBeNull();
+    expect(check(withExecutorComment(stageWithSummary,executorComment,{...stageOwner,agentId,
+      parentReceipt:{...stageOwner.parentReceipt,binding:{...stageOwner.parentReceipt.binding,agentId}}}),stageTriggerWithSummary)).toBeNull();
+    expect(check(presented,{...stageTriggerWithSummary,executorRunId:randomUUID()})).toBeNull();
+    const presentedNoSummary=withExecutorComment(capture);
+    expect(check(presentedNoSummary,stageTriggerWithSummary)).toBeNull();
     const brokenCanonical=structuredClone(stageWithSummary);
     brokenCanonical.finalizedSummary!.stageEntryRead!.resultHash="e".repeat(64);
     expect(check(brokenCanonical,stageTriggerWithSummary)).toBeNull();

@@ -28,11 +28,35 @@ export function nativeStageCommentApiJsonSchema(issueId: string) {
   return schema;
 }
 
+/** MS1f phase 4. The declared Stage Reviewer's `call_api` input schema: exactly
+ * one of the ordinary profile and the Stage comment profile, as before, but not
+ * as a bare top-level `oneOf`. The managed OpenCode provider request completes a
+ * top-level object schema that lacks `properties` or `additionalProperties`, and
+ * the gateway compares that request with these catalog bytes exactly. The top
+ * level therefore names the union of both profiles' keys (with the `type` both
+ * give it) and is closed when both profiles are closed; the `oneOf` moves under
+ * `allOf`. Each profile already implies the top-level facts, so the accepted
+ * inputs are exactly the old schema's. */
+function nativeStageCommentApiInputSchema(ordinary: unknown, stage: Record<string, unknown>): Record<string, unknown> {
+  const base = ordinary && typeof ordinary === "object" && !Array.isArray(ordinary) ? ordinary as Record<string, unknown> : {};
+  const properties = (value: Record<string, unknown>) => value.properties && typeof value.properties === "object" &&
+    !Array.isArray(value.properties) ? value.properties as Record<string, Record<string, unknown>> : {};
+  const baseProperties = properties(base), stageProperties = properties(stage);
+  const keys = [...new Set([...Object.keys(baseProperties), ...Object.keys(stageProperties)])].sort();
+  const sharedType = (key: string) => {
+    const left = baseProperties[key]?.type, right = stageProperties[key]?.type;
+    return typeof left === "string" && left === right ? { type: left } : {};
+  };
+  const closed = base.type === "object" && base.additionalProperties === false && stage.additionalProperties === false;
+  return { type: "object", properties: Object.fromEntries(keys.map(key => [key, sharedType(key)])),
+    ...(closed ? { additionalProperties: false } : {}), allOf: [{ oneOf: [ordinary, stage] }] };
+}
+
 /** Ordinary tools retain their original object and exact catalog bytes. */
 export function nativeStageCommentApiToolDefinition(tool:Record<string,unknown>,issueId:string|null):Record<string,unknown> {
   return issueId===null ? tool : {...tool,
     description:`${tool.description} This declared Stage Reviewer may approve the current Task by posting a body-only comment beginning with ## Review: APPROVED. Ordinary comments are unavailable through this decision profile.`,
-    inputSchema:{type:"object",oneOf:[tool.inputSchema,nativeStageCommentApiJsonSchema(issueId)]}};
+    inputSchema:nativeStageCommentApiInputSchema(tool.inputSchema,nativeStageCommentApiJsonSchema(issueId))};
 }
 
 /** Discovery is advisory: its prepared source set predates the immutable Run

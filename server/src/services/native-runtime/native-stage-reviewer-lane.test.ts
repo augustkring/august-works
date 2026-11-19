@@ -110,6 +110,11 @@ import { nativeStageReviewerOutcome } from "./native-run-finalizer.js";
 import { lockAnalyticalCompany } from "../analytical-privacy.js";
 import { instanceSettingsService } from "../instance-settings.js";
 import { nativeSha256 } from "./canonical.js";
+import { createToolGatewayService } from "../tool-gateway.js";
+import { lockNativeStageReviewerCommentPlan } from "../orchestration/native-tool-boundary.js";
+import { assertCurrentWakeCommentsRead } from "./current-wake-comments.js";
+import { captureNativeStageContinuationOwner, nativeStageDeliveredReasonMatches, nativeStageIntentBoundToDeliveredRun,
+  nativeStageReviewerRunCapturable, nativeStageReviewerRunUnselected, nativeStageConsumptionModelCallBound } from "../native-stage-wake-source.js";
 import { policyFixture } from "../../__tests__/helpers/sandbox-fixture.js";
 
 const support = await getEmbeddedPostgresTestSupport();
@@ -841,6 +846,318 @@ describeDb("execution-policy stage Reviewer lane under a plan (MS1f decision 4)"
       const ids = await seed({ preNative: true, selfReview: true });
       await expect(admit(ids)).rejects.toThrow("The execution-stage review is no longer current for this Reviewer Run");
       expect(await attempts(ids)).toEqual([]);
+    });
+  });
+  // MS1f phase 4. Bootstrap selects the stage continuation owner while it builds
+  // the Reviewer's first dispatch envelope: before `paperclipWake` is rendered
+  // into the Run context and before Native selection. The context's own stage
+  // and wake reason stand in only in that window; the stage Reviewer's
+  // dispatch receipt may be the promoted row of a deferred stage wake.
+  describe("stage continuation owner at bootstrap (MS1f phase 4)", () => {
+    const reader = (ids: Ids) => ({ type: "agent" as const, source: "agent_jwt" as const, companyId: ids.company,
+      agentId: ids.reviewer, runId: ids.reviewerRun, onBehalfOfUserId: ids.user });
+    const owner = async (ids: Ids, extra: Partial<Parameters<typeof captureNativeStageContinuationOwner>[1]> = {}) =>
+      (await captureNativeStageContinuationOwner(db as never, { companyId: ids.company, issueId: ids.issue,
+        receiver: await reviewerRunRow(ids), reader: reader(ids), ...extra }))?.trigger ?? null;
+    const setContext = async (ids: Ids, change: (context: Record<string, unknown>) => Record<string, unknown>) => {
+      const run = await reviewerRunRow(ids);
+      await db.update(heartbeatRuns).set({ contextSnapshot: change({ ...(run.contextSnapshot as Record<string, unknown>) }) })
+        .where(eq(heartbeatRuns.id, ids.reviewerRun));
+    };
+    const unrendered = ({ paperclipWake: _wake, ...context }: Record<string, unknown>) => context;
+    /** The pre-render, pre-selection Reviewer Run that bootstrap reads. */
+    const bootstrapSeed = async () => {
+      const ids = await seed({ preNative: true });
+      await setContext(ids, unrendered);
+      return ids;
+    };
+    /** The same Run after bootstrap rendered its wake and selected Native. */
+    const renderAndSelect = async (ids: Ids) => {
+      await setContext(ids, context => ({ ...context, paperclipWake: { reason: context.wakeReason,
+        executionStage: context.executionStage } }));
+      await db.update(heartbeatRuns).set({ runtimeMode: "native", nativeIssueId: ids.issue, runtimeModeResolvedAt: new Date() })
+        .where(eq(heartbeatRuns.id, ids.reviewerRun));
+    };
+    /** The dispatcher's deferred receipt, later promoted: the intent stays
+     * coalesced with no Run, and promotion rewrote the receipt's reason. */
+    const promoteReceipt = async (ids: Ids, receiptKey: string | null = `issue.execution_stage:${ids.issue}:${ids.decision}`) => {
+      await db.update(agentWakeupRequests).set({ status: "coalesced", runId: null }).where(eq(agentWakeupRequests.id, ids.intent));
+      await db.update(agentWakeupRequests).set({ reason: "issue_execution_promoted", idempotencyKey: receiptKey })
+        .where(eq(agentWakeupRequests.id, ids.delivered));
+    };
+
+    it("selects the owner from the unrendered context before Native selection, and the rendered selected Run agrees", async () => {
+      const ids = await bootstrapSeed();
+      const atBootstrap = await owner(ids);
+      expect(atBootstrap).toMatchObject({ runId: ids.reviewerRun, agentId: ids.reviewer, intentId: ids.intent,
+        decisionId: ids.decision, executorRunId: ids.sourceRun, executorAgentId: ids.executor,
+        reason: "execution_review_requested", stageHash: nativeSha256(ids.executionStage) });
+      await renderAndSelect(ids);
+      await expect(owner(ids)).resolves.toEqual(atBootstrap);
+    });
+
+    const unrenderedRefusals: Array<[string, (ids: Ids) => Promise<unknown>]> = [
+      ["a Run already selected for Native", ids => db.update(heartbeatRuns).set({ runtimeMode: "native", nativeIssueId: ids.issue,
+        runtimeModeResolvedAt: new Date() }).where(eq(heartbeatRuns.id, ids.reviewerRun))],
+      ["a Run resolved to the legacy runtime", ids => db.update(heartbeatRuns).set({ runtimeModeResolvedAt: new Date() })
+        .where(eq(heartbeatRuns.id, ids.reviewerRun))],
+      ["a legacy Run that names a Native Task", ids => db.update(heartbeatRuns).set({ nativeIssueId: ids.issue })
+        .where(eq(heartbeatRuns.id, ids.reviewerRun))],
+      ["a context stage that is not the intent's stage", ids => setContext(ids, context => ({ ...context,
+        executionStage: { ...ids.executionStage, allowedActions: ["approve"] } }))],
+      ["a context stage of another stage", ids => setContext(ids, context => ({ ...context,
+        executionStage: { ...ids.executionStage, stageId: randomUUID() } }))],
+      ["no context stage", ids => setContext(ids, ({ executionStage: _stage, ...context }) => context)],
+      ["a context wake reason of an approval", ids => setContext(ids, context => ({ ...context,
+        wakeReason: "execution_approval_requested" }))],
+      ["no context wake reason", ids => setContext(ids, ({ wakeReason: _reason, ...context }) => context)],
+      // A rendered key never falls back to the context, even before selection.
+      ["a rendered wake with no stage", ids => setContext(ids, context => ({ ...context,
+        paperclipWake: { reason: "execution_review_requested", executionStage: null } }))],
+      ["a rendered wake with another reason", ids => setContext(ids, context => ({ ...context,
+        paperclipWake: { reason: "issue_assigned", executionStage: ids.executionStage } }))],
+      ["a null rendered wake", ids => setContext(ids, context => ({ ...context, paperclipWake: null }))],
+    ];
+    for (const [name, change] of unrenderedRefusals) {
+      it(`refuses ${name}`, async () => {
+        const ids = await bootstrapSeed();
+        await expect(owner(ids)).resolves.not.toBeNull();
+        await change(ids);
+        await expect(owner(ids)).resolves.toBeNull();
+      });
+    }
+
+    it("refuses an unrendered context for a historical selection", async () => {
+      const ids = await bootstrapSeed();
+      await db.update(heartbeatRuns).set({ status: "succeeded", finishedAt: new Date() }).where(eq(heartbeatRuns.id, ids.reviewerRun));
+      await expect(owner(ids, { historicalConsumption: { runId: ids.reviewerRun } as never })).resolves.toBeNull();
+    });
+
+    it("binds a promoted dispatch receipt of a deferred stage wake to its intent", async () => {
+      const ids = await bootstrapSeed();
+      const before = await owner(ids);
+      await promoteReceipt(ids);
+      const promoted = await owner(ids);
+      expect(promoted).toMatchObject({ intentId: ids.intent, reason: "execution_review_requested",
+        stageHash: before!.stageHash, decisionId: ids.decision });
+      await renderAndSelect(ids);
+      await expect(owner(ids)).resolves.toEqual(promoted);
+    });
+
+    const promotedRefusals: Array<[string, (ids: Ids) => Promise<unknown>]> = [
+      ["a promoted receipt keyed to another stage decision", ids => promoteReceipt(ids, `issue.execution_stage:${ids.issue}:${randomUUID()}`)],
+      ["a promoted receipt with no key", ids => promoteReceipt(ids, null)],
+      ["an unpromoted receipt with a coalesced intent and no Run", ids => db.update(agentWakeupRequests)
+        .set({ status: "coalesced", runId: null }).where(eq(agentWakeupRequests.id, ids.intent))],
+      ["a receipt with another reason", ids => db.update(agentWakeupRequests).set({ reason: "issue_assigned" })
+        .where(eq(agentWakeupRequests.id, ids.delivered))],
+      ["a promoted receipt whose intent coalesced into another Run", async ids => {
+        await promoteReceipt(ids);
+        await db.update(agentWakeupRequests).set({ runId: ids.sourceRun }).where(eq(agentWakeupRequests.id, ids.intent));
+      }],
+      ["a promoted receipt whose intent is still queued", async ids => {
+        await promoteReceipt(ids);
+        await db.update(agentWakeupRequests).set({ status: "queued" }).where(eq(agentWakeupRequests.id, ids.intent));
+      }],
+      ["a promoted receipt whose intent changed reason", async ids => {
+        await promoteReceipt(ids);
+        await db.update(agentWakeupRequests).set({ reason: "issue_execution_promoted" }).where(eq(agentWakeupRequests.id, ids.intent));
+      }],
+    ];
+    for (const [name, change] of promotedRefusals) {
+      it(`refuses ${name}`, async () => {
+        const ids = await bootstrapSeed();
+        await expect(owner(ids)).resolves.not.toBeNull();
+        await change(ids);
+        await expect(owner(ids)).resolves.toBeNull();
+      });
+    }
+
+    it("matches a receipt reason and intent binding only for the intent's own reason or its exact promotion", () => {
+      const key = "issue.execution_stage:issue:decision";
+      const reason = "execution_review_requested";
+      expect(nativeStageDeliveredReasonMatches({ delivered: { reason, idempotencyKey: null }, intent: { idempotencyKey: key }, reason }))
+        .toBe(true);
+      expect(nativeStageDeliveredReasonMatches({ delivered: { reason: "issue_execution_promoted", idempotencyKey: key },
+        intent: { idempotencyKey: key }, reason })).toBe(true);
+      for (const delivered of [{ reason: "issue_execution_promoted", idempotencyKey: "other" },
+        { reason: "issue_execution_promoted", idempotencyKey: null }, { reason: "issue_assigned", idempotencyKey: key },
+        { reason: null, idempotencyKey: key }]) {
+        expect(nativeStageDeliveredReasonMatches({ delivered, intent: { idempotencyKey: key }, reason })).toBe(false);
+      }
+      expect(nativeStageDeliveredReasonMatches({ delivered: { reason: "issue_execution_promoted", idempotencyKey: "" },
+        intent: { idempotencyKey: "" }, reason })).toBe(false);
+      expect(nativeStageDeliveredReasonMatches({ delivered: { reason: "issue_execution_promoted", idempotencyKey: null },
+        intent: { idempotencyKey: null }, reason })).toBe(false);
+
+      const promoted = { reason: "issue_execution_promoted", idempotencyKey: key, runId: "run" };
+      const bound = (intent: { status: string; runId: string | null; idempotencyKey: string | null },
+        delivered: { reason: string | null; idempotencyKey: string | null; runId: string | null } = promoted) =>
+        nativeStageIntentBoundToDeliveredRun({ intent, delivered, runId: "run" });
+      expect(bound({ status: "coalesced", runId: "run", idempotencyKey: key }, { ...promoted, reason })).toBe(true);
+      expect(bound({ status: "claimed", runId: null, idempotencyKey: key }, { ...promoted, reason })).toBe(true);
+      expect(bound({ status: "coalesced", runId: null, idempotencyKey: key })).toBe(true);
+      expect(bound({ status: "coalesced", runId: null, idempotencyKey: key }, { ...promoted, reason })).toBe(false);
+      expect(bound({ status: "coalesced", runId: null, idempotencyKey: key }, { ...promoted, runId: "other" })).toBe(false);
+      expect(bound({ status: "coalesced", runId: null, idempotencyKey: key }, { ...promoted, idempotencyKey: "other" })).toBe(false);
+      expect(bound({ status: "coalesced", runId: null, idempotencyKey: null }, { ...promoted, idempotencyKey: null })).toBe(false);
+      expect(bound({ status: "coalesced", runId: "other", idempotencyKey: key })).toBe(false);
+      expect(bound({ status: "queued", runId: null, idempotencyKey: key })).toBe(false);
+      expect(bound({ status: "claimed", runId: "run", idempotencyKey: key })).toBe(false);
+    });
+
+    it("captures a stage Task wake only for the Native Run on this Task or its unselected running Run", () => {
+      const issueId = randomUUID();
+      const unselected = { status: "running", runtimeMode: "legacy", nativeIssueId: null, runtimeModeResolvedAt: null, issueId };
+      expect(nativeStageReviewerRunUnselected(unselected)).toBe(true);
+      expect(nativeStageReviewerRunCapturable(unselected, issueId)).toBe(true);
+      expect(nativeStageReviewerRunCapturable({ ...unselected, runtimeMode: "native", nativeIssueId: issueId,
+        runtimeModeResolvedAt: new Date(), status: "succeeded" }, issueId)).toBe(true);
+      for (const run of [
+        { ...unselected, issueId: randomUUID() },
+        { ...unselected, issueId: null },
+        { ...unselected, status: "queued" },
+        { ...unselected, status: "succeeded" },
+        { ...unselected, runtimeModeResolvedAt: new Date() },
+        { ...unselected, nativeIssueId: randomUUID() },
+        { ...unselected, runtimeMode: "native" },
+        { ...unselected, runtimeMode: "native", nativeIssueId: randomUUID() },
+      ]) expect(nativeStageReviewerRunCapturable(run, issueId)).toBe(false);
+    });
+  });
+  // MS1f phase 4. A planned stage Reviewer is the Task assignee and a kind of
+  // the reviewer lane: like the completion Reviewer (MS1h2), it shares the
+  // sandbox lifecycle but is issued no credential binding.
+  describe("credential broker owner for the stage Reviewer (MS1f phase 4)", () => {
+    const binding = { connectionId: randomUUID(), grantVersionHash: "0".repeat(64), hostname: "provider.example.test", port: 443,
+      methods: ["POST"] as ["POST"], pathPrefixes: ["/mcp"], binary: "/usr/bin/curl", ttlSeconds: 120 };
+    const resolve = (ids: Ids, bindings: typeof binding[] = []) =>
+      createToolGatewayService(db as never).resolveSandboxCredentialBrokerPolicyBindings({ companyId: ids.company,
+        agentId: ids.reviewer, runId: ids.reviewerRun, responsibleUserId: ids.user, presenceId: randomUUID(), bindings });
+
+    it("admits the stage Reviewer with zero credential bindings and refuses any binding", async () => {
+      const ids = await seed();
+      await expect(resolve(ids)).resolves.toEqual({ authorizedConnectionGrantHashes: {}, bindings: [] });
+      await expect(resolve(ids, [binding])).rejects.toMatchObject({ status: 403,
+        reasonCode: "sandbox_broker_reviewer_credentials_denied" });
+    });
+
+    it("keeps the assignee path once the Run is no longer the current stage Reviewer", async () => {
+      const ids = await seed();
+      // No plan attempt for the source Run: not a planned stage Reviewer, so the
+      // ordinary assignee path applies (a missing connection still refuses).
+      await db.delete(orchestrationWorkerAttempts).where(eq(orchestrationWorkerAttempts.id, ids.attempt));
+      await expect(resolve(ids)).resolves.toEqual({ authorizedConnectionGrantHashes: {}, bindings: [] });
+      await expect(resolve(ids, [binding])).rejects.toMatchObject({ status: 409,
+        reasonCode: "sandbox_broker_connection_unavailable" });
+    });
+
+    it("keeps the assignee path for a Run whose wake is not a stage Reviewer wake", async () => {
+      const ids = await seed();
+      const run = await reviewerRunRow(ids);
+      await db.update(heartbeatRuns).set({ contextSnapshot: { ...(run.contextSnapshot as object), source: "issue.assignment" } })
+        .where(eq(heartbeatRuns.id, ids.reviewerRun));
+      await expect(resolve(ids, [binding])).rejects.toMatchObject({ status: 409,
+        reasonCode: "sandbox_broker_connection_unavailable" });
+    });
+  });
+  // MS1f phase 4. The mutation lock of the declared Stage Reviewer's stage
+  // comment under a plan: its reviewer lane stands in for a worker attempt.
+  describe("stage-comment mutation lock under a plan (MS1f phase 4)", () => {
+    const lock = (ids: Ids) => db.transaction(tx => lockNativeStageReviewerCommentPlan(tx as never, { companyId: ids.company,
+      issueId: ids.issue, agentId: ids.reviewer, runId: ids.reviewerRun } as never));
+    it("locks for the current stage Reviewer with no worker attempt", async () => {
+      const ids = await seed();
+      await expect(lock(ids)).resolves.toBeNull();
+    });
+    it("refuses once the stage is no longer pending with this Reviewer", async () => {
+      const ids = await seed();
+      await db.update(issues).set({ executionState: stageState(ids, { status: "changes_requested" }) }).where(eq(issues.id, ids.issue));
+      await expect(lock(ids)).rejects.toThrow("The Stage Reviewer comment is no longer current for this Reviewer Run");
+    });
+    it("refuses a completion-review wake and a Run that has its own plan attempt", async () => {
+      const ids = await seed();
+      const run = await reviewerRunRow(ids);
+      await db.update(heartbeatRuns).set({ contextSnapshot: { ...(run.contextSnapshot as object),
+        nativeReviewInteractionId: randomUUID(), nativeReviewDecisionId: randomUUID() } }).where(eq(heartbeatRuns.id, ids.reviewerRun));
+      await expect(lock(ids)).rejects.toThrow("The Stage Reviewer comment is no longer current for this Reviewer Run");
+      const other = await seed();
+      await db.insert(orchestrationWorkerAttempts).values({ companyId: other.company, planId: other.plan, workerId: other.worker,
+        agentId: other.reviewer, runId: other.reviewerRun, attempt: 2, status: "running", executionManifestId: other.manifest });
+      await expect(lock(other)).rejects.toThrow("The Stage Reviewer comment is no longer current for this Reviewer Run");
+    });
+  });
+  // MS1f phase 4. The terminal current-wake fence: after its own stage decision
+  // hands the Task back to the plan Worker, exactly that deciding stage
+  // Reviewer Run may still finish; it does not regain task write access.
+  describe("terminal current-wake fence after the stage decision (MS1f phase 4)", () => {
+    const fence = (ids: Ids, runId = ids.reviewerRun, agentId = ids.reviewer) =>
+      assertCurrentWakeCommentsRead(db as never, { companyId: ids.company, issueId: ids.issue, runId, agentId });
+    it("lets the deciding stage Reviewer Run finish once the Task is back with the plan Worker", async () => {
+      const ids = await seed();
+      await expect(fence(ids)).resolves.toBeUndefined();
+      await recordStageDecision(ids);
+      await expect(fence(ids)).resolves.toBeUndefined();
+    });
+    it("refuses when the stage's last decision is not this Run's, or no decision was recorded", async () => {
+      const ids = await seed();
+      await db.update(issues).set({ assigneeAgentId: ids.executor }).where(eq(issues.id, ids.issue));
+      await expect(fence(ids)).rejects.toThrow("native_current_wake_comments_binding_changed");
+      const other = await seed();
+      await recordStageDecision(other, other.sourceRun);
+      await expect(fence(other)).rejects.toThrow("native_current_wake_comments_binding_changed");
+    });
+    it("refuses a Run whose wake is not a stage Reviewer wake once it is no longer the assignee", async () => {
+      const ids = await seed();
+      await recordStageDecision(ids);
+      const run = await reviewerRunRow(ids);
+      await db.update(heartbeatRuns).set({ contextSnapshot: { ...(run.contextSnapshot as object), source: "issue.assignment" } })
+        .where(eq(heartbeatRuns.id, ids.reviewerRun));
+      await expect(fence(ids)).rejects.toThrow("native_current_wake_comments_binding_changed");
+    });
+  });
+  // MS1f phase 4. The finalized stage consumption accepts the stage Reviewer's
+  // model call only when it is exactly this Run's `review_model` (planned) or
+  // `worker_model` (plan-less) reservation with the matching dispatch source.
+  describe("finalized stage consumption model-call binding (MS1f phase 4)", () => {
+    const run = { id: randomUUID(), agentId: randomUUID() };
+    const issueId = randomUUID(), stageId = randomUUID(), decisionId = randomUUID(), executorRunId = randomUUID();
+    const h = (c: string) => c.repeat(64);
+    const reviewReservation = { id: randomUUID(), purpose: "review_model", inputHash: h("a"), providerResponseHash: h("b"),
+      reviewRunId: run.id, reviewAgentId: run.agentId, reviewIssueId: issueId, reviewInteractionId: null,
+      reviewStageId: stageId, reviewDecisionId: decisionId, reviewSourceRunId: executorRunId };
+    const intent = { modelPurpose: "review_model", requestHash: h("a"), callId: "call-1", wireBodyHash: h("c") };
+    const reviewSource = { kind: "review_model_dispatch", reviewKind: "execution_stage", stageId, decisionId, issueId,
+      runId: run.id, reservationId: reviewReservation.id, callId: "call-1", requestHash: h("a"), wireBodyHash: h("c"), responseHash: h("b") };
+    const base = { reservation: reviewReservation, run, issueId, stageId, decisionId, executorRunId, intent, dispatchSources: [reviewSource] };
+    const bound = (patch: Record<string, unknown> = {}) => nativeStageConsumptionModelCallBound({ ...base, ...patch } as never);
+    it("accepts the planned stage Reviewer's own review_model call", () => {
+      expect(bound()).toBe(true);
+    });
+    it("refuses a review_model reservation bound to another Run, Agent, Task, interaction, stage, decision or executor", () => {
+      for (const [field, value] of [["reviewRunId", randomUUID()], ["reviewAgentId", randomUUID()], ["reviewIssueId", randomUUID()],
+        ["reviewInteractionId", randomUUID()], ["reviewStageId", randomUUID()], ["reviewDecisionId", randomUUID()],
+        ["reviewSourceRunId", randomUUID()], ["inputHash", h("d")], ["purpose", "worker_model"]] as const)
+        expect(bound({ reservation: { ...reviewReservation, [field]: value } }), field).toBe(false);
+    });
+    it("refuses a review_model call without the exact stage review dispatch source", () => {
+      for (const [field, value] of [["kind", "worker_model_dispatch"], ["reviewKind", "interaction"], ["stageId", randomUUID()],
+        ["decisionId", randomUUID()], ["issueId", randomUUID()], ["runId", randomUUID()], ["reservationId", randomUUID()],
+        ["callId", "call-2"], ["requestHash", h("d")], ["wireBodyHash", h("d")], ["responseHash", h("d")]] as const)
+        expect(bound({ dispatchSources: [{ ...reviewSource, [field]: value }] }), field).toBe(false);
+      expect(bound({ dispatchSources: [] })).toBe(false);
+    });
+    it("keeps the plan-less worker_model path exact and refuses other purposes", () => {
+      const reservation = { ...reviewReservation, purpose: "worker_model", reviewRunId: null, reviewAgentId: null, reviewIssueId: null,
+        reviewStageId: null, reviewDecisionId: null, reviewSourceRunId: null };
+      const source = { kind: "worker_model_dispatch", runId: run.id, reservationId: reservation.id, callId: "call-1",
+        requestHash: h("a"), wireBodyHash: h("c"), responseHash: h("b") };
+      const workerIntent = { ...intent, modelPurpose: "worker_model" };
+      expect(bound({ reservation, intent: workerIntent, dispatchSources: [source] })).toBe(true);
+      expect(bound({ reservation, intent: workerIntent, dispatchSources: [{ ...source, responseHash: h("d") }] })).toBe(false);
+      expect(bound({ reservation, intent: workerIntent, dispatchSources: [reviewSource] })).toBe(false);
+      expect(bound({ reservation, intent: { ...intent, modelPurpose: "conformance_model" }, dispatchSources: [source] })).toBe(false);
+      expect(bound({ intent: { ...intent, modelPurpose: "worker_model" } })).toBe(false);
     });
   });
 });

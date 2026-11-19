@@ -9615,13 +9615,19 @@ async function recordManagedOpenCodeToolResult(input: Parameters<typeof renewNat
       let returnedDocumentSource: Extract<NativePayloadSourceInput, { kind: "document_revision" }> | null = null;
       if (input.tool === "read_document") {
         markResultPhase("document_task_source");
+        // MS1f phase 4. The document read owner records the returned DTO's
+        // digest as the SHA-256 of its JSON bytes (`returnedResultDigest`,
+        // `paperclip-runner-tool-authority.ts`); bind the capture with that same
+        // digest of this exact returned result, never the canonical hash.
+        const documentResultDigest = createHash("sha256").update(JSON.stringify(input.result)).digest("hex");
         const readCaptures = Array.isArray(profile.nativeToolResultSourceCaptures)
           ? profile.nativeToolResultSourceCaptures.map(record).filter(value => value.managedOpenCode !== true &&
-              value.callId === input.callId && value.tool === input.tool && value.resultDigest === digest)
+              value.callId === input.callId && value.tool === input.tool && value.resultDigest === documentResultDigest &&
+              value.resultCanonicalDigest === digest)
           : [];
         const readSource = record(readCaptures[0]?.source);
         const sourceInput = nativePayloadSourceInputSchema.safeParse(readSource.input);
-        if (readCaptures.length !== 1 || readSource.returnedResultDigest !== digest || !sourceInput.success ||
+        if (readCaptures.length !== 1 || readSource.returnedResultDigest !== documentResultDigest || !sourceInput.success ||
           sourceInput.data.kind !== "document_revision" || sourceInput.data.issueId !== input.issueId)
           throw new Error("managed_opencode_tool_result_binding_invalid");
         returnedDocumentSource = sourceInput.data;
@@ -10174,7 +10180,8 @@ async function persistNativeToolResultSourceCapture(input: Parameters<typeof ren
           pathAndQuery: capture.pathAndQuery, apiResultDigest: capture.apiResultDigest } : {};
       const captures = [...previous, { eventSeq: launch.seq, attempt: input.attempt, turnId: capture.turnId,
         nativeInputDispatch, responsibleUserId: run.responsibleUserId ?? null, callId: capture.callId,
-        tool: capture.tool, ...projectBinding, resultDigest: capture.resultDigest, source: capture.source }];
+        tool: capture.tool, ...projectBinding, resultDigest: capture.resultDigest,
+        ...(capture.tool === "read_document" ? { resultCanonicalDigest: capture.resultCanonicalDigest } : {}), source: capture.source }];
       if (Buffer.byteLength(JSON.stringify(captures)) > 2 * 1024 * 1024) throw new Error(budgetError);
       const nextProfile: Record<string, unknown> = { ...profile, nativeToolResultSourceCaptures: captures };
       delete nextProfile.nativeDocumentToolResultSources;
@@ -10199,6 +10206,7 @@ export async function recordNativeDocumentToolResultIntent(input: Parameters<typ
     const capture = input.capture;
     if (!Number.isSafeInteger(input.eventSeq) || input.eventSeq < 0 || capture.tool !== "read_document" ||
       !/^[\x21-\x7e]{1,240}$/.test(capture.callId) || !/^[0-9a-f]{64}$/.test(capture.resultDigest) ||
+      !/^[0-9a-f]{64}$/.test(capture.resultCanonicalDigest) ||
       capture.turnId !== null && (typeof capture.turnId !== "string" || !/^[\x21-\x7e]{1,240}$/.test(capture.turnId)))
       throw new Error("native_document_tool_capture_binding_invalid");
     let source: DocumentRevisionSourceCapture | null = null;

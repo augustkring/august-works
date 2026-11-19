@@ -24796,7 +24796,22 @@ export function heartbeatService(
             const withdrawalPresentationSourceRunIds = closedTaskContinuation?.humanReviewWithdrawals?.length
               ? closedTaskContinuation.commentSources.flatMap(source => source.acceptedPresentationOwner
                 ? [source.acceptedPresentationOwner.acceptedSummaryOwner.sourceRunId] : []) : [];
+            // MS1f phase 4 (stage-executor provenance family). A stage
+            // continuation carries the stage executor's accepted summary under the
+            // owner-bound stage trigger; only that executor Run's own presentation
+            // comment joins, under that executor Agent, and only that Run joins
+            // the presentation policy. Every other path is unchanged.
+            const stageTriggerForClosure = nativeStageContinuationTrigger.value;
+            const stageClosureSummary = nativeTaskWakeSource ? closedTaskContinuation?.finalizedSummary : undefined;
+            const stageExecutorPresentation = stageTriggerForClosure && stageClosureSummary?.stageEntryRead &&
+              stageClosureSummary.sourceRunId === stageTriggerForClosure.executorRunId &&
+              stageClosureSummary.agentId === stageTriggerForClosure.executorAgentId &&
+              stageTriggerForClosure.executorAgentId !== agent.id &&
+              closedTaskContinuation?.commentSources.some(source =>
+                source.acceptedPresentationOwner?.acceptedSummaryOwner.sourceRunId === stageTriggerForClosure.executorRunId)
+              ? { agentId: stageTriggerForClosure.executorAgentId, runId: stageTriggerForClosure.executorRunId } : null;
             const presentationSourceRunIds = [...new Set([
+              ...(stageExecutorPresentation ? [stageExecutorPresentation.runId] : []),
               ...(nativeBootstrapContinuationCapture?.currentHumanAssignment
                 ? [...nativeBootstrapContinuationCapture.envelope.messages.flatMap(message =>
                     message.authorType === "agent" && message.createdByRunId ? [message.createdByRunId] : []),
@@ -24848,6 +24863,7 @@ export function heartbeatService(
                   ...(treeHoldRootCapture ? [{ kind: "task" as const, id: treeHoldRootCapture.input.issueId,
                     input: treeHoldRootCapture.input, payloadSourceSnapshot: treeHoldRootCapture.payloadSourceSnapshot }] : []),
                 ],
+                ...(stageExecutorPresentation ? { stageExecutorPresentation } : {}),
                 taskWakeCommentCandidates: nativeTaskWakeSource && closedTaskContinuation
                   ? closedTaskContinuation.commentSources.map(capture => ({ kind: "comment" as const, id: capture.input.commentId,
                       input: capture.input, payloadSourceSnapshot: capture.payloadSourceSnapshot,

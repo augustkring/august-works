@@ -1,7 +1,8 @@
 import { randomUUID } from "node:crypto";
 import { describe, expect, it } from "vitest";
 import { nativeSha256 } from "../native-runtime/canonical.js";
-import { managedReviewerDocumentReadExact, managedStageReviewCommentResultExact } from "./worker-model-gateway.js";
+import { createHash } from "node:crypto";
+import { managedDocumentReadCaptureSource, managedReviewerDocumentReadExact, managedStageReviewCommentResultExact } from "./worker-model-gateway.js";
 
 // MS1f decisions 4 and 6. The gateway admits a stage Reviewer's stage-comment
 // call_api result, and either Reviewer kind's declared output read, into the
@@ -162,5 +163,52 @@ describe("managed Reviewer declared output read receipt (MS1f decision 6)", () =
     const input = readFixture();
     expect(managedReviewerDocumentReadExact(input)).toBe(true);
     expect(managedReviewerDocumentReadExact(change(input))).toBe(false);
+  });
+});
+
+// MS1f phase 4 (b1). Any lane's managed OpenCode read_document result (a worker
+// and a Reviewer alike): the provider-visible result is canonical JSON, bound
+// by the canonical digest the read capture records for the same result.
+describe("managed read_document capture binding (MS1f phase 4)", () => {
+  const issueId = randomUUID(), documentId = randomUUID(), revisionId = randomUUID();
+  const result = { document: { id: documentId, issueId, key: "result", title: "Result", body: "The declared result.",
+    latestRevisionId: revisionId, latestRevisionNumber: 1 } };
+  const ownerOrderDigest = (value: unknown) => createHash("sha256").update(JSON.stringify(value)).digest("hex");
+  const capture = (value: unknown = result) => ({ tool: "read_document", callId: "read-1", turnId: "turn-1",
+    resultDigest: ownerOrderDigest(value), resultCanonicalDigest: nativeSha256(value),
+    source: { input: { kind: "document_revision", issueId, documentId, revisionId, contentHash: "a".repeat(64) },
+      payloadSourceSnapshot: null, returnedResultDigest: ownerOrderDigest(value) } });
+  // The runner sends the result to the provider with sorted keys.
+  const providerVisible = JSON.parse(JSON.stringify({ document: Object.fromEntries(Object.entries(result.document).sort()) }));
+
+  it("binds the provider-visible canonical result of a worker or Reviewer read", () => {
+    expect(ownerOrderDigest(providerVisible)).not.toBe(capture().resultDigest);
+    expect(managedDocumentReadCaptureSource({ priorRead: capture(), contentHash: nativeSha256(providerVisible), issueId }))
+      .toMatchObject({ kind: "document_revision", issueId, documentId, revisionId });
+  });
+
+  it("refuses a changed body, another revision, extra keys or another document", () => {
+    const read = capture();
+    for (const changed of [
+      { document: { ...result.document, body: "A changed result." } },
+      { document: { ...result.document, latestRevisionId: randomUUID() } },
+      { document: { ...result.document, extra: true } },
+      { ...result, extra: true },
+      { document: { ...result.document, id: randomUUID() } },
+    ]) expect(managedDocumentReadCaptureSource({ priorRead: read, contentHash: nativeSha256(changed), issueId })).toBeNull();
+  });
+
+  it("refuses an incomplete or mismatched capture", () => {
+    const contentHash = nativeSha256(result);
+    const { resultCanonicalDigest: _canonical, ...legacy } = capture();
+    for (const read of [
+      undefined, legacy, { ...capture(), resultCanonicalDigest: "f".repeat(64) }, { ...capture(), tool: "write_document" },
+      { ...capture(), resultDigest: "f".repeat(64) },
+      { ...capture(), source: { ...capture().source, returnedResultDigest: "f".repeat(64) } },
+      { ...capture(), source: { ...capture().source, input: { ...capture().source.input, issueId: randomUUID() } } },
+      { ...capture(), source: { ...capture().source, input: { ...capture().source.input, kind: "task" } } },
+    ]) expect(managedDocumentReadCaptureSource({ priorRead: read, contentHash, issueId })).toBeNull();
+    expect(managedDocumentReadCaptureSource({ priorRead: capture(), contentHash, issueId: randomUUID() })).toBeNull();
+    expect(managedDocumentReadCaptureSource({ priorRead: capture(), contentHash, issueId: null })).toBeNull();
   });
 });

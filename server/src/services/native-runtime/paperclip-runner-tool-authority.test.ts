@@ -397,6 +397,7 @@ describe("PaperclipRunnerToolAuthority", () => {
       callId: string;
       tool: "read_document";
       resultDigest: string;
+      resultCanonicalDigest: string;
       source: DocumentRevisionSourceCapture | null;
     }> = [];
     const result = await fixture.authority.execute({ tool: "read_document", callId: "read-exact-source", arguments: { key } }, {
@@ -406,6 +407,8 @@ describe("PaperclipRunnerToolAuthority", () => {
     expect(captures).toHaveLength(1);
     expect(captures[0]).toMatchObject({ callId: "read-exact-source", tool: "read_document",
       resultDigest: createHash("sha256").update(JSON.stringify(result)).digest("hex"),
+      // MS1f phase 4: the canonical digest of the same returned result.
+      resultCanonicalDigest: nativeSha256(result),
       source: { input: { kind: "document_revision", documentId: created.document.id,
         revisionId: created.document.latestRevisionId, issueId: fixture.issueId,
         contentHash: createHash("sha256").update(body, "utf8").digest("hex") }, payloadSourceSnapshot: null } });

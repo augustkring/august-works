@@ -41,7 +41,7 @@ import { createLocalDiskStorageProvider } from "../../storage/local-disk-provide
 import { createStorageService } from "../../storage/service.js";
 import { verifyRuntimeToolsToken } from "../../runtime-tools-token.js";
 import { HttpError } from "../../errors.js";
-import { readNativeReviewAssignmentContext } from "../../services/native-runtime/native-review-participant.js";
+import { readNativeReviewAssignmentContext, readNativeStageReviewContext } from "../../services/native-runtime/native-review-participant.js";
 import { setupRunnerPrpWebSocketServer, runnerPrpWebSocketInternals } from "../../realtime/runner-prp-ws.js";
 import { createToolGatewayService } from "../../services/tool-gateway.js";
 import { createManagedAssignedGatewayResultObserver } from "./assigned-tool-gateway-result-observer.js";
@@ -1141,11 +1141,13 @@ export async function withManagedNativeHeartbeatFixture<T>(input: Omit<FrameInpu
     const [ownerRun] = await db.select({ contextSnapshot: heartbeatRuns.contextSnapshot }).from(heartbeatRuns)
       .where(and(eq(heartbeatRuns.companyId, companyId), eq(heartbeatRuns.id, runId), eq(heartbeatRuns.agentId, currentAgentId))).limit(1);
     const nativeConversation = ownerRun?.contextSnapshot?.conversationMode === true;
-    // Same selection as RuntimeControl's dispatch mint (`control.ts`): a Run
-    // with a Native review context and no worker attempt is an assigned
-    // completion Reviewer and mints only through `issueForReviewRun`.
+    // Same selection as RuntimeControl's dispatch mint (`control.ts`,
+    // `nativeManagedModelIssuer`): a Run with a Native review context, or an
+    // execution-policy stage Reviewer wake (MS1f decision 4), and no worker
+    // attempt is an assigned Reviewer and mints only through `issueForReviewRun`.
     const nativeReview = !nativeConversation && !input.controlledNativeSessionBackendFactory &&
-      readNativeReviewAssignmentContext(ownerRun?.contextSnapshot) !== null &&
+      (readNativeReviewAssignmentContext(ownerRun?.contextSnapshot) !== null ||
+        readNativeStageReviewContext(ownerRun?.contextSnapshot) !== null) &&
       (await db.select({ id: orchestrationWorkerAttempts.id }).from(orchestrationWorkerAttempts)
         .where(and(eq(orchestrationWorkerAttempts.companyId, companyId), eq(orchestrationWorkerAttempts.runId, runId))).limit(1)).length === 0;
     const mintedScope = nativeConversation ? "conversation_model" : nativeReview ? "review_model" : "worker_model";

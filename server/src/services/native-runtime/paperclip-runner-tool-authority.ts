@@ -8,7 +8,7 @@ import {MANAGEMENT_ANALYTICAL_TOOL_DEFINITIONS,isManagementAnalyticalTool,execut
 import {assertAnalyticalContextPayloadAccess,assertNativeAnalyticalRunPayloadAccess} from "../analytical-context-authority.js";
 import { lockMemoryPrivacy } from "../memory/memory-privacy.js";
 import { lockAnalyticalCompany } from "../analytical-privacy.js";
-import { withOrchestrationNativeTool, lockNativeToolPlan, assertNativeToolPlanCurrent,
+import { withOrchestrationNativeTool, lockNativeToolPlan, lockNativeStageReviewerCommentPlan, assertNativeToolPlanCurrent,
   assertNativeConversationToolNoPlanScope, type NativeReviewerActionGuard } from "../orchestration/native-tool-boundary.js";
 import { createAssignedMcpTools, getAssignedMcpGateway, type AssignedMcpInvocationWitness, type AssignedMcpPendingWitness, type AssignedMcpSearchWitness } from "./assigned-mcp-tools.js";
 import { assertAssignableAgent } from "../agent-assignability.js";
@@ -221,7 +221,12 @@ export type NativeDocumentToolResultSource = {
   turnId: string | null;
   callId: string;
   tool: "read_document";
+  /** SHA-256 of the returned result's JSON bytes in the owner's key order. */
   resultDigest: string;
+  /** MS1f phase 4. `nativeSha256` of the same returned result (sorted keys):
+   * the provider-visible tool result is canonical JSON, so the managed model
+   * gateway binds the read by this digest. */
+  resultCanonicalDigest: string;
   source: DocumentRevisionSourceCapture | null;
 };
 
@@ -616,7 +621,7 @@ export class PaperclipRunnerToolAuthority {
         documentSource.value = exactCapture;
         if (options.onDocumentRead) {
           await options.onDocumentRead({ turnId: boundNativeCall?.turnId ?? null, callId: call.callId, tool: "read_document",
-            resultDigest,
+            resultDigest, resultCanonicalDigest: nativeSha256(result),
             // The document owner computes this from the same selected revision
             // and normalized DTO before returning. A mismatch means provenance
             // is unknown; never repair it with a later re-read.
@@ -1357,7 +1362,7 @@ export class PaperclipRunnerToolAuthority {
     const key = createHash("sha256").update(callId).digest("hex");
     const digest = createHash("sha256").update(canonicalJson(input)).digest("hex");
     const prior = await this.db.transaction(async (tx) => {
-      const locked = await this.#lockAuthorizedMutationContext(tx as unknown as Db);
+      const locked = await this.#lockAuthorizedMutationContext(tx as unknown as Db, managedStageComment);
       const resultJson = record(locked.run.resultJson);
       const receipts = record(resultJson.apiToolReceipts);
       const existing = record(receipts[key]);
@@ -2841,7 +2846,7 @@ export class PaperclipRunnerToolAuthority {
     });
   }
 
-  async #lockAuthorizedMutationContext(tx: Db): Promise<{
+  async #lockAuthorizedMutationContext(tx: Db, stageReviewerComment = false): Promise<{
     run: typeof heartbeatRuns.$inferSelect;
     issue: typeof issues.$inferSelect;
     actor: typeof agents.$inferSelect;
@@ -2854,7 +2859,10 @@ export class PaperclipRunnerToolAuthority {
     await lockMemoryPrivacy(tx, this.binding.companyId);
     // Bounded plans use the same order as reservation, supervision and Stop.
     // Ordinary native runs retain their existing Task/run mutation behavior.
-    const bounded = await lockNativeToolPlan(tx, this.binding);
+    // MS1f phase 4: a declared Stage Reviewer's stage comment under a plan
+    // re-checks its reviewer lane instead of a plan worker attempt.
+    const bounded = stageReviewerComment ? await lockNativeStageReviewerCommentPlan(tx, this.binding)
+      : await lockNativeToolPlan(tx, this.binding);
     // Match identity activation and queue mutations before locking the run.
     await tx.select({ id: issues.id }).from(issues).where(and(
       eq(issues.id, this.binding.issueId), eq(issues.companyId, this.binding.companyId),

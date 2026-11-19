@@ -3100,7 +3100,25 @@ test("a plain managed command attaches an exact review_model credential and refu
     const nowSeconds = () => Math.floor(Date.now() / 1000);
     const binding = change => claims => ({ ...claims, review_model: change({ ...claims.review_model }) });
     const omit = key => value => { delete value[key]; return value; };
+    // MS1f decision 4: an execution-policy stage binding names its stage
+    // instead of a review interaction (`kind: "execution_stage"`).
+    const stageBinding = change => binding(b => { const { interactionId: _interactionId, ...source } = b;
+      return change({ ...source, kind: "execution_stage", stageId: randomUUID() }); });
+    {
+      const before = creates();
+      const { request, token } = modelBrokerExecRequest("review_model", stageBinding(b => b)); hooks.brokerToken = token;
+      assert.deepEqual(await engine.executeStream({ scope: scopeInput, request, capabilityToken: "fixture-token" }, () => {}),
+        { exitCode: 0, timedOut: false }, "stage review_model");
+      assert.equal(creates(), before + 1, "stage review_model: one provider is created");
+    }
     const cases = [
+      ["stage binding that also names an interaction", "review_model", stageBinding(b => ({ ...b, interactionId: randomUUID() }))],
+      ["stage binding of another kind", "review_model", stageBinding(b => ({ ...b, kind: "completion" }))],
+      ["stage binding without its kind", "review_model", stageBinding(({ kind: _kind, ...b }) => b)],
+      ["stage binding without its stage", "review_model", stageBinding(omit("stageId"))],
+      ["stage id is not a UUID", "review_model", stageBinding(b => ({ ...b, stageId: "stage-1" }))],
+      ["stage Reviewer Run is another Run", "review_model", stageBinding(b => ({ ...b, reviewerRunId: randomUUID() }))],
+      ["completion binding with a stage kind", "review_model", binding(b => ({ ...b, kind: "execution_stage" }))],
       ["Reviewer Run is another Run", "review_model", binding(b => ({ ...b, reviewerRunId: randomUUID() }))],
       ["review token for another Run", "review_model", claims => { const other = randomUUID();
         return { ...claims, run_id: other, review_model: { ...claims.review_model, reviewerRunId: other } }; }],
@@ -3115,6 +3133,7 @@ test("a plain managed command attaches an exact review_model credential and refu
       ["prefixed review receipt digest", "review_model", binding(b => ({ ...b, sourceReceiptDigest: `sha256:${"d".repeat(64)}` }))],
       ["review plan version zero", "review_model", binding(b => ({ ...b, expectedPlanVersion: 0 }))],
       ["review id is not a UUID", "review_model", binding(b => ({ ...b, planId: "plan-1" }))],
+      ["review interaction id is not a UUID", "review_model", binding(b => ({ ...b, interactionId: "interaction-1" }))],
       ["review binding is not an object", "review_model", claims => ({ ...claims, review_model: [claims.review_model] })],
       ["extra review claim member", "review_model", claims => ({ ...claims, aud: "paperclip-model-broker" })],
       ["missing review instance", "review_model", claims => { delete claims.instance_id; return claims; }],
