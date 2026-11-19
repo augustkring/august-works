@@ -127,6 +127,7 @@ import {
 import {
   SANDBOX_PROVIDER_PLUGIN_NOT_READY_REASON,
   sandboxProviderPluginRemedy,
+  buildConfigurationIncompleteRecoveryNoticeSeed,
   buildExecutionReviewParticipantRecoveryNoticeSeed,
   buildExecutionReviewParticipantUnavailableNoticeSeed,
   buildStrandedRecoveryEscalationNotice,
@@ -4024,8 +4025,22 @@ export function recoveryService(
           input.successfulRunHandoffEvidence.missingDisposition,
       });
     }
+    // The Run's release path seeds a configuration-incomplete notice from the
+    // structured payload the failed Run recorded; the periodic sweep passes
+    // only a generic comment. Derive the same seed here so the retained notice
+    // names the same gap whichever writer posts it.
+    const configurationIncompletePayload =
+      !input.notice && recoveryCause === "configuration_incomplete"
+        ? readConfigurationIncompletePayload(input.latestRun)
+        : null;
     const escalationNotice = buildStrandedRecoveryEscalationNotice({
-      seed: input.notice,
+      seed:
+        input.notice ??
+        (configurationIncompletePayload
+          ? buildConfigurationIncompleteRecoveryNoticeSeed(
+              configurationIncompletePayload,
+            )
+          : null),
       fallbackBody: input.comment,
       recoveryCause,
       recoveryActionId: recoveryAction.id,
@@ -4053,56 +4068,53 @@ export function recoveryService(
     if (shouldPostEscalationComment) {
       const escalationCommentMarker = `Recovery action: \`${recoveryAction.id}\``;
 
-      const hasEscalationComment = await db
-        .select({
-          id: issueComments.id,
-          body: issueComments.body,
-          metadata: issueComments.metadata,
-        })
-        .from(issueComments)
-        .where(
-          and(
-            eq(issueComments.issueId, input.issue.id),
-            eq(issueComments.authorType, "system"),
-          ),
-        )
-        .orderBy(desc(issueComments.createdAt))
-        .limit(50)
-        .then((rows) =>
-          rows.some(
-            (row) =>
-              noticeMetadataReferencesRecoveryAction(
-                row.metadata,
-                recoveryAction.id,
-              ) || (row.body ?? "").includes(escalationCommentMarker),
-          ),
+      const retainedNotice = notice ?? escalationNotice;
+      // Two writers can escalate the same failed Run at the same time: the
+      // Run's own release path and the periodic stranded-issue sweep. Each
+      // reuses the same source-scoped recovery action, so check for its
+      // retained notice and insert it under one per-Task transaction lock.
+      // Otherwise both writers can see no notice and both insert one.
+      await db.transaction(async (tx) => {
+        await tx.execute(
+          sql`select pg_advisory_xact_lock(hashtextextended(${`stranded-recovery-notice:${input.issue.companyId}:${input.issue.id}`}, 0))`,
         );
-
-      if (!hasEscalationComment) {
-        if (notice) {
-          await issuesSvc.addComment(
-            input.issue.id,
-            notice.body,
-            {},
-            {
-              authorType: "system",
-              presentation: notice.presentation,
-              metadata: notice.metadata,
-            },
+        const hasEscalationComment = await tx
+          .select({
+            id: issueComments.id,
+            body: issueComments.body,
+            metadata: issueComments.metadata,
+          })
+          .from(issueComments)
+          .where(
+            and(
+              eq(issueComments.issueId, input.issue.id),
+              eq(issueComments.authorType, "system"),
+            ),
+          )
+          .orderBy(desc(issueComments.createdAt))
+          .limit(50)
+          .then((rows) =>
+            rows.some(
+              (row) =>
+                noticeMetadataReferencesRecoveryAction(
+                  row.metadata,
+                  recoveryAction.id,
+                ) || (row.body ?? "").includes(escalationCommentMarker),
+            ),
           );
-        } else {
-          await issuesSvc.addComment(
-            input.issue.id,
-            escalationNotice.body,
-            {},
-            {
-              authorType: "system",
-              presentation: escalationNotice.presentation,
-              metadata: escalationNotice.metadata,
-            },
-          );
-        }
-      }
+        if (hasEscalationComment) return;
+        await issuesSvc.addComment(
+          input.issue.id,
+          retainedNotice.body,
+          {},
+          {
+            authorType: "system",
+            presentation: retainedNotice.presentation,
+            metadata: retainedNotice.metadata,
+          },
+          tx,
+        );
+      });
     }
 
     await logActivity(db, {
