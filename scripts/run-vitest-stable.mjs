@@ -124,6 +124,7 @@ const managedNativeSuites = [
   "server/src/__tests__/native-payload-temporal-sources.integration.test.ts",
   "server/src/__tests__/v7-model-reservations.integration.test.ts",
   "server/src/services/native-runtime/heartbeat-managed-native-comment-handoff.integration.test.ts",
+  "server/src/services/native-runtime/managed-signoff-api-policy.integration.test.ts",
   "server/src/services/native-runtime/native-model-session-controller.integration.test.ts",
   "server/src/services/native-runtime/native-opencode-conversation-task-erasure.integration.test.ts",
   "server/src/services/native-runtime/native-opencode-managed-browser-governed-handoffs.integration.test.ts",
