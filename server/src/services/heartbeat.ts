@@ -24915,8 +24915,18 @@ export function heartbeatService(
             const stageRoundReturnPresentation = roundReturnOwner && roundReturnOwner.agentId === agent.id &&
               roundReturnOwner.receiverRunId === run.id
               ? { agentId: roundReturnOwner.reviewerAgentId, runIds: roundReturnOwner.reviewerRunIds } : null;
+            // MS1f (round history). Earlier returned rounds' Runs, each under its
+            // own round Agent, only for a closed continuation that records them.
+            const roundHistoryForClosure = nativeTaskWakeSource ? closedTaskContinuation?.stageRoundHistory : undefined;
+            const returnedRoundPresentation = roundHistoryForClosure?.length
+              ? roundHistoryForClosure.flatMap(round => [{ agentId: round.executorAgentId, runId: round.executorRunId },
+                  ...round.reviewerRunIds.map(runId => ({ agentId: round.reviewerAgentId, runId }))]) : null;
             const presentationSourceRunIds = [...new Set([
               ...(stageExecutorPresentation ? [stageExecutorPresentation.runId] : []),
+              ...(returnedRoundPresentation && closedTaskContinuation
+                ? closedTaskContinuation.commentSources.flatMap(source => source.acceptedPresentationOwner &&
+                    returnedRoundPresentation.some(entry => entry.runId === source.acceptedPresentationOwner!.acceptedSummaryOwner.sourceRunId)
+                    ? [source.acceptedPresentationOwner.acceptedSummaryOwner.sourceRunId] : []) : []),
               ...(nativeBootstrapContinuationCapture?.currentHumanAssignment
                 ? [...nativeBootstrapContinuationCapture.envelope.messages.flatMap(message =>
                     message.authorType === "agent" && message.createdByRunId ? [message.createdByRunId] : []),
@@ -24970,6 +24980,7 @@ export function heartbeatService(
                 ],
                 ...(stageExecutorPresentation ? { stageExecutorPresentation } : {}),
                 ...(stageRoundReturnPresentation ? { stageRoundReturnPresentation } : {}),
+                ...(returnedRoundPresentation ? { returnedRoundPresentation } : {}),
                 taskWakeCommentCandidates: nativeTaskWakeSource && closedTaskContinuation
                   ? closedTaskContinuation.commentSources.map(capture => ({ kind: "comment" as const, id: capture.input.commentId,
                       input: capture.input, payloadSourceSnapshot: capture.payloadSourceSnapshot,
@@ -25212,6 +25223,7 @@ export function heartbeatService(
                   ...(lockedProfile.nativeExecutionInput ? {} : { nativeBootstrapFinalizedContinuationSummary: nativeBootstrapContinuationCapture?.finalizedSummary ?? null,
                     nativeBootstrapStageTrigger: nativeStageContinuationTrigger.value ?? null,
                     nativeBootstrapStageRoundReturn: nativeBootstrapContinuationCapture?.stageRoundReturn ?? null,
+                    nativeBootstrapStageRoundHistory: nativeBootstrapContinuationCapture?.stageRoundHistory ?? null,
                     nativeBootstrapStageActionSources: nativeBootstrapContinuationCapture?.stageActions ?? null,
                     nativeBootstrapContinuationSummaryDocument: nativeBootstrapContinuationCapture?.summary ?? null }),
                   ...(lockedProfile.nativeExecutionInput ? {} : { nativePreparedBootstrapSourceClosure:

@@ -174,3 +174,98 @@ export async function nativeStageRoundReviewerRunIds(db: Db | Transaction, input
   }
   return reviewerRunIds;
 }
+
+/** One earlier stage round the board returned, derived from its verified
+ * board_stage_return step: its executor Run (through the round's
+ * stage-pending decision) and its Reviewer Runs. */
+export type NativeReturnedStageRound = {
+  activityId: string; stageId: string; decisionId: string; executorRunId: string; executorAgentId: string;
+  reviewerAgentId: string; reviewerRunIds: string[];
+};
+
+/** Rounds must be recorded in time order: each round's stage-pending decision
+ * was applied after the previous round's return, and each return comes after
+ * the previous one. */
+export function nativeReturnedStageRoundsOrdered(rounds: ReadonlyArray<{ decisionAppliedAt: Date; returnedAt: Date }>): boolean {
+  return rounds.every((round, index) => round.decisionAppliedAt <= round.returnedAt &&
+    (index === 0 || (round.returnedAt > rounds[index - 1]!.returnedAt && round.decisionAppliedAt >= rounds[index - 1]!.returnedAt)));
+}
+
+/** Exact shape of a recorded round history (no database read). */
+export function exactNativeReturnedStageRounds(value: unknown): value is NativeReturnedStageRound[] {
+  if (!Array.isArray(value) || value.length === 0 || value.length > 16) return false;
+  const runIds = new Set<string>();
+  return value.every(round => {
+    const r = record(round);
+    if (!r || Object.keys(r).sort().join(",") !==
+        "activityId,decisionId,executorAgentId,executorRunId,reviewerAgentId,reviewerRunIds,stageId") return false;
+    const reviewerRunIds = r.reviewerRunIds;
+    if (![r.activityId, r.decisionId, r.executorAgentId, r.executorRunId, r.reviewerAgentId, r.stageId]
+        .every(id => typeof id === "string" && uuid.test(id)) || r.reviewerAgentId === r.executorAgentId ||
+      !Array.isArray(reviewerRunIds) || reviewerRunIds.length > 16 ||
+      !reviewerRunIds.every((id, index) => typeof id === "string" && uuid.test(id) &&
+        (index === 0 || (reviewerRunIds[index - 1] as string) < id))) return false;
+    for (const id of [r.executorRunId as string, ...(reviewerRunIds as string[])]) {
+      if (runIds.has(id)) return false;
+      runIds.add(id);
+    }
+    return true;
+  });
+}
+
+/**
+ * MS1f (round history). Every earlier stage round the board returned on this
+ * Task, in recorded order, each derived separately from its own verified
+ * board_stage_return step exactly as the board-return owner derives it. Null
+ * when any recorded return no longer verifies, a round is out of order or a
+ * bound is exceeded; an empty list when the Task has no board return.
+ */
+export async function captureNativeReturnedStageRounds(db: Db | Transaction, input: {
+  companyId: string; issueId: string; reader: AuthorizationActor;
+}): Promise<NativeReturnedStageRound[] | null> {
+  const [task] = await db.select({ snapshot: issues.payloadSourceSnapshot, invalidated: issues.payloadSourceSnapshotInvalidated })
+    .from(issues).where(and(eq(issues.companyId, input.companyId), eq(issues.id, input.issueId))).limit(1).for("share");
+  if (!task || task.invalidated) return null;
+  const steps = (record(task.snapshot)?.transforms ?? []) as Array<Record<string, unknown>>;
+  if (!Array.isArray(steps)) return null;
+  const boardSteps = steps.filter(step => record(step)?.kind === "board_stage_return");
+  if (boardSteps.length > 16) return null;
+  const { readNativeBoardStageReturnStep } = await import("../native-board-stage-return-source.js");
+  const rounds: NativeReturnedStageRound[] = [];
+  const times: Array<{ decisionAppliedAt: Date; returnedAt: Date }> = [];
+  for (const raw of boardSteps) {
+    const step = raw as unknown as import("../native-board-stage-return-source.js").NativeBoardStageReturnTransform;
+    const read = await readNativeBoardStageReturnStep(db, { companyId: input.companyId, issueId: input.issueId, step });
+    const [activity] = await db.select({ createdAt: activityLog.createdAt }).from(activityLog).where(and(
+      eq(activityLog.companyId, input.companyId), eq(activityLog.id, step.activityId))).limit(1);
+    const [decision] = await db.select({ id: statusDecisions.id, runId: statusDecisions.runId, appliedAt: statusDecisions.appliedAt })
+      .from(statusDecisions).where(and(eq(statusDecisions.companyId, input.companyId), eq(statusDecisions.issueId, input.issueId),
+        eq(statusDecisions.id, step.decisionId))).limit(1);
+    const [executor] = decision ? await db.select({ id: heartbeatRuns.id, agentId: heartbeatRuns.agentId }).from(heartbeatRuns)
+      .where(and(eq(heartbeatRuns.companyId, input.companyId), eq(heartbeatRuns.id, decision.runId),
+        eq(heartbeatRuns.nativeIssueId, input.issueId), eq(heartbeatRuns.runtimeMode, "native"))).limit(1) : [];
+    if (!read || !activity || !decision?.appliedAt || !executor || executor.agentId !== step.executorAgentId) return null;
+    const reviewerRunIds = await nativeStageRoundReviewerRunIds(db, { companyId: input.companyId, issueId: input.issueId,
+      reviewerAgentId: step.participantAgentId, stageId: step.stageId, decision: { id: decision.id, appliedAt: decision.appliedAt },
+      executorRunId: executor.id, executorAgentId: step.executorAgentId, returnedAt: activity.createdAt, reader: input.reader });
+    if (!reviewerRunIds) return null;
+    rounds.push({ activityId: step.activityId, stageId: step.stageId, decisionId: decision.id, executorRunId: executor.id,
+      executorAgentId: step.executorAgentId, reviewerAgentId: step.participantAgentId, reviewerRunIds: [...reviewerRunIds].sort() });
+    times.push({ decisionAppliedAt: decision.appliedAt, returnedAt: activity.createdAt });
+  }
+  if (!nativeReturnedStageRoundsOrdered(times)) return null;
+  if (rounds.length > 0 && !exactNativeReturnedStageRounds(rounds)) return null;
+  return rounds;
+}
+
+/** The Run of a returned round that authored a presentation comment, and the
+ * Agent its owner must be bound to; null for any other Run or Agent. */
+export function nativeReturnedRoundCommentAgent(rounds: readonly NativeReturnedStageRound[] | undefined,
+  comment: { createdByRunId: string | null; authorId: string | null }): string | null {
+  if (!rounds || !comment.createdByRunId || !comment.authorId) return null;
+  for (const round of rounds) {
+    if (comment.createdByRunId === round.executorRunId && comment.authorId === round.executorAgentId) return round.executorAgentId;
+    if (round.reviewerRunIds.includes(comment.createdByRunId) && comment.authorId === round.reviewerAgentId) return round.reviewerAgentId;
+  }
+  return null;
+}

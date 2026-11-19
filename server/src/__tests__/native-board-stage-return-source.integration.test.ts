@@ -10,6 +10,8 @@ import { issueService } from "../services/issues.js";
 import { nativeParentReceiptRunId, verifyNativeParentTaskCaptureLineage, verifyNativeRetainedTaskRoundSuffix } from "../services/native-board-stage-return-source.js";
 import { assertNativeContextTaskSourceCurrent } from "../services/native-direct-input.js";
 import { nativeStageReviewerRoundTurnState } from "../services/native-stage-reviewer-round-turn.js";
+import { captureNativeReturnedStageRounds, exactNativeReturnedStageRounds, nativeReturnedRoundCommentAgent,
+  nativeReturnedStageRoundsOrdered } from "../services/native-runtime/native-stage-round-return-source.js";
 import { nativeContextTaskEvidence, nativeContextTaskEvidenceHash } from "../services/context/context-task-evidence.js";
 
 // MS1f stop 5 (migration 0587). The board's PATCH override that returns a Task
@@ -466,6 +468,75 @@ describeDb("board_stage_return Task source transform (MS1f stop 5, 0587)", () =>
       expect(state({ captureSteps: [otherRunEntry], currentSteps: [otherRunEntry, board] })).toBeNull();
       expect(state({ captureSteps: [], currentSteps: [board] })).toBeNull();
       expect(state({ boardStep: null })).toBeNull();
+    });
+  });
+  // MS1f (round history). Earlier returned rounds, each derived from its own
+  // verified board return, in recorded order.
+  describe("returned stage round history", () => {
+    it("derives the recorded board return's round and refuses an unverified or forged round", async () => {
+      const seeded = await seed();
+      const reader = { type: "board" as const, source: "session" as const, userId: seeded.ids.user, companyIds: [seeded.ids.company],
+        isInstanceAdmin: false as const };
+      const read = () => captureNativeReturnedStageRounds(db as never, { companyId: seeded.ids.company, issueId: seeded.ids.issue, reader });
+      expect(await read()).toEqual([]);
+      const step = await rawReturn(seeded);
+      expect(await read()).toEqual([{ activityId: step.activityId, stageId: seeded.ids.stage, decisionId: seeded.ids.decision,
+        executorRunId: seeded.ids.run, executorAgentId: seeded.ids.executor, reviewerAgentId: seeded.ids.reviewer, reviewerRunIds: [] }]);
+      const rollback = new Error("rollback");
+      await expect(db.transaction(async tx => {
+        await tx.update(activityLog).set({ details: { changes: {} } }).where(eq(activityLog.id, step.activityId));
+        expect(await captureNativeReturnedStageRounds(tx as never, { companyId: seeded.ids.company, issueId: seeded.ids.issue, reader })).toBeNull();
+        throw rollback;
+      })).rejects.toBe(rollback);
+      // A forged round: the recorded decision is no longer the executor's stage-pending decision.
+      await expect(db.transaction(async tx => {
+        await tx.execute(sql`set local session_replication_role = replica`);
+        await tx.update(statusDecisions).set({ reasonCode: "native_review_unresolved" }).where(eq(statusDecisions.id, seeded.ids.decision));
+        expect(await captureNativeReturnedStageRounds(tx as never, { companyId: seeded.ids.company, issueId: seeded.ids.issue, reader })).toBeNull();
+        throw rollback;
+      })).rejects.toBe(rollback);
+      // Out of order: the recorded decision was applied after the board return.
+      await expect(db.transaction(async tx => {
+        await tx.execute(sql`set local session_replication_role = replica`);
+        const [returned] = await tx.select({ createdAt: activityLog.createdAt }).from(activityLog).where(eq(activityLog.id, step.activityId));
+        await tx.update(statusDecisions).set({ appliedAt: new Date(returned!.createdAt.getTime() + 1000) })
+          .where(eq(statusDecisions.id, seeded.ids.decision));
+        expect(await captureNativeReturnedStageRounds(tx as never, { companyId: seeded.ids.company, issueId: seeded.ids.issue, reader })).toBeNull();
+        throw rollback;
+      })).rejects.toBe(rollback);
+      expect(await read()).toHaveLength(1);
+    });
+
+    it("requires rounds in recorded order", () => {
+      const t = (seconds: number) => new Date(Date.UTC(2026, 10, 1, 0, 0, seconds));
+      expect(nativeReturnedStageRoundsOrdered([{ decisionAppliedAt: t(1), returnedAt: t(2) }, { decisionAppliedAt: t(3), returnedAt: t(4) }])).toBe(true);
+      expect(nativeReturnedStageRoundsOrdered([{ decisionAppliedAt: t(3), returnedAt: t(4) }, { decisionAppliedAt: t(1), returnedAt: t(2) }])).toBe(false);
+      expect(nativeReturnedStageRoundsOrdered([{ decisionAppliedAt: t(1), returnedAt: t(4) }, { decisionAppliedAt: t(2), returnedAt: t(5) }])).toBe(false);
+      expect(nativeReturnedStageRoundsOrdered([{ decisionAppliedAt: t(3), returnedAt: t(2) }])).toBe(false);
+      // A later return at the same instant as the earlier one is not a later round.
+      expect(nativeReturnedStageRoundsOrdered([{ decisionAppliedAt: t(1), returnedAt: t(2) }, { decisionAppliedAt: t(2), returnedAt: t(2) }])).toBe(false);
+      expect(nativeReturnedStageRoundsOrdered([{ decisionAppliedAt: t(1), returnedAt: t(2) }, { decisionAppliedAt: t(2), returnedAt: t(3) }])).toBe(true);
+      expect(nativeReturnedStageRoundsOrdered([])).toBe(true);
+    });
+
+    it("binds each round comment to its own Run and Agent and checks the recorded shape", () => {
+      const round = { activityId: randomUUID(), stageId: randomUUID(), decisionId: randomUUID(), executorRunId: randomUUID(),
+        executorAgentId: randomUUID(), reviewerAgentId: randomUUID(), reviewerRunIds: [randomUUID(), randomUUID()].sort() };
+      const later = { ...round, activityId: randomUUID(), decisionId: randomUUID(), executorRunId: randomUUID(), reviewerRunIds: [randomUUID()] };
+      expect(exactNativeReturnedStageRounds([round, later])).toBe(true);
+      expect(nativeReturnedRoundCommentAgent([round, later], { createdByRunId: round.executorRunId, authorId: round.executorAgentId })).toBe(round.executorAgentId);
+      expect(nativeReturnedRoundCommentAgent([round, later], { createdByRunId: later.reviewerRunIds[0]!, authorId: round.reviewerAgentId })).toBe(round.reviewerAgentId);
+      expect(nativeReturnedRoundCommentAgent([round], { createdByRunId: round.executorRunId, authorId: round.reviewerAgentId })).toBeNull();
+      expect(nativeReturnedRoundCommentAgent([round], { createdByRunId: round.reviewerRunIds[0]!, authorId: round.executorAgentId })).toBeNull();
+      expect(nativeReturnedRoundCommentAgent([round], { createdByRunId: randomUUID(), authorId: round.reviewerAgentId })).toBeNull();
+      expect(nativeReturnedRoundCommentAgent(undefined, { createdByRunId: round.executorRunId, authorId: round.executorAgentId })).toBeNull();
+      expect(nativeReturnedRoundCommentAgent([round], { createdByRunId: null, authorId: round.executorAgentId })).toBeNull();
+      expect(exactNativeReturnedStageRounds([])).toBe(false);
+      expect(exactNativeReturnedStageRounds([{ ...round, extra: true }])).toBe(false);
+      expect(exactNativeReturnedStageRounds([{ ...round, reviewerRunIds: [...round.reviewerRunIds].reverse() }])).toBe(false);
+      expect(exactNativeReturnedStageRounds([{ ...round, reviewerAgentId: round.executorAgentId }])).toBe(false);
+      expect(exactNativeReturnedStageRounds([round, { ...later, executorRunId: round.executorRunId }])).toBe(false);
+      expect(exactNativeReturnedStageRounds([{ ...round, stageId: "not-a-uuid" }])).toBe(false);
     });
   });
 });

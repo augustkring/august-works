@@ -1,5 +1,5 @@
 import type { NativeBlockedHumanInteraction, NativeTreeHoldInteractionSource } from "../native-direct-input.js";
-import { exactNativeStageRoundReturnOwner } from "./native-stage-round-return-source.js";
+import { exactNativeReturnedStageRounds, exactNativeStageRoundReturnOwner, nativeReturnedRoundCommentAgent } from "./native-stage-round-return-source.js";
 import { exactNativeWorkspaceCoordination, type NativeWorkspaceCoordinationCapture } from "./native-workspace-coordination-source.js";
 import { askUserQuestionsResultSchema, issueExecutionStateSchema } from "@paperclipai/shared";
 import { PLAN_REVIEW_CONTEXT_LIMITS } from "../plan-review-context.js";
@@ -239,6 +239,7 @@ export function exactNativeTaskContinuation(input: { value: unknown; companyId: 
     ...(capture.summary !== undefined ? ["summary"] : []),
     ...(capture.currentHumanAssignment !== undefined ? ["currentHumanAssignment"] : []),
     ...(capture.stageRoundReturn !== undefined ? ["stageRoundReturn"] : []),
+    ...(capture.stageRoundHistory !== undefined ? ["stageRoundHistory"] : []),
     ...(capture.finalizedSummary !== undefined ? ["finalizedSummary"] : []),
     ...(capture.delivery !== undefined ? ["delivery"] : []),
     ...(capture.pendingInteractions !== undefined ? ["pendingInteractions"] : []),
@@ -578,6 +579,11 @@ export function exactNativeTaskContinuation(input: { value: unknown; companyId: 
         stageEntry.taskCapture.input.contentHash!==stageEntry.taskCapture.payloadSourceSnapshot.owner.contentHash ||
         !receipt.data.bootstrap.inputs.some(source=>isDeepStrictEqual(source,stageEntry.taskCapture.input)))) || (!hasStageTrigger && stageEntry)) return null;
   }
+  // MS1f (round history). Earlier returned rounds of this Task, only in a
+  // stage continuation or a returned executor's assignment continuation.
+  const roundHistory = capture.stageRoundHistory;
+  if (roundHistory !== undefined && (!exactNativeReturnedStageRounds(roundHistory) ||
+    !(hasStageTrigger || (roundReturn !== undefined && hasSummaryAssignment)))) return null;
   const ids = new Set<string>();
   // MS1f phase 4 (stage-executor provenance family): in a stage continuation
   // carrying the executor's accepted summary, at most one comment joins: that
@@ -621,12 +627,15 @@ export function exactNativeTaskContinuation(input: { value: unknown; companyId: 
       // Run and Agent; never the receiving executor.
       const roundReviewerProducer = roundReturn !== undefined && message.createdByRunId !== null &&
         message.authorId === roundReturn.reviewerAgentId && roundReturn.reviewerRunIds.includes(message.createdByRunId);
-      if ((!hasSummaryAssignment && !exactWithdrawalProducer && !livenessProducer && !stageExecutorProducer) || sourceSnapshot.success ||
+      const roundHistoryAgent = nativeReturnedRoundCommentAgent(roundHistory, { createdByRunId: message.createdByRunId,
+        authorId: message.authorId });
+      if ((!hasSummaryAssignment && !exactWithdrawalProducer && !livenessProducer && !stageExecutorProducer && !roundHistoryAgent) ||
+          sourceSnapshot.success ||
           stagePresentationComments > 1 ||
           !exactNativeAcceptedPresentationCommentOwner(presentationOwner, {
             binding: { companyId: input.companyId, issueId: input.issueId,
               agentId: stageExecutorProducer ? stageTrigger!.executorAgentId :
-                roundReviewerProducer ? roundReturn!.reviewerAgentId : input.agentId }, commentSource: sources[0]!.input,
+                roundReviewerProducer ? roundReturn!.reviewerAgentId : roundHistoryAgent ?? input.agentId }, commentSource: sources[0]!.input,
           }) || presentationOwner.acceptedSummaryOwner.sourceRunId !== message.createdByRunId || message.authorType !== "agent") return null;
     }
   }
@@ -1313,6 +1322,10 @@ export function buildNativeBootstrapSourceSet(input: {
    * continuation's board-return owner): only these Reviewer Runs' own
    * presentation comments are admitted, under that Reviewer Agent. */
   stageRoundReturnPresentation?: { agentId: string; runIds: readonly string[] } | null;
+  /** MS1f (round history). Earlier returned rounds' Runs (from the closed
+   * continuation's round history): each Run's presentation comment is admitted
+   * only under its own round Agent. */
+  returnedRoundPresentation?: readonly { agentId: string; runId: string }[] | null;
   interactionResponses?: readonly NativeInteractionResponseEnvelope[] | null;
   interactionSources?: readonly Extract<NativePayloadSourceInput, { kind: "interaction" }>[] | null;
   contextManifestIds: readonly { companyId: string; contextManifestId: string }[] | null;
@@ -1469,13 +1482,17 @@ export function buildNativeBootstrapSourceSet(input: {
     if (stageExecutorComment) stagePresentationComments += 1;
     const roundReviewerComment = Boolean(roundReturn && !candidate.payloadSourceSnapshot &&
       roundReturn.runIds.includes(candidate.acceptedPresentationOwner?.acceptedSummaryOwner?.sourceRunId ?? ""));
+    const returnedRound = !candidate.payloadSourceSnapshot && !stageExecutorComment && !roundReviewerComment
+      ? input.returnedRoundPresentation?.find(entry =>
+          entry.runId === candidate.acceptedPresentationOwner?.acceptedSummaryOwner?.sourceRunId) : undefined;
     if (candidate.payloadSourceSnapshot) {
       if (candidate.acceptedPresentationOwner || !addSnapshotPolicy(candidate.payloadSourceSnapshot, { kind: "comment", id: candidate.id }))
         return reject("source_snapshot_invalid");
     } else if (!candidate.acceptedPresentationOwner || stagePresentationComments > 1 ||
       !exactNativeAcceptedPresentationCommentOwner(candidate.acceptedPresentationOwner, {
         binding: { companyId: input.companyId, issueId: input.issueId,
-          agentId: stageExecutorComment ? stageExecutor!.agentId : roundReviewerComment ? roundReturn!.agentId : input.agentId },
+          agentId: stageExecutorComment ? stageExecutor!.agentId : roundReviewerComment ? roundReturn!.agentId :
+            returnedRound ? returnedRound.agentId : input.agentId },
         commentSource: candidate.input,
       }) || !input.additionalPolicy?.runIds.includes(candidate.acceptedPresentationOwner.acceptedSummaryOwner.sourceRunId)) {
       return reject("source_snapshot_invalid");

@@ -3135,6 +3135,20 @@ async function assertNativeTaskWakeSourceCurrentInScope(db: Db | Transaction, sc
       throw forbidden("The Native stage round return owner changed");
     stageRoundReturn = current!;
   }
+  // MS1f (round history). Read again for this Run's own dispatch only and
+  // required to equal the history bootstrap saved; a parent walk gets none.
+  let stageRoundHistory: NativeTaskContinuationCapture["stageRoundHistory"];
+  const savedRoundHistory = nativeSourceRecord(run?.runnerProfileJson).nativeBootstrapStageRoundHistory;
+  if (run && savedRoundHistory !== undefined && savedRoundHistory !== null) {
+    const { captureNativeReturnedStageRounds } = await import("./native-runtime/native-stage-round-return-source.js");
+    const { nativeParentReceiptRunId } = await import("./native-board-stage-return-source.js");
+    if (!nativeParentReceiptRunId(input.actor as { type: string; runId?: string | null }, run.id)) {
+      const current = await captureNativeReturnedStageRounds(db, { companyId: input.companyId, issueId: input.issueId, reader: input.actor });
+      if (!current || !isDeepStrictEqual(current, savedRoundHistory))
+        throw forbidden("The Native returned stage round history changed");
+      stageRoundHistory = current;
+    }
+  }
   // The same persisted bounded run-liveness continuation record the bootstrap
   // owner read; it is re-read here, never taken from the saved wake.
   const { captureNativeRunLivenessContinuationTrigger } = await import("./native-runtime/native-liveness-continuation-source.js");
@@ -3272,6 +3286,7 @@ async function assertNativeTaskWakeSourceCurrentInScope(db: Db | Transaction, sc
       ...(summary ? { summary } : {}),
       ...(currentHumanAssignment ? { currentHumanAssignment } : {}),
       ...(stageRoundReturn ? { stageRoundReturn } : {}),
+      ...(stageRoundHistory ? { stageRoundHistory } : {}),
       ...(finalizedSummary ? { finalizedSummary } : {}),
       ...(explicitHumanSource ? { explicitHumanSource } : {}),
       ...(previousContext && retainedSource ? { previousContext, retainedSource } :

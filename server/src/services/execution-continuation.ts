@@ -54,6 +54,9 @@ export type NativeTaskContinuationCapture = {
   /** MS1f stop 4. The board's return of this Task from a pending stage round to
    * this executor; admits that round's Reviewer presentation comments. */
   stageRoundReturn?: import("./native-runtime/native-stage-round-return-source.js").NativeStageRoundReturnOwner;
+  /** MS1f (round history). Every earlier stage round the board returned on
+   * this Task; admits those rounds' Runs' sealed presentation comments. */
+  stageRoundHistory?: import("./native-runtime/native-stage-round-return-source.js").NativeReturnedStageRound[];
   stageActions?: import("./native-stage-wake-source.js").NativeFinalizedStageConsumption[];
   pendingInteractions?: import("./native-runtime/native-interaction-bridge.js").NativeGovernedPendingInteractionCapture[];
   governedInteractions?: import("./native-runtime/native-interaction-bridge.js").NativeGovernedInteractionContinuationCapture[];
@@ -506,6 +509,7 @@ export async function buildExecutionContinuation(input: {
   // stage executor's sealed, accepted summary replaces the unsealed
   // server-written continuation summary document.
   let stageSummaryReplacesDocument = false;
+  let returnedStageRounds: import("./native-runtime/native-stage-round-return-source.js").NativeReturnedStageRound[] | null = null;
   const [receiver] = input.runId ? await db.select().from(heartbeatRuns).where(and(
     eq(heartbeatRuns.id, input.runId), eq(heartbeatRuns.companyId, companyId),
     eq(heartbeatRuns.agentId, input.agentId), eq(heartbeatRuns.status, "running"),
@@ -533,6 +537,11 @@ export async function buildExecutionContinuation(input: {
       stageContinuation = selected ? { ...selected,
         summary: input.summary === null || stageSummaryReplacesDocument ? selected.summary : null } : null;
       if (stageContinuation) input.onStageTriggerCapture?.(stageContinuation.trigger);
+      // MS1f (round history). Earlier returned rounds of this Task, derived
+      // from their verified board returns (live consumers only).
+      const { captureNativeReturnedStageRounds } = await import("./native-runtime/native-stage-round-return-source.js");
+      const rounds = await captureNativeReturnedStageRounds(db, { companyId, issueId, reader });
+      returnedStageRounds = rounds && rounds.length > 0 ? rounds : null;
     }
   }
   const rows = await db
@@ -871,7 +880,12 @@ export async function buildExecutionContinuation(input: {
       const stageExecutorProducer = Boolean(stageSummaryOwner) && selected.createdByRunId !== null &&
         selected.createdByRunId === stageContinuation?.trigger.executorRunId && selected.createdByRunId === stageSummaryOwner?.sourceRunId &&
         selected.authorAgentId === stageContinuation?.trigger.executorAgentId && selected.authorAgentId !== input.agentId;
-      if ((assignmentSummarySelected || closedWithdrawalProducer || stageExecutorProducer) && !selected.payloadSourceSnapshot &&
+      // MS1f (round history). A presentation comment of an earlier returned
+      // round's Run, under its own Run and Agent.
+      const { nativeReturnedRoundCommentAgent } = await import("./native-runtime/native-stage-round-return-source.js");
+      const returnedRoundProducer = Boolean(stageContinuation && returnedStageRounds &&
+        nativeReturnedRoundCommentAgent(returnedStageRounds, { createdByRunId: selected.createdByRunId, authorId: selected.authorAgentId }));
+      if ((assignmentSummarySelected || closedWithdrawalProducer || stageExecutorProducer || returnedRoundProducer) && !selected.payloadSourceSnapshot &&
           selected.authorType === "agent" && selected.createdByRunId && outcomeReader.type === "agent") {
         const acceptedPresentationOwner = await captureNativeAcceptedFinalizedPresentationCommentOwner({ db, companyId, issueId,
           commentId: selected.id, reader: outcomeReader });
@@ -1044,6 +1058,7 @@ export async function buildExecutionContinuation(input: {
       ...(summary ? { summary } : {}),
       ...(currentHumanAssignment ? { currentHumanAssignment } : {}),
       ...(stageRoundReturn ? { stageRoundReturn } : {}),
+      ...((stageContinuation || stageRoundReturn) && returnedStageRounds ? { stageRoundHistory: returnedStageRounds } : {}),
       ...(finalizedSummary ? { finalizedSummary } : {}),
       ...(explicitHumanSource ? { explicitHumanSource } : {}),
       ...(!fullHistoryTurn && input.previousContextRunId && deliveredMessages?.length ? { previousContext: { runId: input.previousContextRunId,
