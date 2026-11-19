@@ -5855,7 +5855,7 @@
         },
         {
           "path": "server/src/services/heartbeat.ts",
-          "sha256": "53e478f9e43159375ce44f4831a7fe6ef09cefecbbde8d3babbc5d181be4ef92"
+          "sha256": "244e90cc49d6b609385ddbef624e5076a11ed6aadf48b095b1d678611308db51"
         },
         {
           "path": "server/src/services/issue-assignment-wakeup.ts",
@@ -6363,7 +6363,7 @@
         },
         {
           "path": "server/src/services/heartbeat.ts",
-          "sha256": "53e478f9e43159375ce44f4831a7fe6ef09cefecbbde8d3babbc5d181be4ef92"
+          "sha256": "244e90cc49d6b609385ddbef624e5076a11ed6aadf48b095b1d678611308db51"
         },
         {
           "path": "server/src/services/native-runtime/runtime-context.ts",
@@ -9268,7 +9268,7 @@
         },
         {
           "path": "server/src/services/heartbeat.ts",
-          "sha256": "53e478f9e43159375ce44f4831a7fe6ef09cefecbbde8d3babbc5d181be4ef92"
+          "sha256": "244e90cc49d6b609385ddbef624e5076a11ed6aadf48b095b1d678611308db51"
         },
         {
           "path": "server/src/services/issue-thread-interactions.ts",
@@ -10333,7 +10333,7 @@
         },
         {
           "path": "server/src/services/heartbeat.ts",
-          "sha256": "53e478f9e43159375ce44f4831a7fe6ef09cefecbbde8d3babbc5d181be4ef92"
+          "sha256": "244e90cc49d6b609385ddbef624e5076a11ed6aadf48b095b1d678611308db51"
         },
         {
           "path": "server/src/services/learning/learning-assets.ts",
@@ -10600,7 +10600,7 @@
         },
         {
           "path": "server/src/services/heartbeat.ts",
-          "sha256": "53e478f9e43159375ce44f4831a7fe6ef09cefecbbde8d3babbc5d181be4ef92"
+          "sha256": "244e90cc49d6b609385ddbef624e5076a11ed6aadf48b095b1d678611308db51"
         },
         {
           "path": "server/src/services/workspace-runtime.ts",
@@ -11473,7 +11473,7 @@
         },
         {
           "path": "server/src/services/heartbeat.ts",
-          "sha256": "53e478f9e43159375ce44f4831a7fe6ef09cefecbbde8d3babbc5d181be4ef92"
+          "sha256": "244e90cc49d6b609385ddbef624e5076a11ed6aadf48b095b1d678611308db51"
         },
         {
           "path": "server/src/services/native-runtime/create-skill.integration.test.ts",
@@ -48339,7 +48339,7 @@
       "id": "source:server/src/services/heartbeat.ts",
       "kind": "current_source_owner",
       "path": "server/src/services/heartbeat.ts",
-      "sha256": "53e478f9e43159375ce44f4831a7fe6ef09cefecbbde8d3babbc5d181be4ef92",
+      "sha256": "244e90cc49d6b609385ddbef624e5076a11ed6aadf48b095b1d678611308db51",
       "changeIds": [
         "SCR-V10-HOTSPOT-02",
         "SCR-V10-HOTSPOT-03",
