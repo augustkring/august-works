@@ -1738,11 +1738,11 @@
     },
     {
       "path": "server/src/__tests__/native-board-stage-return-source.integration.test.ts",
-      "sha256": "bf66ffdccbcfc833850e1a1eae0ad3ac216b78d9776e311f88fb070b5f69b46e"
+      "sha256": "ae8ed5ff88678ddd9d72b43bf2a402a1fa9d7dcc97f85d32b5113129d3cf32fe"
     },
     {
       "path": "server/src/services/native-board-stage-return-source.ts",
-      "sha256": "cdf3166411e0c4b82f1ad1e00573c1cc6cdd9b2cc1b8d232915657d5d5cc1fb3"
+      "sha256": "27f2ac28b21216718b22bff1e54fb2bf49dc6bbffe62c331884b2281cfd782a6"
     }
   ],
   "sourcePinBasis": "Exact private composed source inventory anchored at sourceHead b1, not equality with its unchanged tree. Only two individually approved code/test pins and two own-documentation pins change from the recovered b1 index; original changed/retired pin history remains preserved. Hash equality is not behavioral or release qualification.",
