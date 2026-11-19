@@ -54,6 +54,18 @@ describe("Native source operation memo", () => {
     close();
   });
 
+  it("keeps a resolved value only when the caller's retention accepts it", async () => {
+    const tx = {}, close = openNativeSourceOperationMemo(tx);
+    let loads = 0;
+    const absent = async () => { loads += 1; return null; };
+    expect(await nativeSourceOperationMemoized(tx, "f", "k", absent, value => value !== null)).toBeNull();
+    expect(await nativeSourceOperationMemoized(tx, "f", "k", absent, value => value !== null)).toBeNull();
+    expect(loads).toBe(2);
+    expect(await nativeSourceOperationMemoized(tx, "f", "k", async () => "present", value => value !== null)).toBe("present");
+    expect(await nativeSourceOperationMemoized(tx, "f", "k", async () => "unused", value => value !== null)).toBe("present");
+    close();
+  });
+
   it("retires at an effect boundary for the rest of the operation", async () => {
     const tx = {}, close = openNativeSourceOperationMemo(tx), reads = counting();
     expect(await nativeSourceOperationMemoized(tx, "f", "k", reads.load("before"))).toBe("before");

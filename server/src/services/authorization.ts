@@ -1796,14 +1796,21 @@ export async function canActorReadHeartbeatRunPrivacy(db: Db | DbTransaction, ac
   // predicate reads: the exact actor, the Run and company, and the ambient
   // Memory contexts. A Routine or Workflow read scope (whose predicate also
   // reads session settings) is never memoized, nor is the final reader pass.
-  const routineScope = nativeRoutineReadScopes.get(db as object), workflowScope = nativeWorkflowReadScopes.get(db as object);
-  if (!routineScope?.active && !workflowScope?.active && nativeSourceOperationMemoOpen(db as object)) {
-    const contexts = activeMemoryTemporalContexts(db, actor, "run", source.id);
-    return nativeSourceOperationMemoized(db as object, "run-privacy",
-      JSON.stringify([routineActorKey(actor), source.companyId, source.id, contexts === undefined ? null : [...contexts]]),
-      () => canActorReadHeartbeatRunPrivacyUncached(db, actor, source));
-  }
+  const key = nativeRunPrivacyOperationMemoKey(db, actor, source);
+  if (key !== null) return nativeSourceOperationMemoized(db as object, "run-privacy", key,
+    () => canActorReadHeartbeatRunPrivacyUncached(db, actor, source));
   return canActorReadHeartbeatRunPrivacyUncached(db, actor, source);
+}
+/** MS1f stop 8. The exact per-operation memo key of one Run privacy decision,
+ * or null when it must not be memoized: outside an open operation memo, or in
+ * a Routine or Workflow read scope. A read whose only privacy input is this
+ * decision (on otherwise share-locked rows) may reuse the same key. */
+export function nativeRunPrivacyOperationMemoKey(db: Db | DbTransaction, actor: AuthorizationActor,
+  source: { id: string; companyId: string }): string | null {
+  const routineScope = nativeRoutineReadScopes.get(db as object), workflowScope = nativeWorkflowReadScopes.get(db as object);
+  if (routineScope?.active || workflowScope?.active || !nativeSourceOperationMemoOpen(db as object)) return null;
+  const contexts = activeMemoryTemporalContexts(db, actor, "run", source.id);
+  return JSON.stringify([routineActorKey(actor), source.companyId, source.id, contexts === undefined ? null : [...contexts]]);
 }
 async function canActorReadHeartbeatRunPrivacyUncached(db: Db | DbTransaction, actor: AuthorizationActor,
   source: { id: string; companyId: string }): Promise<boolean> {
