@@ -1490,6 +1490,34 @@ const nativeSessionResumeDispatchTimers = new Map<
   string,
   ReturnType<typeof setTimeout>
 >();
+// The claim-stage chat-control recovery gate takes the issue row with NOWAIT
+// and defers the claim to the queue when another transaction holds it. Without
+// a prompt retry the queued run waits for the periodic resumeQueuedRuns sweep
+// (HEARTBEAT_SCHEDULER_INTERVAL_MS, 30 s by default). These bounded, per-Agent
+// retries only re-run the ordinary queue start; they do not change the gate,
+// its lock order, or queue semantics. One pending entry per Agent covers every
+// later contention deferral for that Agent until the entry settles.
+export const QUEUED_CLAIM_CONTENTION_RETRY_DELAYS_MS: readonly number[] = [250, 500, 1_000];
+type QueuedClaimContentionRetry = {
+  attempt: number;
+  timer: ReturnType<typeof setTimeout> | null;
+  inFlight: Promise<void> | null;
+  contended: boolean;
+  cancelled: boolean;
+};
+const queuedClaimContentionRetries = new Map<string, QueuedClaimContentionRetry>();
+/** Cancel pending claim-contention retries; resolve once in-flight ones settle. */
+function stopQueuedClaimContentionRetries(): Promise<unknown> {
+  const inFlight: Promise<void>[] = [];
+  for (const [agentId, entry] of queuedClaimContentionRetries) {
+    if (entry.timer) clearTimeout(entry.timer);
+    entry.timer = null;
+    entry.cancelled = true;
+    if (entry.inFlight) inFlight.push(entry.inFlight);
+    else queuedClaimContentionRetries.delete(agentId);
+  }
+  return Promise.allSettled(inFlight);
+}
 /**
  * Report the task-drain state for this process only. `activeRuns` and
  * `pendingWakes` count in-process work. A process restart clears both
@@ -14703,6 +14731,8 @@ export function heartbeatService(
     now = new Date(),
   ) {
     shutdownInProgress = true;
+    // A late claim retry must not create a run absent from the shutdown snapshot.
+    await stopQueuedClaimContentionRetries();
     const idleSessions = await closeIdleWarmNativeSessionsForRestart();
     if (idleSessions.failed > 0) {
       logger.warn({ idleSessions }, "idle native sessions could not checkpoint before controller shutdown");
@@ -17452,6 +17482,9 @@ export function heartbeatService(
         // this attempt distinctly; it must not become a successful close.
         throw new ChatControlRecoveryUnresolvedError();
       }
+      // Claim defers to the queue on lock contention. Only this contention
+      // path schedules a prompt bounded retry; every other null stays final.
+      scheduleQueuedClaimContentionRetry(run.agentId);
       return null;
     }
   }
@@ -20352,13 +20385,77 @@ export function heartbeatService(
       clearTimeout(timer);
     }
     nativeSessionResumeDispatchTimers.clear();
+    // A finishing run can start the next queued run and defer it again, so
+    // cancel claim-contention retries on every pass, not only once.
     while (
       activeWakeupPromises.size > 0 ||
-      activeRunExecutionPromises.size > 0
+      activeRunExecutionPromises.size > 0 ||
+      queuedClaimContentionRetries.size > 0
     ) {
+      await stopQueuedClaimContentionRetries();
       await Promise.allSettled([...activeWakeupPromises]);
       await Promise.all([...activeRunExecutionPromises]);
     }
+  }
+
+  // Called only when the claim-stage gate deferred on NOWAIT lock contention.
+  // A pending entry for this Agent (armed or in flight) covers this deferral;
+  // an in-flight retry that is deferred again arms the next bounded attempt.
+  function scheduleQueuedClaimContentionRetry(agentId: string) {
+    if (shutdownInProgress) return;
+    const pending = queuedClaimContentionRetries.get(agentId);
+    if (pending) {
+      if (pending.inFlight && !pending.cancelled) pending.contended = true;
+      return;
+    }
+    const entry: QueuedClaimContentionRetry = {
+      attempt: 0, timer: null, inFlight: null, contended: false, cancelled: false,
+    };
+    queuedClaimContentionRetries.set(agentId, entry);
+    armQueuedClaimContentionRetry(agentId, entry);
+  }
+
+  function armQueuedClaimContentionRetry(
+    agentId: string,
+    entry: QueuedClaimContentionRetry,
+  ) {
+    const delayMs = QUEUED_CLAIM_CONTENTION_RETRY_DELAYS_MS[entry.attempt]!;
+    const timer = setTimeout(() => {
+      if (entry.timer !== timer) return;
+      entry.timer = null;
+      if (entry.cancelled || shutdownInProgress) {
+        queuedClaimContentionRetries.delete(agentId);
+        return;
+      }
+      entry.contended = false;
+      entry.inFlight = (async () => {
+        try {
+          await startNextQueuedRunForAgent(agentId);
+        } catch (err) {
+          logger.warn(
+            { err, agentId, attempt: entry.attempt + 1 },
+            "queued run claim retry after lock contention failed",
+          );
+        }
+      })().finally(() => {
+        entry.inFlight = null;
+        entry.attempt += 1;
+        const retryAgain = entry.contended && !entry.cancelled && !shutdownInProgress;
+        if (retryAgain && entry.attempt < QUEUED_CLAIM_CONTENTION_RETRY_DELAYS_MS.length) {
+          armQueuedClaimContentionRetry(agentId, entry);
+          return;
+        }
+        if (queuedClaimContentionRetries.get(agentId) === entry)
+          queuedClaimContentionRetries.delete(agentId);
+        if (retryAgain)
+          logger.info(
+            { agentId, attempts: entry.attempt },
+            "queued run claim still contended after bounded retries; the scheduler sweep will retry",
+          );
+      });
+    }, delayMs);
+    timer.unref?.();
+    entry.timer = timer;
   }
 
   function scheduleNativeSessionResumeDispatch(
