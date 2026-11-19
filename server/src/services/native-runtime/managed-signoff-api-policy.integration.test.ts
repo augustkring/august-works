@@ -3,7 +3,7 @@ import { randomUUID } from "node:crypto";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import request from "supertest";
-import { and, eq, or, sql } from "drizzle-orm";
+import { and, eq, inArray, or, sql } from "drizzle-orm";
 import { afterAll, beforeAll, expect, it, vi } from "vitest";
 import { createDb, agentExecutionManifests, agentWakeupRequests, agents, environmentLeases, heartbeatRunEvents, heartbeatRuns, issues,
   statusDecisions, statusDecisionEffects, issueThreadInteractions, workAssessments, activityLog, companyMemberships,
@@ -231,6 +231,9 @@ it("denies an authenticated Reviewer's missing-comment decision on the actual st
   // gateway's own checks, so the stage decision below is attempted while the
   // Reviewer Run is live and before any Reviewer provider dispatch or spend.
   const calls = new Map<string, number>();
+  // MS1f stop 7: every Reviewer provider request, kept to check that a later
+  // round's Reviewer starts fresh.
+  const reviewerRequests: Array<{ runId: string; callIndex: number; body: Record<string, unknown> }> = [];
   let signalReviewerModelRequest: (runId: string) => void = () => {};
   const reviewerModelRequest = new Promise<string>(resolve => { signalReviewerModelRequest = resolve; });
   let releaseReviewerModelRequest: () => void = () => {};
@@ -242,6 +245,9 @@ it("denies an authenticated Reviewer's missing-comment decision on the actual st
     timeoutSec: 300,
     schedulerMode: "serial",
     managedTwoAgentSignoff: true,
+    // The board's return starts a second executor round and its Reviewer turn,
+    // each on its own registered runtime, sealed profile and credentials.
+    managedAgentHostRounds: true,
     beforeManagedModelRequest: async ({ runId }) => {
       const [run] = await db.select({ agentId: heartbeatRuns.agentId }).from(heartbeatRuns).where(eq(heartbeatRuns.id, runId)).limit(1);
       if (!run || run.agentId !== fixtureReviewerId) return;
@@ -273,6 +279,7 @@ it("denies an authenticated Reviewer's missing-comment decision on the actual st
       if (execution.binding.agentId === fixtureExecutorId) return plannedExecutorReply({ body, execution, runId, callIndex,
         ...(resubmissionBaseRevisionId ? { resubmission: { baseRevisionId: resubmissionBaseRevisionId } } : {}) });
       if (execution.binding.agentId !== fixtureReviewerId) throw new Error("managed_signoff_api_policy_foreign_agent");
+      reviewerRequests.push({ runId, callIndex, body: structuredClone(body) });
       // Released only after the denied decision: the Reviewer ends its turn
       // without a stage decision, so the stage stays pending with it.
       if (callIndex > 2) throw new Error("managed_signoff_api_policy_reviewer_unexpected_provider_replay");
@@ -281,7 +288,8 @@ it("denies an authenticated Reviewer's missing-comment decision on the actual st
         summary: "Inspected the stage without recording a decision.",
         criterion: () => ({ status: "unknown", evidenceRefs: [] }) })] };
     },
-    driveScheduler: async ({ actor, companyId, heartbeat, managedAgentIds, closeManagedAgentHostForRun, managedSignoff, facts, factsForRun }) => {
+    driveScheduler: async ({ actor, companyId, heartbeat, managedAgentIds, closeManagedAgentHostForRun, managedSignoff, facts, factsForRun,
+      managedAgentRounds }) => {
       try {
       if (!managedAgentIds || !managedSignoff) throw new Error("managed_signoff_fixture_missing_two_agent_routes");
       expect(managedAgentIds).toEqual({ executor: fixtureExecutorId, reviewer: fixtureReviewerId });
@@ -742,6 +750,27 @@ it("denies an authenticated Reviewer's missing-comment decision on the actual st
       resubmissionBaseRevisionId = resultDocument.latestRevisionId;
       const executorRunIdsBeforeReturn = (await db.select({ id: heartbeatRuns.id }).from(heartbeatRuns)
         .where(and(eq(heartbeatRuns.companyId, companyId), eq(heartbeatRuns.agentId, managedAgentIds.executor)))).map(run => run.id);
+      // Each Agent's next round is registered before the board's return admits its Run.
+      await managedAgentRounds.begin(managedAgentIds.executor);
+      await managedAgentRounds.begin(managedAgentIds.reviewer);
+      // Fixture negative: each Agent's second round reuses neither the first
+      // round's runtime registration (Host, cell generation, provider profile)
+      // nor its sealed profile or model credential, and the first round's
+      // registration is no longer current.
+      for (const roundAgentId of [managedAgentIds.executor, managedAgentIds.reviewer]) {
+        const rounds = managedAgentRounds.list(roundAgentId);
+        expect(rounds).toHaveLength(2);
+        expect(rounds[0]!.runtimeCredentialConnectionId).toBeTruthy();
+        for (const key of ["registrationHostId", "registrationCellGeneration", "providerProfileRef", "profileId",
+          "modelCredentialSha256"] as const) {
+          expect(rounds[1]![key], key).toBeTruthy();
+          expect(rounds[1]![key], key).not.toBe(rounds[0]![key]);
+        }
+        await expect(managedAgentRounds.assertRegistrationCurrent(roundAgentId, 0))
+          .rejects.toThrow("conversation_software_host_registration_changed");
+        await expect(managedAgentRounds.assertRegistrationCurrent(roundAgentId, 1)).resolves.toBeUndefined();
+      }
+      await expect(managedAgentRounds.begin(managedAgentIds.executor)).rejects.toThrow("scheduler_fixture_agent_round_begin_invalid");
       const returned = await request(managedSignoff.app).patch(`/api/issues/${issueId}`)
         .set("Cookie", managedSignoff.humanCookie)
         .send({ status: "in_progress", assigneeAgentId: managedAgentIds.executor });
@@ -765,6 +794,11 @@ it("denies an authenticated Reviewer's missing-comment decision on the actual st
         .toMatchObject({ status: "succeeded", runtimeMode: "native", agentId: managedAgentIds.executor, nativeIssueId: issueId });
       await expect.poll(async () => (await db.select({ pending: heartbeatRuns.nativeProcessCleanupPending }).from(heartbeatRuns)
         .where(eq(heartbeatRuns.id, secondExecutorRunId!)).limit(1))[0]?.pending, { timeout: 120_000, interval: 100 }).toBe(false);
+      // Fixture negative: the second executor round's Host has its own runtime
+      // broker connection, never the first round's.
+      const executorHostRounds = managedAgentRounds.list(managedAgentIds.executor);
+      expect(executorHostRounds[1]!.runtimeCredentialConnectionId).toBeTruthy();
+      expect(executorHostRounds[1]!.runtimeCredentialConnectionId).not.toBe(executorHostRounds[0]!.runtimeCredentialConnectionId);
       const resubmissions = await db.select().from(statusDecisions)
         .where(and(eq(statusDecisions.companyId, companyId), eq(statusDecisions.runId, secondExecutorRunId!)));
       expect(resubmissions).toHaveLength(1);
@@ -793,8 +827,29 @@ it("denies an authenticated Reviewer's missing-comment decision on the actual st
         nextReviewerRunId = intent?.runId ?? receipt?.runId ?? null;
         return nextReviewerRunId !== null;
       }, { timeout: 60_000, interval: 100 }).toBe(true);
-      await waitForTerminalRun(nextReviewerRunId!);
+      const nextReviewerTerminal = await waitForTerminalRun(nextReviewerRunId!);
       await heartbeat.drainActiveRunExecutions();
+      // The round's Reviewer turn runs on its own round runtime and ends
+      // without a decision, as in the first round.
+      expect(nextReviewerTerminal, JSON.stringify({ errorCode: nextReviewerTerminal.errorCode, error: nextReviewerTerminal.error }))
+        .toMatchObject({ status: "succeeded", runtimeMode: "native", agentId: managedAgentIds.reviewer, nativeIssueId: issueId });
+      // MS1f stop 7 (option A). The round's Reviewer starts fresh: its first
+      // model request carries no earlier Reviewer transcript (no assistant turn,
+      // no earlier tool call or result), and it runs on a new Native session.
+      const nextReviewerRequests = reviewerRequests.filter(request => request.runId === nextReviewerRunId);
+      const earlierReviewerRunIds = [...new Set(reviewerRequests.map(request => request.runId))].filter(id => id !== nextReviewerRunId);
+      expect(earlierReviewerRunIds).toContain(reviewerRun!.id);
+      expect(nextReviewerRequests[0]?.callIndex).toBe(1);
+      const firstNextMessages = (nextReviewerRequests[0]!.body.messages ?? []) as Array<Record<string, unknown>>;
+      expect(firstNextMessages.length).toBeGreaterThan(0);
+      expect(firstNextMessages.filter(message => message.role === "assistant")).toEqual([]);
+      const firstNextBody = JSON.stringify(nextReviewerRequests[0]!.body);
+      for (const earlierRunId of earlierReviewerRunIds) expect(firstNextBody).not.toContain(`finish-${earlierRunId}`);
+      const reviewerSessions = await db.select({ id: heartbeatRuns.id, nativeSessionId: heartbeatRuns.nativeSessionId })
+        .from(heartbeatRuns).where(inArray(heartbeatRuns.id, [nextReviewerRunId!, ...earlierReviewerRunIds]));
+      const nextSession = reviewerSessions.find(row => row.id === nextReviewerRunId)?.nativeSessionId;
+      expect(nextSession).toBeTruthy();
+      expect(reviewerSessions.filter(row => row.id !== nextReviewerRunId).map(row => row.nativeSessionId)).not.toContain(nextSession);
       await closeManagedAgentHostForRun(nextReviewerRunId!);
       const [nextRoundSettled] = await db.select().from(issues).where(and(eq(issues.companyId, companyId), eq(issues.id, issueId))).limit(1);
       expect(nextRoundSettled).toMatchObject({ status: "in_review", assigneeAgentId: managedAgentIds.reviewer,

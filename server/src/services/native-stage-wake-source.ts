@@ -49,10 +49,13 @@ export function nativeStageReviewerRunCapturable(run:{status:string;runtimeMode:
  * it deliberately needs no Reviewer Native input receipt. */
 export async function captureNativeStageContinuationOwner(db: Db | Transaction,input:{companyId:string;issueId:string;
   receiver:typeof heartbeatRuns.$inferSelect;reader:AuthorizationActor;historicalConsumption?:NativeFinalizedStageConsumption;
+  /** MS1f. A decision-less stage Reviewer turn the board returned (parent-receipt walks only). */
+  historicalRoundTurn?:import("./native-stage-reviewer-round-turn.js").NativeStageReviewerRoundTurn;
   readWork?:()=>void}):Promise<{trigger:NativeStageTaskContinuationTrigger;
     receiver:typeof heartbeatRuns.$inferSelect;executor:typeof heartbeatRuns.$inferSelect}|null>{
   if(!input.receiver.agentId || !input.receiver.responsibleUserId || !input.receiver.wakeupRequestId) return null;
-  const history=input.historicalConsumption;
+  const roundTurn=input.historicalConsumption ? undefined : input.historicalRoundTurn;
+  const history=input.historicalConsumption ?? roundTurn;
   const [currentReceiver]=await db.select().from(heartbeatRuns).where(and(eq(heartbeatRuns.companyId,input.companyId),
     eq(heartbeatRuns.id,input.receiver.id),eq(heartbeatRuns.agentId,input.receiver.agentId),
     eq(heartbeatRuns.responsibleUserId,input.receiver.responsibleUserId),eq(heartbeatRuns.wakeupRequestId,input.receiver.wakeupRequestId),
@@ -83,7 +86,13 @@ export async function captureNativeStageContinuationOwner(db: Db | Transaction,i
   const [task]=await db.select().from(issues).where(and(eq(issues.companyId,input.companyId),eq(issues.id,input.issueId))).limit(1).for("share");
   if(!task || !await canActorReadIssuePrivacy(db,input.reader,task)) return null;
   let state=parseIssueExecutionState(task.executionState);
-  if(history){
+  if(roundTurn){
+    const {captureNativeStageReviewerRoundTurn}=await import("./native-stage-reviewer-round-turn.js");
+    const current=await captureNativeStageReviewerRoundTurn(db,{companyId:input.companyId,issueId:input.issueId,
+      runId:receiver.id,reader:input.reader});
+    if(!current || !isDeepStrictEqual(current,roundTurn)) return null;
+    state=roundTurn.fromState;
+  } else if(history){
     const consumed=await captureNativeFinalizedStageConsumption(db,{companyId:input.companyId,issueId:input.issueId,
       runId:receiver.id,reader:input.reader,readWork:input.readWork});
     if(!consumed || !isDeepStrictEqual(consumed,history)) return null;
@@ -93,7 +102,8 @@ export async function captureNativeStageContinuationOwner(db: Db | Transaction,i
   if(!state || state.status!=="pending" || state.currentParticipant?.type!=="agent" ||
     (history ? state.currentParticipant.agentId!==history.agentId : state.currentParticipant.agentId!==receiver.agentId)) return null;
   const origin=await captureNativeStageOrigin(db,{...receiver,nativeIssueId:input.issueId});
-  if(!origin || origin.intentId!==intentId || (!history && origin.decisionId!==task.lastStatusDecisionId)) return null;
+  if(!origin || origin.intentId!==intentId || (!history && origin.decisionId!==task.lastStatusDecisionId) ||
+    (roundTurn && (origin.decisionId!==roundTurn.decisionId || origin.executorRunId!==roundTurn.executorRunId))) return null;
   const [intent]=await db.select().from(agentWakeupRequests).where(and(eq(agentWakeupRequests.companyId,input.companyId),
     eq(agentWakeupRequests.id,origin.intentId),eq(agentWakeupRequests.agentId,receiver.agentId))).limit(1).for("share");
   const [effect]=await db.select().from(statusDecisionEffects).where(and(eq(statusDecisionEffects.companyId,input.companyId),
@@ -174,6 +184,8 @@ export async function captureNativeExecutionStageTaskWakeSource(db: Db | Transac
   historicalPendingSources?: NativeTaskWakeCaptureInput["historicalPendingSources"];
   checkoutRunId?: string | null;
   historicalConsumption?: NativeFinalizedStageConsumption;
+  /** MS1f. A decision-less stage Reviewer turn the board returned (parent-receipt walks only). */
+  historicalRoundTurn?: import("./native-stage-reviewer-round-turn.js").NativeStageReviewerRoundTurn;
   reader?: AuthorizationActor;
   expectedStageTrigger?: import("./execution-continuation.js").NativeStageTaskContinuationTrigger;
   onContinuationCapture?: (capture: import("./execution-continuation.js").NativeTaskContinuationCapture) => void;
@@ -263,9 +275,15 @@ export async function captureNativeExecutionStageTaskWakeSource(db: Db | Transac
   const consumed=input.historicalConsumption && input.reader ? await captureNativeFinalizedStageConsumption(db,{
     companyId:input.companyId,issueId:input.issueId,runId:reviewerRun.id,reader:input.reader}) : null;
   if(input.historicalConsumption && (!consumed || !isDeepStrictEqual(consumed,input.historicalConsumption))) return null;
-  if (!currentIssue || (!consumed && (currentIssue.lastStatusDecisionId !== decision.id || currentIssue.status !== decision.toStatus ||
+  const {captureNativeStageReviewerRoundTurn}=await import("./native-stage-reviewer-round-turn.js");
+  const roundTurn=!input.historicalConsumption && input.historicalRoundTurn && input.reader
+    ? await captureNativeStageReviewerRoundTurn(db,{companyId:input.companyId,issueId:input.issueId,runId:reviewerRun.id,reader:input.reader})
+    : null;
+  if(input.historicalRoundTurn && !input.historicalConsumption && (!roundTurn || !isDeepStrictEqual(roundTurn,input.historicalRoundTurn) ||
+    roundTurn.decisionId!==decision.id || roundTurn.executorRunId!==executorRun.id)) return null;
+  if (!currentIssue || (!consumed && !roundTurn && (currentIssue.lastStatusDecisionId !== decision.id || currentIssue.status !== decision.toStatus ||
     currentIssue.assigneeAgentId !== reviewerRun.agentId))) return null;
-  const currentState = consumed?.fromState ?? parseIssueExecutionState(currentIssue.executionState);
+  const currentState = consumed?.fromState ?? roundTurn?.fromState ?? parseIssueExecutionState(currentIssue.executionState);
   if (!currentState || currentState.status !== "pending" || currentState.currentParticipant?.type !== "agent" ||
     currentState.currentParticipant.agentId !== reviewerRun.agentId) return null;
   const canonicalWake = buildExecutionStageWakeup({ issueId: input.issueId, previousState: null, nextState: currentState,

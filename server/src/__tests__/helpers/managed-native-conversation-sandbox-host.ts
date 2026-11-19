@@ -488,7 +488,10 @@ export async function ensureManagedSandboxEnvironmentForAgent(
 
 export async function registerManagedSandboxProvider(
   input: Pick<ManagedSandboxHostInput, "db" | "actor" | "companyId" | "agentId" | "providerBindingId"> &
-    { nativeOpenCodeConformance?: true; sandboxQualificationOperator?: AuthorizationActor },
+    { nativeOpenCodeConformance?: true; sandboxQualificationOperator?: AuthorizationActor;
+      /** A later round re-provisions this Agent's stopped cell at its next
+       * generation on a new Host, as a runtime migration does. */
+      reprovisionCellId?: string },
 ) {
   const { db, actor, companyId, agentId, providerBindingId } = input;
   const nativeOpenCodeConformance = input.nativeOpenCodeConformance === true;
@@ -555,9 +558,14 @@ export async function registerManagedSandboxProvider(
       throw new Error("conversation_software_host_billing_entitlement_changed");
     return selected;
   });
-  const [cell] = await db.insert(runtimeCells).values({ companyId, billingAccountId: account.id,
-    capacityProfile: "conversation-software-host", desiredImageDigest: imageDigest, status: "STOPPED",
-    isolationMode: "company_cell", runtimeHostId: host.id, providerBindingId }).returning();
+  const [cell] = input.reprovisionCellId
+    ? await db.update(runtimeCells).set({ generation: sql`${runtimeCells.generation}+1`, runtimeHostId: host.id, updatedAt: new Date() })
+      .where(and(eq(runtimeCells.companyId, companyId), eq(runtimeCells.id, input.reprovisionCellId),
+        eq(runtimeCells.providerBindingId, providerBindingId), eq(runtimeCells.billingAccountId, account.id),
+        eq(runtimeCells.status, "STOPPED"), isNull(runtimeCells.deletedAt))).returning()
+    : await db.insert(runtimeCells).values({ companyId, billingAccountId: account.id,
+      capacityProfile: "conversation-software-host", desiredImageDigest: imageDigest, status: "STOPPED",
+      isolationMode: "company_cell", runtimeHostId: host.id, providerBindingId }).returning();
   if (!cell) throw new Error("conversation_software_host_cell_missing");
   // This fixture represents a V6-qualified profile and the existing reservation owned by this STOPPED cell.
   // Sandbox qualification must reuse this bounded profile, not allocate untracked capacity.
@@ -741,7 +749,7 @@ async function installManagedSandboxInfrastructure(input: ManagedSandboxHostInpu
     return { canary, canarySecretValue };
   };
   return Object.freeze({ hostKeys, host, cell, environment, conversationHostCapacity, payerUserId, fixtureImageNode, sandboxQualificationOperator,
-    runtimeConnection, runtimePresence, createCanary, providerImageHome, fixtureToolAccess, runtimeSecretValue,
+    runtimeConnection, runtimeToolProfileId: runtimeToolProfile.id, runtimePresence, createCanary, providerImageHome, fixtureToolAccess, runtimeSecretValue,
     assertInstalledProfileCurrent: () => registration.assertCurrent(input, input.profile),
     restoreEnvironment: sharedImage.restoreEnvironment, retireData: sharedImage.retireData,
     retainData: sharedImage.retainData });
@@ -1048,7 +1056,8 @@ async function configureManagedRunSandboxHost(
     },
     conformanceObservations: () => collectRetainedConformanceObservations(retainedHosts),
     facts: () => ({ mode: `controlled_signed_host_relay_${admissionMode}`, hostId: infrastructure.host.id, cellId: infrastructure.cell.id,
-      environmentId: infrastructure.environment.id, runs: [...hostAdmissionByRun].map(([runId, entry]) =>
+      environmentId: infrastructure.environment.id, runtimeCredentialConnectionId: infrastructure.runtimeConnection.connection.id,
+      runtimeToolProfileId: infrastructure.runtimeToolProfileId, runs: [...hostAdmissionByRun].map(([runId, entry]) =>
         ({ runId, leaseId: entry.leaseId, retired: entry.closed })) }),
     close: async () => {
       closing = true;

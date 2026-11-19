@@ -3066,6 +3066,14 @@ async function assertNativeTaskWakeSourceCurrentInScope(db: Db | Transaction, sc
             agentId:run.agentId,receiverRunId:run.id,sourceRunId:String(nativeSourceRecord(savedStageTrigger).executorRunId),
             reader:input.actor,stageEntryRead:originalSummary.stageEntryRead,stageTrigger:savedStageTrigger as import("./execution-continuation.js").NativeStageTaskContinuationTrigger,
             historicalConsumption,readWork:()=>nativeSourceReadWork(scope)});
+        } else if(originalSummary?.stageEntryRead){
+          // MS1f (historical stage-wake owner). A parent decision-less stage
+          // Reviewer turn the board returned, on a parent-receipt walk only.
+          const roundTurn=await nativeHistoricalStageRoundTurn(db,input.actor,input.companyId,input.issueId,run.id);
+          if(roundTurn) selected=await captureNativeFinalizedContinuationSummary({db:db as Db,companyId:input.companyId,issueId:input.issueId,
+            agentId:run.agentId,receiverRunId:run.id,sourceRunId:String(nativeSourceRecord(savedStageTrigger).executorRunId),
+            reader:input.actor,stageEntryRead:originalSummary.stageEntryRead,stageTrigger:savedStageTrigger as import("./execution-continuation.js").NativeStageTaskContinuationTrigger,
+            historicalRoundTurn:roundTurn});
         }
       }
     } else {
@@ -3126,6 +3134,20 @@ async function assertNativeTaskWakeSourceCurrentInScope(db: Db | Transaction, sc
     if (!nativeStageRoundReturnOwnerMatches(current, savedRoundReturn))
       throw forbidden("The Native stage round return owner changed");
     stageRoundReturn = current!;
+  }
+  // MS1f (round history). Read again for this Run's own dispatch only and
+  // required to equal the history bootstrap saved; a parent walk gets none.
+  let stageRoundHistory: NativeTaskContinuationCapture["stageRoundHistory"];
+  const savedRoundHistory = nativeSourceRecord(run?.runnerProfileJson).nativeBootstrapStageRoundHistory;
+  if (run && savedRoundHistory !== undefined && savedRoundHistory !== null) {
+    const { captureNativeReturnedStageRounds } = await import("./native-runtime/native-stage-round-return-source.js");
+    const { nativeParentReceiptRunId } = await import("./native-board-stage-return-source.js");
+    if (!nativeParentReceiptRunId(input.actor as { type: string; runId?: string | null }, run.id)) {
+      const current = await captureNativeReturnedStageRounds(db, { companyId: input.companyId, issueId: input.issueId, reader: input.actor });
+      if (!current || !isDeepStrictEqual(current, savedRoundHistory))
+        throw forbidden("The Native returned stage round history changed");
+      stageRoundHistory = current;
+    }
   }
   // The same persisted bounded run-liveness continuation record the bootstrap
   // owner read; it is re-read here, never taken from the saved wake.
@@ -3264,6 +3286,7 @@ async function assertNativeTaskWakeSourceCurrentInScope(db: Db | Transaction, sc
       ...(summary ? { summary } : {}),
       ...(currentHumanAssignment ? { currentHumanAssignment } : {}),
       ...(stageRoundReturn ? { stageRoundReturn } : {}),
+      ...(stageRoundHistory ? { stageRoundHistory } : {}),
       ...(finalizedSummary ? { finalizedSummary } : {}),
       ...(explicitHumanSource ? { explicitHumanSource } : {}),
       ...(previousContext && retainedSource ? { previousContext, retainedSource } :
@@ -3384,6 +3407,10 @@ async function assertNativeTaskWakeSourceCurrentInScope(db: Db | Transaction, sc
             value.kind === "comment"), continuationCapture,
           historicalPendingSources: input.historicalTransition ? pendingInteractions : undefined,
           historicalConsumption: input.historicalTransition?.stageReads?.find(value=>value.producer.runId === input.runId)?.producer,
+          ...(input.historicalTransition?.stageReads?.some(value=>value.producer.runId === input.runId) ? {} : await (async () => {
+            const roundTurn = await nativeHistoricalStageRoundTurn(db, input.actor, input.companyId, input.issueId, input.runId);
+            return roundTurn ? { historicalRoundTurn: roundTurn } : {};
+          })()),
           expectedStageTrigger: nativeSourceRecord(run.runnerProfileJson).nativeBootstrapStageTrigger as
             import("./execution-continuation.js").NativeStageTaskContinuationTrigger|undefined,
           reader:input.actor,
@@ -4877,7 +4904,9 @@ async function assertNativePayloadSourceSetCurrentUncachedInScope(db: Db | Trans
           readerSelection: { context: scope.context, sets: new Map(), complete: true } };
         taskProofStack.push(taskFrame);
         try {
-          const snapshotDigest = await assertNativeTaskSourceInputCurrentInScope(db, input.companyId, input.actor, source, scope, siblingToolSourceProofs, historicalTransition);
+          const { nativeParentReceiptRunId } = await import("./native-board-stage-return-source.js");
+          const snapshotDigest = await assertNativeTaskSourceInputCurrentInScope(db, input.companyId, input.actor, source, scope, siblingToolSourceProofs, historicalTransition,
+            nativeParentReceiptRunId(input.actor, input.runId));
           if (proofIdentity && snapshotDigest) completedTaskSourceProofs!.set(proofIdentity, {
             key: nativeManagedConsumedTaskSourceProofKey(input.companyId, input.actor, source, snapshotDigest,
               scope.context.memoryTemporalIdentity), descendants: taskFrame.descendants, mutableSources: taskFrame.mutableSources,
@@ -6659,18 +6688,31 @@ export async function assertNativeContextTaskSourceCurrent(db: Db | Transaction,
         !isDeepStrictEqual(oldResult.data.inputs, currentResult.data.inputs)) return false;
     const oldTransforms = oldResult.data.transforms ?? [];
     const currentTransforms = currentResult.data.transforms ?? [];
+    const suffix = currentTransforms.slice(oldTransforms.length);
+    const workspaceSuffix = suffix.every(step => step.kind === "workspace_binding" && step.runId === manifest.runId);
+    // MS1f (retained only). A stage round and a board return the platform
+    // recorded after this item was captured: owner-verified steps that changed
+    // only execution_state, in order, with a continuous owner-hash chain.
+    const roundSuffix = retained && !workspaceSuffix &&
+      suffix.every(step => step.kind === "native_stage_policy" || step.kind === "board_stage_return");
     if (currentTransforms.length <= oldTransforms.length ||
         !isDeepStrictEqual(currentTransforms.slice(0, oldTransforms.length), oldTransforms) ||
-        !currentTransforms.slice(oldTransforms.length).every(step => step.kind === "workspace_binding" && step.runId === manifest.runId))
+        (!workspaceSuffix && !roundSuffix))
       return false;
-    const firstSuffix = currentTransforms[oldTransforms.length];
-    if (firstSuffix?.kind !== "workspace_binding") return false;
-    const [firstSuffixAudit] = await tx.select({ createdAt: activityLog.createdAt }).from(activityLog).where(and(
-      eq(activityLog.companyId, companyId), eq(activityLog.id, firstSuffix.activityId),
-      eq(activityLog.entityType, "issue"), eq(activityLog.entityId, issueId),
-      eq(activityLog.action, "issue.payload_source_workspace_bound"))).limit(1);
-    if (!firstSuffixAudit ||
-        firstSuffixAudit.createdAt < manifest.createdAt) return false;
+    if (roundSuffix) {
+      const { verifyNativeRetainedTaskRoundSuffix } = await import("./native-board-stage-return-source.js");
+      if (!await verifyNativeRetainedTaskRoundSuffix(tx, { companyId, issueId, suffix,
+          prefixOwnerHash: oldResult.data.owner.contentHash, currentOwnerHash: currentResult.data.owner.contentHash })) return false;
+    } else {
+      const firstSuffix = currentTransforms[oldTransforms.length];
+      if (firstSuffix?.kind !== "workspace_binding") return false;
+      const [firstSuffixAudit] = await tx.select({ createdAt: activityLog.createdAt }).from(activityLog).where(and(
+        eq(activityLog.companyId, companyId), eq(activityLog.id, firstSuffix.activityId),
+        eq(activityLog.entityType, "issue"), eq(activityLog.entityId, issueId),
+        eq(activityLog.action, "issue.payload_source_workspace_bound"))).limit(1);
+      if (!firstSuffixAudit ||
+          firstSuffixAudit.createdAt < manifest.createdAt) return false;
+    }
     const baseContentHash = currentTransforms[0]?.previousOwnerContentHash ?? currentResult.data.owner.contentHash;
     const base = { version: 1 as const, owner: { ...currentResult.data.owner, contentHash: baseContentHash },
       policy: currentResult.data.policy, inputs: currentResult.data.inputs };
@@ -6892,8 +6934,19 @@ async function assertNativeFrozenTaskSnapshotCurrent(db: Db | Transaction, compa
   }
 }
 
+/** MS1f (historical stage-wake owner). Only when an agent consumer walks a
+ * parent Run's receipt (never its own bootstrap or live sources). */
+async function nativeHistoricalStageRoundTurn(db: Db | Transaction, actor: AuthorizationActor, companyId: string,
+  issueId: string, runId: string) {
+  const { nativeParentReceiptRunId } = await import("./native-board-stage-return-source.js");
+  if (!nativeParentReceiptRunId(actor as { type: string; runId?: string | null }, runId)) return null;
+  const { captureNativeStageReviewerRoundTurn } = await import("./native-stage-reviewer-round-turn.js");
+  return captureNativeStageReviewerRoundTurn(db, { companyId, issueId, runId, reader: actor });
+}
+
 async function assertNativeTaskSourceInputCurrentInScope(db: Db | Transaction, companyId: string, actor: AuthorizationActor,
-  source: Extract<NativePayloadSourceInput, { kind: "task" }>, scope: NativeSourceReadScope, siblingToolSourceProofs: NativeSiblingToolSourceProofs = new Map(), historicalTransition?: NativeHistoricalPendingTransitionContext): Promise<string | null> {
+  source: Extract<NativePayloadSourceInput, { kind: "task" }>, scope: NativeSourceReadScope, siblingToolSourceProofs: NativeSiblingToolSourceProofs = new Map(), historicalTransition?: NativeHistoricalPendingTransitionContext,
+  parentReceiptRunId?: string): Promise<string | null> {
   nativeSourceReadWork(scope);
   const [task] = await db.select({ id: issues.id, companyId: issues.companyId, identifier: issues.identifier,
     title: issues.title, description: issues.description, workMode: issues.workMode, status: issues.status,
@@ -6928,6 +6981,16 @@ async function assertNativeTaskSourceInputCurrentInScope(db: Db | Transaction, c
       historicalTask=true;
     }
     disableNativeSourceGraphCheckpoints(scope);
+  }
+  // MS1f (option A′). A parent Run's exact saved Task capture across a later
+  // verified stage round and board return that changed only execution_state.
+  if (task && !historicalTask && parentReceiptRunId && task.ownerBodyHash !== source.contentHash &&
+      bodyHash !== source.contentHash && ancestorHash !== source.contentHash) {
+    const { verifyNativeParentTaskCaptureLineage } = await import("./native-board-stage-return-source.js");
+    if (await verifyNativeParentTaskCaptureLineage(db, { companyId, issueId: source.issueId, parentRunId: parentReceiptRunId, source })) {
+      historicalTask = true;
+      disableNativeSourceGraphCheckpoints(scope);
+    }
   }
   if (!task || (!historicalTask && task.ownerBodyHash !== source.contentHash &&
       bodyHash !== source.contentHash && ancestorHash !== source.contentHash)) throw forbidden("A Native source Task changed");

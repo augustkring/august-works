@@ -128,6 +128,39 @@ describe("native bootstrap rendered-source closure", () => {
     expect(build({ taskWakeCommentCandidates: [comment(owner(agentId, outsideRunId))], stageRoundReturnPresentation: round })).not.toBeNull();
   });
 
+  it("admits earlier returned rounds' presentation comments only under each Run's own round Agent (MS1f round history)", () => {
+    const wake: NativePayloadSourceInput = { kind: "native_task_wake", runId, issueId, sourceVersion: "1", contentHash: hash };
+    const roundExecutorAgent = randomUUID(), roundExecutorRun = randomUUID(), roundReviewerAgent = randomUUID(), roundReviewerRun = randomUUID();
+    const outsideRun = randomUUID();
+    const owner = (ownerAgentId: string, ownerRunId: string) => ({ companyId, issueId, agentId: ownerAgentId,
+      sourceRunId: ownerRunId, resultId: randomUUID(), resultCanonicalSha256: "f".repeat(64), resultCreatedAt: "2026-10-01T00:00:00.000Z",
+      finalizationVersion: "2026-10-01T00:00:01.000Z", assessmentId: randomUUID(), decisionId: randomUUID(),
+      decisionDigest: "a".repeat(64), decisionSnapshotHash: "d".repeat(64), body: "A round summary.",
+      parentReceipt: { version: 1 as const, binding: { companyId, issueId, agentId: ownerAgentId, runId: ownerRunId,
+        responsibleUserId: "stage-human" }, bootstrap: { executionInputDigest: "b".repeat(64), policy,
+        inputs: [{ kind: "task" as const, issueId, sourceVersion: "1", contentHash: hash }] }, dispatches: [], additionalInputs: [],
+        digest: "c".repeat(64) } });
+    const comment = (acceptedSummaryOwner: ReturnType<typeof owner>) => {
+      const source = { kind: "comment" as const, issueId, commentId: randomUUID(), sourceVersion: "1", contentHash: hash };
+      return { kind: "comment" as const, id: source.commentId, input: source, payloadSourceSnapshot: null,
+        acceptedPresentationOwner: { commentSourceIdentity: source, acceptedSummaryOwner } };
+    };
+    const rounds = [{ agentId: roundExecutorAgent, runId: roundExecutorRun }, { agentId: roundReviewerAgent, runId: roundReviewerRun }];
+    const build = (overrides: Partial<Parameters<typeof buildNativeBootstrapSourceSet>[0]>) => input({ additionalInputs: [wake],
+      additionalPolicy: { ...policy, runIds: [roundExecutorRun, roundReviewerRun, outsideRun].sort() }, ...overrides });
+    expect(build({ taskWakeCommentCandidates: [comment(owner(roundExecutorAgent, roundExecutorRun)),
+      comment(owner(roundReviewerAgent, roundReviewerRun))], returnedRoundPresentation: rounds })).not.toBeNull();
+    // Without the round history each comment stays bound to the receiver.
+    expect(build({ taskWakeCommentCandidates: [comment(owner(roundReviewerAgent, roundReviewerRun))] })).toBeNull();
+    // A Run outside the rounds, another Agent's Run, a Run outside the policy, an unsealed comment.
+    expect(build({ taskWakeCommentCandidates: [comment(owner(roundReviewerAgent, outsideRun))], returnedRoundPresentation: rounds })).toBeNull();
+    expect(build({ taskWakeCommentCandidates: [comment(owner(roundExecutorAgent, roundReviewerRun))], returnedRoundPresentation: rounds })).toBeNull();
+    expect(build({ taskWakeCommentCandidates: [comment(owner(roundReviewerAgent, roundReviewerRun))], returnedRoundPresentation: rounds,
+      additionalPolicy: { ...policy, runIds: [outsideRun] } })).toBeNull();
+    const unsealed = comment(owner(roundReviewerAgent, roundReviewerRun)) as Record<string, unknown>; delete unsealed.acceptedPresentationOwner;
+    expect(build({ taskWakeCommentCandidates: [unsealed as never], returnedRoundPresentation: rounds })).toBeNull();
+  });
+
   it("binds external chat guidance to one exact Task wake source and keeps other unknowns closed", () => {
     const wake: NativePayloadSourceInput = { kind: "native_task_wake", runId, issueId, sourceVersion: "1",
       contentHash: hash, externalChatProvider: "slack" };
@@ -231,6 +264,17 @@ describe("native bootstrap rendered-source closure", () => {
       (v: NativeTaskContinuationCapture) => { v.explicitHumanSource!.sourceStopReceiptHash = "invalid"; },
     ]) { const changed = structuredClone(explicit); mutate(changed); expect(checkExplicit(changed)).toBeNull(); }
     expect(check()).toBe(capture);
+    // MS1f stop 7 (option A). A stage continuation never resumes an earlier
+    // session: a resume delta without a retained_run source is refused, with or
+    // without the previous context it would apply to.
+    const stageResume = structuredClone(capture), stageResumeBase = randomUUID();
+    stageResume.envelope.resumeDelta = { baseRunId: stageResumeBase, messages: structuredClone(capture.envelope.messages) };
+    stageResume.previousContext = { runId: stageResumeBase, messages: [] };
+    expect(check(stageResume)).toBeNull();
+    const stageDeltaOnly = structuredClone(stageResume); delete stageDeltaOnly.previousContext;
+    expect(check(stageDeltaOnly)).toBeNull();
+    const stagePreviousOnly = structuredClone(stageResume); delete stagePreviousOnly.envelope.resumeDelta;
+    expect(check(stagePreviousOnly)).toBeNull();
     expect(exactNativeTaskContinuation({companyId,issueId,runId,agentId,responsibleUserId:humanId,wakeupRequestId:wakeId,
       wakeReason:reason,value:capture.envelope,capture})).toBeNull();
     for (const mutate of [
@@ -1120,6 +1164,40 @@ describe("native bootstrap rendered-source closure", () => {
       const changed = structuredClone(returned); (changed.stageRoundReturn as Record<string, unknown>)[key] = value;
       expect(captureAssignment(changed, finalizedAssignmentPayload), key).toBeNull();
     }
+    // MS1f (round history). An earlier returned round's Reviewer comment joins
+    // only through the recorded round history, under that round's Agent.
+    const earlierReviewer = randomUUID(), earlierRun = randomUUID(), earlierCommentId = randomUUID();
+    const earlierMessage = { ...reviewerMessage, id: earlierCommentId, authorId: earlierReviewer, createdByRunId: earlierRun };
+    const earlierSource = { kind: "comment" as const, issueId, commentId: earlierCommentId, sourceVersion: "1",
+      contentHash: nativeContinuationMessageHash(earlierMessage) };
+    const earlierOwner = { ...structuredClone(reviewerOwner), agentId: earlierReviewer, sourceRunId: earlierRun };
+    earlierOwner.parentReceipt.binding = { ...earlierOwner.parentReceipt.binding, agentId: earlierReviewer, runId: earlierRun };
+    const history = [{ activityId: randomUUID(), stageId: randomUUID(), decisionId: randomUUID(), executorRunId: randomUUID(),
+      executorAgentId: agentId, reviewerAgentId: earlierReviewer, reviewerRunIds: [earlierRun] }];
+    const withHistory = structuredClone(returned);
+    withHistory.envelope.messages.push(earlierMessage);
+    withHistory.envelope.coverage = { kind: "full_task_history", throughCommentId: earlierCommentId, summaryThroughCommentId: null };
+    withHistory.commentSources.push({ input: earlierSource, payloadSourceSnapshot: null,
+      acceptedPresentationOwner: { commentSourceIdentity: earlierSource, acceptedSummaryOwner: earlierOwner } });
+    withHistory.stageRoundHistory = history;
+    expect(captureAssignment(withHistory, finalizedAssignmentPayload)).toMatchObject({ kind: "native_task_wake", runId, issueId });
+    const noHistory = structuredClone(withHistory); delete noHistory.stageRoundHistory;
+    expect(captureAssignment(noHistory, finalizedAssignmentPayload)).toBeNull();
+    const outsideHistory = structuredClone(withHistory); outsideHistory.stageRoundHistory![0]!.reviewerRunIds = [randomUUID()];
+    expect(captureAssignment(outsideHistory, finalizedAssignmentPayload)).toBeNull();
+    const otherHistoryAgent = structuredClone(withHistory); otherHistoryAgent.stageRoundHistory![0]!.reviewerAgentId = randomUUID();
+    expect(captureAssignment(otherHistoryAgent, finalizedAssignmentPayload)).toBeNull();
+    const forgedHistory = structuredClone(withHistory);
+    (forgedHistory.stageRoundHistory![0] as Record<string, unknown>).extra = true;
+    expect(captureAssignment(forgedHistory, finalizedAssignmentPayload)).toBeNull();
+    // A round history without a board-return owner (or a stage trigger) is refused.
+    const historyWithoutReturn = structuredClone(withHistory); delete historyWithoutReturn.stageRoundReturn;
+    expect(captureAssignment(historyWithoutReturn, finalizedAssignmentPayload)).toBeNull();
+    // Isolated: an otherwise valid Human assignment that carries a round history
+    // without a board-return owner or a stage trigger.
+    const plainWithHistory = structuredClone(finalizedAssignment); plainWithHistory.stageRoundHistory = structuredClone(history);
+    expect(captureAssignment(finalizedAssignment, finalizedAssignmentPayload)).toMatchObject({ kind: "native_task_wake", runId, issueId });
+    expect(captureAssignment(plainWithHistory, finalizedAssignmentPayload)).toBeNull();
     const agentRequested = structuredClone(returned); agentRequested.wake.requestedByActorType = "agent";
     expect(captureAssignment(agentRequested, finalizedAssignmentPayload)).toBeNull();
     const noHumanAssignment = structuredClone(returned); delete noHumanAssignment.currentHumanAssignment;

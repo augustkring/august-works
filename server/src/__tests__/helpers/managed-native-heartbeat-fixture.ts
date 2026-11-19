@@ -17,7 +17,7 @@ import express, { type Express as ExpressApp, type Request as ExpressRequest } f
 import { and, desc, eq, inArray, sql } from "drizzle-orm";
 import { agents, agentExecutionManifests, authSessions, authUsers, companies, companyMemberships,
   environmentLeases, heartbeatRunEvents, heartbeatRuns, issueComments, issueThreadInteractions, issues, toolInvocations,
-  orchestrationModelReservations, orchestrationPlans, orchestrationWorkerAttempts, principalPermissionGrants, createDb } from "@paperclipai/db";
+  orchestrationModelReservations, orchestrationPlans, orchestrationWorkerAttempts, principalPermissionGrants, toolProfileBindings, createDb } from "@paperclipai/db";
 import { workerModelProfileSchema, type WorkerModelProfile } from "../../services/orchestration/worker-model-profiles.js";
 import { workerModelGateway } from "../../services/orchestration/worker-model-gateway.js";
 import { aiConnectionService } from "../../services/ai-connections.js";
@@ -124,6 +124,12 @@ export async function withManagedNativeHeartbeatFixture<T>(input: Omit<FrameInpu
   ordinaryWorkerProject?: () => ManagedNativeProjectWorkspaceScope;
   /** Explicit two-presence opt-in for real Executor→Reviewer issue journeys. */
   managedTwoAgentSignoff?: true;
+  /** With managedTwoAgentSignoff: an Agent whose Host was closed after its Run
+   * may run again in a later round. Each round gets its own runtime
+   * registration (Host, cell, Sandbox binding), sealed model profile, model
+   * credential and runtime broker connection; nothing is borrowed from a
+   * prior round, whose tool profile binding is retired. */
+  managedAgentHostRounds?: true;
   /** Execute the registered OpenCode conformance owner before any ordinary Run is created. */
   managedOpenCodeConformance?: true;
   /** Test-only revocation hook after the actual signed Sandbox Host start receipt. */
@@ -183,6 +189,13 @@ export async function withManagedNativeHeartbeatFixture<T>(input: Omit<FrameInpu
     agentId: string; gateway: ReturnType<typeof workerModelGateway>; heartbeat: ReturnType<typeof heartbeatService>;
     managedAgentIds: { executor: string; reviewer: string } | null;
     closeManagedAgentHostForRun: (runId: string) => Promise<void>;
+    managedAgentRounds: {
+      /** Register the Agent's next round (after its Host closed) before the Run that uses it is admitted. */
+      begin: (agentId: string) => Promise<void>;
+      list: (agentId: string) => Array<{ registrationHostId: string; registrationCellGeneration: string; providerProfileRef: string;
+        profileId: string; modelCredentialSha256: string; runtimeCredentialConnectionId: string | null }>;
+      assertRegistrationCurrent: (agentId: string, round: number) => Promise<void>;
+    };
     humanApi: { app: ExpressApp; humanCookie: string };
     managedSignoff: { app: ExpressApp; humanCookie: string; agentApiTokens: { executor: string; reviewer: string } } | null;
     facts: () => { providerCallCount: number; providerCredentialFacts: { requestCount: number; everyRequestMatchedConfiguredApiKey: boolean }; issuerFacts: Array<{ scope: string; runId: string; manifestId: string }>;
@@ -350,7 +363,7 @@ export async function withManagedNativeHeartbeatFixture<T>(input: Omit<FrameInpu
     preparedAgents.push({ agentId: configuredAgentId, adapterConfig });
   }
   // Both canonical registrations exist before any Worker profile or gateway is sealed.
-  for (const { agentId: configuredAgentId, adapterConfig } of preparedAgents) {
+  const sealAgentProfile = async (configuredAgentId: string, adapterConfig: Record<string, unknown>) => {
     const configuredCompanyId = companyByAgent.get(configuredAgentId) ?? companyId;
     const provider = input.managedOpenCodeConformance
       ? await providerService.getForPresence(human, configuredCompanyId, configuredAgentId)
@@ -376,6 +389,10 @@ export async function withManagedNativeHeartbeatFixture<T>(input: Omit<FrameInpu
       qualificationEvidenceRef: "https://protected.test.invalid/qualification/managed-conversation-fixture.json",
       qualificationArtifactSha256: "c".repeat(64),
     });
+    return { profile, apiKey };
+  };
+  for (const { agentId: configuredAgentId, adapterConfig } of preparedAgents) {
+    const { profile } = await sealAgentProfile(configuredAgentId, adapterConfig);
     profilesByAgent.set(configuredAgentId, profile);
   }
   const executionsByRun = new Map<string, { execution: NativeExecutionInput; issueId: string | null; agentId: string }>();
@@ -411,7 +428,9 @@ export async function withManagedNativeHeartbeatFixture<T>(input: Omit<FrameInpu
       and(eq(orchestrationWorkerAttempts.companyId, orchestrationModelReservations.companyId),
         eq(orchestrationWorkerAttempts.id, orchestrationModelReservations.workerAttemptId)))
     .where(and(eq(orchestrationWorkerAttempts.companyId, companyId), eq(orchestrationWorkerAttempts.runId, runId)));
-  const gateway = workerModelGateway(db, { profiles: [...profilesByAgent.values()], sourceSha,
+  // One live list: a later Agent round replaces its own prior profile in place.
+  const gatewayProfiles: WorkerModelProfile[] = [...profilesByAgent.values()];
+  const gateway = workerModelGateway(db, { profiles: gatewayProfiles, sourceSha,
     protectedEvidenceOrigin: "https://protected.test.invalid", fetch: async (url, init) => {
       if (String(url) !== "https://api.anthropic.com/v1/messages") {
         providerStubFailure ??= { stage: "provider_url", code: "unexpected_provider_url" };
@@ -902,16 +921,74 @@ export async function withManagedNativeHeartbeatFixture<T>(input: Omit<FrameInpu
   };
   const hostsByAgent = new Map<string, ConfiguredHost>();
   const closedAgentHostIds = new Set<string>();
+  type AgentRound = { registration: ManagedSandboxProviderRegistration; profile: WorkerModelProfile; apiKey: string;
+    host?: ConfiguredHost };
+  const roundsByAgent = new Map<string, AgentRound[]>();
+  const pendingRoundByAgent = new Map<string, number>();
+  const roundsEnabled = Boolean(input.managedTwoAgentSignoff && input.managedAgentHostRounds);
+  const hostFacts = (host: ConfiguredHost | undefined) => {
+    const facts = (host as { facts?: () => Record<string, unknown> } | undefined)?.facts?.() ?? {};
+    return { runtimeCredentialConnectionId: typeof facts.runtimeCredentialConnectionId === "string" ? facts.runtimeCredentialConnectionId : null,
+      runtimeToolProfileId: typeof facts.runtimeToolProfileId === "string" ? facts.runtimeToolProfileId : null };
+  };
+  /** A later round of one Agent: retire the prior round's tool profile
+   * binding, re-provision the Agent's stopped cell at its next generation on a
+   * new Host, and seal a fresh profile and model credential. Every identity
+   * must differ from every prior round. */
+  const beginAgentRound = async (configuredAgentId: string) => {
+    const rounds = roundsByAgent.get(configuredAgentId) ?? [];
+    const prior = rounds.at(-1);
+    const prepared = preparedAgents.find(entry => entry.agentId === configuredAgentId);
+    if (!prior || !prepared) throw new Error("scheduler_fixture_agent_round_prior_missing");
+    const configuredCompanyId = companyByAgent.get(configuredAgentId) ?? companyId;
+    const priorToolProfileId = hostFacts(prior.host).runtimeToolProfileId;
+    if (!priorToolProfileId) throw new Error("scheduler_fixture_agent_round_prior_tool_profile_missing");
+    await db.delete(toolProfileBindings).where(and(eq(toolProfileBindings.companyId, configuredCompanyId),
+      eq(toolProfileBindings.profileId, priorToolProfileId), eq(toolProfileBindings.targetType, "agent"),
+      eq(toolProfileBindings.targetId, configuredAgentId)));
+    // The board user authenticates again (a fresh passkey step-up on the same
+    // session) before this round's provider registration, as a Human would;
+    // the production recent-authentication window is unchanged.
+    await db.update(authSessions).set({ authenticatedAt: new Date(), updatedAt: new Date() })
+      .where(and(eq(authSessions.id, human.sessionId), eq(authSessions.userId, human.userId)));
+    const { registerManagedSandboxProvider } = await import("./managed-native-conversation-sandbox-host.js");
+    const registration = await registerManagedSandboxProvider({ db, actor: human,
+      ...(sandboxQualificationOperator ? { sandboxQualificationOperator } : {}),
+      companyId: configuredCompanyId, agentId: configuredAgentId, providerBindingId: providerBindingsByAgent.get(configuredAgentId)!,
+      // The Agent's stopped cell is re-provisioned at its next generation on a new Host.
+      reprovisionCellId: prior.registration.cell.id });
+    const { profile, apiKey } = await sealAgentProfile(configuredAgentId, prepared.adapterConfig);
+    if (rounds.some(round => round.registration.host.id === registration.host.id ||
+        `${round.registration.cell.id}:${round.registration.cell.generation}` === `${registration.cell.id}:${registration.cell.generation}` ||
+        round.registration.providerProfileRef === registration.providerProfileRef || round.profile.id === profile.id ||
+        round.apiKey === apiKey || round.profile.providerProfileRef === profile.providerProfileRef))
+      throw new Error("scheduler_fixture_agent_round_reuses_prior_identity");
+    const index = gatewayProfiles.indexOf(prior.profile);
+    if (index < 0) throw new Error("scheduler_fixture_agent_round_prior_profile_unsealed");
+    gatewayProfiles.splice(index, 1, profile);
+    registrationsByAgent.set(configuredAgentId, registration);
+    profilesByAgent.set(configuredAgentId, profile);
+    apiKeysByAgent.set(configuredAgentId, apiKey);
+    rounds.push({ registration, profile, apiKey });
+    roundsByAgent.set(configuredAgentId, rounds);
+    return rounds.length - 1;
+  };
   const configureHostForAgent = async (configuredAgentId: string) => {
     const existing = hostsByAgent.get(configuredAgentId);
-    if (existing && closedAgentHostIds.has(configuredAgentId))
+    if (existing && closedAgentHostIds.has(configuredAgentId) && !roundsEnabled)
       throw new Error("scheduler_fixture_two_agent_host_reuse_not_supported");
-    if (existing) return existing;
+    if (existing && !closedAgentHostIds.has(configuredAgentId)) return existing;
+    // A later round's runtime is registered before its Run's manifest pins the
+    // provider (managedAgentRounds.begin); never here, after admission.
+    const pendingRound = pendingRoundByAgent.get(configuredAgentId);
+    if (existing && pendingRound === undefined) throw new Error("scheduler_fixture_agent_round_not_begun");
+    const round = existing ? pendingRound! : 0;
+    pendingRoundByAgent.delete(configuredAgentId);
     if (!agentIds.includes(configuredAgentId)) throw new Error("scheduler_fixture_native_run_agent_unmapped");
     if ((input.managedTwoAgentSignoff || input.managedOpenCodeConformance) && !registrationsByAgent.has(configuredAgentId))
       throw new Error("scheduler_fixture_agent_registration_missing");
     const hostRoot = input.managedTwoAgentSignoff || input.managedOpenCodeConformance
-      ? join(runHome, `agent-${configuredAgentId}`) : runHome;
+      ? join(runHome, round > 0 ? `agent-${configuredAgentId}-round-${round}` : `agent-${configuredAgentId}`) : runHome;
     if (input.managedTwoAgentSignoff || input.managedOpenCodeConformance) { await mkdir(hostRoot, { mode: 0o700 }); await chmod(hostRoot, 0o700); }
     const configuredCompanyId = companyByAgent.get(configuredAgentId) ?? companyId;
     const host = await input.configureHeartbeat?.({ db, actor: human, companyId: configuredCompanyId, agentId: configuredAgentId,
@@ -926,6 +1003,13 @@ export async function withManagedNativeHeartbeatFixture<T>(input: Omit<FrameInpu
     if (!host) throw new Error("scheduler_fixture_host_configuration_missing");
     const schedulerHost = host as ConfiguredHost;
     hostsByAgent.set(configuredAgentId, schedulerHost);
+    closedAgentHostIds.delete(configuredAgentId);
+    if (roundsEnabled) {
+      const rounds = roundsByAgent.get(configuredAgentId) ?? [{ registration: registrationsByAgent.get(configuredAgentId)!,
+        profile: profilesByAgent.get(configuredAgentId)!, apiKey: apiKeysByAgent.get(configuredAgentId)! }];
+      rounds[round]!.host = schedulerHost;
+      roundsByAgent.set(configuredAgentId, rounds);
+    }
     return schedulerHost;
   };
   if (!input.managedTwoAgentSignoff && !input.managedOpenCodeConformance) await configureHostForAgent(agentId);
@@ -1012,10 +1096,14 @@ export async function withManagedNativeHeartbeatFixture<T>(input: Omit<FrameInpu
       }),
       beforeNativeExecution: async (args: Parameters<NonNullable<NonNullable<Parameters<typeof heartbeatService>[1]>["testNativeRunnerEnvironment"]>>[0]) => {
         const admittedRun = admittedRunByAgent.get(args.agentId);
-        if (admittedRun && admittedRun !== args.runId)
+        // A later round: only after this Agent's prior Run's Host was closed for that exact Run.
+        const nextRound = Boolean(roundsEnabled && admittedRun && admittedRun !== args.runId &&
+          closedAgentHostIds.has(args.agentId) && closedHostRunByAgent.get(args.agentId) === admittedRun);
+        if (admittedRun && admittedRun !== args.runId && !nextRound)
           throw new Error("scheduler_fixture_two_agent_one_run_per_agent_limit");
-        if (closedAgentHostIds.has(args.agentId))
+        if (closedAgentHostIds.has(args.agentId) && !nextRound)
           throw new Error("scheduler_fixture_two_agent_host_reuse_not_supported");
+        if (nextRound) closedHostRunByAgent.delete(args.agentId);
         if (
           lastManagedExecution &&
           lastManagedExecution.agentId !== args.agentId &&
@@ -1327,6 +1415,25 @@ export async function withManagedNativeHeartbeatFixture<T>(input: Omit<FrameInpu
     }
     return await input.driveScheduler({ db, actor: human, companyId, agentId, managedAgentIds,
       closeManagedAgentHostForRun, humanApi, managedSignoff, gateway, heartbeat,
+      managedAgentRounds: {
+        begin: async roundAgentId => {
+          if (!roundsEnabled || !hostsByAgent.has(roundAgentId) || !closedAgentHostIds.has(roundAgentId) ||
+              pendingRoundByAgent.has(roundAgentId)) throw new Error("scheduler_fixture_agent_round_begin_invalid");
+          pendingRoundByAgent.set(roundAgentId, await beginAgentRound(roundAgentId));
+        },
+        list: roundAgentId => (roundsByAgent.get(roundAgentId) ?? []).map(round => ({
+          registrationHostId: round.registration.host.id,
+          registrationCellGeneration: `${round.registration.cell.id}:${round.registration.cell.generation}`,
+          providerProfileRef: round.registration.providerProfileRef, profileId: round.profile.id,
+          modelCredentialSha256: createHash("sha256").update(round.apiKey).digest("hex"),
+          runtimeCredentialConnectionId: hostFacts(round.host).runtimeCredentialConnectionId })),
+        assertRegistrationCurrent: async (roundAgentId, index) => {
+          const round = roundsByAgent.get(roundAgentId)?.[index];
+          if (!round) throw new Error("scheduler_fixture_agent_round_missing");
+          await round.registration.assertCurrent({ db, actor: human, companyId: companyByAgent.get(roundAgentId) ?? companyId,
+            agentId: roundAgentId, providerBindingId: providerBindingsByAgent.get(roundAgentId)! }, round.profile);
+        },
+      },
       facts: () => ({ providerCallCount: providerCalls.length, providerCredentialFacts: { requestCount: providerCalls.length, everyRequestMatchedConfiguredApiKey: providerCalls.every(call => call.keyMatches) }, issuerFacts: structuredClone(issuerFacts),
         sandboxRuntimeFacts: input.schedulerMode ? { ...sandboxHeartbeat?.facts?.(),
           originHttpDenials: Object.fromEntries(originHttpDenials), authenticatedModelTunnels, appliedModelProfileInjections: structuredClone(appliedModelProfileInjections) }
