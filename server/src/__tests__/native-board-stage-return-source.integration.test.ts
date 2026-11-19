@@ -7,6 +7,9 @@ import { activityLog, agents, authUsers, companies, companyMemberships, completi
   nativeRunResults, statusDecisions, workAssessments } from "@paperclipai/db";
 import { getEmbeddedPostgresTestSupport, startEmbeddedPostgresTestDatabase } from "./helpers/embedded-postgres.js";
 import { issueService } from "../services/issues.js";
+import { verifyNativeRetainedTaskRoundSuffix } from "../services/native-board-stage-return-source.js";
+import { assertNativeContextTaskSourceCurrent } from "../services/native-direct-input.js";
+import { nativeContextTaskEvidence, nativeContextTaskEvidenceHash } from "../services/context/context-task-evidence.js";
 
 // MS1f stop 5 (migration 0587). The board's PATCH override that returns a Task
 // from a pending execution stage to the round's executor clears
@@ -66,6 +69,12 @@ describeDb("board_stage_return Task source transform (MS1f stop 5, 0587)", () =>
         'foundationRevisionIds','[]'::jsonb),'inputs','[]'::jsonb) as snap from issues i where i.id=${ids.issue}::uuid)
       update issues set payload_source_snapshot = s.snap || jsonb_build_object('digest',encode(sha256(convert_to(s.snap::text,'UTF8')),'hex'))
       from s where issues.id=${ids.issue}::uuid`);
+    // The original direct Human capture audit the Task source history roots in.
+    const [sealed] = await db.select({ snapshot: issues.payloadSourceSnapshot }).from(issues).where(eq(issues.id, ids.issue));
+    const sealedSnapshot = sealed!.snapshot as { digest: string; owner: { contentHash: string } };
+    await db.insert(activityLog).values({ companyId: ids.company, actorType: "user", actorId: ids.user,
+      action: "issue.payload_source_captured", entityType: "issue", entityId: ids.issue,
+      details: { producer: "direct_manual_input", digest: sealedSnapshot.digest, contentHash: sealedSnapshot.owner.contentHash } });
     await db.insert(completionContracts).values({ id: ids.contract, companyId: ids.company, issueId: ids.issue, revision: 1,
       schemaVersion: "aw.completion-contract.v7", policyVersion: "test", risk: "low", completionAuthority: "server_arbiter",
       incompleteCriteriaPolicy: "block", contractJson: { objective: "Rework it", criteria: [] }, canonicalSha256: "c".repeat(64),
@@ -217,5 +226,96 @@ describeDb("board_stage_return Task source transform (MS1f stop 5, 0587)", () =>
       await db.execute(sql.raw(current));
     }
     expect((await taskSource((await (async () => { const s = await seed(); await rawReturn(s); return s; })()).ids.issue)).invalidated).toBe(false);
+  });
+  // MS1f (retained Context Task lineage). A Context Task item captured before
+  // the stage round and the board return stays current for a retained consumer
+  // only through owner-verified steps that changed only execution_state.
+  describe("retained Context Task lineage across the board return", () => {
+    async function returned() {
+      const seeded = await seed();
+      const [before] = await db.select({ snapshot: issues.payloadSourceSnapshot }).from(issues).where(eq(issues.id, seeded.ids.issue));
+      const original = before!.snapshot as { owner: { contentHash: string } };
+      const step = await rawReturn(seeded);
+      const after = await taskSource(seeded.ids.issue);
+      const current = after.snapshot as { owner: { contentHash: string } };
+      return { seeded, original, step, currentHash: current.owner.contentHash, originalSnapshot: before!.snapshot };
+    }
+    const verify = (companyId: string, issueId: string, suffix: unknown[], prefixOwnerHash: string, currentOwnerHash: string,
+      db_: Db = db) => verifyNativeRetainedTaskRoundSuffix(db_ as never, { companyId, issueId, suffix: suffix as never,
+        prefixOwnerHash, currentOwnerHash });
+
+    it("accepts the recorded board return and refuses a changed prefix, an unknown kind, a broken chain and an out-of-order step", async () => {
+      const { seeded, original, step, currentHash } = await returned();
+      const { company, issue } = seeded.ids;
+      expect(await verify(company, issue, [step], original.owner.contentHash, currentHash)).toBe(true);
+      expect(await verify(company, issue, [step], "f".repeat(64), currentHash)).toBe(false);
+      expect(await verify(company, issue, [{ ...step, kind: "workspace_binding" }], original.owner.contentHash, currentHash)).toBe(false);
+      expect(await verify(company, issue, [step, step], original.owner.contentHash, currentHash)).toBe(false);
+      expect(await verify(company, issue, [{ ...step, nextOwnerContentHash: "e".repeat(64) }], original.owner.contentHash, currentHash)).toBe(false);
+      expect(await verify(company, issue, [step], step.nextOwnerContentHash, currentHash)).toBe(false);
+      expect(await verify(company, issue, [], original.owner.contentHash, currentHash)).toBe(false);
+      expect(await verify(company, issue, [], currentHash, currentHash)).toBe(false);
+      expect(await verify(company, issue, [step], original.owner.contentHash, "d".repeat(64))).toBe(false);
+      expect(await verify(company, issue, [{ ...step, kind: "workspace_binding", previousOwnerContentHash: currentHash,
+        nextOwnerContentHash: currentHash }], currentHash, currentHash)).toBe(false);
+    });
+
+    it("refuses an unverified step and a step whose Task changed a user-authored field", async () => {
+      const { seeded, original, step, currentHash } = await returned();
+      const { company, issue } = seeded.ids;
+      const rollback = new Error("rollback");
+      // Unverified: the board's activity no longer records that return.
+      await expect(db.transaction(async tx => {
+        await tx.update(activityLog).set({ details: { changes: {} } }).where(eq(activityLog.id, step.activityId));
+        expect(await verify(company, issue, [step], original.owner.contentHash, currentHash, tx as never)).toBe(false);
+        throw rollback;
+      })).rejects.toBe(rollback);
+      // A user-authored field that differs from what the recorded hashes explain.
+      await expect(db.transaction(async tx => {
+        await tx.execute(sql`set local session_replication_role = replica`);
+        await tx.execute(sql`update issues set title = 'Edited by a person' where id = ${issue}::uuid`);
+        expect(await verify(company, issue, [step], original.owner.contentHash, currentHash, tx as never)).toBe(false);
+        throw rollback;
+      })).rejects.toBe(rollback);
+      expect(await verify(company, issue, [step], original.owner.contentHash, currentHash)).toBe(true);
+    });
+
+    it("keeps a retained item current and still refuses a live consumer", async () => {
+      const { seeded, originalSnapshot } = await returned();
+      const { company, issue, executor, run, user } = seeded.ids;
+      const manifest = { id: randomUUID(), companyId: company, agentId: executor, runId: run, issueId: issue, createdAt: new Date() };
+      // The item's evidence hash matches the current Task, so a live consumer is refused only by the retained-only lineage.
+      const [currentTask] = await db.select().from(issues).where(eq(issues.id, issue));
+      const evidenceHash = nativeContextTaskEvidenceHash(nativeContextTaskEvidence(currentTask! as never));
+      const item = { id: randomUUID(), companyId: company, manifestId: manifest.id, sourceClass: "task", sourceProvider: "august_works_tasks",
+        sourceRef: `issue://${issue}`, sourceVersion: "1", payloadSourceSnapshot: originalSnapshot, contentHash: evidenceHash,
+        trustLevel: "high", sensitivity: "internal", rank: 0, selectionReason: "test" } as never;
+      const human = { type: "board" as const, source: "session" as const, userId: user, companyIds: [company], isInstanceAdmin: false as const };
+      await expect(assertNativeContextTaskSourceCurrent(db as never, { actor: human, companyId: company, agentId: executor,
+        issueId: issue, manifest, item, consumption: "retained" })).resolves.toBe(true);
+      const agent = { type: "agent" as const, source: "agent_jwt" as const, companyId: company, agentId: executor, runId: run,
+        onBehalfOfUserId: user };
+      await expect(assertNativeContextTaskSourceCurrent(db as never, { actor: agent, companyId: company, agentId: executor,
+        issueId: issue, manifest, item, consumption: "bootstrap" })).resolves.toBe(false);
+      await expect(assertNativeContextTaskSourceCurrent(db as never, { actor: agent, companyId: company, agentId: executor,
+        issueId: issue, manifest, item })).resolves.toBe(false);
+      // A recorded step whose hashes were rewritten to hide a user-authored
+      // change (the chain and digests stay consistent) is still refused.
+      const rollback = new Error("rollback");
+      await expect(db.transaction(async tx => {
+        await tx.execute(sql`set local session_replication_role = replica`);
+        await tx.execute(sql`update issues set title = 'Edited by a person' where id = ${issue}::uuid`);
+        await tx.execute(sql`with h as (select public.aw_native_payload_body_hash('issue',to_jsonb(i)) as next from issues i where i.id=${issue}::uuid),
+          s as (select ((i.payload_source_snapshot - 'digest') || jsonb_build_object(
+            'owner', (i.payload_source_snapshot->'owner') || jsonb_build_object('contentHash', h.next),
+            'transforms', jsonb_build_array((i.payload_source_snapshot->'transforms'->0) || jsonb_build_object('nextOwnerContentHash', h.next))))
+            as snap from issues i, h where i.id=${issue}::uuid)
+          update issues set payload_source_snapshot = s.snap || jsonb_build_object('digest',encode(sha256(convert_to(s.snap::text,'UTF8')),'hex'))
+          from s where issues.id=${issue}::uuid`);
+        await expect(assertNativeContextTaskSourceCurrent(tx as never, { actor: human, companyId: company, agentId: executor,
+          issueId: issue, manifest, item, consumption: "retained" })).resolves.toBe(false);
+        throw rollback;
+      })).rejects.toBe(rollback);
+    });
   });
 });

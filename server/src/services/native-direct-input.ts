@@ -6659,18 +6659,31 @@ export async function assertNativeContextTaskSourceCurrent(db: Db | Transaction,
         !isDeepStrictEqual(oldResult.data.inputs, currentResult.data.inputs)) return false;
     const oldTransforms = oldResult.data.transforms ?? [];
     const currentTransforms = currentResult.data.transforms ?? [];
+    const suffix = currentTransforms.slice(oldTransforms.length);
+    const workspaceSuffix = suffix.every(step => step.kind === "workspace_binding" && step.runId === manifest.runId);
+    // MS1f (retained only). A stage round and a board return the platform
+    // recorded after this item was captured: owner-verified steps that changed
+    // only execution_state, in order, with a continuous owner-hash chain.
+    const roundSuffix = retained && !workspaceSuffix &&
+      suffix.every(step => step.kind === "native_stage_policy" || step.kind === "board_stage_return");
     if (currentTransforms.length <= oldTransforms.length ||
         !isDeepStrictEqual(currentTransforms.slice(0, oldTransforms.length), oldTransforms) ||
-        !currentTransforms.slice(oldTransforms.length).every(step => step.kind === "workspace_binding" && step.runId === manifest.runId))
+        (!workspaceSuffix && !roundSuffix))
       return false;
-    const firstSuffix = currentTransforms[oldTransforms.length];
-    if (firstSuffix?.kind !== "workspace_binding") return false;
-    const [firstSuffixAudit] = await tx.select({ createdAt: activityLog.createdAt }).from(activityLog).where(and(
-      eq(activityLog.companyId, companyId), eq(activityLog.id, firstSuffix.activityId),
-      eq(activityLog.entityType, "issue"), eq(activityLog.entityId, issueId),
-      eq(activityLog.action, "issue.payload_source_workspace_bound"))).limit(1);
-    if (!firstSuffixAudit ||
-        firstSuffixAudit.createdAt < manifest.createdAt) return false;
+    if (roundSuffix) {
+      const { verifyNativeRetainedTaskRoundSuffix } = await import("./native-board-stage-return-source.js");
+      if (!await verifyNativeRetainedTaskRoundSuffix(tx, { companyId, issueId, suffix,
+          prefixOwnerHash: oldResult.data.owner.contentHash, currentOwnerHash: currentResult.data.owner.contentHash })) return false;
+    } else {
+      const firstSuffix = currentTransforms[oldTransforms.length];
+      if (firstSuffix?.kind !== "workspace_binding") return false;
+      const [firstSuffixAudit] = await tx.select({ createdAt: activityLog.createdAt }).from(activityLog).where(and(
+        eq(activityLog.companyId, companyId), eq(activityLog.id, firstSuffix.activityId),
+        eq(activityLog.entityType, "issue"), eq(activityLog.entityId, issueId),
+        eq(activityLog.action, "issue.payload_source_workspace_bound"))).limit(1);
+      if (!firstSuffixAudit ||
+          firstSuffixAudit.createdAt < manifest.createdAt) return false;
+    }
     const baseContentHash = currentTransforms[0]?.previousOwnerContentHash ?? currentResult.data.owner.contentHash;
     const base = { version: 1 as const, owner: { ...currentResult.data.owner, contentHash: baseContentHash },
       policy: currentResult.data.policy, inputs: currentResult.data.inputs };

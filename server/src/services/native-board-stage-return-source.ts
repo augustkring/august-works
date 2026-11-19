@@ -91,7 +91,7 @@ export async function prepareNativeBoardStageReturnSnapshot(tx: Transaction, inp
  */
 export async function readNativeBoardStageReturnStep(db: Db | Transaction, input: {
   companyId: string; issueId: string; step: NativeBoardStageReturnTransform;
-}): Promise<boolean> {
+}): Promise<{ fromExecutionState: unknown } | null> {
   const { step } = input;
   const [activity] = await db.select().from(activityLog).where(and(eq(activityLog.companyId, input.companyId),
     eq(activityLog.id, step.activityId), eq(activityLog.entityType, "issue"), eq(activityLog.entityId, input.issueId),
@@ -103,12 +103,64 @@ export async function readNativeBoardStageReturnStep(db: Db | Transaction, input
   if (!activity || activity.agentId !== null || activity.runId !== null || !c || state?.to !== null || !from ||
     from.status !== "pending" || from.currentStageId !== step.stageId || from.currentParticipant?.agentId !== step.participantAgentId ||
     from.returnAssignee?.agentId !== step.executorAgentId || assignee?.from !== step.participantAgentId ||
-    assignee.to !== step.executorAgentId || version?.to !== step.taskStatusVersion || Object.hasOwn(c, "lastStatusDecisionId")) return false;
+    assignee.to !== step.executorAgentId || version?.to !== step.taskStatusVersion || Object.hasOwn(c, "lastStatusDecisionId")) return null;
   const [decision] = await db.select({ id: statusDecisions.id }).from(statusDecisions)
     .innerJoin(heartbeatRuns, and(eq(heartbeatRuns.companyId, statusDecisions.companyId), eq(heartbeatRuns.id, statusDecisions.runId)))
     .where(and(eq(statusDecisions.companyId, input.companyId), eq(statusDecisions.issueId, input.issueId),
       eq(statusDecisions.id, step.decisionId), eq(statusDecisions.applicationState, "applied"),
       eq(statusDecisions.reasonCode, "execution_policy_stage_pending"), eq(heartbeatRuns.nativeIssueId, input.issueId),
       eq(heartbeatRuns.agentId, step.executorAgentId), eq(heartbeatRuns.runtimeMode, "native"))).limit(1);
-  return Boolean(decision);
+  return decision ? { fromExecutionState: state!.from } : null;
+}
+
+type SourceStep = NativePayloadSourceTransform;
+
+/**
+ * MS1f (retained Context Task lineage). A suffix of Task source steps that the
+ * platform recorded after a retained Context Task item was captured qualifies
+ * only when every step is a `native_stage_policy` step (re-read by its own
+ * owner) or a `board_stage_return` step (re-read by its activity and round
+ * decision), in recorded order, with a continuous owner-hash chain from the
+ * item's owner hash to the Task's current owner hash, and when every step
+ * changed only `execution_state`: the current row with only `execution_state`
+ * replaced by the step's recorded from/to states must hash to the step's
+ * recorded previous/next owner hashes. Any other body change (title,
+ * description, unblock descriptor or any other body field) makes the hashes
+ * differ and the suffix is refused.
+ */
+export async function verifyNativeRetainedTaskRoundSuffix(db: Db | Transaction, input: {
+  companyId: string; issueId: string; suffix: readonly SourceStep[]; prefixOwnerHash: string; currentOwnerHash: string;
+}): Promise<boolean> {
+  if (input.suffix.length === 0 || input.suffix.length > 32) return false;
+  const [task] = await db.select().from(issues).where(and(eq(issues.companyId, input.companyId), eq(issues.id, input.issueId)))
+    .limit(1).for("share");
+  if (!task || task.payloadSourceSnapshotInvalidated) return false;
+  const { readNativeStageTaskBodyStep } = await import("./native-stage-task-body-source.js");
+  const pairs: Array<{ from: unknown; to: unknown; previous: string; next: string }> = [];
+  let chain = input.prefixOwnerHash;
+  for (const step of input.suffix) {
+    if (step.previousOwnerContentHash !== chain) return false;
+    if (step.kind === "native_stage_policy") {
+      const receipt = await readNativeStageTaskBodyStep(db, { task, step }).catch(() => null);
+      if (!receipt || receipt.previousOwnerContentHash !== step.previousOwnerContentHash ||
+        receipt.nextOwnerContentHash !== step.nextOwnerContentHash) return false;
+      pairs.push({ from: receipt.fromExecutionState ?? null, to: receipt.toExecutionState ?? null,
+        previous: step.previousOwnerContentHash, next: step.nextOwnerContentHash });
+    } else if (step.kind === "board_stage_return") {
+      const read = await readNativeBoardStageReturnStep(db, { companyId: input.companyId, issueId: input.issueId, step });
+      if (!read) return false;
+      pairs.push({ from: read.fromExecutionState ?? null, to: null, previous: step.previousOwnerContentHash, next: step.nextOwnerContentHash });
+    } else return false;
+    chain = step.nextOwnerContentHash;
+  }
+  if (chain !== input.currentOwnerHash) return false;
+  const [hashes] = await db.execute<{ values: Array<{ previous: string; next: string }> }>(sql`select coalesce(jsonb_agg(jsonb_build_object(
+      'previous', public.aw_native_payload_body_hash('issue', to_jsonb(i) || jsonb_build_object('execution_state', p.value->'from')),
+      'next', public.aw_native_payload_body_hash('issue', to_jsonb(i) || jsonb_build_object('execution_state', p.value->'to')))
+      order by p.ordinality), '[]'::jsonb) as values
+    from issues i, jsonb_array_elements(${JSON.stringify(pairs)}::jsonb) with ordinality as p(value, ordinality)
+    where i.company_id=${input.companyId}::uuid and i.id=${input.issueId}::uuid`);
+  const values = hashes?.values ?? [];
+  return values.length === pairs.length && pairs.every((pair, index) =>
+    values[index]?.previous === pair.previous && values[index]?.next === pair.next);
 }
