@@ -113,10 +113,17 @@ export async function captureNativeStageRoundReturnOwner(db: Db | Transaction, i
     executor.finishedAt > activity.createdAt) return null;
   if (running) {
     const [task] = await db.select({ assigneeAgentId: issues.assigneeAgentId, responsibleUserId: issues.responsibleUserId,
-      statusVersion: issues.statusVersion, lastStatusDecisionId: issues.lastStatusDecisionId, executionState: issues.executionState })
+      statusVersion: issues.statusVersion, lastStatusDecisionId: issues.lastStatusDecisionId, executionState: issues.executionState,
+      payloadSourceSnapshot: issues.payloadSourceSnapshot })
       .from(issues).where(and(eq(issues.companyId, input.companyId), eq(issues.id, input.issueId))).limit(1).for("share");
     if (!task || task.assigneeAgentId !== receiver.agentId || task.responsibleUserId !== receiver.responsibleUserId ||
       task.statusVersion !== version!.to || task.lastStatusDecisionId !== decision.id || task.executionState !== null) return null;
+    // MS1f stop 5 (0587): the Task source records exactly this board return.
+    const transforms = record(task.payloadSourceSnapshot)?.transforms;
+    const last = Array.isArray(transforms) ? record(transforms.at(-1)) : null;
+    if (!last || last.kind !== "board_stage_return" || last.activityId !== activity.id || last.stageId !== stageId ||
+      last.decisionId !== decision.id || last.taskStatusVersion !== version!.to ||
+      last.participantAgentId !== reviewerAgentId || last.executorAgentId !== receiver.agentId) return null;
   }
   // The stage Reviewer Runs this decision's stage wake started on the returned
   // stage, ended before the return.

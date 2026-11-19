@@ -3,6 +3,7 @@ import { and, eq, sql } from "drizzle-orm";
 import { afterAll, beforeAll, describe, expect, it, vi } from "vitest";
 import {
   activityLog,
+  companyMemberships,
   agentExecutionManifests,
   agentPresenceRuntimeBindings,
   agentProviderBindings,
@@ -159,7 +160,7 @@ describeDb("execution-policy stage Reviewer lane under a plan (MS1f decision 4)"
    * the Reviewer, and the Reviewer's running Run holding the execution lease.
    * `selfReview`: the plan Worker (executor) is the Reviewer. `preNative`: the
    * Reviewer Run is still its unresolved pre-binding row (manifest admission). */
-  async function seed(variant: { selfReview?: true; preNative?: true; startedAt?: Date } = {}) {
+  async function seed(variant: { selfReview?: true; preNative?: true; startedAt?: Date; sealed?: true } = {}) {
     const ids = { company: randomUUID(), otherCompany: randomUUID(), executor: randomUUID(), reviewer: randomUUID(),
       outsider: randomUUID(), issue: randomUUID(), sourceRun: randomUUID(), reviewerRun: randomUUID(), decision: randomUUID(),
       stage: randomUUID(), intent: randomUUID(), delivered: randomUUID(), contract: randomUUID(), result: randomUUID(),
@@ -186,7 +187,14 @@ describeDb("execution-policy stage Reviewer lane under a plan (MS1f decision 4)"
       statusVersion: 1, lastStatusDecisionId: ids.decision, assigneeAgentId: ids.reviewer,
       executionPolicy: { mode: "normal", commentRequired: true, stages: [{ id: ids.stage, type: "review", approvalsNeeded: 1,
         participants: [{ id: randomUUID(), type: "agent", agentId: ids.reviewer, userId: null }] }] },
-      executionState: stageState(ids) });
+      executionState: stageState(ids), ...(variant.sealed ? { payloadSourceProtocolVersion: 1 } : {}) });
+    // MS1f stop 5: a sealed manual Task source (digest over the JSONB text).
+    if (variant.sealed) await db.execute(sql`with s as (select jsonb_build_object('version',1,'owner',jsonb_build_object('kind','issue',
+        'companyId',i.company_id::text,'id',i.id::text,'contentHash',public.aw_native_payload_body_hash('issue',to_jsonb(i))),
+        'policy',jsonb_build_object('issueIds','[]'::jsonb,'projectIds','[]'::jsonb,'runIds','[]'::jsonb,'memoryIds','[]'::jsonb,
+        'foundationRevisionIds','[]'::jsonb),'inputs','[]'::jsonb) as snap from issues i where i.id=${ids.issue}::uuid)
+      update issues set payload_source_snapshot = s.snap || jsonb_build_object('digest',encode(sha256(convert_to(s.snap::text,'UTF8')),'hex'))
+      from s where issues.id=${ids.issue}::uuid`);
     await db.insert(completionContracts).values({ id: ids.contract, companyId: ids.company, issueId: ids.issue, revision: 1,
       schemaVersion: "aw.completion-contract.v7", policyVersion: "test", risk: "low", completionAuthority: "server_arbiter",
       incompleteCriteriaPolicy: "block", contractJson: { objective: "Write the planned report",
@@ -1190,14 +1198,39 @@ describeDb("execution-policy stage Reviewer lane under a plan (MS1f decision 4)"
           decisionVersion: 2, policyVersion: "test", fromStatus: "in_review", toStatus: "in_review", reasonCode: "native_review_unresolved",
           decisionJson: {}, decisionDigest: "f".repeat(64), applicationState: "applied", appliedAt: at(9_000) });
       }
-      await db.insert(activityLog).values({ id: activityId, companyId: ids.company, actorType: "user", actorId: ids.user,
-        action: "issue.updated", entityType: "issue", entityId: ids.issue, createdAt: at(20_000),
-        details: { status: "in_progress", previousStatus: "in_review", changes: { status: { from: "in_review", to: "in_progress" },
-          assigneeAgentId: { from: ids.reviewer, to: ids.executor }, statusVersion: { from: 1, to: 2 },
-          executionState: { from: stageState(ids), to: null } } } });
-      await db.update(issues).set({ status: "in_progress", statusVersion: 2, assigneeAgentId: ids.executor, executionState: null,
-        responsibleUserId: ids.user })
-        .where(eq(issues.id, ids.issue));
+      // The board's return under the real 0587 triggers: its issue.updated
+      // activity and the Task update with one board_stage_return step.
+      await db.insert(companyMemberships).values({ companyId: ids.company, principalType: "user", principalId: ids.user,
+        status: "active", membershipRole: "owner" }).onConflictDoNothing();
+      await db.update(issues).set({ responsibleUserId: ids.user }).where(eq(issues.id, ids.issue));
+      const [task] = await db.select().from(issues).where(eq(issues.id, ids.issue));
+      const changes = { status: { from: "in_review", to: "in_progress" }, assigneeAgentId: { from: ids.reviewer, to: ids.executor },
+        statusVersion: { from: task!.statusVersion, to: task!.statusVersion + 1 }, executionState: { from: stageState(ids), to: null } };
+      if (!task!.payloadSourceSnapshot) {
+        // An unsealed Task records no source transform for the return.
+        await db.insert(activityLog).values({ id: activityId, companyId: ids.company, actorType: "user", actorId: ids.user,
+          action: "issue.updated", entityType: "issue", entityId: ids.issue, createdAt: at(20_000), details: { changes } });
+        await db.update(issues).set({ status: "in_progress", assigneeAgentId: ids.executor, executionState: null })
+          .where(eq(issues.id, ids.issue));
+      }
+      const snapshot = (task!.payloadSourceSnapshot ?? { owner: {}, digest: "" }) as { owner: Record<string, unknown>; digest: string; transforms?: unknown[] };
+      const [hash] = await db.execute<{ next: string }>(sql`select public.aw_native_payload_body_hash('issue',
+        to_jsonb(i) || jsonb_build_object('execution_state',null::jsonb)) as next from issues i where i.id=${ids.issue}::uuid`);
+      const step = { kind: "board_stage_return", transitionId: randomUUID(), activityId, stageId: ids.stage,
+        participantAgentId: ids.reviewer, executorAgentId: ids.executor, decisionId: ids.decision,
+        taskStatusVersion: task!.statusVersion + 1, previousSnapshotDigest: snapshot.digest,
+        previousOwnerContentHash: snapshot.owner.contentHash, nextOwnerContentHash: hash!.next };
+      const { digest: _digest, ...unsealed } = snapshot;
+      const next = { ...unsealed, owner: { ...snapshot.owner, contentHash: hash!.next }, transforms: [...(snapshot.transforms ?? []), step] };
+      if (task!.payloadSourceSnapshot) await db.transaction(async tx => {
+        await tx.insert(activityLog).values({ id: activityId, companyId: ids.company, actorType: "user", actorId: ids.user,
+          action: "issue.updated", entityType: "issue", entityId: ids.issue, createdAt: at(20_000),
+          details: { status: "in_progress", previousStatus: "in_review", changes } });
+        await tx.execute(sql`with s as (select ${JSON.stringify(next)}::jsonb as snap)
+          update issues set status='in_progress', assignee_agent_id=${ids.executor}::uuid, execution_state=null,
+            payload_source_snapshot = s.snap || jsonb_build_object('digest',encode(sha256(convert_to(s.snap::text,'UTF8')),'hex'))
+          from s where issues.id=${ids.issue}::uuid`);
+      });
       await db.insert(heartbeatRuns).values({ id: receiver, companyId: ids.company, agentId: ids.executor, status: "running",
         runtimeMode: "legacy", scopeKind: "issue", issueId: ids.issue, responsibleUserId: ids.user, startedAt: at(21_000),
         createdAt: at(21_000), contextSnapshot: { issueId: ids.issue, taskId: ids.issue, wakeReason: "issue_assigned", source: "issue.update" } });
@@ -1215,7 +1248,7 @@ describeDb("execution-policy stage Reviewer lane under a plan (MS1f decision 4)"
         onBehalfOfUserId: ids.user } });
 
     it("names the board's return, the Task version, the round decision and its Reviewer Run", async () => {
-      const ids = await seed();
+      const ids = await seed({ sealed: true });
       const { receiver, wakeId, activityId } = await returnRound(ids, { reviewerDecision: "round" });
       const owner = await capture(ids, receiver);
       expect(owner).toMatchObject({ version: 1, companyId: ids.company, issueId: ids.issue, receiverRunId: receiver,
@@ -1233,7 +1266,7 @@ describeDb("execution-policy stage Reviewer lane under a plan (MS1f decision 4)"
     });
 
     it("refuses without the board's return or with another Human, actor or wake", async () => {
-      const ids = await seed();
+      const ids = await seed({ sealed: true });
       const { receiver, wakeId, activityId } = await returnRound(ids);
       expect(await capture(ids, receiver)).not.toBeNull();
       await db.update(activityLog).set({ actorType: "agent", agentId: ids.executor }).where(eq(activityLog.id, activityId));
@@ -1242,7 +1275,7 @@ describeDb("execution-policy stage Reviewer lane under a plan (MS1f decision 4)"
       expect(await capture(ids, receiver)).toBeNull();
       await db.delete(activityLog).where(eq(activityLog.id, activityId));
       expect(await capture(ids, receiver)).toBeNull();
-      const other = await seed();
+      const other = await seed({ sealed: true });
       const second = await returnRound(other);
       await db.update(agentWakeupRequests).set({ requestedByActorType: "agent" }).where(eq(agentWakeupRequests.id, second.wakeId));
       expect(await capture(other, second.receiver)).toBeNull();
@@ -1258,8 +1291,14 @@ describeDb("execution-policy stage Reviewer lane under a plan (MS1f decision 4)"
       void wakeId;
     });
 
-    it("refuses a different Task version or a later status decision", async () => {
+    it("refuses a return the Task source does not record (MS1f stop 5)", async () => {
       const ids = await seed();
+      const { receiver } = await returnRound(ids);
+      expect(await capture(ids, receiver)).toBeNull();
+    });
+
+    it("refuses a different Task version or a later status decision", async () => {
+      const ids = await seed({ sealed: true });
       const { receiver } = await returnRound(ids);
       await db.update(issues).set({ statusVersion: 3 }).where(eq(issues.id, ids.issue));
       expect(await capture(ids, receiver)).toBeNull();
@@ -1268,7 +1307,7 @@ describeDb("execution-policy stage Reviewer lane under a plan (MS1f decision 4)"
     });
 
     it("refuses a Reviewer Run of another stage, another Agent's Run, and a decision outside the round", async () => {
-      const ids = await seed();
+      const ids = await seed({ sealed: true });
       const { receiver } = await returnRound(ids);
       const run = await reviewerRunRow(ids);
       const context = run.contextSnapshot as Record<string, unknown>;
@@ -1286,7 +1325,7 @@ describeDb("execution-policy stage Reviewer lane under a plan (MS1f decision 4)"
         assigneeAgentId: { from: ids.outsider, to: ids.executor },
         executionState: { from: stageState({ ...ids, reviewer: ids.outsider }), to: null } } } }).where(eq(activityLog.id, returned!.id));
       expect(await capture(ids, receiver)).toBeNull();
-      const foreign = await seed();
+      const foreign = await seed({ sealed: true });
       const second = await returnRound(foreign, { reviewerDecision: "foreign" });
       expect(await capture(foreign, second.receiver)).toBeNull();
     });

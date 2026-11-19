@@ -6708,7 +6708,7 @@ export async function assertNativeContextTaskSourceCurrent(db: Db | Transaction,
 async function nativeStageTaskOriginalSnapshot(db: Db | Transaction, companyId: string, issueId: string,
   snapshot: NativePayloadSourceSnapshot): Promise<NativePayloadSourceSnapshot> {
   const transforms=snapshot.transforms ?? [];
-  if(!transforms.some(step=>step.kind==="native_stage_policy")) return snapshot;
+  if(!transforms.some(step=>step.kind==="native_stage_policy" || step.kind==="board_stage_return")) return snapshot;
   const [task]=await db.select().from(issues).where(and(eq(issues.companyId,companyId),eq(issues.id,issueId))).limit(1).for("share");
   if(!task || task.payloadSourceSnapshotInvalidated) throw forbidden("A Native Stage Task source is unavailable");
   const {readNativeStageTaskBodyStep}=await import("./native-stage-task-body-source.js");
@@ -6720,6 +6720,11 @@ async function nativeStageTaskOriginalSnapshot(db: Db | Transaction, companyId: 
     if(step.previousSnapshotDigest!==digest || step.previousOwnerContentHash!==bodyHash)
       throw forbidden("A Native Stage Task source history changed");
     if(step.kind==="native_stage_policy") await readNativeStageTaskBodyStep(db,{task,step});
+    // MS1f stop 5 (0587): the board's return is current only with its activity and round decision.
+    if(step.kind==="board_stage_return"){
+      const {readNativeBoardStageReturnStep}=await import("./native-board-stage-return-source.js");
+      if(!await readNativeBoardStageReturnStep(db,{companyId,issueId,step})) throw forbidden("A Native Task board return changed");
+    }
     prefix.push(step);bodyHash=step.nextOwnerContentHash;
     digest=await nativePayloadSourceDigest(db,{...original,owner:{...original.owner,contentHash:bodyHash},transforms:prefix});
   }
@@ -8294,6 +8299,14 @@ async function readAuditedManualRelatedOwner(db: Db | Transaction, companyId: st
     let priorContentHash = originalContentHash;
     let priorDigest = originalDigest;
     for (const transform of transforms) {
+      if(transform.kind==="board_stage_return"){
+        if(transform.previousOwnerContentHash!==priorContentHash || transform.previousSnapshotDigest!==priorDigest) return null;
+        const {readNativeBoardStageReturnStep}=await import("./native-board-stage-return-source.js");
+        if(!await readNativeBoardStageReturnStep(db,{companyId,issueId,step:transform})) return null;
+        prefix=[...prefix,transform];priorContentHash=transform.nextOwnerContentHash;
+        priorDigest=await nativePayloadSourceDigest(db,{...originalSnapshot,owner:{...originalSnapshot.owner,contentHash:priorContentHash},transforms:prefix});
+        continue;
+      }
       if(transform.kind==="native_stage_policy"){
         if(transform.previousOwnerContentHash!==priorContentHash || transform.previousSnapshotDigest!==priorDigest) return null;
         const [task]=await db.select().from(issues).where(and(eq(issues.companyId,companyId),eq(issues.id,issueId))).limit(1).for("share");
