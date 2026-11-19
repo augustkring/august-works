@@ -13908,7 +13908,7 @@
         },
         {
           "path": "server/src/__tests__/helpers/managed-native-heartbeat-fixture.ts",
-          "sha256": "97d90a39f0642c909234583f7f44c388214ef33832c0772cda8b5132b072ad64"
+          "sha256": "b530d422457fae9680fc14eaec85559831a1dd8ab062b9d5b77c2afa47d189f0"
         },
         {
           "path": "server/src/__tests__/helpers/prepare-genuine-native-draft-conformance-fixture.ts",
@@ -25066,7 +25066,7 @@
         },
         {
           "path": "server/src/services/native-runtime/managed-signoff-api-policy.integration.test.ts",
-          "sha256": "b13b66d7068a81fa459bca87d8813f2590889dfe3c27f9f58cf867235ec586a4"
+          "sha256": "0c5699cc2210efcbbe87b5912e693d6290c0e7e3a33c16b2ac046301e7ab365f"
         },
         {
           "path": "server/src/services/native-runtime/management-analytical-tools.test.ts",
@@ -25102,11 +25102,11 @@
         },
         {
           "path": "server/src/services/native-runtime/native-execution-input.test.ts",
-          "sha256": "a8631039a25864fe9726a86634e704ba7cec33d2dd146049d0f197ca35575d69"
+          "sha256": "cef15e97124a2976d5cf5746126d41e30c681a86e735954346218ee9bf6546fa"
         },
         {
           "path": "server/src/services/native-runtime/native-execution-input.ts",
-          "sha256": "66f78d9a79efdd7668e6c4fc9ac5eb3150ad0177c4b85661968b2017cdf8045a"
+          "sha256": "4a55d02d1da2ec13127e38d82fc2835ced92a3029720a5750d892f3b75e9a594"
         },
         {
           "path": "server/src/services/native-runtime/native-finalization-error-diagnostic.ts",
@@ -27593,7 +27593,7 @@
         },
         {
           "path": "server/src/services/native-stage-wake-source.ts",
-          "sha256": "c605ebf6025684dc0ba7ffa74c881f5838bdb406518c0d4f8749be2af5fb6077"
+          "sha256": "5fdba45bb70330e6c16c32cba8319bfc914a11b5b2431e645b1007a433885666"
         },
         {
           "path": "server/src/services/optimizer/optimizer-evaluation.ts",
@@ -52906,7 +52906,7 @@
       "id": "source:server/src/__tests__/helpers/managed-native-heartbeat-fixture.ts",
       "kind": "current_source_owner",
       "path": "server/src/__tests__/helpers/managed-native-heartbeat-fixture.ts",
-      "sha256": "97d90a39f0642c909234583f7f44c388214ef33832c0772cda8b5132b072ad64",
+      "sha256": "b530d422457fae9680fc14eaec85559831a1dd8ab062b9d5b77c2afa47d189f0",
       "changeIds": [
         "SCR-V10-WORKFLOWS-DURABLE-OPERATIONS"
       ],
@@ -63953,7 +63953,7 @@
       "id": "source:server/src/services/native-runtime/managed-signoff-api-policy.integration.test.ts",
       "kind": "current_source_owner",
       "path": "server/src/services/native-runtime/managed-signoff-api-policy.integration.test.ts",
-      "sha256": "b13b66d7068a81fa459bca87d8813f2590889dfe3c27f9f58cf867235ec586a4",
+      "sha256": "0c5699cc2210efcbbe87b5912e693d6290c0e7e3a33c16b2ac046301e7ab365f",
       "changeIds": [
         "SCR-V10-NATIVE-RUNTIME-AND-AUTHORITY"
       ],
@@ -64073,7 +64073,7 @@
       "id": "source:server/src/services/native-runtime/native-execution-input.test.ts",
       "kind": "current_source_owner",
       "path": "server/src/services/native-runtime/native-execution-input.test.ts",
-      "sha256": "a8631039a25864fe9726a86634e704ba7cec33d2dd146049d0f197ca35575d69",
+      "sha256": "cef15e97124a2976d5cf5746126d41e30c681a86e735954346218ee9bf6546fa",
       "changeIds": [
         "SCR-V10-NATIVE-RUNTIME-AND-AUTHORITY"
       ],
@@ -64088,7 +64088,7 @@
       "id": "source:server/src/services/native-runtime/native-execution-input.ts",
       "kind": "current_source_owner",
       "path": "server/src/services/native-runtime/native-execution-input.ts",
-      "sha256": "66f78d9a79efdd7668e6c4fc9ac5eb3150ad0177c4b85661968b2017cdf8045a",
+      "sha256": "4a55d02d1da2ec13127e38d82fc2835ced92a3029720a5750d892f3b75e9a594",
       "changeIds": [
         "SCR-V10-NATIVE-RUNTIME-AND-AUTHORITY"
       ],
@@ -67343,7 +67343,7 @@
       "id": "source:server/src/services/native-stage-wake-source.ts",
       "kind": "current_source_owner",
       "path": "server/src/services/native-stage-wake-source.ts",
-      "sha256": "c605ebf6025684dc0ba7ffa74c881f5838bdb406518c0d4f8749be2af5fb6077",
+      "sha256": "5fdba45bb70330e6c16c32cba8319bfc914a11b5b2431e645b1007a433885666",
       "changeIds": [
         "SCR-V10-UNCLASSIFIED-REGISTERED-OWNER"
       ],
