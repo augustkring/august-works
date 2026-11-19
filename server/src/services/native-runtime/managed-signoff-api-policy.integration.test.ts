@@ -242,6 +242,9 @@ it("denies an authenticated Reviewer's missing-comment decision on the actual st
     timeoutSec: 300,
     schedulerMode: "serial",
     managedTwoAgentSignoff: true,
+    // The board's return starts a second executor round and its Reviewer turn,
+    // each on its own registered runtime, sealed profile and credentials.
+    managedAgentHostRounds: true,
     beforeManagedModelRequest: async ({ runId }) => {
       const [run] = await db.select({ agentId: heartbeatRuns.agentId }).from(heartbeatRuns).where(eq(heartbeatRuns.id, runId)).limit(1);
       if (!run || run.agentId !== fixtureReviewerId) return;
@@ -281,7 +284,8 @@ it("denies an authenticated Reviewer's missing-comment decision on the actual st
         summary: "Inspected the stage without recording a decision.",
         criterion: () => ({ status: "unknown", evidenceRefs: [] }) })] };
     },
-    driveScheduler: async ({ actor, companyId, heartbeat, managedAgentIds, closeManagedAgentHostForRun, managedSignoff, facts, factsForRun }) => {
+    driveScheduler: async ({ actor, companyId, heartbeat, managedAgentIds, closeManagedAgentHostForRun, managedSignoff, facts, factsForRun,
+      managedAgentRounds }) => {
       try {
       if (!managedAgentIds || !managedSignoff) throw new Error("managed_signoff_fixture_missing_two_agent_routes");
       expect(managedAgentIds).toEqual({ executor: fixtureExecutorId, reviewer: fixtureReviewerId });
@@ -742,6 +746,27 @@ it("denies an authenticated Reviewer's missing-comment decision on the actual st
       resubmissionBaseRevisionId = resultDocument.latestRevisionId;
       const executorRunIdsBeforeReturn = (await db.select({ id: heartbeatRuns.id }).from(heartbeatRuns)
         .where(and(eq(heartbeatRuns.companyId, companyId), eq(heartbeatRuns.agentId, managedAgentIds.executor)))).map(run => run.id);
+      // Each Agent's next round is registered before the board's return admits its Run.
+      await managedAgentRounds.begin(managedAgentIds.executor);
+      await managedAgentRounds.begin(managedAgentIds.reviewer);
+      // Fixture negative: each Agent's second round reuses neither the first
+      // round's runtime registration (Host, cell generation, provider profile)
+      // nor its sealed profile or model credential, and the first round's
+      // registration is no longer current.
+      for (const roundAgentId of [managedAgentIds.executor, managedAgentIds.reviewer]) {
+        const rounds = managedAgentRounds.list(roundAgentId);
+        expect(rounds).toHaveLength(2);
+        expect(rounds[0]!.runtimeCredentialConnectionId).toBeTruthy();
+        for (const key of ["registrationHostId", "registrationCellGeneration", "providerProfileRef", "profileId",
+          "modelCredentialSha256"] as const) {
+          expect(rounds[1]![key], key).toBeTruthy();
+          expect(rounds[1]![key], key).not.toBe(rounds[0]![key]);
+        }
+        await expect(managedAgentRounds.assertRegistrationCurrent(roundAgentId, 0))
+          .rejects.toThrow("conversation_software_host_registration_changed");
+        await expect(managedAgentRounds.assertRegistrationCurrent(roundAgentId, 1)).resolves.toBeUndefined();
+      }
+      await expect(managedAgentRounds.begin(managedAgentIds.executor)).rejects.toThrow("scheduler_fixture_agent_round_begin_invalid");
       const returned = await request(managedSignoff.app).patch(`/api/issues/${issueId}`)
         .set("Cookie", managedSignoff.humanCookie)
         .send({ status: "in_progress", assigneeAgentId: managedAgentIds.executor });
@@ -765,6 +790,11 @@ it("denies an authenticated Reviewer's missing-comment decision on the actual st
         .toMatchObject({ status: "succeeded", runtimeMode: "native", agentId: managedAgentIds.executor, nativeIssueId: issueId });
       await expect.poll(async () => (await db.select({ pending: heartbeatRuns.nativeProcessCleanupPending }).from(heartbeatRuns)
         .where(eq(heartbeatRuns.id, secondExecutorRunId!)).limit(1))[0]?.pending, { timeout: 120_000, interval: 100 }).toBe(false);
+      // Fixture negative: the second executor round's Host has its own runtime
+      // broker connection, never the first round's.
+      const executorHostRounds = managedAgentRounds.list(managedAgentIds.executor);
+      expect(executorHostRounds[1]!.runtimeCredentialConnectionId).toBeTruthy();
+      expect(executorHostRounds[1]!.runtimeCredentialConnectionId).not.toBe(executorHostRounds[0]!.runtimeCredentialConnectionId);
       const resubmissions = await db.select().from(statusDecisions)
         .where(and(eq(statusDecisions.companyId, companyId), eq(statusDecisions.runId, secondExecutorRunId!)));
       expect(resubmissions).toHaveLength(1);
