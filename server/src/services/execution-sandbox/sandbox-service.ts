@@ -239,6 +239,18 @@ export function executionSandboxService(db: Db, options: {
       eq(environmentLeases.heartbeatRunId, input.runId), eq(environmentLeases.status, "active"),
     )).for("share");
     if (!lease || !lease.expiresAt || lease.expiresAt <= now) throw conflict("Current native environment lease is required");
+    // D5c. Lock the Run's Task before the Run (company > Task > run, the
+    // order of steering acceptance and the other Task-then-run writers in
+    // run-identity.ts). Holding the Run while waiting for the Task would close
+    // a cycle with a writer that holds the Task and waits for the Run. The
+    // plain read only finds the Task id; every check below still uses the
+    // locked rows, and `authority` re-reads this Task FOR SHARE unchanged.
+    const [runTask] = await tx.select({ nativeIssueId: heartbeatRuns.nativeIssueId }).from(heartbeatRuns).where(and(
+      eq(heartbeatRuns.companyId, input.companyId), eq(heartbeatRuns.id, input.runId),
+    ));
+    if (runTask?.nativeIssueId) await tx.select({ id: issues.id }).from(issues).where(and(
+      eq(issues.companyId, input.companyId), eq(issues.id, runTask.nativeIssueId),
+    )).for("share");
     const [run] = await tx.select().from(heartbeatRuns).where(and(
       eq(heartbeatRuns.companyId, input.companyId), eq(heartbeatRuns.id, input.runId),
     )).for("share");

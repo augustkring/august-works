@@ -451,7 +451,29 @@ class SteeredIdentityAcceptanceRequired extends Error {}
  * | Native source transactions (dispatch intent and ack,    | company A+M exclusive > lease > run FOR UPDATE >      |
  * |   tool-result and attachment intents)                   |   Task FOR SHARE (in source-closure checks)           |
  * | Tool authority mutation context                         | company A+M exclusive > plan > Task > run             |
+ * | Sandbox exec checks (assertTaskExecutionContext: exec   | company A+M shared (relay authorization: exclusive) > |
+ * |   initial, claim, relay authorization, output, result)  |   lease > Task FOR SHARE > run FOR SHARE              |
  * | Watchdog fold, warm restart, claim release (heartbeat)  | run > Task                                            |
+ *
+ * D5c. The sandbox exec checks used to lock the run and then the Task. Their
+ * company locks are shared, so they overlap steering acceptance (also shared)
+ * and the Task > run writers that take no company lock, and each side could
+ * hold one row and wait for the other. They now lock the Task first, so on
+ * the run/Task pair they share the Task > run order of acceptance, identity
+ * initialize/reserve/reconcile, steering delivery, queue edits, dispatch,
+ * finalizer and restart recovery: two transactions that both take Task before
+ * run cannot wait on each other in a cycle over these two rows. Native source
+ * transactions and tool authority mutation take the company locks exclusively
+ * before any row, and the exec checks take them before any row too, so the
+ * two never hold rows at the same time. Not ordered with the exec checks: the
+ * run > Task writers in the last row (no company lock). Of those, the watchdog
+ * fold can meet an exec (a silent running Run whose Task is already done or
+ * cancelled); PostgreSQL then aborts one side with 40P01. An aborted exec
+ * initial, claim or relay check leaves no claim or a PENDING one, which the
+ * exec records FAILED (a known outcome); an aborted output or result check
+ * comes after the claim and leaves it CLAIMED, like any failure there. An
+ * aborted fold rolls back and leaves the Run to a later scan. Moving those
+ * writers to Task > run is the open follow-up.
  *
  * The run and Task orders differ between families, so the per-request path
  * takes only the run row and waits only before it holds any lock: it cannot

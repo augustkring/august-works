@@ -1977,7 +1977,7 @@ function signedRuntimeRelayProof(hostId: string, privateKey: ReturnType<typeof g
         };
         await runAdmissionRace(false);
         await runAdmissionRace(true);
-        // Lock-wait helpers for EXC2: a transaction that holds locks
+        // Lock-wait helpers for D5c and EXC2: a transaction that holds locks
         // until released, and a barrier on PostgreSQL's own wait graph.
         const holdLocks = (lock: (tx: typeof db) => Promise<unknown>) => {
           let release!: () => void;
@@ -2003,6 +2003,38 @@ function signedRuntimeRelayProof(hostId: string, privateKey: ReturnType<typeof g
           }
           throw new Error(`no backend waited on ${blockerPid}`);
         };
+        // D5c. Steering acceptance (captureRunIdentity) takes company A+M
+        // shared > Task FOR UPDATE > run FOR UPDATE. The exec checks share the
+        // company locks with it, so they must also take the Task before the
+        // run: an exec check holding the run while it waits for the Task closes
+        // a cycle that PostgreSQL breaks with deadlock_detected (40P01).
+        const [runTask] = await db.select({ issueId: heartbeatRuns.nativeIssueId }).from(heartbeatRuns).where(eq(heartbeatRuns.id, run!.id));
+        expect(runTask?.issueId).toBeTruthy();
+        let markAcceptanceHoldsTask!: (pid: number) => void;
+        let continueAcceptance!: () => void;
+        const acceptanceHoldsTask = new Promise<number>(resolve => { markAcceptanceHoldsTask = resolve; });
+        const acceptanceMayTakeRun = new Promise<void>(resolve => { continueAcceptance = resolve; });
+        const acceptanceOutcome = db.transaction(async tx => {
+          await lockAnalyticalCompany(tx as unknown as typeof db, f.home, "read");
+          await lockMemoryPrivacy(tx as unknown as typeof db, f.home, "read");
+          await tx.select({ id: issues.id }).from(issues).where(eq(issues.id, runTask!.issueId!)).for("update");
+          const [backend] = await tx.execute<{ pid: number }>(sql`select pg_backend_pid() as pid`);
+          markAcceptanceHoldsTask(Number(backend!.pid));
+          await acceptanceMayTakeRun;
+          await tx.select({ id: heartbeatRuns.id }).from(heartbeatRuns).where(eq(heartbeatRuns.id, run!.id)).for("update");
+        }).then(() => ({ ok: true as const }), (error: any) => ({ ok: false as const, code: error?.cause?.code ?? error?.code, error }));
+        const acceptancePid = await acceptanceHoldsTask;
+        const execCheckOutcome = db.transaction(tx => executionSandboxService(tx as any, { runtimeSuspectSeconds: 90 })
+          .assertTaskExecutionContext(tx as any, { companyId: f.home, runId: run!.id, leaseId: lease!.id }))
+          .then(value => ({ ok: true as const, value }), (error: any) => ({ ok: false as const, code: error?.cause?.code ?? error?.code, error }));
+        // Barrier: the exec check waits on the acceptance's Task lock. Only
+        // then does the acceptance take the run, as captureRunIdentity does.
+        await blockedBy(acceptancePid);
+        continueAcceptance();
+        const [acceptanceResult, execCheckResult] = await Promise.all([acceptanceOutcome, execCheckOutcome]);
+        expect([acceptanceResult.ok ? null : acceptanceResult.code, execCheckResult.ok ? null : execCheckResult.code],
+          "neither side may be aborted as a deadlock").toEqual([null, null]);
+        expect(execCheckResult).toMatchObject({ ok: true, value: { run: { id: run!.id }, lease: { id: lease!.id } } });
         const environmentRuntime = environmentRuntimeService(db, { executeSandboxTask: runtime.executeSandboxTask });
         const executionEnvironment = { id: randomUUID(), driver: "sandbox", config: {}, envVars: {}, metadata: null } as any;
         const executeThroughAdapter = () => {
