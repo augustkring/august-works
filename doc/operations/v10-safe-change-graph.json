@@ -23,8 +23,8 @@
   "qualificationBoundary": "Source hashes identify current candidate bytes and exact base comparisons. Requirement edges are source links, not closure. The inventory does not prove full behavior review, compatibility, rollback, Human approval, provider/hosted behavior, or release acceptance. Unknown owners and external facts remain open.",
   "migrationJournal": {
     "path": "packages/db/src/migrations/meta/_journal.json",
-    "sha256": "02b9a90d913339a10f184e84a327afc4c57ca16b5ace69d492e6b57e7ce5f8ae",
-    "entryCount": 584,
+    "sha256": "b0b4c7292a22f77eb1b17e27e6a1285f2d2a74111532406411594efaa730e1fe",
+    "entryCount": 585,
     "qualification": "journal order and current SQL source hashes only; not migration phase, mixed-version safety, rollback, or operator approval"
   },
   "sourceInputs": [
@@ -20064,7 +20064,7 @@
         },
         {
           "path": "packages/db/src/migrations/meta/_journal.json",
-          "sha256": "02b9a90d913339a10f184e84a327afc4c57ca16b5ace69d492e6b57e7ce5f8ae"
+          "sha256": "b0b4c7292a22f77eb1b17e27e6a1285f2d2a74111532406411594efaa730e1fe"
         },
         {
           "path": "packages/db/src/native-input-source-protocol.test.ts",
@@ -25046,7 +25046,7 @@
         },
         {
           "path": "server/src/services/native-runtime/current-wake-comments.ts",
-          "sha256": "a3413f23e304ddff08a94945c546b41b55f90524324ffc3e58c56be3c268fd6d"
+          "sha256": "410fcc00fd8b64a0d37504a829525b44697be9ca5c57c7999c8ef9e6eb57d025"
         },
         {
           "path": "server/src/services/native-runtime/external-chat-question-response-input.ts",
@@ -25066,7 +25066,7 @@
         },
         {
           "path": "server/src/services/native-runtime/managed-signoff-api-policy.integration.test.ts",
-          "sha256": "364ab82342b6d2ccd149e1eea731283cf163fcf231caff4ec61fd512f952f714"
+          "sha256": "ce4585879c2c0b21eee699a6100846e6ae8eeea40b0dc56419b12b236caa2f40"
         },
         {
           "path": "server/src/services/native-runtime/management-analytical-tools.test.ts",
@@ -27593,7 +27593,7 @@
         },
         {
           "path": "server/src/services/native-stage-wake-source.ts",
-          "sha256": "5fdba45bb70330e6c16c32cba8319bfc914a11b5b2431e645b1007a433885666"
+          "sha256": "8bf4fc11334bb7a1936a48bc93dff43958034351f59d7d6f18830ebe8bb9c7f6"
         },
         {
           "path": "server/src/services/optimizer/optimizer-evaluation.ts",
@@ -46231,6 +46231,16 @@
       "qualification": "journal_order_and_current_sql_hash_only"
     },
     {
+      "id": "0586_native_stage_source_owner_stage_id_text",
+      "kind": "journaled_migration_source",
+      "path": "packages/db/src/migrations/0586_native_stage_source_owner_stage_id_text.sql",
+      "sha256": "c8b76b460f8d591674c3261b9a28a82b2827250d1c84927d42b17f1ac05db5e1",
+      "journalPosition": 584,
+      "journalIndex": 586,
+      "createdAt": 1795075788041,
+      "qualification": "journal_order_and_current_sql_hash_only"
+    },
+    {
       "id": "deleted:server/src/__tests__/heartbeat-workspace-finalize-branch.test.ts",
       "kind": "deleted_source_delta",
       "path": "server/src/__tests__/heartbeat-workspace-finalize-branch.test.ts",
@@ -58715,7 +58725,7 @@
       "id": "source:packages/db/src/migrations/meta/_journal.json",
       "kind": "current_source_owner",
       "path": "packages/db/src/migrations/meta/_journal.json",
-      "sha256": "02b9a90d913339a10f184e84a327afc4c57ca16b5ace69d492e6b57e7ce5f8ae",
+      "sha256": "b0b4c7292a22f77eb1b17e27e6a1285f2d2a74111532406411594efaa730e1fe",
       "changeIds": [
         "SCR-V10-DATABASE-SCHEMA-AND-MIGRATIONS"
       ],
@@ -63878,7 +63888,7 @@
       "id": "source:server/src/services/native-runtime/current-wake-comments.ts",
       "kind": "current_source_owner",
       "path": "server/src/services/native-runtime/current-wake-comments.ts",
-      "sha256": "a3413f23e304ddff08a94945c546b41b55f90524324ffc3e58c56be3c268fd6d",
+      "sha256": "410fcc00fd8b64a0d37504a829525b44697be9ca5c57c7999c8ef9e6eb57d025",
       "changeIds": [
         "SCR-V10-NATIVE-RUNTIME-AND-AUTHORITY"
       ],
@@ -63953,7 +63963,7 @@
       "id": "source:server/src/services/native-runtime/managed-signoff-api-policy.integration.test.ts",
       "kind": "current_source_owner",
       "path": "server/src/services/native-runtime/managed-signoff-api-policy.integration.test.ts",
-      "sha256": "364ab82342b6d2ccd149e1eea731283cf163fcf231caff4ec61fd512f952f714",
+      "sha256": "ce4585879c2c0b21eee699a6100846e6ae8eeea40b0dc56419b12b236caa2f40",
       "changeIds": [
         "SCR-V10-NATIVE-RUNTIME-AND-AUTHORITY"
       ],
@@ -67343,7 +67353,7 @@
       "id": "source:server/src/services/native-stage-wake-source.ts",
       "kind": "current_source_owner",
       "path": "server/src/services/native-stage-wake-source.ts",
-      "sha256": "5fdba45bb70330e6c16c32cba8319bfc914a11b5b2431e645b1007a433885666",
+      "sha256": "8bf4fc11334bb7a1936a48bc93dff43958034351f59d7d6f18830ebe8bb9c7f6",
       "changeIds": [
         "SCR-V10-UNCLASSIFIED-REGISTERED-OWNER"
       ],
@@ -83192,6 +83202,11 @@
     {
       "from": "0584_review_model_wire_receipt_call_id",
       "to": "0585_review_stage_reservation",
+      "relation": "drizzle_journal_order_only"
+    },
+    {
+      "from": "0585_review_stage_reservation",
+      "to": "0586_native_stage_source_owner_stage_id_text",
       "relation": "drizzle_journal_order_only"
     },
     {
