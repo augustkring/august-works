@@ -713,6 +713,27 @@ function sandboxExecutionCwdAllowed(cwd: string, filesystem: { readPaths?: unkno
 }
 
 type CurrentSandboxTaskSource = NonNullable<Awaited<ReturnType<ReturnType<typeof executionSandboxService>["assertTaskExecutionContext"]>>>;
+/**
+ * EXC2. The least exec time that must remain when relay admission claims a
+ * command. After the claim commits, the relay still opens a host channel, the
+ * host starts the command in the sandbox and streams its exit back; the relay
+ * timer (gateway-relay.ts) fires at the exec deadline. With less than this
+ * left, that timer, not the command, decides the outcome and the claim becomes
+ * an unknown outcome. 250 ms is an eighth of the shortest exec budget the
+ * Native runner uses (the 2 s runner process identity poll), so a claim that
+ * waited only briefly still proceeds. It is a floor for admission only: it
+ * never extends a deadline.
+ */
+export const SANDBOX_EXEC_CLAIM_RELAY_FLOOR_MS = 250;
+function postgresLockTimedOut(error: unknown): boolean {
+  let current: unknown = error;
+  for (let depth = 0; depth < 8 && current && typeof current === "object"; depth += 1) {
+    const record = current as { code?: unknown; cause?: unknown };
+    if (record.code === "55P03") return true;
+    current = record.cause;
+  }
+  return false;
+}
 const WORKER_NATIVE_PREPARATION_PURPOSES = new Set(["provider_artifact", "native_harness_state", "native_workspace_prepare", "native_runtime_context_prepare", "native_provider_data_erasure_probe", NATIVE_ATTACHMENT_STAGE_PREPARATION_PURPOSE, NATIVE_ATTACHMENT_CLEANUP_PREPARATION_PURPOSE]);
 const CONFORMANCE_NATIVE_PREPARATION_PURPOSES = new Set(["provider_artifact", "native_harness_state", "native_workspace_prepare", "native_session_start", "native_provider_data_erasure_probe",
   NATIVE_RUNNER_TRUST_BUNDLE_PREPARATION_PURPOSE]);
@@ -3918,13 +3939,41 @@ export function runtimeControlService(
       capability.commandDigest !== request.commandDigest || capability.deadlineAt !== request.deadlineAt ||
       claims.run_id !== request.runId || claims.jti !== request.requestId)
       throw forbidden("Sandbox execution capability scope mismatch");
-    return db.transaction(async transaction => {
+    // EXC2. Admission below waits on company-wide locks (any long privacy
+    // reader or writer). It never turns PENDING into CLAIMED once the caller's
+    // own exec deadline can no longer cover the relay: a CLAIMED row whose
+    // command may or may not have run is an unknown outcome that fences every
+    // later exec of the Task attempt. A refusal here (exec_timeout) rolls back
+    // with the row still PENDING; executeSandboxTask's catch then records it
+    // FAILED (a known outcome) and eraseRemoteNativeRuntimeAsset's catch
+    // EXPIRED, so neither fences a retry. The deadline itself is unchanged;
+    // this only bounds how long admission waits.
+    const execDeadlineMs = Date.parse(request.deadlineAt);
+    // Time left for admission to claim. A NaN deadline has none (fail closed).
+    const claimBudgetMs = () => {
+      const budget = execDeadlineMs - Date.now() - SANDBOX_EXEC_CLAIM_RELAY_FLOOR_MS;
+      if (!(budget > 0)) throw new Error("exec_timeout");
+      return budget;
+    };
+    // Each later lock wait (advisory or row) ends with 55P03 before the claim
+    // budget does. lock_timeout bounds one wait, so the budget is checked
+    // again right before each PENDING -> CLAIMED update. No statement_timeout:
+    // lock waits are the only unbounded part, and any other slow statement is
+    // caught by that final check before anything is claimed.
+    const boundLockWaits = (tx: Db) => tx.execute(sql.raw(
+      `set local lock_timeout = '${Math.min(2_147_483_647, Math.max(1, Math.floor(claimBudgetMs())))}ms'`));
+    claimBudgetMs();
+    return await db.transaction(async transaction => {
       const tx = transaction as unknown as Db;
+      await boundLockWaits(tx);
       // Source readers and erasers share these company-scoped advisory locks.
       // Acquire them before pinning the host command / Run rows, then perform
       // the final exact source-owner check below in this same transaction.
       await lockAnalyticalCompany(tx, claims.company_id);
       await lockMemoryPrivacy(tx, claims.company_id);
+      // The company locks are the long waits; bound the row locks below by
+      // what is left of the budget after them.
+      await boundLockWaits(tx);
       const [operation] = await tx.select().from(runtimeHostCommands).where(and(
         eq(runtimeHostCommands.companyId, claims.company_id), eq(runtimeHostCommands.runtimeCellId, input.cellId),
         eq(runtimeHostCommands.cellGeneration, BigInt(input.generation)),
@@ -3989,6 +4038,7 @@ export function runtimeControlService(
             remoteCwd: current.remoteCwd, expectedProcessPid: current.run.processPid ?? -1,
             expectedProcessStartedAt: current.run.processStartedAt?.toISOString() ?? "" }))
           throw forbidden("Sandbox remote asset erasure target changed before dispatch");
+        claimBudgetMs();
         const [consumed] = await tx.update(runtimeHostCommands).set({ status: "CLAIMED", attempt: 1 }).where(and(
           eq(runtimeHostCommands.id, operation.id), eq(runtimeHostCommands.status, "PENDING"),
           eq(runtimeHostCommands.attempt, 0),
@@ -4767,11 +4817,16 @@ export function runtimeControlService(
       } else if (modelCredential !== undefined) {
         throw forbidden("Sandbox execution contains an unauthorized managed model capability");
       }
+      claimBudgetMs();
       const [consumed] = await tx.update(runtimeHostCommands).set({ status: "CLAIMED", attempt: 1 }).where(and(
         eq(runtimeHostCommands.id, operation.id), eq(runtimeHostCommands.status, "PENDING"), eq(runtimeHostCommands.attempt, 0),
       )).returning({ id: runtimeHostCommands.id });
       if (!consumed) throw forbidden("Sandbox execution capability was already consumed");
       return { runtimeHostId: source.host.id, companyId: claims.company_id, generation: input.generation };
+    }).catch(error => {
+      // A bounded wait ran out (55P03); the transaction rolled back unclaimed.
+      if (postgresLockTimedOut(error)) throw new Error("exec_timeout", { cause: error });
+      throw error;
     });
   }
   async function authorizeSandboxBrokerCapability(input: { capabilityToken: string; gatewayPublicId: string }): Promise<SandboxBrokerCapabilityClaim> {

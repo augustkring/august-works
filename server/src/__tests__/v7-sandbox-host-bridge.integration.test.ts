@@ -77,7 +77,7 @@ import { agentIdentityService } from "../services/agent-identities.js";
 import { agentProviderBindingService } from "../services/agent-provider-bindings.js";
 import { agentRuntimeFabricService } from "../services/agent-runtime-fabric.js";
 import { discoverNativeCapabilities } from "../services/native-provider-conformance.js";
-import { runtimeControlService } from "../services/runtime/control.js";
+import { SANDBOX_EXEC_CLAIM_RELAY_FLOOR_MS, runtimeControlService } from "../services/runtime/control.js";
 import { describeWorkspaceReconstruction, deliverReconciledExecutions, markExecutionReconciliation, validateExecutionReconciliation, verifyNativeWorkspaceDestructionReceipt } from "../services/execution-recovery-resolution.js";
 import { errorHandler } from "../middleware/index.js";
 import { nativeSha256 } from "../services/native-runtime/canonical.js";
@@ -1977,6 +1977,32 @@ function signedRuntimeRelayProof(hostId: string, privateKey: ReturnType<typeof g
         };
         await runAdmissionRace(false);
         await runAdmissionRace(true);
+        // Lock-wait helpers for EXC2: a transaction that holds locks
+        // until released, and a barrier on PostgreSQL's own wait graph.
+        const holdLocks = (lock: (tx: typeof db) => Promise<unknown>) => {
+          let release!: () => void;
+          let markHeld!: (pid: number) => void;
+          const held = new Promise<number>(resolve => { markHeld = resolve; });
+          const released = new Promise<void>(resolve => { release = resolve; });
+          const done = db.transaction(async tx => {
+            const [backend] = await tx.execute<{ pid: number }>(sql`select pg_backend_pid() as pid`);
+            await lock(tx as unknown as typeof db);
+            markHeld(Number(backend!.pid));
+            await released;
+          });
+          return { held, release, done };
+        };
+        /** The pid of a backend waiting on `blockerPid` (only `waiterPid`, when given). */
+        const blockedBy = async (blockerPid: number, waiterPid?: number) => {
+          for (let attempt = 0; attempt < 500; attempt += 1) {
+            const [state] = await db.execute<{ pid: number | null }>(sql`select pid from pg_stat_activity
+              where ${blockerPid}::integer = any(pg_blocking_pids(pid)) and wait_event_type = 'Lock'
+                and (${waiterPid ?? null}::integer is null or pid = ${waiterPid ?? null}::integer) limit 1`);
+            if (state?.pid) return Number(state.pid);
+            await new Promise(resolve => setTimeout(resolve, 10));
+          }
+          throw new Error(`no backend waited on ${blockerPid}`);
+        };
         const environmentRuntime = environmentRuntimeService(db, { executeSandboxTask: runtime.executeSandboxTask });
         const executionEnvironment = { id: randomUUID(), driver: "sandbox", config: {}, envVars: {}, metadata: null } as any;
         const executeThroughAdapter = () => {
@@ -2087,6 +2113,118 @@ function signedRuntimeRelayProof(hostId: string, privateKey: ReturnType<typeof g
           cellId: admissionCell!.id, generation: admissionCell!.generation.toString(), request: firstCommand.request,
           capabilityToken: firstCommand.capabilityToken, onOutput: () => {},
         })).rejects.toThrow();
+
+        // EXC2. Exec admission waits on the company privacy keys (relay
+        // authorization takes them exclusively). A wait that outlasts the
+        // exec deadline must end unclaimed and FAILED (a known outcome),
+        // never CLAIMED (an unknown outcome that fences the Task attempt).
+        const unresolvedRunExecs = () => db.select({ id: runtimeHostCommands.id }).from(runtimeHostCommands).where(and(
+          eq(runtimeHostCommands.companyId, f.home), eq(runtimeHostCommands.commandType, "sandbox_exec"),
+          sql`${runtimeHostCommands.payload}->>'runId' = ${run!.id}`,
+          sql`${runtimeHostCommands.status} in ('PENDING', 'CLAIMED')`));
+        let boundedExecOpens = 0;
+        const countBoundedExecOpens = (raw: unknown) => {
+          if (JSON.parse(String(raw)).type === "exec_open") boundedExecOpens += 1;
+        };
+        relayHost.on("message", countBoundedExecOpens);
+        const boundedExec = (timeoutMs: number) => environmentRuntime.execute({
+          environment: executionEnvironment, lease: lease as any, command: "/usr/bin/node",
+          args: ["-e", "process.stdout.write('bounded')"], cwd: "/work/output", timeoutMs, onLog: async () => {},
+        });
+        const holdCompanyKeys = (mode: "reader" | "writer") => holdLocks(async tx => {
+          if (mode === "reader") {
+            // A long company privacy reader (shared), as a source validation holds it.
+            await tx.execute(sql`select pg_advisory_xact_lock_shared(hashtextextended(${`business-events:${f.home}`}, 0))`);
+          } else {
+            // A Native dispatch-like source writer holds both keys exclusively.
+            await lockAnalyticalCompany(tx, f.home);
+            await lockMemoryPrivacy(tx, f.home);
+          }
+        });
+        const latestBoundedClaim = async (since: Date) => (await db.select().from(runtimeHostCommands).where(and(
+          eq(runtimeHostCommands.companyId, f.home), eq(runtimeHostCommands.commandType, "sandbox_exec"),
+          sql`${runtimeHostCommands.payload}->>'runId' = ${run!.id}`, sql`${runtimeHostCommands.createdAt} >= ${since.toISOString()}::timestamptz`,
+        )).orderBy(sql`${runtimeHostCommands.createdAt} desc`).limit(1))[0];
+        for (const mode of ["reader", "writer"] as const) {
+          const since = new Date(Date.now() - 1);
+          const holder = holdCompanyKeys(mode);
+          await holder.held;
+          const startedAt = Date.now();
+          const outcome = boundedExec(1_500).then(() => null, (error: unknown) => error);
+          // Reader: the claim is persisted under the shared keys, then relay
+          // authorization waits behind the reader; lock_timeout ends that wait
+          // unclaimed, well before the 3 s reader does. Writer: the exec's
+          // first shared lock waits behind the writer past its deadline, so it
+          // fails before admission (its capabilities can no longer be minted),
+          // with no claim or a FAILED one; nothing may be left unresolved.
+          const holdTimer = setTimeout(() => holder.release(), 3_000);
+          const error = await outcome;
+          expect(error, mode).toBeTruthy();
+          if (mode === "reader") {
+            expect(String(error)).toMatch(/exec_timeout/);
+            expect(Date.now() - startedAt).toBeLessThan(3_000);
+          }
+          await holder.done;
+          clearTimeout(holdTimer);
+          const claim = await latestBoundedClaim(since);
+          if (mode === "reader") expect(claim).toMatchObject({ status: "FAILED", errorCode: "exec_timeout" });
+          else expect(claim?.status ?? "none", mode).toMatch(/^(none|FAILED)$/);
+          expect(await unresolvedRunExecs(), mode).toEqual([]);
+          expect(boundedExecOpens, mode).toBe(0);
+        }
+        // lock_timeout bounds each wait, not their sum. Two row waits after
+        // the company locks that each fit the bound but together outlast the
+        // claim budget must still end unclaimed (the check before the update).
+        // This Task's connector broker JWT expires at the exec deadline rounded
+        // down to the second, which also refuses a late claim, so the deadline
+        // is aimed just past a whole second: between deadline - floor and that
+        // second only the claim-budget check refuses.
+        {
+          const since = new Date(Date.now() - 1);
+          const reader = holdCompanyKeys("reader");
+          const readerPid = await reader.held;
+          const outcome = boundedExec(3_000 + (1_040 - ((Date.now() + 3_000) % 1_000)) % 1_000)
+            .then(() => null, (error: unknown) => error);
+          const admissionPid = await blockedBy(readerPid);
+          const [claim] = await db.select().from(runtimeHostCommands).where(and(
+            eq(runtimeHostCommands.companyId, f.home), eq(runtimeHostCommands.commandType, "sandbox_exec"),
+            eq(runtimeHostCommands.status, "PENDING"), sql`${runtimeHostCommands.payload}->>'runId' = ${run!.id}`,
+            sql`${runtimeHostCommands.createdAt} >= ${since.toISOString()}::timestamptz`));
+          expect(claim).toBeTruthy();
+          const leaseHolder = holdLocks(tx => tx.select({ id: environmentLeases.id }).from(environmentLeases).where(eq(environmentLeases.id, lease!.id)).for("update"));
+          const runHolder = holdLocks(tx => tx.select({ id: heartbeatRuns.id }).from(heartbeatRuns).where(eq(heartbeatRuns.id, run!.id)).for("update"));
+          const leaseHolderPid = await leaseHolder.held;
+          await runHolder.held;
+          reader.release();
+          await reader.done;
+          await blockedBy(leaseHolderPid, admissionPid);
+          const claimDeadlineMs = claim!.deadlineAt.getTime() - SANDBOX_EXEC_CLAIM_RELAY_FLOOR_MS;
+          const budgetLeftMs = claimDeadlineMs - Date.now();
+          // The run wait below (0.6 of this) must fit one lock_timeout.
+          expect(budgetLeftMs).toBeGreaterThan(600);
+          await new Promise(resolve => setTimeout(resolve, budgetLeftMs * 0.4));
+          leaseHolder.release();
+          await leaseHolder.done;
+          // Admission passes the run lock just after the claim budget ran out.
+          await new Promise(resolve => setTimeout(resolve, Math.max(0, claimDeadlineMs + 5 - Date.now())));
+          runHolder.release();
+          await runHolder.done;
+          expect(await outcome).toBeTruthy();
+          expect(await latestBoundedClaim(since)).toMatchObject({ id: claim!.id, status: "FAILED" });
+          expect(await unresolvedRunExecs()).toEqual([]);
+          expect(boundedExecOpens).toBe(0);
+        }
+        // With the locks released, the next exec of the same Task attempt is not
+        // fenced by an unknown outcome and runs to completion.
+        const retriedFrame = new Promise<Record<string, any>>(resolve => relayHost.on("message", raw => {
+          const message = JSON.parse(raw.toString());
+          if (message.type === "exec_open") resolve(message);
+        }));
+        const retried = boundedExec(30_000);
+        const retriedCommand = await retriedFrame;
+        relayHost.send(JSON.stringify({ type: "exec_exit", channelId: retriedCommand.channelId, exitCode: 0, timedOut: false }));
+        await expect(retried).resolves.toMatchObject({ exitCode: 0 });
+        relayHost.off("message", countBoundedExecOpens);
 
         const service = executionSandboxService(db, {
           ...serviceOptions,
