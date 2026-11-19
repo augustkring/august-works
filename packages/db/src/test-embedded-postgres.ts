@@ -30,6 +30,7 @@ type EmbeddedPostgresCtor = new (opts: {
   port: number;
   persistent: boolean;
   initdbFlags?: string[];
+  postgresFlags?: string[];
   onLog?: (message: unknown) => void;
   onError?: (message: unknown) => void;
 }) => EmbeddedPostgresInstance;
@@ -129,6 +130,13 @@ async function createEmbeddedPostgresTestInstance(tempDirPrefix: string) {
     password: "paperclip",
     port,
     persistent: true,
+    // Each test cluster is disposable: its data dir is deleted after the file,
+    // and nothing survives a host crash. Without this, every 16 MB WAL segment
+    // and every commit waits for the runner's disk flush, so timing budgets
+    // measured the CI disk instead of the code (the 68,000-outcome experiment
+    // capture issues about 100 WAL fsyncs). WAL is still written and replayed
+    // after a PostgreSQL process crash; only the flush to stable storage goes.
+    postgresFlags: ["-c", "fsync=off"],
     initdbFlags: ["--encoding=UTF8", "--locale=C", "--lc-messages=C"],
     onLog: (message) => logBuffer.append(message),
     onError: (message) => logBuffer.append(message),

@@ -4473,7 +4473,7 @@
         },
         {
           "path": "server/src/routes/issues.ts",
-          "sha256": "8854fada3e3654cb915c1cb076a9678142cea268889fa72dd624123b0ccd0eb8"
+          "sha256": "358f3ccdc2736d80c38efa18736982a4501a141643ebfb820ebb34167f11d129"
         },
         {
           "path": "server/src/services/agent-runtime-fabric.ts",
@@ -7123,7 +7123,7 @@
         },
         {
           "path": "server/src/__tests__/issue-comment-reopen-routes.test.ts",
-          "sha256": "ab5249437e0cd8412135a0440dbe2e39f9beabcaa0ab5629e3dee44349faa806"
+          "sha256": "356cc63b18c11b1f33535f501786d6b17d8be9c0e25f55f47a295c41302d04c8"
         },
         {
           "path": "server/src/__tests__/issue-create-deduplication-routes.test.ts",
@@ -7143,7 +7143,7 @@
         },
         {
           "path": "server/src/__tests__/issue-execution-policy-routes.test.ts",
-          "sha256": "fff2099561747388c5bbdf83b43e5a9db0b93b7a7474f9b3dec5f817b023a2f0"
+          "sha256": "8613fac625c850dd935f430e37233d86685a08e03846adc0323295715e3ca5a4"
         },
         {
           "path": "server/src/__tests__/issue-feedback-routes.test.ts",
@@ -7251,7 +7251,7 @@
         },
         {
           "path": "server/src/routes/issues.ts",
-          "sha256": "8854fada3e3654cb915c1cb076a9678142cea268889fa72dd624123b0ccd0eb8"
+          "sha256": "358f3ccdc2736d80c38efa18736982a4501a141643ebfb820ebb34167f11d129"
         },
         {
           "path": "server/src/services/company-search.ts",
@@ -7642,7 +7642,7 @@
         },
         {
           "path": "server/src/routes/issues.ts",
-          "sha256": "8854fada3e3654cb915c1cb076a9678142cea268889fa72dd624123b0ccd0eb8"
+          "sha256": "358f3ccdc2736d80c38efa18736982a4501a141643ebfb820ebb34167f11d129"
         },
         {
           "path": "server/src/services/chat-channels.ts",
@@ -9156,7 +9156,7 @@
         },
         {
           "path": "server/src/__tests__/v7-orchestration.integration.test.ts",
-          "sha256": "a4a3b669ba89e0cc400a37e4f60b4d7181c299174c145c80d9625c2ef454a34c"
+          "sha256": "1084b2a778fd6c6405f7acdbcb9e379794e2f78b0983019dee4766803d656d3a"
         },
         {
           "path": "server/src/__tests__/v7-portability.integration.test.ts",
@@ -9216,7 +9216,7 @@
         },
         {
           "path": "server/src/routes/issues.ts",
-          "sha256": "8854fada3e3654cb915c1cb076a9678142cea268889fa72dd624123b0ccd0eb8"
+          "sha256": "358f3ccdc2736d80c38efa18736982a4501a141643ebfb820ebb34167f11d129"
         },
         {
           "path": "server/src/routes/pipelines.ts",
@@ -9272,7 +9272,7 @@
         },
         {
           "path": "server/src/services/issue-thread-interactions.ts",
-          "sha256": "ef0b36e83d2d2edf48d438457a593236babc9073f218f571aa54797730d2ca19"
+          "sha256": "aab8d9b76b57a162b6a1fe426ce76e0c52624c0c070b74a9fccbafb59f02bdd3"
         },
         {
           "path": "server/src/services/issues.ts",
@@ -9380,7 +9380,7 @@
         },
         {
           "path": "server/src/services/native-runtime/status-decision-committer.ts",
-          "sha256": "0e8026eafdbab49e212bacfd3d2b52d7a47e061993fb6e2528d0b7c09e0aa06a"
+          "sha256": "a3f4d4b2392e8abd323c5a75445534d4944e187ab6204ef7595169c7028417bf"
         },
         {
           "path": "server/src/services/native-runtime/task-creation-backlog.test.ts",
@@ -9420,7 +9420,7 @@
         },
         {
           "path": "server/src/services/supervision/verification-service.ts",
-          "sha256": "fdfb87c0c3cce05e736a68252e88bf0617b4eb69c9028080e4a71401bd791755"
+          "sha256": "3b47fc88c86a71741d97f48c1e3472ae5adc066226c3e4858081c9e7eb49a026"
         },
         {
           "path": "server/src/services/workflows/workflow-direct-agent.test.ts",
@@ -10604,7 +10604,7 @@
         },
         {
           "path": "server/src/services/workspace-runtime.ts",
-          "sha256": "9bea9b30457d3700a8f9440c47e4fecedc43edb2ae42920e4e41eaae344e6085"
+          "sha256": "6e1b90ae6f78b77c4bf312483b2467d184445c64273306015ffb4114f81fe0c7"
         }
       ],
       "kind": "safe_change_record",
@@ -11780,7 +11780,7 @@
         },
         {
           "path": "server/src/__tests__/v7-orchestration.integration.test.ts",
-          "sha256": "a4a3b669ba89e0cc400a37e4f60b4d7181c299174c145c80d9625c2ef454a34c"
+          "sha256": "1084b2a778fd6c6405f7acdbcb9e379794e2f78b0983019dee4766803d656d3a"
         },
         {
           "path": "server/src/__tests__/v9-workflow-authoring-sources.integration.test.ts",
@@ -20212,7 +20212,7 @@
         },
         {
           "path": "packages/db/src/test-embedded-postgres.ts",
-          "sha256": "9f989d24cc239759f144bb82fd65409013f1d4f54ccab3e0a4a3a427f405a1f2"
+          "sha256": "36825261ef5c067d885b665285676813fdd16bda76d99914eb865441e1630834"
         },
         {
           "path": "packages/db/src/transient-write-retry.test.ts",
@@ -21304,11 +21304,11 @@
         },
         {
           "path": "server/src/services/context/context-engine.test.ts",
-          "sha256": "b8c7cc408916009dd3fb5c962d8aaa414c227e502edfd2c87e1c06bb0f66b237"
+          "sha256": "b1ed37ef8a5a99a6db1c6b17753878d4ae845e3db54e5c5896570cca96d4c93b"
         },
         {
           "path": "server/src/services/context/context-engine.ts",
-          "sha256": "3c87eeef23b240e8b1fb0359cc475a7df3703db1c2a689e459ae9208f7e73d7d"
+          "sha256": "3fccaebc9fe30c08c37e5dcdbb82f4817d7d7605b8959403805ffa1b45107e71"
         },
         {
           "path": "server/src/services/context/context-manifest.test.ts",
@@ -24978,7 +24978,7 @@
         },
         {
           "path": "server/src/services/issue-execution-policy.ts",
-          "sha256": "abb440ad866d4a0bfe7008a401798610bb60a70f7b7d2bc182dd26a40d928ca0"
+          "sha256": "f3d6947a1b891c80ebb490bbba053c65ba883e5e37073ca833f81904270d3677"
         },
         {
           "path": "server/src/services/issue-execution-stage-wakeup.ts",
@@ -29271,7 +29271,7 @@
         },
         {
           "path": "packages/shared/src/verification.ts",
-          "sha256": "abe57836ffe7444fc2c55e7b0487f4afa3ea4bc9dfff8fc58f6b903dd94a466b"
+          "sha256": "457f4e87194b1e591b26edd80582bc2ff985d408d98bcd50761b55d7f58ae6ba"
         }
       ],
       "kind": "safe_change_record",
@@ -30467,11 +30467,11 @@
         },
         {
           "path": "server/src/services/business-experiments/analysis.ts",
-          "sha256": "750bb0ea12d8cb7f8a95f13cea0367bafc8454f1a9f794e0d1b4a0633cf4dd61"
+          "sha256": "115c564e4d39e4095a114115d6bdb549a80c98adb0ee3481403da2fb73c27f94"
         },
         {
           "path": "server/src/services/business-experiments/receipts.ts",
-          "sha256": "c69663b618ee371dc3e27e7cbf139ad94e63c8b9ce8d25dc190d0fa90bb73d5e"
+          "sha256": "483c74d7cc23a48971388383d83b5ac6c628eed0a80e1a51a18ee2288677aca1"
         },
         {
           "path": "server/src/services/business-experiments/results.ts",
@@ -32121,7 +32121,7 @@
         },
         {
           "path": "server/src/services/company-search-help.generated.ts",
-          "sha256": "17a94e5270a8778e793deef94c0bd79d3bca44ce69ec6630a92f5718ec92f333"
+          "sha256": "d7d59fc7eea42b9bd7f87b1e2be48e774d89bce77c66759d92c14d49283143e5"
         },
         {
           "path": "server/src/services/task-search.ts",
@@ -46923,7 +46923,7 @@
       "id": "source:server/src/routes/issues.ts",
       "kind": "current_source_owner",
       "path": "server/src/routes/issues.ts",
-      "sha256": "8854fada3e3654cb915c1cb076a9678142cea268889fa72dd624123b0ccd0eb8",
+      "sha256": "358f3ccdc2736d80c38efa18736982a4501a141643ebfb820ebb34167f11d129",
       "changeIds": [
         "SCR-V10-HOTSPOT-01",
         "SCR-V10-HOTSPOT-04",
@@ -49250,7 +49250,7 @@
       "id": "source:server/src/__tests__/issue-comment-reopen-routes.test.ts",
       "kind": "current_source_owner",
       "path": "server/src/__tests__/issue-comment-reopen-routes.test.ts",
-      "sha256": "ab5249437e0cd8412135a0440dbe2e39f9beabcaa0ab5629e3dee44349faa806",
+      "sha256": "356cc63b18c11b1f33535f501786d6b17d8be9c0e25f55f47a295c41302d04c8",
       "changeIds": [
         "SCR-V10-HOTSPOT-04"
       ],
@@ -49327,7 +49327,7 @@
       "id": "source:server/src/__tests__/issue-execution-policy-routes.test.ts",
       "kind": "current_source_owner",
       "path": "server/src/__tests__/issue-execution-policy-routes.test.ts",
-      "sha256": "fff2099561747388c5bbdf83b43e5a9db0b93b7a7474f9b3dec5f817b023a2f0",
+      "sha256": "8613fac625c850dd935f430e37233d86685a08e03846adc0323295715e3ca5a4",
       "changeIds": [
         "SCR-V10-HOTSPOT-04"
       ],
@@ -50429,7 +50429,7 @@
       "id": "source:server/src/__tests__/v7-orchestration.integration.test.ts",
       "kind": "current_source_owner",
       "path": "server/src/__tests__/v7-orchestration.integration.test.ts",
-      "sha256": "a4a3b669ba89e0cc400a37e4f60b4d7181c299174c145c80d9625c2ef454a34c",
+      "sha256": "1084b2a778fd6c6405f7acdbcb9e379794e2f78b0983019dee4766803d656d3a",
       "changeIds": [
         "SCR-V10-HOTSPOT-06",
         "SCR-V10-HOTSPOT-12"
@@ -50755,7 +50755,7 @@
       "id": "source:server/src/services/issue-thread-interactions.ts",
       "kind": "current_source_owner",
       "path": "server/src/services/issue-thread-interactions.ts",
-      "sha256": "ef0b36e83d2d2edf48d438457a593236babc9073f218f571aa54797730d2ca19",
+      "sha256": "aab8d9b76b57a162b6a1fe426ce76e0c52624c0c070b74a9fccbafb59f02bdd3",
       "changeIds": [
         "SCR-V10-HOTSPOT-06"
       ],
@@ -50998,7 +50998,7 @@
       "id": "source:server/src/services/native-runtime/status-decision-committer.ts",
       "kind": "current_source_owner",
       "path": "server/src/services/native-runtime/status-decision-committer.ts",
-      "sha256": "0e8026eafdbab49e212bacfd3d2b52d7a47e061993fb6e2528d0b7c09e0aa06a",
+      "sha256": "a3f4d4b2392e8abd323c5a75445534d4944e187ab6204ef7595169c7028417bf",
       "changeIds": [
         "SCR-V10-HOTSPOT-06"
       ],
@@ -51121,7 +51121,7 @@
       "id": "source:server/src/services/supervision/verification-service.ts",
       "kind": "current_source_owner",
       "path": "server/src/services/supervision/verification-service.ts",
-      "sha256": "fdfb87c0c3cce05e736a68252e88bf0617b4eb69c9028080e4a71401bd791755",
+      "sha256": "3b47fc88c86a71741d97f48c1e3472ae5adc066226c3e4858081c9e7eb49a026",
       "changeIds": [
         "SCR-V10-HOTSPOT-06"
       ],
@@ -51621,7 +51621,7 @@
       "id": "source:server/src/services/workspace-runtime.ts",
       "kind": "current_source_owner",
       "path": "server/src/services/workspace-runtime.ts",
-      "sha256": "9bea9b30457d3700a8f9440c47e4fecedc43edb2ae42920e4e41eaae344e6085",
+      "sha256": "6e1b90ae6f78b77c4bf312483b2467d184445c64273306015ffb4114f81fe0c7",
       "changeIds": [
         "SCR-V10-HOTSPOT-08"
       ],
@@ -59260,7 +59260,7 @@
       "id": "source:packages/db/src/test-embedded-postgres.ts",
       "kind": "current_source_owner",
       "path": "packages/db/src/test-embedded-postgres.ts",
-      "sha256": "9f989d24cc239759f144bb82fd65409013f1d4f54ccab3e0a4a3a427f405a1f2",
+      "sha256": "36825261ef5c067d885b665285676813fdd16bda76d99914eb865441e1630834",
       "changeIds": [
         "SCR-V10-DATABASE-SCHEMA-AND-MIGRATIONS"
       ],
@@ -59995,7 +59995,7 @@
       "id": "source:server/src/services/context/context-engine.test.ts",
       "kind": "current_source_owner",
       "path": "server/src/services/context/context-engine.test.ts",
-      "sha256": "b8c7cc408916009dd3fb5c962d8aaa414c227e502edfd2c87e1c06bb0f66b237",
+      "sha256": "b1ed37ef8a5a99a6db1c6b17753878d4ae845e3db54e5c5896570cca96d4c93b",
       "changeIds": [
         "SCR-V10-PRIVATE-DATA-ERASURE"
       ],
@@ -60010,7 +60010,7 @@
       "id": "source:server/src/services/context/context-engine.ts",
       "kind": "current_source_owner",
       "path": "server/src/services/context/context-engine.ts",
-      "sha256": "3c87eeef23b240e8b1fb0359cc475a7df3703db1c2a689e459ae9208f7e73d7d",
+      "sha256": "3fccaebc9fe30c08c37e5dcdbb82f4817d7d7605b8959403805ffa1b45107e71",
       "changeIds": [
         "SCR-V10-PRIVATE-DATA-ERASURE"
       ],
@@ -63628,7 +63628,7 @@
       "id": "source:server/src/services/issue-execution-policy.ts",
       "kind": "current_source_owner",
       "path": "server/src/services/issue-execution-policy.ts",
-      "sha256": "abb440ad866d4a0bfe7008a401798610bb60a70f7b7d2bc182dd26a40d928ca0",
+      "sha256": "f3d6947a1b891c80ebb490bbba053c65ba883e5e37073ca833f81904270d3677",
       "changeIds": [
         "SCR-V10-NATIVE-RUNTIME-AND-AUTHORITY"
       ],
@@ -69643,7 +69643,7 @@
       "id": "source:packages/shared/src/verification.ts",
       "kind": "current_source_owner",
       "path": "packages/shared/src/verification.ts",
-      "sha256": "abe57836ffe7444fc2c55e7b0487f4afa3ea4bc9dfff8fc58f6b903dd94a466b",
+      "sha256": "457f4e87194b1e591b26edd80582bc2ff985d408d98bcd50761b55d7f58ae6ba",
       "changeIds": [
         "SCR-V10-SHARED-CONTRACTS"
       ],
@@ -70680,7 +70680,7 @@
       "id": "source:server/src/services/business-experiments/analysis.ts",
       "kind": "current_source_owner",
       "path": "server/src/services/business-experiments/analysis.ts",
-      "sha256": "750bb0ea12d8cb7f8a95f13cea0367bafc8454f1a9f794e0d1b4a0633cf4dd61",
+      "sha256": "115c564e4d39e4095a114115d6bdb549a80c98adb0ee3481403da2fb73c27f94",
       "changeIds": [
         "SCR-V10-ANALYTICS-LEARNING"
       ],
@@ -70695,7 +70695,7 @@
       "id": "source:server/src/services/business-experiments/receipts.ts",
       "kind": "current_source_owner",
       "path": "server/src/services/business-experiments/receipts.ts",
-      "sha256": "c69663b618ee371dc3e27e7cbf139ad94e63c8b9ce8d25dc190d0fa90bb73d5e",
+      "sha256": "483c74d7cc23a48971388383d83b5ac6c628eed0a80e1a51a18ee2288677aca1",
       "changeIds": [
         "SCR-V10-ANALYTICS-LEARNING"
       ],
@@ -72540,7 +72540,7 @@
       "id": "source:server/src/services/company-search-help.generated.ts",
       "kind": "current_source_owner",
       "path": "server/src/services/company-search-help.generated.ts",
-      "sha256": "17a94e5270a8778e793deef94c0bd79d3bca44ce69ec6630a92f5718ec92f333",
+      "sha256": "d7d59fc7eea42b9bd7f87b1e2be48e774d89bce77c66759d92c14d49283143e5",
       "changeIds": [
         "SCR-V10-PRODUCT-IDENTITY-HELP-LANGUAGE"
       ],

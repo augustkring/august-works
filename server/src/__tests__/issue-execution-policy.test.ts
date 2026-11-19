@@ -1,5 +1,11 @@
 import { describe, expect, it } from "vitest";
-import { applyIssueExecutionPolicyTransition, normalizeIssueExecutionPolicy, parseIssueExecutionState } from "../services/issue-execution-policy.ts";
+import {
+  applyIssueExecutionPolicyTransition,
+  holdFinalExecutionStageApprovalForPlanVerification,
+  isFinalExecutionStageApproval,
+  normalizeIssueExecutionPolicy,
+  parseIssueExecutionState,
+} from "../services/issue-execution-policy.ts";
 import type { IssueExecutionPolicy, IssueExecutionState } from "@paperclipai/shared";
 
 const coderAgentId = "11111111-1111-4111-8111-111111111111";
@@ -2083,5 +2089,101 @@ describe("review round circuit breaker", () => {
       currentParticipant: { type: "user", userId: boardUserId },
       changesRequestedCount: 1,
     });
+  });
+});
+
+describe("final stage approval held for plan verification (MS1f)", () => {
+  const policy = twoStagePolicy();
+  const [reviewStage, approvalStage] = policy.stages;
+  const pendingAt = (stageIndex: 0 | 1, participant: { type: "agent"; agentId: string } | { type: "user"; userId: string },
+    returnAssignee: IssueExecutionState["returnAssignee"] = { type: "agent", agentId: coderAgentId, userId: null }) => ({
+    status: "in_review",
+    assigneeAgentId: participant.type === "agent" ? participant.agentId : null,
+    assigneeUserId: participant.type === "user" ? participant.userId : null,
+    executionPolicy: policy,
+    executionState: {
+      status: "pending",
+      currentStageId: policy.stages[stageIndex].id,
+      currentStageIndex: stageIndex,
+      currentStageType: policy.stages[stageIndex].type,
+      currentParticipant: participant,
+      returnAssignee,
+      completedStageIds: stageIndex === 1 ? [reviewStage.id] : [],
+      lastDecisionId: null,
+      lastDecisionOutcome: null,
+    },
+  });
+  const finalApproval = (returnAssignee?: IssueExecutionState["returnAssignee"]) => applyIssueExecutionPolicyTransition({
+    issue: pendingAt(1, { type: "user", userId: ctoUserId }, returnAssignee),
+    policy,
+    requestedStatus: "done",
+    requestedAssigneePatch: {},
+    actor: { userId: ctoUserId },
+    commentBody: "Approved for the plan's verification",
+  });
+
+  it("recognises only a final approval as holdable", () => {
+    expect(isFinalExecutionStageApproval(finalApproval())).toBe(true);
+    // An approval that advances to the next stage already keeps the Task in review.
+    const advancing = applyIssueExecutionPolicyTransition({
+      issue: pendingAt(0, { type: "agent", agentId: qaAgentId }),
+      policy,
+      requestedStatus: "done",
+      requestedAssigneePatch: {},
+      actor: { agentId: qaAgentId },
+      commentBody: "QA signoff complete",
+    });
+    expect(advancing.decision?.outcome).toBe("approved");
+    expect(isFinalExecutionStageApproval(advancing)).toBe(false);
+    const changes = applyIssueExecutionPolicyTransition({
+      issue: pendingAt(0, { type: "agent", agentId: qaAgentId }),
+      policy,
+      requestedStatus: "in_progress",
+      requestedAssigneePatch: {},
+      actor: { agentId: qaAgentId },
+      commentBody: "Needs another pass",
+    });
+    expect(isFinalExecutionStageApproval(changes)).toBe(false);
+    // A transition without a decision (a non-participant's update) is not an approval.
+    expect(isFinalExecutionStageApproval({ patch: { executionState: finalApproval().patch.executionState } })).toBe(false);
+  });
+
+  it("keeps the Task in review, completes the stage and returns it to the plan Worker", () => {
+    const transition = finalApproval();
+    const completedState = transition.patch.executionState;
+    expect(transition.patch.status).toBeUndefined();
+    holdFinalExecutionStageApprovalForPlanVerification(transition);
+    expect(transition.patch).toMatchObject({ status: "in_review", assigneeAgentId: coderAgentId, assigneeUserId: null });
+    expect(transition.workflowControlledAssignment).toBe(true);
+    // The stage is still completed with this approval.
+    expect(transition.patch.executionState).toBe(completedState);
+    expect(transition.patch.executionState).toMatchObject({
+      status: "completed",
+      completedStageIds: expect.arrayContaining([reviewStage.id, approvalStage.id]),
+      lastDecisionOutcome: "approved",
+    });
+    expect(transition.decision).toMatchObject({ stageId: approvalStage.id, outcome: "approved" });
+  });
+
+  it("returns the Task to a Human return assignee, and keeps the assignee when the stage has none", () => {
+    const toHuman = holdFinalExecutionStageApprovalForPlanVerification(finalApproval({ type: "user", userId: boardUserId, agentId: null }));
+    expect(toHuman.patch).toMatchObject({ status: "in_review", assigneeAgentId: null, assigneeUserId: boardUserId });
+    const noReturn = holdFinalExecutionStageApprovalForPlanVerification(finalApproval(null));
+    expect(noReturn.patch.status).toBe("in_review");
+    expect(noReturn.patch).not.toHaveProperty("assigneeAgentId");
+    expect(noReturn.patch).not.toHaveProperty("assigneeUserId");
+  });
+
+  it("refuses to hold anything but a final approval", () => {
+    const changes = applyIssueExecutionPolicyTransition({
+      issue: pendingAt(0, { type: "agent", agentId: qaAgentId }),
+      policy,
+      requestedStatus: "in_progress",
+      requestedAssigneePatch: {},
+      actor: { agentId: qaAgentId },
+      commentBody: "Needs another pass",
+    });
+    expect(() => holdFinalExecutionStageApprovalForPlanVerification(changes)).toThrow();
+    expect(changes.patch.status).toBe("in_progress");
   });
 });

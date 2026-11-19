@@ -8,6 +8,7 @@ import type { AuthorizationActor } from "../authorization.js";
 import { v7HumanActorId } from "../v7-authorization.js";
 import { withV7ActivityTransaction } from "../v7-mutations.js";
 import { canonicalNativeJson, nativeSha256 } from "../native-runtime/canonical.js";
+import { withDecisionSigningKey } from "../decision-signing.js";
 import { businessMetricService } from "../business-metrics/service.js";
 import { prepareNativeMetric, prepareNativeMetricInput } from "../business-metrics/native-engine.js";
 import { admitBusinessExperiment,lockBusinessExperimentRoot,inspectBusinessExperimentVersion,businessExperimentRootView,auditBusinessExperiment } from "./service.js";
@@ -20,7 +21,9 @@ import { experimentCapture,experimentInvariantDiagnostics,experimentAnalysisMate
 export function businessExperimentAnalysisService(db:Db){return {
   async analyze(companyId:string,actor:AuthorizationActor,id:string,raw:Parameters<typeof analyzeBusinessExperimentSchema.parse>[0]){
     const input=analyzeBusinessExperimentSchema.parse(raw);
-    return withV7ActivityTransaction(db,async(tx,publications)=>{
+    // One capture signs 68,000 outcome receipts and verifies every assignment,
+    // exposure and completion receipt: resolve the signing key once for it.
+    return withV7ActivityTransaction(db,(tx,publications)=>withDecisionSigningKey(async()=>{
       await admitBusinessExperiment(tx,companyId,actor,true);const row=await lockBusinessExperimentRoot(tx,companyId,id),deadline=performance.now()+30_000;
       if(row.revision!==input.expectedRevision||row.currentVersionId!==input.versionId||row.state!=="completed")throw conflict("A single final analysis requires the exact completed protocol and revision");
       const pin=await inspectBusinessExperimentVersion(tx,row,actor,input.versionId,true,deadline),receipts=pin.receipts;
@@ -100,7 +103,7 @@ export function businessExperimentAnalysisService(db:Db){return {
       experimentBudget(deadline);
       if(Math.min(version.expiresAt.getTime(),pin.source.expiresAt.getTime())<=Date.now())throw conflict("Experiment current Source expired before final capture completed");
       return {experiment:businessExperimentRootView(updated),analysis:experimentAnalysisView(analysis,receipts.completion,true)};
-    });
+    }));
   },
   async interpret(companyId:string,actor:AuthorizationActor,id:string,raw:Parameters<typeof interpretBusinessExperimentSchema.parse>[0]){
     const input=interpretBusinessExperimentSchema.parse(raw);

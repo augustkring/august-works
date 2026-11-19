@@ -322,7 +322,9 @@ import {
 } from "../services/company-search-rate-limit.js";
 import {
   applyIssueExecutionPolicyTransition,
+  holdFinalExecutionStageApprovalForPlanVerification,
   isApprovalReviewComment,
+  isFinalExecutionStageApproval,
   normalizeIssueExecutionPolicy,
   parseIssueExecutionState,
   redactIssueMonitorExternalRef,
@@ -330,6 +332,7 @@ import {
 } from "../services/issue-execution-policy.js";
 import { parseIssueExecutionWorkspaceSettings } from "../services/execution-workspace-policy.js";
 import { buildExecutionStageWakeup } from "../services/issue-execution-stage-wakeup.js";
+import { activePlanCoveringTask } from "../services/orchestration/plan-coverage.js";
 import type { PluginWorkerManager } from "../services/plugin-worker-manager.js";
 import {
   buildPromotedSourceTrust,
@@ -13774,6 +13777,22 @@ export function issueRoutes(
           lastDecisionId: decisionId,
         };
       }
+      // MS1f. The final approval of a declared stage on a Task that an
+      // unfinished orchestration plan covers completes the stage but not the
+      // Task: it stays in review, back with the plan Worker and without a wake,
+      // for the plan's Human server verification. The 0360 guard stays the
+      // backstop. Without a covering plan the approval completes as before.
+      const stagePlanHoldPlanId = isFinalExecutionStageApproval(transition)
+        ? await activePlanCoveringTask(db, existing.companyId, existing.id)
+        : null;
+      if (stagePlanHoldPlanId)
+        holdFinalExecutionStageApprovalForPlanVerification(transition);
+      const stagePlanHoldActivity = stagePlanHoldPlanId
+        ? {
+            taskCompletion: "awaiting_plan_verification" as const,
+            planId: stagePlanHoldPlanId,
+          }
+        : {};
       Object.assign(updateFields, transition.patch);
 
       const nextStatus = updateFields.status ?? existing.status;
@@ -14142,10 +14161,13 @@ export function issueRoutes(
         const lockedPolicyChangeRequested =
           req.body.reviewPolicy !== undefined &&
           req.body.reviewPolicy !== lockedExisting.reviewPolicy;
+        // A held final stage approval (MS1f) is still the stage verdict the
+        // review policy governs, although the Task stays in review.
         const lockedReviewVerdictRequested =
           lockedExisting.status === "in_review" &&
           (updateFields.status === "done" ||
-            updateFields.status === "cancelled");
+            updateFields.status === "cancelled" ||
+            stagePlanHoldPlanId !== null);
         if (
           (lockedReviewVerdictRequested || lockedPolicyChangeRequested) &&
           lockedExisting.reviewPolicy != null &&
@@ -14195,6 +14217,7 @@ export function issueRoutes(
                 ? { resumeIntent: true, followUpRequested: true }
                 : {}),
               ...(interruptedRunId ? { interruptedRunId } : {}),
+              ...stagePlanHoldActivity,
               _previous: Object.keys(changes).length > 0 ? previous : undefined,
             },
           },
@@ -14588,6 +14611,7 @@ export function issueRoutes(
             ...(interruptedRunId ? { interruptedRunId } : {}),
             ...(cancelledStatusRunId ? { cancelledStatusRunId } : {}),
             ...(workspaceChange ? { workspaceChange } : {}),
+            ...stagePlanHoldActivity,
             _previous: hasFieldChanges ? previous : undefined,
             ...summarizeIssueReferenceActivityDetails(
               updateReferenceDiff
@@ -14896,6 +14920,8 @@ export function issueRoutes(
         if (
           issue.assigneeAgentId &&
           !issue.externalConversationState &&
+          // MS1f. A held final stage approval is not input for the plan Worker.
+          !stagePlanHoldPlanId &&
           !(
             actor.actorType === "agent" &&
             actor.actorId === issue.assigneeAgentId
@@ -15165,6 +15191,9 @@ export function issueRoutes(
           // Restoring an assignee on completed work is not a reopen request.
           // Explicit reopen/resume transitions are already reflected in issue.status.
           !isClosedIssueStatus(issue.status) &&
+          // MS1f. The plan Worker restored by a held final stage approval has
+          // nothing to do until a person verifies the plan.
+          !stagePlanHoldPlanId &&
           deferWakeForGoal !== true
         ) {
           addWakeup(issue.assigneeAgentId, {
@@ -18205,6 +18234,9 @@ export function issueRoutes(
       let commentDecisionStageWakeup: ReturnType<
         typeof buildExecutionStageWakeup
       > | null = null;
+      // MS1f. Set when this comment's final stage approval is held for the
+      // covering plan's Human verification.
+      let commentStagePlanHoldPlanId: string | null = null;
       const commentReferenceSummaryBefore =
         await issueReferencesSvc.listIssueReferenceSummary(issue.id);
 
@@ -18355,6 +18387,15 @@ export function issueRoutes(
             lastDecisionId: decisionId,
           };
         }
+        // MS1f. Under an unfinished orchestration plan the final stage
+        // approval completes the stage, not the Task: it stays in review, back
+        // with the plan Worker and without a wake, for the plan's Human server
+        // verification (0360 stays the backstop). Otherwise unchanged.
+        commentStagePlanHoldPlanId = isFinalExecutionStageApproval(transition)
+          ? await activePlanCoveringTask(db, currentIssue.companyId, currentIssue.id)
+          : null;
+        if (commentStagePlanHoldPlanId)
+          holdFinalExecutionStageApprovalForPlanVerification(transition);
 
         issueBeforeCommentDecision = currentIssue;
         const updatePatch = {
@@ -18466,9 +18507,35 @@ export function issueRoutes(
         await flushIssuePostCommitActions(postCommitIssueActions);
         comment = txResult.comment;
         currentIssue = txResult.issue;
-        // Mirror the normal status-change audit trail: every other in_review -> done path
-        // emits an `issue.updated` activity, so emit one here too for the auto-approval path.
-        if (issueBeforeCommentDecision.status !== currentIssue.status) {
+        if (commentStagePlanHoldPlanId) {
+          // MS1f. The status does not change, so record the held approval and
+          // the restored plan Worker explicitly.
+          await logActivity(db, {
+            companyId: currentIssue.companyId,
+            actorType: actor.actorType,
+            actorId: actor.actorId,
+            agentId: actor.agentId,
+            runId: actor.runId,
+            agentApiKeyId: actor.agentApiKeyId,
+            action: "issue.updated",
+            entityType: "issue",
+            entityId: currentIssue.id,
+            details: {
+              identifier: currentIssue.identifier,
+              source: "auto_approval_comment",
+              assigneeAgentId: currentIssue.assigneeAgentId,
+              assigneeUserId: currentIssue.assigneeUserId,
+              taskCompletion: "awaiting_plan_verification",
+              planId: commentStagePlanHoldPlanId,
+              _previous: {
+                assigneeAgentId: issueBeforeCommentDecision.assigneeAgentId,
+                assigneeUserId: issueBeforeCommentDecision.assigneeUserId,
+              },
+            },
+          });
+        } else if (issueBeforeCommentDecision.status !== currentIssue.status) {
+          // Mirror the normal status-change audit trail: every other in_review -> done path
+          // emits an `issue.updated` activity, so emit one here too for the auto-approval path.
           await logActivity(db, {
             companyId: currentIssue.companyId,
             actorType: actor.actorType,
@@ -18534,6 +18601,8 @@ export function issueRoutes(
         // Slack-linked messages need the normal attributed wake boundary so
         // the accepted requester and return-thread receipt travel with the run.
         !currentIssue.externalConversationState &&
+        // MS1f. A held final stage approval is not input for the plan Worker.
+        !commentStagePlanHoldPlanId &&
         !(
           actor.actorType === "agent" &&
           actor.actorId === currentIssue.assigneeAgentId
@@ -18813,7 +18882,14 @@ export function issueRoutes(
           reopened,
           currentStatus: wakeIssueSnapshot.status,
         });
-        if (assigneeId && !goalCommentSteered && shouldWakeAssigneeForComment) {
+        if (
+          assigneeId &&
+          !goalCommentSteered &&
+          // MS1f. The plan Worker restored by a held final stage approval has
+          // nothing to do until a person verifies the plan.
+          !commentStagePlanHoldPlanId &&
+          shouldWakeAssigneeForComment
+        ) {
           if (reopened) {
             addWakeup(assigneeId, {
               source: "automation",

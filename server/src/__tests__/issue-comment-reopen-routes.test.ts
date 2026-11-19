@@ -24,6 +24,8 @@ const mockAccessService = vi.hoisted(() => ({
 }));
 const mockCurrentTaskSourceRead = vi.hoisted(() => vi.fn(async () => true));
 const mockAnalyticalSourceRead = vi.hoisted(() => vi.fn(async () => undefined));
+/** MS1f. The shared plan-coverage fact (0360); null = no unfinished plan covers the Task. */
+const mockActivePlanCoveringTask = vi.hoisted(() => vi.fn(async (): Promise<string | null> => null));
 
 // These route units model public Task fixtures and mocked domain effects.
 // Native source ACL/provenance is covered by the PostgreSQL integration suites.
@@ -220,6 +222,10 @@ vi.mock("../services/index.js", () => ({
   workProductService: () => ({}),
 }));
 
+vi.mock("../services/orchestration/plan-coverage.js", () => ({
+  activePlanCoveringTask: mockActivePlanCoveringTask,
+}));
+
 vi.mock("../services/external-objects.js", () => ({
   externalObjectService: () => mockExternalObjectService,
 }));
@@ -338,6 +344,7 @@ describe.sequential("issue comment reopen routes", () => {
     vi.clearAllMocks();
     mockCurrentTaskSourceRead.mockReset().mockResolvedValue(true);
     mockAnalyticalSourceRead.mockReset().mockResolvedValue(undefined);
+    mockActivePlanCoveringTask.mockReset().mockResolvedValue(null);
     mockIssueService.getById.mockReset();
     mockIssueService.getByIdForUpdate.mockReset();
     mockIssueService.assertCheckoutOwner.mockReset();
@@ -4245,5 +4252,201 @@ describe.sequential("issue comment reopen routes", () => {
         }),
       ),
     );
+  });
+  describe("final execution-policy stage approval under an unfinished plan (MS1f)", () => {
+    const reviewerAgentId = "33333333-3333-4333-8333-333333333333";
+    const workerAgentId = "22222222-2222-4222-8222-222222222222";
+    const issueId = "11111111-1111-4111-8111-111111111111";
+    const planId = "99999999-9999-4999-8999-999999999999";
+    async function pendingStageIssue(participant: { type: "agent"; agentId: string } | { type: "user"; userId: string }) {
+      const policy = (await normalizePolicy({
+        stages: [{ id: "aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaaa", type: participant.type === "agent" ? "review" : "approval", participants: [participant] }],
+      }))!;
+      return {
+        ...makeIssue("todo"),
+        status: "in_review",
+        assigneeAgentId: participant.type === "agent" ? participant.agentId : null,
+        assigneeUserId: participant.type === "user" ? participant.userId : null,
+        executionPolicy: policy,
+        executionState: {
+          status: "pending",
+          currentStageId: policy.stages[0].id,
+          currentStageIndex: 0,
+          currentStageType: policy.stages[0].type,
+          currentParticipant: participant,
+          returnAssignee: { type: "agent", agentId: workerAgentId },
+          completedStageIds: [],
+          lastDecisionId: null,
+          lastDecisionOutcome: null,
+        },
+      };
+    }
+    /** The update mock persists the route's patch exactly as written. */
+    function persistPatches(issue: Record<string, unknown>) {
+      let current = issue;
+      mockIssueService.getById.mockImplementation(async () => current);
+      mockIssueService.update.mockImplementation(async (_id: string, patch: Record<string, unknown>) => {
+        const { privacyActor: _privacyActor, actorAgentId: _a, actorUserId: _u, actorRunId: _r, actorRunStopId: _s,
+          privateWorkAdmission: _p, ...fields } = patch;
+        current = { ...current, ...fields, updatedAt: new Date() };
+        return current;
+      });
+    }
+    function decisionRow() {
+      return mockTxInsertValues.mock.calls.map(([row]) => row as Record<string, unknown>)
+        .find(row => row.outcome !== undefined);
+    }
+    async function settleDeferredWakes() {
+      await new Promise((resolve) => setImmediate(resolve));
+      await new Promise((resolve) => setImmediate(resolve));
+    }
+
+    it("comment auto-approval keeps the Task in review, completes the stage and restores the plan Worker without a wake", async () => {
+      const issue = await pendingStageIssue({ type: "agent", agentId: reviewerAgentId });
+      persistPatches(issue);
+      mockActivePlanCoveringTask.mockResolvedValue(planId);
+      const reviewBody = "## Review: APPROVED\n\nThe draft meets the declared criteria.";
+      mockIssueService.addComment.mockResolvedValue({ id: "comment-stage-hold", issueId, companyId: "company-1", body: reviewBody,
+        createdAt: new Date(), updatedAt: new Date(), authorAgentId: reviewerAgentId, authorUserId: null, createdByRunId: "run-review-hold" });
+
+      const res = await request(await installActor(createApp(), { type: "agent", agentId: reviewerAgentId, companyId: "company-1",
+        source: "agent_key", runId: "run-review-hold" }))
+        .post(`/api/issues/${issueId}/comments`)
+        .send({ body: reviewBody });
+
+      expect(res.status).toBe(201);
+      expect(mockActivePlanCoveringTask).toHaveBeenCalledWith(mockDb, "company-1", issueId);
+      const decision = decisionRow();
+      expect(decision).toMatchObject({ issueId, stageId: issue.executionPolicy.stages[0].id, outcome: "approved",
+        actorAgentId: reviewerAgentId, createdByRunId: "run-review-hold" });
+      expect(mockIssueService.update).toHaveBeenCalledTimes(1);
+      const patch = mockIssueService.update.mock.calls[0]![1] as Record<string, unknown>;
+      expect(patch).toMatchObject({
+        status: "in_review",
+        assigneeAgentId: workerAgentId,
+        assigneeUserId: null,
+        executionState: expect.objectContaining({
+          status: "completed",
+          completedStageIds: [issue.executionPolicy.stages[0].id],
+          lastDecisionId: decision!.id,
+          lastDecisionOutcome: "approved",
+          returnAssignee: expect.objectContaining({ type: "agent", agentId: workerAgentId }),
+        }),
+      });
+      expect(mockLogActivity).toHaveBeenCalledWith(expect.anything(), expect.objectContaining({
+        action: "issue.updated",
+        entityId: issueId,
+        details: expect.objectContaining({
+          source: "auto_approval_comment",
+          assigneeAgentId: workerAgentId,
+          taskCompletion: "awaiting_plan_verification",
+          planId,
+          _previous: { assigneeAgentId: reviewerAgentId, assigneeUserId: null },
+        }),
+      }));
+      const holdActivity = mockLogActivity.mock.calls.map(([, entry]) => entry as { action: string; details: Record<string, unknown> })
+        .find(entry => entry.details?.taskCompletion);
+      expect(holdActivity?.details).not.toHaveProperty("status");
+      await settleDeferredWakes();
+      expect(mockHeartbeatService.wakeup.mock.calls.filter(([agentId]) => agentId === workerAgentId)).toEqual([]);
+      // Nor is the approval steered into a live session goal of the plan Worker.
+      expect(mockRunnerGoalService.projection.mock.calls.filter(([, , agentId]) => agentId === workerAgentId)).toEqual([]);
+      expect(mockIssueService.listWakeableBlockedDependents).not.toHaveBeenCalled();
+    });
+
+    it("PATCH approval by a Human approver holds the Task the same way and records the plan in the activity", async () => {
+      const issue = await pendingStageIssue({ type: "user", userId: "local-board" });
+      persistPatches(issue);
+      mockActivePlanCoveringTask.mockResolvedValue(planId);
+
+      const res = await request(await installActor(createApp()))
+        .patch(`/api/issues/${issueId}`)
+        .send({ status: "done", comment: "Approved; the plan still needs its verification." });
+
+      expect(res.status).toBe(200);
+      expect(res.body).toMatchObject({ status: "in_review", assigneeAgentId: workerAgentId, assigneeUserId: null,
+        executionState: expect.objectContaining({ status: "completed", lastDecisionOutcome: "approved" }) });
+      const decision = decisionRow();
+      expect(decision).toMatchObject({ outcome: "approved", actorUserId: "local-board" });
+      expect(res.body.executionState.lastDecisionId).toBe(decision!.id);
+      expect(mockLogActivity).toHaveBeenCalledWith(expect.anything(), expect.objectContaining({
+        action: "issue.updated",
+        details: expect.objectContaining({ status: "in_review", assigneeAgentId: workerAgentId,
+          taskCompletion: "awaiting_plan_verification", planId }),
+      }));
+      await settleDeferredWakes();
+      expect(mockHeartbeatService.wakeup.mock.calls.filter(([agentId]) => agentId === workerAgentId)).toEqual([]);
+      expect(mockRunnerGoalService.projection.mock.calls.filter(([, , agentId]) => agentId === workerAgentId)).toEqual([]);
+    });
+
+    it("records the held approval in the transactional review activity when the approval re-enters review", async () => {
+      // A drifted Task (pending stage, status no longer in review) re-enters review through the held approval.
+      const issue = { ...(await pendingStageIssue({ type: "user", userId: "local-board" })), status: "in_progress" };
+      persistPatches(issue);
+      mockActivePlanCoveringTask.mockResolvedValue(planId);
+
+      const res = await request(await installActor(createApp()))
+        .patch(`/api/issues/${issueId}`)
+        .send({ status: "done", comment: "Approved; the plan still needs its verification." });
+
+      expect(res.status).toBe(200);
+      expect(res.body).toMatchObject({ status: "in_review", assigneeAgentId: workerAgentId });
+      expect(mockLogActivity).toHaveBeenCalledWith(mockTx, expect.objectContaining({
+        action: "issue.updated",
+        details: expect.objectContaining({ status: "in_review", taskCompletion: "awaiting_plan_verification", planId }),
+      }), expect.any(Array));
+    });
+
+    it("completes the Task as before when no unfinished plan covers it", async () => {
+      const issue = await pendingStageIssue({ type: "user", userId: "local-board" });
+      persistPatches(issue);
+
+      const res = await request(await installActor(createApp()))
+        .patch(`/api/issues/${issueId}`)
+        .send({ status: "done", comment: "Approved for ship" });
+
+      expect(res.status).toBe(200);
+      expect(mockActivePlanCoveringTask).toHaveBeenCalledWith(mockDb, "company-1", issueId);
+      expect(res.body).toMatchObject({ status: "done", assigneeAgentId: null, assigneeUserId: "local-board",
+        executionState: expect.objectContaining({ status: "completed", lastDecisionOutcome: "approved" }) });
+      expect(mockLogActivity.mock.calls.some(([, entry]) =>
+        (entry as { details?: Record<string, unknown> }).details?.taskCompletion !== undefined)).toBe(false);
+
+      const reviewer = await pendingStageIssue({ type: "agent", agentId: reviewerAgentId });
+      persistPatches(reviewer);
+      const reviewBody = "## Review: APPROVED";
+      mockIssueService.addComment.mockResolvedValue({ id: "comment-stage-done", issueId, companyId: "company-1", body: reviewBody,
+        createdAt: new Date(), updatedAt: new Date(), authorAgentId: reviewerAgentId, authorUserId: null });
+      const commented = await request(await installActor(createApp(), { type: "agent", agentId: reviewerAgentId, companyId: "company-1",
+        source: "agent_key", runId: "run-review-done" }))
+        .post(`/api/issues/${issueId}/comments`)
+        .send({ body: reviewBody });
+      expect(commented.status).toBe(201);
+      expect(mockIssueService.update).toHaveBeenLastCalledWith(issueId, expect.objectContaining({ status: "done",
+        executionState: expect.objectContaining({ status: "completed" }) }), mockTx, undefined, expect.any(Array), {});
+      const lastPatch = mockIssueService.update.mock.lastCall![1] as Record<string, unknown>;
+      expect(lastPatch).not.toHaveProperty("assigneeAgentId");
+    });
+
+    it("leaves changes-requested unchanged under the plan: returned to the Worker with its wake, no plan lookup", async () => {
+      const issue = await pendingStageIssue({ type: "agent", agentId: reviewerAgentId });
+      persistPatches(issue);
+      mockActivePlanCoveringTask.mockResolvedValue(planId);
+
+      const res = await request(await installActor(createApp(), { type: "agent", agentId: reviewerAgentId, companyId: "company-1",
+        runId: "run-review-changes" }))
+        .patch(`/api/issues/${issueId}`)
+        .send({ status: "in_progress", comment: "Needs another pass" });
+
+      expect(res.status).toBe(200);
+      expect(mockActivePlanCoveringTask).not.toHaveBeenCalled();
+      expect(res.body).toMatchObject({ status: "in_progress", assigneeAgentId: workerAgentId,
+        executionState: expect.objectContaining({ status: "changes_requested", lastDecisionOutcome: "changes_requested" }) });
+      expect(decisionRow()).toMatchObject({ outcome: "changes_requested" });
+      expect(mockLogActivity.mock.calls.some(([, entry]) =>
+        (entry as { details?: Record<string, unknown> }).details?.taskCompletion !== undefined)).toBe(false);
+      await waitForWakeup(() => expect(mockHeartbeatService.wakeup).toHaveBeenCalledWith(workerAgentId,
+        expect.objectContaining({ reason: "execution_changes_requested" })));
+    });
   });
 });

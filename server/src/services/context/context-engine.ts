@@ -72,6 +72,15 @@ export function contextTaskProviderTimeoutMs(totalDeadlineMs: number, nativeBoot
       Math.max(0, totalDeadlineMs - CONTEXT_FINALIZATION_RESERVE_MS))
     : DEFAULT_CONTEXT_PROVIDER_TIMEOUT_MS;
 }
+/** Approved Foundation retrieval revalidates every learned revision's retained
+ * Memory roots and analytical pins (`assertLearnedAssetAnalyticalSources`), the
+ * same source qualification the Memory provider performs. It therefore takes the
+ * same slice of the invocation's own total deadline instead of the generic
+ * 900 ms index-lookup slice, which ignored a caller's longer deadline. The total
+ * deadline still bounds it, and a timeout still omits Foundation. */
+export function contextFoundationProviderTimeoutMs(totalDeadlineMs: number): number {
+  return contextMemoryProviderTimeoutMs(totalDeadlineMs);
+}
 
 export const DEFAULT_CONTEXT_BUDGET: ContextBudget = {
   maxItems: 24,
@@ -409,12 +418,13 @@ export function serializeContextPacket(packet: ContextPacket): string {
   ].filter((section) => section.trim().length > 0).join("\n\n");
 }
 
-function foundationProvider(db: Db): ContextProvider {
+function foundationProvider(db: Db, totalDeadlineMs: number): ContextProvider {
   const access = accessService(db);
   const search = foundationIndexService(db);
   return {
     key: "foundation",
     requirement: "optional",
+    timeoutMs: contextFoundationProviderTimeoutMs(totalDeadlineMs),
     async retrieve({ request, signal, providerDeadlineAt }) {
       const decision = await (request.authorizationDecision ?? access.decide)({
         enforceResponsibleUserIntersection: request.enforceResponsibleUserIntersection,
@@ -786,7 +796,7 @@ export function contextEngineService(db: Db, options: { providers?: ContextProvi
       const providers = options.providers ?? [
         ...(input.issueId ? [taskProvider(activeDb, contextTaskProviderTimeoutMs(totalDeadlineMs, nativeBootstrap))] : []),
         ...(input.sourceScope === "task_only" ? [] : [
-          ...(input.includeFoundation === false ? [] : [foundationProvider(activeDb)]),
+          ...(input.includeFoundation === false ? [] : [foundationProvider(activeDb, totalDeadlineMs)]),
           memoryContextProvider(activeDb, totalDeadlineMs), cognitiveContextProvider(activeDb), derivedMemoryContextProvider(activeDb),
           ...(!inspectionActor ? defaultConnectedKnowledgeContextProviders(activeDb, input) : []),
         ]),

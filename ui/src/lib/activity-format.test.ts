@@ -171,4 +171,14 @@ describe("activity formatting", () => {
     expect(activityReviewAwaitsPlanVerification("issue.thread_interaction_rejected", held)).toBe(false);
     expect(activityReviewAwaitsPlanVerification("issue.thread_interaction_accepted", null)).toBe(false);
   });
+  it("marks a final stage approval held for its plan's verification (MS1f)", () => {
+    const held = { source: "auto_approval_comment", assigneeAgentId: "agent-1", assigneeUserId: null,
+      taskCompletion: "awaiting_plan_verification", planId: "plan-1", _previous: { assigneeAgentId: "agent-2", assigneeUserId: null } };
+    expect(activityReviewAwaitsPlanVerification("issue.updated", held)).toBe(true);
+    // The activity line keeps its existing wording; the note is shown beside it.
+    expect(formatIssueActivityAction("issue.updated", held, { agentMap: new Map([["agent-1", { name: "Writer" }]]) as never }))
+      .toBe("made Writer responsible for the task");
+    expect(activityReviewAwaitsPlanVerification("issue.updated", { status: "done", source: "auto_approval_comment" })).toBe(false);
+    expect(activityReviewAwaitsPlanVerification("issue.comment_added", held)).toBe(false);
+  });
 });
