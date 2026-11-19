@@ -901,10 +901,10 @@
     {
       "source": "server/src/routes/issues.ts",
       "articleId": "help-and-human-support",
-      "sourceSha256": "358f3ccdc2736d80c38efa18736982a4501a141643ebfb820ebb34167f11d129",
+      "sourceSha256": "a1a9919d5ae3c714e751d18d20b202d5162ee7abc325f21bb15a3f021cd08718",
       "articleSha256": "bec6b2b830586252df7700cc8b8f23018da446ede36284d98e53f8db2b049a1b",
       "decision": "no_change",
-      "rationale": "2026-11-18 MS1f phase 1 review: the final approval of an execution-policy review or approval stage on a Task covered by an unfinished orchestration plan now keeps the Task in review, returns it to the plan Worker without a wake and records taskCompletion awaiting_plan_verification and the plan id in the issue.updated activity; without a covering plan, changes-requested and every other route behaviour are unchanged. Support intake, contacts, recovery actions, retry and stop steps and Help navigation are unchanged, and these articles do not describe stage approvals, so the existing English and Danish guidance remains accurate."
+      "rationale": "2026-11-19 MS1f stop 5 review: when the board returns a Task from a review step to the Co-worker that did the work, the Task keeps its saved Native sources (migration 0587 records the return), so that Co-worker can work on it again; previously the update dropped those sources and later Native runs on the Task were refused. Task status, retry, stop, continuation, recovery, support, export and deletion behavior shown to people is unchanged; no article change needed. 2026-11-18 MS1f phase 1 review: the final approval of an execution-policy review or approval stage on a Task covered by an unfinished orchestration plan now keeps the Task in review, returns it to the plan Worker without a wake and records taskCompletion awaiting_plan_verification and the plan id in the issue.updated activity; without a covering plan, changes-requested and every other route behaviour are unchanged. Support intake, contacts, recovery actions, retry and stop steps and Help navigation are unchanged, and these articles do not describe stage approvals, so the existing English and Danish guidance remains accurate."
     },
     {
       "source": "server/src/routes/saas.ts",
@@ -1213,10 +1213,10 @@
     {
       "source": "server/src/routes/issues.ts",
       "articleId": "help-and-human-support-da",
-      "sourceSha256": "358f3ccdc2736d80c38efa18736982a4501a141643ebfb820ebb34167f11d129",
+      "sourceSha256": "a1a9919d5ae3c714e751d18d20b202d5162ee7abc325f21bb15a3f021cd08718",
       "articleSha256": "2c92acfc98fc458e84cf4bf6fc421119816d6f471922dceee726e311804bf6b5",
       "decision": "no_change",
-      "rationale": "2026-11-18 MS1f phase 1 review: the final approval of an execution-policy review or approval stage on a Task covered by an unfinished orchestration plan now keeps the Task in review, returns it to the plan Worker without a wake and records taskCompletion awaiting_plan_verification and the plan id in the issue.updated activity; without a covering plan, changes-requested and every other route behaviour are unchanged. Support intake, contacts, recovery actions, retry and stop steps and Help navigation are unchanged, and these articles do not describe stage approvals, so the existing English and Danish guidance remains accurate."
+      "rationale": "2026-11-19 MS1f stop 5-gennemgang: n\u00e5r bestyrelsen sender en opgave tilbage fra et gennemgangstrin til den Co-worker, der udf\u00f8rte arbejdet, beholder opgaven sine gemte Native-kilder (migration 0587 registrerer tilbagesendelsen), s\u00e5 den Co-worker kan arbejde p\u00e5 den igen; tidligere fjernede opdateringen kilderne, og senere Native-k\u00f8rsler p\u00e5 opgaven blev afvist. Opgavestatus, nyt fors\u00f8g, stop, genoptagelse, gendannelse, support, eksport og sletning, som personer ser, er u\u00e6ndret; artiklen kr\u00e6ver ingen \u00e6ndring. 2026-11-18 MS1f phase 1 review: the final approval of an execution-policy review or approval stage on a Task covered by an unfinished orchestration plan now keeps the Task in review, returns it to the plan Worker without a wake and records taskCompletion awaiting_plan_verification and the plan id in the issue.updated activity; without a covering plan, changes-requested and every other route behaviour are unchanged. Support intake, contacts, recovery actions, retry and stop steps and Help navigation are unchanged, and these articles do not describe stage approvals, so the existing English and Danish guidance remains accurate."
     },
     {
       "source": "server/src/routes/saas.ts",
@@ -1541,10 +1541,10 @@
     {
       "source": "server/src/routes/issues.ts",
       "articleId": "recovering-work",
-      "sourceSha256": "358f3ccdc2736d80c38efa18736982a4501a141643ebfb820ebb34167f11d129",
+      "sourceSha256": "a1a9919d5ae3c714e751d18d20b202d5162ee7abc325f21bb15a3f021cd08718",
       "articleSha256": "0296c2c8ae18c613eef9c17ea9679b146e8afbcd3504451a5511a218d6d8b955",
       "decision": "no_change",
-      "rationale": "2026-11-18 MS1f phase 1 review: the final approval of an execution-policy review or approval stage on a Task covered by an unfinished orchestration plan now keeps the Task in review, returns it to the plan Worker without a wake and records taskCompletion awaiting_plan_verification and the plan id in the issue.updated activity; without a covering plan, changes-requested and every other route behaviour are unchanged. Support intake, contacts, recovery actions, retry and stop steps and Help navigation are unchanged, and these articles do not describe stage approvals, so the existing English and Danish guidance remains accurate."
+      "rationale": "2026-11-19 MS1f stop 5 review: when the board returns a Task from a review step to the Co-worker that did the work, the Task keeps its saved Native sources (migration 0587 records the return), so that Co-worker can work on it again; previously the update dropped those sources and later Native runs on the Task were refused. Task status, retry, stop, continuation, recovery, support, export and deletion behavior shown to people is unchanged; no article change needed. 2026-11-18 MS1f phase 1 review: the final approval of an execution-policy review or approval stage on a Task covered by an unfinished orchestration plan now keeps the Task in review, returns it to the plan Worker without a wake and records taskCompletion awaiting_plan_verification and the plan id in the issue.updated activity; without a covering plan, changes-requested and every other route behaviour are unchanged. Support intake, contacts, recovery actions, retry and stop steps and Help navigation are unchanged, and these articles do not describe stage approvals, so the existing English and Danish guidance remains accurate."
     },
     {
       "source": "server/src/services/execution-workspaces.ts",
@@ -1581,10 +1581,10 @@
     {
       "source": "server/src/services/issues.ts",
       "articleId": "recovering-work",
-      "sourceSha256": "6c4388358d023019c3faaae421905fc94e80784941c1c95290c429974646b1d5",
+      "sourceSha256": "54d21c04d004281f6c766aed51d0091327e9d6aec28f49b7a94b92735a8b3cb5",
       "articleSha256": "0296c2c8ae18c613eef9c17ea9679b146e8afbcd3504451a5511a218d6d8b955",
       "decision": "no_change",
-      "rationale": "Reviewed the complete English and Danish guidance. The source fix (D4) makes concurrent requests that replace an Agent Chat conversation whose sources became inaccessible return the one replacement conversation instead of a spurious not-found error, and returns it only for the same company, Agent and person. It adds no user action, retry, stop or support step, and the articles do not describe this flow, so the existing guidance remains accurate."
+      "rationale": "2026-11-19 MS1f stop 5 review: when the board returns a Task from a review step to the Co-worker that did the work, the Task keeps its saved Native sources (migration 0587 records the return), so that Co-worker can work on it again; previously the update dropped those sources and later Native runs on the Task were refused. Task status, retry, stop, continuation, recovery, support, export and deletion behavior shown to people is unchanged; no article change needed. Reviewed the complete English and Danish guidance. The source fix (D4) makes concurrent requests that replace an Agent Chat conversation whose sources became inaccessible return the one replacement conversation instead of a spurious not-found error, and returns it only for the same company, Agent and person. It adds no user action, retry, stop or support step, and the articles do not describe this flow, so the existing guidance remains accurate."
     },
     {
       "source": "server/src/services/managed-repository-checkout.ts",
@@ -1645,10 +1645,10 @@
     {
       "source": "server/src/routes/issues.ts",
       "articleId": "recovering-work-da",
-      "sourceSha256": "358f3ccdc2736d80c38efa18736982a4501a141643ebfb820ebb34167f11d129",
+      "sourceSha256": "a1a9919d5ae3c714e751d18d20b202d5162ee7abc325f21bb15a3f021cd08718",
       "articleSha256": "ce0a7beaa56a5db23963d81eed8c19687d2efc5405773ec33dfd635a377090bc",
       "decision": "no_change",
-      "rationale": "2026-11-18 MS1f phase 1 review: the final approval of an execution-policy review or approval stage on a Task covered by an unfinished orchestration plan now keeps the Task in review, returns it to the plan Worker without a wake and records taskCompletion awaiting_plan_verification and the plan id in the issue.updated activity; without a covering plan, changes-requested and every other route behaviour are unchanged. Support intake, contacts, recovery actions, retry and stop steps and Help navigation are unchanged, and these articles do not describe stage approvals, so the existing English and Danish guidance remains accurate."
+      "rationale": "2026-11-19 MS1f stop 5-gennemgang: n\u00e5r bestyrelsen sender en opgave tilbage fra et gennemgangstrin til den Co-worker, der udf\u00f8rte arbejdet, beholder opgaven sine gemte Native-kilder (migration 0587 registrerer tilbagesendelsen), s\u00e5 den Co-worker kan arbejde p\u00e5 den igen; tidligere fjernede opdateringen kilderne, og senere Native-k\u00f8rsler p\u00e5 opgaven blev afvist. Opgavestatus, nyt fors\u00f8g, stop, genoptagelse, gendannelse, support, eksport og sletning, som personer ser, er u\u00e6ndret; artiklen kr\u00e6ver ingen \u00e6ndring. 2026-11-18 MS1f phase 1 review: the final approval of an execution-policy review or approval stage on a Task covered by an unfinished orchestration plan now keeps the Task in review, returns it to the plan Worker without a wake and records taskCompletion awaiting_plan_verification and the plan id in the issue.updated activity; without a covering plan, changes-requested and every other route behaviour are unchanged. Support intake, contacts, recovery actions, retry and stop steps and Help navigation are unchanged, and these articles do not describe stage approvals, so the existing English and Danish guidance remains accurate."
     },
     {
       "source": "server/src/services/execution-workspaces.ts",
@@ -1685,10 +1685,10 @@
     {
       "source": "server/src/services/issues.ts",
       "articleId": "recovering-work-da",
-      "sourceSha256": "6c4388358d023019c3faaae421905fc94e80784941c1c95290c429974646b1d5",
+      "sourceSha256": "54d21c04d004281f6c766aed51d0091327e9d6aec28f49b7a94b92735a8b3cb5",
       "articleSha256": "ce0a7beaa56a5db23963d81eed8c19687d2efc5405773ec33dfd635a377090bc",
       "decision": "no_change",
-      "rationale": "Reviewed the complete English and Danish guidance. The source fix (D4) makes concurrent requests that replace an Agent Chat conversation whose sources became inaccessible return the one replacement conversation instead of a spurious not-found error, and returns it only for the same company, Agent and person. It adds no user action, retry, stop or support step, and the articles do not describe this flow, so the existing guidance remains accurate."
+      "rationale": "2026-11-19 MS1f stop 5-gennemgang: n\u00e5r bestyrelsen sender en opgave tilbage fra et gennemgangstrin til den Co-worker, der udf\u00f8rte arbejdet, beholder opgaven sine gemte Native-kilder (migration 0587 registrerer tilbagesendelsen), s\u00e5 den Co-worker kan arbejde p\u00e5 den igen; tidligere fjernede opdateringen kilderne, og senere Native-k\u00f8rsler p\u00e5 opgaven blev afvist. Opgavestatus, nyt fors\u00f8g, stop, genoptagelse, gendannelse, support, eksport og sletning, som personer ser, er u\u00e6ndret; artiklen kr\u00e6ver ingen \u00e6ndring. Reviewed the complete English and Danish guidance. The source fix (D4) makes concurrent requests that replace an Agent Chat conversation whose sources became inaccessible return the one replacement conversation instead of a spurious not-found error, and returns it only for the same company, Agent and person. It adds no user action, retry, stop or support step, and the articles do not describe this flow, so the existing guidance remains accurate."
     },
     {
       "source": "server/src/services/managed-repository-checkout.ts",
