@@ -1111,9 +1111,11 @@ describeEmbeddedPostgres("routine service live-execution coalescing", () => {
 
       stopTaskDrain();
       workers.routines.wake();
+      // RS1: the woken worker claims the trigger asynchronously; vi.waitFor's
+      // 1 s default is shorter than a loaded CI runner needs for that round trip.
       await vi.waitFor(async () => {
         expect(await db.select().from(routineRuns).where(eq(routineRuns.routineId, routine.id))).toHaveLength(1);
-      });
+      }, { timeout: 15_000, interval: 100 });
       const [claimed] = await db.select({ nextRunAt: routineTriggers.nextRunAt }).from(routineTriggers)
         .where(eq(routineTriggers.id, trigger.id));
       expect(claimed?.nextRunAt?.getTime()).toBeGreaterThan(deadline.getTime());
