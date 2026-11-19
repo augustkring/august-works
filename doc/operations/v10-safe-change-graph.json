@@ -4481,7 +4481,7 @@
         },
         {
           "path": "server/src/services/authorization.ts",
-          "sha256": "7ca9d478369570e04f0e15a3cd5bea96a588623851fd0f2b4aa94157af118533"
+          "sha256": "d4e9a33d7ba00d9f2fcb946109f3c12fadcd13368cbc8ae56d1ce2c6a20382b4"
         },
         {
           "path": "server/src/services/chat-channels.ts",
@@ -10293,7 +10293,7 @@
         },
         {
           "path": "server/src/services/authorization.ts",
-          "sha256": "7ca9d478369570e04f0e15a3cd5bea96a588623851fd0f2b4aa94157af118533"
+          "sha256": "d4e9a33d7ba00d9f2fcb946109f3c12fadcd13368cbc8ae56d1ce2c6a20382b4"
         },
         {
           "path": "server/src/services/capability-resolver.test.ts",
@@ -11429,7 +11429,7 @@
         },
         {
           "path": "server/src/__tests__/v7-learning.integration.test.ts",
-          "sha256": "37e4e71e1eaf0d9cfc9dae5f24076fdc3d3bf592a5b775d5edf0c50b2ca6a673"
+          "sha256": "d316bfa2de61565418fd2c5a6b091cd66f80a73a7a3ee3670ab60c84333105df"
         },
         {
           "path": "server/src/__tests__/v7-model-reservations.integration.test.ts",
@@ -11776,7 +11776,7 @@
         },
         {
           "path": "server/src/__tests__/v7-learning.integration.test.ts",
-          "sha256": "37e4e71e1eaf0d9cfc9dae5f24076fdc3d3bf592a5b775d5edf0c50b2ca6a673"
+          "sha256": "d316bfa2de61565418fd2c5a6b091cd66f80a73a7a3ee3670ab60c84333105df"
         },
         {
           "path": "server/src/__tests__/v7-orchestration.integration.test.ts",
@@ -16302,7 +16302,7 @@
         },
         {
           "path": "server/src/services/authorization.ts",
-          "sha256": "7ca9d478369570e04f0e15a3cd5bea96a588623851fd0f2b4aa94157af118533"
+          "sha256": "d4e9a33d7ba00d9f2fcb946109f3c12fadcd13368cbc8ae56d1ce2c6a20382b4"
         },
         {
           "path": "server/src/services/board-auth.test.ts",
@@ -21248,7 +21248,7 @@
         },
         {
           "path": "server/src/__tests__/task-privacy-prepared-plan.integration.test.ts",
-          "sha256": "d26a3e03b2b5dbab859fdeb6adab692e6b219e84ca119859bb01645f508ec6c8"
+          "sha256": "3c26e1716c71f6163f7dc8a4c8a0fcfde8cf2345f8d290272c271a16f8c47f91"
         },
         {
           "path": "server/src/__tests__/v10-private-payload.integration.test.ts",
@@ -21308,7 +21308,7 @@
         },
         {
           "path": "server/src/services/context/context-engine.ts",
-          "sha256": "3fccaebc9fe30c08c37e5dcdbb82f4817d7d7605b8959403805ffa1b45107e71"
+          "sha256": "1a1615a33c46c672d8e0a30169093fb8f7381c42b3295727df664c5d74695ee8"
         },
         {
           "path": "server/src/services/context/context-manifest.test.ts",
@@ -46968,7 +46968,7 @@
       "id": "source:server/src/services/authorization.ts",
       "kind": "current_source_owner",
       "path": "server/src/services/authorization.ts",
-      "sha256": "7ca9d478369570e04f0e15a3cd5bea96a588623851fd0f2b4aa94157af118533",
+      "sha256": "d4e9a33d7ba00d9f2fcb946109f3c12fadcd13368cbc8ae56d1ce2c6a20382b4",
       "changeIds": [
         "SCR-V10-HOTSPOT-01",
         "SCR-V10-HOTSPOT-07",
@@ -51863,7 +51863,7 @@
       "id": "source:server/src/__tests__/v7-learning.integration.test.ts",
       "kind": "current_source_owner",
       "path": "server/src/__tests__/v7-learning.integration.test.ts",
-      "sha256": "37e4e71e1eaf0d9cfc9dae5f24076fdc3d3bf592a5b775d5edf0c50b2ca6a673",
+      "sha256": "d316bfa2de61565418fd2c5a6b091cd66f80a73a7a3ee3670ab60c84333105df",
       "changeIds": [
         "SCR-V10-HOTSPOT-11",
         "SCR-V10-HOTSPOT-12"
@@ -59795,7 +59795,7 @@
       "id": "source:server/src/__tests__/task-privacy-prepared-plan.integration.test.ts",
       "kind": "current_source_owner",
       "path": "server/src/__tests__/task-privacy-prepared-plan.integration.test.ts",
-      "sha256": "d26a3e03b2b5dbab859fdeb6adab692e6b219e84ca119859bb01645f508ec6c8",
+      "sha256": "3c26e1716c71f6163f7dc8a4c8a0fcfde8cf2345f8d290272c271a16f8c47f91",
       "changeIds": [
         "SCR-V10-PRIVATE-DATA-ERASURE"
       ],
@@ -60020,7 +60020,7 @@
       "id": "source:server/src/services/context/context-engine.ts",
       "kind": "current_source_owner",
       "path": "server/src/services/context/context-engine.ts",
-      "sha256": "3fccaebc9fe30c08c37e5dcdbb82f4817d7d7605b8959403805ffa1b45107e71",
+      "sha256": "1a1615a33c46c672d8e0a30169093fb8f7381c42b3295727df664c5d74695ee8",
       "changeIds": [
         "SCR-V10-PRIVATE-DATA-ERASURE"
       ],
