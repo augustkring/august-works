@@ -14817,7 +14817,8 @@ export function remoteCheckpointIncompleteFailure(
   );
 }
 
-async function assertNativeOpenCodeConformanceBackendAuthority(input: {
+/** Exported for the lock-order test only. */
+export async function assertNativeOpenCodeConformanceBackendAuthority(input: {
   db: Db; execution: NativeExecutionInput; runnerExecutionTarget?: AdapterExecutionTarget | null;
   durableEnvironmentLeaseId?: string; runnerEnvironment?: NodeJS.ProcessEnv; runnerInstanceId: string;
 }) {
@@ -14832,11 +14833,21 @@ async function assertNativeOpenCodeConformanceBackendAuthority(input: {
   const leaseId = target.leaseId;
   await input.db.transaction(async rawTx => {
     const tx = rawTx as unknown as Db, binding = execution.binding;
-    const [run] = await tx.select().from(heartbeatRuns).where(and(
+    const runPredicate = and(
       eq(heartbeatRuns.companyId, binding.companyId), eq(heartbeatRuns.id, binding.runId),
       eq(heartbeatRuns.agentId, binding.agentId), eq(heartbeatRuns.status, "running"),
       eq(heartbeatRuns.runtimeMode, "native"), eq(heartbeatRuns.scopeKind, "issue"),
+    );
+    // D5e. Lock the Run's Task before the Run (company > Task > run in
+    // run-identity.ts), as assertTaskExecutionContext does below. Holding the
+    // Run while waiting for the Task would close a cycle with a writer that
+    // holds the Task and waits for the Run. The plain read only finds the
+    // Task id; the reads below are unchanged and re-read this Task FOR SHARE.
+    const [runTask] = await tx.select({ nativeIssueId: heartbeatRuns.nativeIssueId }).from(heartbeatRuns).where(runPredicate);
+    if (runTask?.nativeIssueId) await tx.select({ id: issues.id }).from(issues).where(and(
+      eq(issues.companyId, binding.companyId), eq(issues.id, runTask.nativeIssueId),
     )).for("share");
+    const [run] = await tx.select().from(heartbeatRuns).where(runPredicate).for("share");
     const [task] = run?.nativeIssueId ? await tx.select().from(issues).where(and(
       eq(issues.companyId, binding.companyId), eq(issues.id, run.nativeIssueId),
     )).for("share") : [];
