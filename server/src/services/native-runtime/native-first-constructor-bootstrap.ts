@@ -18,8 +18,8 @@ const record = (value: unknown): Record<string, unknown> =>
  * - its prepared closure is bound to this company, Run, Agent and Task and to
  *   the persisted execution input;
  * - the candidate inputs are that prepared closure's inputs exactly, in
- *   order, plus only the turn's Context inputs (kind `context`, each once) that
- *   the server attaches to the first frame after launch.
+ *   order, plus at most one extra input: the turn's Context input (kind
+ *   `context`) that the server attaches to the first frame after launch.
  * It returns the prepared inputs and those Context inputs separately; the
  * caller must prove each Context input is a manifest of this same Run (see
  * nativeHistoricalPendingContextForParentInner). The caller passes a Run row
@@ -51,8 +51,7 @@ export function nativeFirstConstructorBootstrapInputs(
   const extras = input.candidate.filter(candidate => !prepared.some(value => isDeepStrictEqual(value, candidate)));
   const turnContextInputs = extras.filter((value): value is Extract<NativePayloadSourceInput, { kind: "context" }> =>
     value.kind === "context");
-  if (turnContextInputs.length !== extras.length ||
-    new Set(turnContextInputs.map(value => nativeSha256(value))).size !== turnContextInputs.length ||
+  if (turnContextInputs.length !== extras.length || turnContextInputs.length > 1 ||
     !isDeepStrictEqual(input.candidate.filter(candidate => !extras.includes(candidate)), prepared)) return null;
   return { inputs: [...prepared], turnContextInputs };
 }

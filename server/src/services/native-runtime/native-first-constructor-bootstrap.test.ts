@@ -1,7 +1,7 @@
 import { describe, expect, it } from "vitest";
 import type { NativePayloadSourceInput } from "@paperclipai/shared";
 import { nativeSha256 } from "./canonical.js";
-import { nativeFirstConstructorBootstrapInputs } from "./native-first-constructor-bootstrap.js";
+import { nativeFirstConstructorBootstrapInputs, nativeFirstConstructorBootstrapInputsCurrent } from "./native-first-constructor-bootstrap.js";
 
 // APR-E2E-16. The running v0 Run's prepared launch closure stands in for its
 // not-yet-sealed receipt, for the exact same inputs only.
@@ -45,6 +45,32 @@ describe("nativeFirstConstructorBootstrapInputs", () => {
     expect(read(run(), [...inputs, turnContext])).toEqual({ inputs, turnContextInputs: [turnContext] });
     expect(read(run(), [inputs[0]!, turnContext, inputs[1]!])).toEqual({ inputs, turnContextInputs: [turnContext] });
     expect(read(run(), [...inputs, turnContext, turnContext])).toBeNull();
+    // Exactly one extra Context input: a second, different one is refused.
+    const secondContext = { ...turnContext, manifestId: "bbbbbbbb-bbbb-4bbb-8bbb-bbbbbbbbbbbb" } as NativePayloadSourceInput;
+    expect(read(run(), [...inputs, turnContext, secondContext])).toBeNull();
+    // Reordered prepared inputs around the Context input are refused.
+    expect(read(run(), [inputs[1]!, turnContext, inputs[0]!])).toBeNull();
+  });
+
+  // The manifest proof, read through the caller's transaction (a stub here).
+  const manifestDb = (row: Record<string, unknown> | null) => ({
+    select: () => ({ from: () => ({ where: () => ({ for: async () => row ? [row] : [] }) }) }),
+  }) as unknown as Parameters<typeof nativeFirstConstructorBootstrapInputsCurrent>[0];
+  const manifest = { id: (turnContext as { manifestId: string }).manifestId, companyId, runId, agentId, issueId,
+    queryHash: "1".repeat(64), policySnapshotHash: "2".repeat(64) };
+  const current = (row: Record<string, unknown> | null) => nativeFirstConstructorBootstrapInputsCurrent(manifestDb(row), run(),
+    { companyId, issueId, agentId, candidate: [...inputs, turnContext] });
+
+  it("accepts the turn's Context input only as this Run's own manifest with the same Agent, Task, query and policy hashes", async () => {
+    expect(await current(manifest)).toEqual(inputs);
+    expect(await nativeFirstConstructorBootstrapInputsCurrent(manifestDb(null), run(), { companyId, issueId, agentId, candidate: inputs }))
+      .toEqual(inputs);
+    expect(await current(null)).toBeNull();
+    expect(await current({ ...manifest, runId: "cccccccc-cccc-4ccc-8ccc-cccccccccccc" })).toBeNull();
+    expect(await current({ ...manifest, agentId: "dddddddd-dddd-4ddd-8ddd-dddddddddddd" })).toBeNull();
+    expect(await current({ ...manifest, issueId: "eeeeeeee-eeee-4eee-8eee-eeeeeeeeeeee" })).toBeNull();
+    expect(await current({ ...manifest, policySnapshotHash: "9".repeat(64) })).toBeNull();
+    expect(await current({ ...manifest, queryHash: "8".repeat(64) })).toBeNull();
   });
 
   it("refuses a Run with a sealed receipt or with prior Native effects", () => {
