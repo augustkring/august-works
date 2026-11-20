@@ -32121,7 +32121,7 @@
         },
         {
           "path": "server/src/services/company-search-help.generated.ts",
-          "sha256": "933fd28347428742046836ab278e108d3427cf2f0ab8c16a221c3bd4264a189c"
+          "sha256": "1a57aca2718f9d5ba04ef6e64d52c97f45cc4f570491bd5507b083d5cd731a5c"
         },
         {
           "path": "server/src/services/task-search.ts",
@@ -32680,7 +32680,7 @@
         },
         {
           "path": "doc/operations/agent-native-ui-operation-coverage.json",
-          "sha256": "9580af0d66cef09cb3094b79d78e0df26ec3c7e9419bc68a920c904ce3312194"
+          "sha256": "bb498f32750f6d406148e7a916bd08cada82c73994b7a3a8a97f38e824a13edf"
         },
         {
           "path": "doc/operations/production-hotspot-responsibilities.json",
@@ -32692,7 +32692,7 @@
         },
         {
           "path": "doc/operations/v10-capability-projection.json",
-          "sha256": "5b509bbf421b18b42ae19025e97a23d560545ba977ffd23c8f0c83afb1c7914a"
+          "sha256": "1ddcbe2be593fc110d35f1730e9adadde7d029863570652fcbc0d06203df4c08"
         },
         {
           "path": "package.json",
@@ -72570,7 +72570,7 @@
       "id": "source:server/src/services/company-search-help.generated.ts",
       "kind": "current_source_owner",
       "path": "server/src/services/company-search-help.generated.ts",
-      "sha256": "933fd28347428742046836ab278e108d3427cf2f0ab8c16a221c3bd4264a189c",
+      "sha256": "1a57aca2718f9d5ba04ef6e64d52c97f45cc4f570491bd5507b083d5cd731a5c",
       "changeIds": [
         "SCR-V10-PRODUCT-IDENTITY-HELP-LANGUAGE"
       ],
@@ -73080,7 +73080,7 @@
       "id": "source:doc/operations/agent-native-ui-operation-coverage.json",
       "kind": "current_source_owner",
       "path": "doc/operations/agent-native-ui-operation-coverage.json",
-      "sha256": "9580af0d66cef09cb3094b79d78e0df26ec3c7e9419bc68a920c904ce3312194",
+      "sha256": "bb498f32750f6d406148e7a916bd08cada82c73994b7a3a8a97f38e824a13edf",
       "changeIds": [
         "SCR-V10-CI-RELEASE-AND-CATALOG-GOVERNANCE"
       ],
@@ -73125,7 +73125,7 @@
       "id": "source:doc/operations/v10-capability-projection.json",
       "kind": "current_source_owner",
       "path": "doc/operations/v10-capability-projection.json",
-      "sha256": "5b509bbf421b18b42ae19025e97a23d560545ba977ffd23c8f0c83afb1c7914a",
+      "sha256": "1ddcbe2be593fc110d35f1730e9adadde7d029863570652fcbc0d06203df4c08",
       "changeIds": [
         "SCR-V10-CI-RELEASE-AND-CATALOG-GOVERNANCE"
       ],
