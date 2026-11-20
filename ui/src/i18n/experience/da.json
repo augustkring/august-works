@@ -5647,6 +5647,46 @@
       "tabConfig": "Konfiguration",
       "tabBudget": "Budget",
       "loadingWs": "Indlæser arbejdsområder…"
+    },
+    "gov": {
+      "title": "Styring af interaktioner",
+      "intro1": "Interaktioner i en tråd er åbne som standard:",
+      "anyone": "Alle",
+      "intro2": "i organisationen – Board eller en vilkårlig agent, også den der spurgte – kan svare. Indsnævr kun en type, når det er nødvendigt.",
+      "defaultPolicy": "Standardregel",
+      "intro3": "er den målgruppe, nye kort får, når afsenderen ikke vælger en;",
+      "cap": "Loft",
+      "intro4": "indsnævrer alle anmodninger af den type og kan aldrig udvide en. Bekræftelser af værktøjsgodkendelser forbliver altid",
+      "humanOnly": "Kun mennesker",
+      "ariaDefault": "Standardmålgruppe for {{kind}}",
+      "ariaCap": "Loft for målgruppen for {{kind}}",
+      "kind": {
+        "suggest_tasks": "Foreslåede opgaver",
+        "ask_user_questions": "Spørgsmål til brugeren",
+        "request_confirmation": "Bekræftelser",
+        "request_checkbox_confirmation": "Bekræftelser med afkrydsning",
+        "request_item_verdicts": "Afgørelser pr. punkt",
+        "connection_intent": "Anmodninger om forbindelse"
+      },
+      "unsetDefault": "Alle (standard)",
+      "unsetCap": "Intet loft",
+      "effectDefault": "Nye kort er åbne – Board eller en vilkårlig agent kan svare, også den der spurgte.",
+      "effectCapNone": "En anmodning beholder den målgruppe, den selv vælger.",
+      "effectDefNotCreator": "Nye kort udelukker den agent, der oprettede dem, så svaret kommer fra en anden.",
+      "effectDefHuman": "Nye kort venter på en person i Board. Agenter afvises.",
+      "effectCapNotCreator": "Selv et kort, der beder om Alle, indsnævres, så skaberen udelukkes.",
+      "effectCapHuman": "Alle kort af denne type venter på en person, uanset hvad de bad om.",
+      "kindHeader": "Type"
+    },
+    "aud": {
+      "anyone": "Alle",
+      "not_creator": "Alle undtagen skaberen",
+      "human_only": "Kun mennesker",
+      "effect": {
+        "anyone": "Alle i organisationen kan svare – Board eller en vilkårlig agent, også den der spurgte.",
+        "not_creator": "Alle i organisationen undtagen den agent, der oprettede kortet, og dens kørsel. Brug den, når svaret skal komme fra en anden.",
+        "human_only": "Kun en person i Board kan svare. Agenter afvises."
+      }
     }
   }
 }

@@ -5647,6 +5647,46 @@
       "tabConfig": "Configuration",
       "tabBudget": "Budget",
       "loadingWs": "Loading workspaces..."
+    },
+    "gov": {
+      "title": "Interaction governance",
+      "intro1": "Thread interactions are open by default:",
+      "anyone": "Anyone",
+      "intro2": "in the organization — the board or any agent, including the one that asked — can respond. Narrow a kind only when you need to.",
+      "defaultPolicy": "Default policy",
+      "intro3": "is the audience new cards get when the requester does not ask for one;",
+      "cap": "Cap",
+      "intro4": "narrows every request of that kind and can never widen one. Tool-approval confirmations always stay",
+      "humanOnly": "Human only",
+      "ariaDefault": "Default resolver audience for {{kind}}",
+      "ariaCap": "Resolver cap for {{kind}}",
+      "kind": {
+        "suggest_tasks": "Suggested tasks",
+        "ask_user_questions": "Ask user questions",
+        "request_confirmation": "Confirmations",
+        "request_checkbox_confirmation": "Checkbox confirmations",
+        "request_item_verdicts": "Item verdicts",
+        "connection_intent": "Connection requests"
+      },
+      "unsetDefault": "Anyone (default)",
+      "unsetCap": "No cap",
+      "effectDefault": "New cards are open — the board or any agent can respond, including the one that asked.",
+      "effectCapNone": "A request keeps whatever audience it asks for.",
+      "effectDefNotCreator": "New cards exclude the agent that created them, so the answer comes from someone else.",
+      "effectDefHuman": "New cards wait for a person on the board. Agents are turned away.",
+      "effectCapNotCreator": "Even a card that asks for Anyone is narrowed to exclude its creator.",
+      "effectCapHuman": "Every card of this kind waits for a person, whatever it asked for.",
+      "kindHeader": "Kind"
+    },
+    "aud": {
+      "anyone": "Anyone",
+      "not_creator": "Anyone except creator",
+      "human_only": "Human only",
+      "effect": {
+        "anyone": "Anyone in the organization can respond — the board or any agent, including the one that asked.",
+        "not_creator": "Anyone in the organization except the agent that created the card, and its run. Use this when the answer has to come from someone else.",
+        "human_only": "Only a person on the board can respond. Agents are turned away."
+      }
     }
   }
 }

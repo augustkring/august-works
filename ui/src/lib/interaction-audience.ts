@@ -28,6 +28,7 @@ import {
   type IssueThreadInteractionResolverPolicyProvenance,
 } from "@paperclipai/shared";
 import type { IssueThreadInteraction } from "./issue-thread-interactions";
+import { screenText } from "../i18n/value-labels";
 
 /**
  * The open default. Creation surfaces present this first and requesters omit
@@ -58,12 +59,14 @@ const RESOLVER_POLICY_EFFECTS: Record<IssueThreadInteractionCanonicalResolverPol
 
 /** Accepts canonical values and the deprecated `board_*` compatibility aliases. */
 export function resolverPolicyLabel(policy: IssueThreadInteractionResolverPolicy): string {
-  return RESOLVER_POLICY_LABELS[normalizeIssueThreadInteractionResolverPolicy(policy)];
+  const key = normalizeIssueThreadInteractionResolverPolicy(policy);
+  return screenText(`aud.${key}`, { defaultValue: RESOLVER_POLICY_LABELS[key] });
 }
 
 /** Accepts canonical values and the deprecated `board_*` compatibility aliases. */
 export function resolverPolicyEffect(policy: IssueThreadInteractionResolverPolicy): string {
-  return RESOLVER_POLICY_EFFECTS[normalizeIssueThreadInteractionResolverPolicy(policy)];
+  const key = normalizeIssueThreadInteractionResolverPolicy(policy);
+  return screenText(`aud.effect.${key}`, { defaultValue: RESOLVER_POLICY_EFFECTS[key] });
 }
 
 /**
