@@ -192,6 +192,15 @@ describe("Connections landing page", () => {
     return client;
   }
 
+  it("exposes the loading placeholder as a labelled status region", async () => {
+    listGalleryMock.mockReturnValue(new Promise(() => {}));
+    await renderBrowse();
+    const loading = container.querySelector('[aria-label="Loading connections"]');
+    expect(loading).not.toBeNull();
+    // aria-label is prohibited on a generic div; axe flags it as aria-prohibited-attr.
+    expect(loading?.getAttribute("role")).toBe("status");
+  });
+
   it("shows retirement guidance before paused state for an obsolete Composio account", async () => {
     listApplicationsMock.mockResolvedValue({ applications: [application({ id: "old-app", name: "Composio", metadata: { sourceTemplateKey: "composio" } })] });
     listConnectionsMock.mockResolvedValue({ connections: [connection({ applicationId: "old-app", enabled: false, healthStatus: "error", transport: "rest_api", config: { sourceTemplateKey: "composio", connectionMethodKey: "api-key" } })] });

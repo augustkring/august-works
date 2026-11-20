@@ -680,7 +680,7 @@ export function Browse({ renderAccountDetails = (connection) => connection.conne
       ) : null}
 
       {loading ? (
-        <div className="space-y-3" aria-label={t("screens.apps.loading")}>
+        <div className="space-y-3" role="status" aria-busy="true" aria-label={t("screens.apps.loading")}>
           {Array.from({ length: 6 }).map((_, index) => (
             <Skeleton key={index} className="h-24 w-full rounded-xl" />
           ))}
