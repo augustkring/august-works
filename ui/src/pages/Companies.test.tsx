@@ -131,6 +131,15 @@ describe("Companies page", () => {
     });
   });
 
+  async function typeConfirmName(dialog: HTMLElement, value: string) {
+    const input = dialog.querySelector<HTMLInputElement>("input")!;
+    act(() => {
+      Object.getOwnPropertyDescriptor(HTMLInputElement.prototype, "value")!.set!.call(input, value);
+      input.dispatchEvent(new Event("input", { bubbles: true }));
+    });
+    await flushReact();
+  }
+
   async function openDeleteConfirmation() {
     const pointerClick = (el: Element) => {
       el.dispatchEvent(new PointerEvent("pointerdown", { bubbles: true, cancelable: true, button: 0 }));
@@ -168,6 +177,17 @@ describe("Companies page", () => {
     expect(dialog!.querySelector("a")?.getAttribute("href")).toBe("/PAP/company/export");
     expect(mockCompaniesApi.remove).not.toHaveBeenCalled();
 
+    // Delete stays disabled until the exact name is typed (EXIT-AUTH1).
+    const input = dialog!.querySelector<HTMLInputElement>("input")!;
+    expect(document.querySelector(`label[for='${input.id}']`)?.textContent).toContain("Type Acme Labs to confirm");
+    const deleteButton = () => [...dialog!.querySelectorAll("button")].find((button) => button.textContent === "Delete")!;
+    expect(deleteButton().disabled).toBe(true);
+    await typeConfirmName(dialog!, "acme labs");
+    expect(deleteButton().disabled).toBe(true);
+    await typeConfirmName(dialog!, "Acme Labs");
+    expect(deleteButton().disabled).toBe(false);
+    expect(dialog!.textContent).toContain("sign-in within the last 5 minutes");
+
     const cancel = [...dialog!.querySelectorAll("button")].find((button) => button.textContent === "Cancel");
     act(() => cancel!.click());
     await flushReact();
@@ -188,6 +208,7 @@ describe("Companies page", () => {
       const dialog = await openDeleteConfirmation();
       expect(dialog?.textContent).toContain("Slet denne organisation og alle dens data? Det kan ikke fortrydes.");
       expect(dialog?.textContent).toContain("Eksportér en kopi først");
+      expect(dialog?.textContent).toContain("Skriv Acme Labs for at bekræfte");
       const labels = [...dialog!.querySelectorAll("button")].map((button) => button.textContent);
       expect(labels).toEqual(["Annuller", "Slet"]);
       expect(dialog?.textContent).not.toMatch(/Delete|Cancel|Export/);
@@ -220,13 +241,14 @@ describe("Companies page", () => {
     expect(menuItem).toBeDefined();
     act(() => pointerClick(menuItem!));
     await flushReact();
+    await typeConfirmName(container.querySelector<HTMLElement>("[role='alertdialog']")!, "Acme Labs");
     const confirm = [...container.querySelectorAll("button")].find((button) => button.textContent === "Delete");
     expect(confirm).toBeDefined();
     act(() => (confirm as HTMLButtonElement).click());
     await flushReact();
     await flushReact();
 
-    expect(mockCompaniesApi.remove).toHaveBeenCalledWith("company-1");
+    expect(mockCompaniesApi.remove).toHaveBeenCalledWith("company-1", "Acme Labs");
     expect(container.querySelector("[role='alert']")?.textContent).toBe(refusal);
     expect(container.textContent).toContain("Delete this organization and all its data?");
 

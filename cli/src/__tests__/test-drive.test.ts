@@ -73,6 +73,10 @@ function freshBootstrapApi(input?: { failAgent?: boolean }) {
       calls.push({ method: "DELETE", path: requestPath });
       return { ok: true } as T;
     }),
+    deleteWithBody: vi.fn(async <T>(requestPath: string, body?: unknown) => {
+      calls.push({ method: "DELETE", path: requestPath, body });
+      return { ok: true } as T;
+    }),
   } as TestDriveApi;
   return { api, calls };
 }
@@ -351,6 +355,7 @@ describe("test-drive API bootstrap", () => {
       post: vi.fn(),
       patch: vi.fn(),
       delete: vi.fn(),
+      deleteWithBody: vi.fn(),
     } as unknown as TestDriveApi;
 
     const result = await bootstrapTestDrive({
@@ -365,6 +370,7 @@ describe("test-drive API bootstrap", () => {
     expect(api.post).not.toHaveBeenCalled();
     expect(api.patch).not.toHaveBeenCalled();
     expect(api.delete).not.toHaveBeenCalled();
+    expect(api.deleteWithBody).not.toHaveBeenCalled();
   });
 
   it("deletes only the newly-created company when fresh bootstrap fails", async () => {
@@ -376,7 +382,7 @@ describe("test-drive API bootstrap", () => {
       instanceId: "default",
       env: { ANTHROPIC_API_KEY: "secret" },
     })).rejects.toThrow("agent setup failed");
-    expect(calls.at(-1)).toEqual({ method: "DELETE", path: "/api/companies/company-1" });
+    expect(calls.at(-1)).toEqual({ method: "DELETE", path: "/api/companies/company-1", body: { confirmName: expect.any(String) } });
   });
 });
 
@@ -399,6 +405,7 @@ describe("test-drive worktree setting reconciliation", () => {
       }),
       post: vi.fn(),
       delete: vi.fn(),
+      deleteWithBody: vi.fn(),
     } as unknown as TestDriveApi;
     return { api, patchBodies };
   }
@@ -441,6 +448,7 @@ describe("test-drive worktree setting reconciliation", () => {
       patch: vi.fn(async <T>() => settings() as T),
       post: vi.fn(),
       delete: vi.fn(),
+      deleteWithBody: vi.fn(),
     } as unknown as TestDriveApi;
     await expect(reconcileTestDriveWorktreeExecution(api, "test-instance"))
       .rejects.toThrow(/Could not arm/);
@@ -470,6 +478,7 @@ describe("test-drive foreground lifecycle", () => {
       post: vi.fn(),
       patch: vi.fn(),
       delete: vi.fn(),
+      deleteWithBody: vi.fn(),
     } as unknown as TestDriveApi;
 
     await testDriveCommand({}, {
@@ -505,6 +514,7 @@ describe("test-drive foreground lifecycle", () => {
       post: vi.fn(),
       patch: vi.fn(),
       delete: vi.fn(),
+      deleteWithBody: vi.fn(),
     } as unknown as TestDriveApi;
 
     await testDriveCommand({ dataDir: "/tmp/test-drive-reused", browser: false }, {
@@ -588,6 +598,7 @@ describe("test-drive foreground lifecycle", () => {
       post: vi.fn(),
       patch: vi.fn(),
       delete: vi.fn(),
+      deleteWithBody: vi.fn(),
     } as unknown as TestDriveApi;
     const openBrowser = vi.fn(async () => true);
 

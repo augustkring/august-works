@@ -5755,6 +5755,8 @@
       "deleteTitle": "Slet denne organisation og alle dens data? Det kan ikke fortrydes.",
       "deleteBody": "Organisationens opgaver, agenter, projekter og Memory slettes. Vil du beholde dataene og blot skjule organisationen, så arkivér den i stedet under Virksomhedsindstillinger.",
       "exportFirst": "Eksportér en kopi først",
+      "typeName": "Skriv {{name}} for at bekræfte",
+      "recentAuthNote": "For din sikkerheds skyld kræver sletning, at du er logget ind inden for de seneste 5 minutter. Hvis den afvises, så log ind igen og prøv igen.",
       "cancel": "Annuller",
       "delete": "Slet",
       "deleting": "Sletter…",

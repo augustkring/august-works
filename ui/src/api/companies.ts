@@ -159,7 +159,9 @@ export const companiesApi = {
   updateBranding: (companyId: string, data: UpdateCompanyBranding) =>
     api.patch<Company>(`/companies/${companyId}/branding`, data),
   archive: (companyId: string) => api.post<Company>(`/companies/${companyId}/archive`, {}),
-  remove: (companyId: string) => api.delete<{ ok: true }>(`/companies/${companyId}`),
+  /** The server compares confirmName with the organization's current name exactly. */
+  remove: (companyId: string, confirmName: string) =>
+    api.deleteWithBody<{ ok: true }>(`/companies/${companyId}`, { confirmName }),
   exportBundle: (
     companyId: string,
     data: CompanyPortabilityExportRequest,

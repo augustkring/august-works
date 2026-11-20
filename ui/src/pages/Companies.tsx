@@ -60,6 +60,8 @@ export function Companies() {
   const [editingId, setEditingId] = useState<string | null>(null);
   const [editName, setEditName] = useState("");
   const [confirmDeleteId, setConfirmDeleteId] = useState<string | null>(null);
+  // The exact organization name, typed before Delete enables (EXIT-AUTH1).
+  const [confirmName, setConfirmName] = useState("");
 
   const editMutation = useMutation({
     mutationFn: ({ id, newName }: { id: string; newName: string }) =>
@@ -71,11 +73,12 @@ export function Companies() {
   });
 
   const deleteMutation = useMutation({
-    mutationFn: (id: string) => companiesApi.remove(id),
+    mutationFn: ({ id, name }: { id: string; name: string }) => companiesApi.remove(id, name),
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: queryKeys.companies.all });
       queryClient.invalidateQueries({ queryKey: queryKeys.companies.stats });
       setConfirmDeleteId(null);
+      setConfirmName("");
     },
   });
 
@@ -271,7 +274,11 @@ export function Companies() {
                       <DropdownMenuSeparator />
                       <DropdownMenuItem
                         variant="destructive"
-                        onClick={() => setConfirmDeleteId(company.id)}
+                        onClick={() => {
+                          deleteMutation.reset();
+                          setConfirmName("");
+                          setConfirmDeleteId(company.id);
+                        }}
                       >
                         <Trash2 className="h-3.5 w-3.5" />
                         {t("screens.companies.deleteItem")}
@@ -332,14 +339,27 @@ export function Companies() {
                       >
                         {t("screens.companies.exportFirst")}
                       </Link>
+                      <label className="block space-y-1 pt-2 text-sm" htmlFor={`${confirmId}-name`}>
+                        <span>{t("screens.companies.typeName", { name: company.name })}</span>
+                        <Input
+                          id={`${confirmId}-name`}
+                          autoFocus
+                          value={confirmName}
+                          onChange={(e) => setConfirmName(e.target.value)}
+                          autoComplete="off"
+                          spellCheck={false}
+                          className="h-8 max-w-sm text-sm"
+                        />
+                      </label>
+                      <p className="text-xs text-muted-foreground">{t("screens.companies.recentAuthNote")}</p>
                     </div>
                     <div className="flex items-center gap-2 shrink-0">
                       <Button
                         variant="ghost"
                         size="sm"
-                        autoFocus
                         onClick={() => {
                           deleteMutation.reset();
+                          setConfirmName("");
                           setConfirmDeleteId(null);
                         }}
                         disabled={deleteMutation.isPending}
@@ -349,15 +369,15 @@ export function Companies() {
                       <Button
                         variant="destructive"
                         size="sm"
-                        onClick={() => deleteMutation.mutate(company.id)}
-                        disabled={deleteMutation.isPending}
+                        onClick={() => deleteMutation.mutate({ id: company.id, name: confirmName })}
+                        disabled={deleteMutation.isPending || confirmName !== company.name}
                       >
                         {deleteMutation.isPending ? t("screens.companies.deleting") : t("screens.companies.delete")}
                       </Button>
                     </div>
                   </div>
                   {/* A refused removal (for example, a run is still active) deletes nothing; say why. */}
-                  {deleteMutation.isError && deleteMutation.variables === company.id && (
+                  {deleteMutation.isError && deleteMutation.variables?.id === company.id && (
                     <p role="alert" className="mt-2 text-sm text-destructive">
                       {deleteMutation.error instanceof Error ? deleteMutation.error.message : t("screens.companies.deleteFailed")}
                     </p>

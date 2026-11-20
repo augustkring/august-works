@@ -5755,6 +5755,8 @@
       "deleteTitle": "Delete this organization and all its data? This cannot be undone.",
       "deleteBody": "Its tasks, agents, projects and Memory are erased. To keep the data but hide the organization, archive it in Company settings instead.",
       "exportFirst": "Export a copy first",
+      "typeName": "Type {{name}} to confirm",
+      "recentAuthNote": "For your protection, deletion needs a sign-in within the last 5 minutes. If it is refused, sign in again and retry.",
       "cancel": "Cancel",
       "delete": "Delete",
       "deleting": "Deleting…",
