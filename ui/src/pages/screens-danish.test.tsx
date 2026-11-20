@@ -44,7 +44,7 @@ if (!globalThis.PointerEvent) {
 function project(id: string, name: string): Project {
   return {
     id, companyId: "company-1", urlKey: id, goalId: null, goalIds: [], goals: [], name, description: null,
-    status: "in_progress", leadAgentId: null, targetDate: null, color: "#ef4444", icon: null, env: null,
+    status: "in_progress", leadAgentId: null, targetDate: null, color: null, icon: null, env: null,
     pauseReason: null, pausedAt: null, executionWorkspacePolicy: null,
     codebase: {
       workspaceId: null, repoUrl: null, repoRef: null, defaultRef: null, repoName: null, localFolder: null,
