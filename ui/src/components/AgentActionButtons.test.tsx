@@ -7,6 +7,7 @@ import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
 import type { Agent } from "@paperclipai/shared";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import { AgentActionButtons } from "./AgentActionButtons";
+import { i18n } from "../i18n";
 
 const mockNavigate = vi.hoisted(() => vi.fn());
 const mockOpenNewIssue = vi.hoisted(() => vi.fn());
@@ -175,6 +176,24 @@ describe("AgentActionButtons", () => {
 
     expect(container.textContent).toContain("Pause");
     expect(container.textContent).not.toContain("Clear error");
+  });
+
+  it("labels the pause action and its decision in Danish", async () => {
+    const previousLocale = i18n.language;
+    await i18n.changeLanguage("da");
+    try {
+      render(makeAgent({ status: "active" }));
+      await flushReact();
+      const pause = container.querySelector<HTMLButtonElement>('[aria-label="Sæt på pause"]');
+      expect(pause?.textContent).toBe("Sæt på pause");
+      expect(container.querySelector('[aria-label="Pause"]')).toBeNull();
+      await act(() => pause!.click());
+      await flushReact();
+      expect(document.body.textContent).toContain("Anmod om annullering");
+      expect(Array.from(document.body.querySelectorAll("button")).map(button => button.textContent)).toContain("Sæt agent på pause");
+    } finally {
+      await i18n.changeLanguage(previousLocale);
+    }
   });
 
   it.each(["drain", "cancel"] as const)("requires an explicit pending-work decision before %s pause", async policy => {

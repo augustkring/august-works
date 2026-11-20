@@ -1582,7 +1582,7 @@
     },
     {
       "path": "ui/src/pages/CompanySettings.tsx",
-      "sha256": "baf71ff2c36a113620e3624483faf784025ff40ae819011909b566d28ac53aa5"
+      "sha256": "a028a2332389ed74e8eafa70baff8bc52afb319b866c5b26e72cad95929d2d70"
     },
     {
       "path": "ui/src/pages/CompanySettingsArchive.test.tsx",
@@ -1590,7 +1590,7 @@
     },
     {
       "path": "ui/src/pages/CompanySettingsRenameHint.test.tsx",
-      "sha256": "0357a097b6d40c7b938f46eb3867d7d25797b71c22475b205feafb6900bacd4e"
+      "sha256": "ae5df62bc0fd50968bd841348db341a098f46e2edbd8b937362c357ae5853c82"
     },
     {
       "path": "packages/db/src/migrations/0576_native_review_model_reservations.sql",

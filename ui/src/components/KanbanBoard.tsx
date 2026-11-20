@@ -27,6 +27,7 @@ import { AlertTriangle } from "lucide-react";
 import { isSuccessfulRunHandoffRequired } from "../lib/successful-run-handoff";
 import { collectSubtreeLiveCounts } from "../lib/liveIssueIds";
 import { cn } from "../lib/utils";
+import { screenText, valueLabel } from "../i18n/value-labels";
 import { Card } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
 
@@ -132,7 +133,7 @@ export function getKanbanColumnTone(status: IssueStatus) {
 }
 
 function statusLabel(status: string): string {
-  return status.replace(/_/g, " ").replace(/\b\w/g, (c) => c.toUpperCase());
+  return valueLabel("title", status, status.replace(/_/g, " ").replace(/\b\w/g, (c) => c.toUpperCase()));
 }
 
 export function resolveKanbanTargetStatus(overId: string, issues: Issue[]): IssueStatus | null {
@@ -254,12 +255,12 @@ function KanbanColumn({
             className="mt-1 flex w-full items-center justify-center rounded-md border border-dashed border-border bg-background/70 px-2 py-2 text-xs font-medium text-muted-foreground transition-colors hover:border-foreground/30 hover:text-foreground"
             onClick={onShowMore}
           >
-            Show {nextRevealCount} more
+            {screenText("kanban.show", { count: nextRevealCount })}
           </button>
         ) : null}
         {issues.length > 0 && (hiddenCount > 0 || issues.length >= visibleCount) ? (
           <p className="px-1 pt-1 text-(length:--text-micro) text-muted-foreground">
-            Showing {visibleIssues.length} of {issues.length}
+            {screenText("kanban.showing", { shown: visibleIssues.length, total: issues.length })}
           </p>
         ) : null}
       </div>
@@ -335,11 +336,11 @@ function KanbanCard({
           {isSuccessfulRunHandoffRequired(issue) ? (
             <Badge variant="outline"
               className="border-amber-400/45 bg-amber-50/60 px-1.5 text-(length:--text-nano) text-amber-700 dark:border-amber-300/35 dark:bg-amber-400/10 dark:text-amber-300"
-              title="This task needs a next step"
-              aria-label="Needs next step"
+              title={screenText("issues.needsNextTitle")}
+              aria-label={screenText("issues.needsNext")}
             >
               <AlertTriangle className="h-3 w-3" />
-              Next step
+              {screenText("kanban.next")}
             </Badge>
           ) : null}
           {isLive && (
@@ -354,10 +355,10 @@ function KanbanCard({
           {!isLive && subtreeLiveCount > 0 && (
             <Badge variant="outline"
               className="border-border px-1.5 text-(length:--text-nano) text-muted-foreground"
-              title={`${subtreeLiveCount} sub-task${subtreeLiveCount === 1 ? "" : "s"} running below`}
+              title={screenText("columns.subtreeRunning", { count: subtreeLiveCount })}
             >
               <span className="h-2 w-2 shrink-0 rounded-full border border-muted-foreground/60" aria-hidden="true" />
-              {subtreeLiveCount} live below
+              {screenText("columns.liveBelow", { count: subtreeLiveCount })}
             </Badge>
           )}
         </div>

@@ -14,6 +14,7 @@ import {
   type IssueFilterWorkspaceContext,
 } from "./issue-filters";
 import { formatAssigneeUserLabel } from "./assignees";
+import { screenText } from "../i18n/value-labels";
 
 export const RECENT_ISSUES_LIMIT = 100;
 export const FAILED_RUN_STATUSES = new Set(["failed", "timed_out"]);
@@ -874,6 +875,10 @@ const inboxWorkItemKindLabels: Record<InboxWorkItem["kind"], string> = {
   join_request: "Join requests",
 };
 
+function inboxKindLabel(kind: InboxWorkItem["kind"]): string {
+  return screenText(`inbox.kind.${kind}`, { defaultValue: inboxWorkItemKindLabels[kind] });
+}
+
 function resolveIssueAssigneeGroup(
   issue: Pick<Issue, "assigneeAgentId" | "assigneeUserId">,
   {
@@ -921,7 +926,7 @@ function groupInboxWorkItemsByIssueGroup(
   for (const item of items) {
     const resolvedGroup = item.kind === "issue"
       ? resolveIssueGroup(item.issue)
-      : { key: `kind:${item.kind}`, label: inboxWorkItemKindLabels[item.kind] };
+      : { key: `kind:${item.kind}`, label: inboxKindLabel(item.kind) };
     const existing = groups.get(resolvedGroup.key);
     if (existing) {
       existing.items.push(item);
@@ -988,7 +993,7 @@ export function groupInboxWorkItems(
     if (groupItems.length === 0) continue;
     orderedGroups.push({
         key: kind,
-        label: inboxWorkItemKindLabels[kind],
+        label: inboxKindLabel(kind),
         items: groupItems,
     });
   }

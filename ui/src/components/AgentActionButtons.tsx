@@ -14,6 +14,7 @@ import {
   CheckCircle2,
   Bug,
 } from "lucide-react";
+import { screenText } from "../i18n/value-labels";
 import { Button } from "@/components/ui/button";
 import {
   Popover,
@@ -85,17 +86,17 @@ export function PauseResumeButton({
 }) {
   if (isPaused) {
     return (
-      <Button variant="outline" size={size} onClick={onResume} disabled={disabled} className="min-h-11 min-w-11" aria-label="Resume">
+      <Button variant="outline" size={size} onClick={onResume} disabled={disabled} className="min-h-11 min-w-11" aria-label={screenText("agent.resume")}>
         <Play className="h-3.5 w-3.5 sm:mr-1" />
-        <span className="hidden sm:inline">Resume</span>
+        <span className="hidden sm:inline">{screenText("agent.resume")}</span>
       </Button>
     );
   }
 
   return (
-    <Button variant="outline" size={size} onClick={onPause} disabled={disabled} className="min-h-11 min-w-11" aria-label="Pause">
+    <Button variant="outline" size={size} onClick={onPause} disabled={disabled} className="min-h-11 min-w-11" aria-label={screenText("agent.pause")}>
       <Pause className="h-3.5 w-3.5 sm:mr-1" />
-      <span className="hidden sm:inline">Pause</span>
+      <span className="hidden sm:inline">{screenText("agent.pause")}</span>
     </Button>
   );
 }
@@ -116,10 +117,10 @@ export function ClearErrorButton({
       onClick={onClick}
       disabled={disabled}
       className="min-h-11 min-w-11 border-destructive/60 text-destructive hover:bg-destructive/10 hover:text-destructive dark:border-destructive/50"
-      aria-label="Clear error and return agent to idle"
+      aria-label={screenText("agent.clearErrorAria")}
     >
       <CheckCircle2 className="h-3.5 w-3.5 sm:mr-1" />
-      <span className="hidden sm:inline">Clear error</span>
+      <span className="hidden sm:inline">{screenText("agent.clearError")}</span>
     </Button>
   );
 }
@@ -255,7 +256,7 @@ export function AgentActionButtons({
       if (onActionError) {
         onActionError(message);
       } else {
-        pushToast({ title: "Action failed", body: message, tone: "error" });
+        pushToast({ title: screenText("agent.actionFailed"), body: message, tone: "error" });
       }
     },
     [onActionError, pushToast],
@@ -342,14 +343,14 @@ export function AgentActionButtons({
       if (resolvedCompanyId) {
         await queryClient.invalidateQueries({ queryKey: queryKeys.agents.list(resolvedCompanyId) });
       }
-      pushToast({ title: "Agent duplicated", body: createdAgent.name, tone: "success" });
+      pushToast({ title: screenText("agent.duplicated"), body: createdAgent.name, tone: "success" });
       if (!confirmLateNavigationChanges(duplicateStartedDirtyRef)) return;
       navigate(`/agents/${agentRouteRef(createdAgent)}/dashboard`);
     },
     onError: (err) => {
       const message = err instanceof Error ? err.message : "Failed to duplicate agent";
       onActionError?.(message);
-      pushToast({ title: "Could not duplicate agent", body: message, tone: "error" });
+      pushToast({ title: screenText("agent.duplicateFailed"), body: message, tone: "error" });
     },
   });
 
@@ -391,10 +392,10 @@ export function AgentActionButtons({
       {persistentProviderTrace ? (
         <span
           className="hidden items-center gap-1 rounded-md border border-primary/30 bg-primary/10 px-2 py-1 text-xs font-medium text-primary lg:inline-flex"
-          title="Exact provider traffic will be captured for future runs and retained for up to 24 hours."
+          title={screenText("agent.traceOnTitle")}
         >
           <Bug className="h-3.5 w-3.5" />
-          Raw tracing on
+          {screenText("agent.traceOn")}
         </span>
       ) : null}
       <Button
@@ -427,10 +428,10 @@ export function AgentActionButtons({
             providerTraceAction.mutate();
           }}
           disabled={assignAndRunDisabled}
-          title="Capture exact provider traffic for this run (expires after 24 hours)"
+          title={screenText("agent.traceRunTitle")}
         >
           <Bug className="h-3.5 w-3.5 sm:mr-1" />
-          <span className="hidden sm:inline">Run with provider trace</span>
+          <span className="hidden sm:inline">{screenText("agent.traceRun")}</span>
         </Button>
       )}
       {isError ? (
@@ -485,7 +486,7 @@ export function AgentActionButtons({
       {children}
       <Popover open={moreOpen} onOpenChange={setMoreOpen}>
         <PopoverTrigger asChild>
-          <Button variant="ghost" size="icon-xs" aria-label={`Open actions for ${agent.name}`}>
+          <Button variant="ghost" size="icon-xs" aria-label={screenText("agent.openActions", { name: agent.name })}>
             <MoreHorizontal className="h-4 w-4" />
           </Button>
         </PopoverTrigger>
@@ -500,19 +501,19 @@ export function AgentActionButtons({
             ) : (
               <Copy className="h-3 w-3" />
             )}
-            Duplicate Agent
+            {screenText("agent.duplicate")}
           </button>
           <button
             className="flex items-center gap-2 w-full px-2 py-1.5 text-xs rounded hover:bg-accent/50"
             onClick={() => {
               void copyTextToClipboard(agent.id).catch(() => {
-                pushToast({ title: "Copy failed", body: "Clipboard access is unavailable.", tone: "error" });
+                pushToast({ title: screenText("task.m.copy_failed"), body: screenText("agent.clipboardUnavailable"), tone: "error" });
               });
               setMoreOpen(false);
             }}
           >
             <Copy className="h-3 w-3" />
-            Copy Agent ID
+            {screenText("agent.copyId")}
           </button>
           <button
             className="flex items-center gap-2 w-full px-2 py-1.5 text-xs rounded hover:bg-accent/50"
@@ -522,7 +523,7 @@ export function AgentActionButtons({
             }}
           >
             <RotateCcw className="h-3 w-3" />
-            Reset Sessions
+            {screenText("agent.resetSessions")}
           </button>
           {!hideTerminate && (
             <button
@@ -534,7 +535,7 @@ export function AgentActionButtons({
               }}
             >
               <Trash2 className="h-3 w-3" />
-              Terminate
+              {screenText("agent.terminate")}
             </button>
           )}
         </PopoverContent>

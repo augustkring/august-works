@@ -82,7 +82,7 @@ const SCREENS: Screen[] = [
     path: () => "issues",
     content: "Publish pricing page",
     data: (seed) => `/api/companies/${seed.companyId}/issues`,
-    primary: (main) => main.getByRole("button", { name: "New Task", exact: true }),
+    primary: (main) => main.getByRole("button", { name: byLocale("New Task", "Ny opgave") }),
   },
   {
     name: "Task detail with comments",
@@ -95,38 +95,38 @@ const SCREENS: Screen[] = [
     name: "Agents list",
     path: () => "agents/all",
     content: "Research assistant",
-    primary: (main) => main.getByRole("button", { name: "New Agent", exact: true }),
+    primary: (main) => main.getByRole("button", { name: byLocale("New Agent", "Ny agent") }),
   },
   {
     name: "Agent detail",
     path: (seed) => `agents/${seed.agentKey}`,
     heading: { en: "Research assistant", da: "Research assistant" },
-    primary: (main) => main.getByRole("button", { name: "Assign Task", exact: true }),
+    primary: (main) => main.getByRole("button", { name: byLocale("Assign Task", "Tildel opgave") }),
   },
   {
     name: "Projects",
     path: () => "projects",
     content: "Website refresh",
-    primary: (main) => main.getByRole("button", { name: "Add Project", exact: true }),
+    primary: (main) => main.getByRole("button", { name: byLocale("Add Project", "Tilføj projekt") }),
   },
   {
     name: "Project detail",
     path: (seed) => `projects/${seed.projectKey}`,
     content: "Draft the launch announcement",
     data: (seed) => `/api/companies/${seed.companyId}/issues`,
-    primary: (main) => main.getByRole("button", { name: "New Task", exact: true }),
+    primary: (main) => main.getByRole("button", { name: byLocale("New Task", "Ny opgave") }),
   },
   {
     name: "Approvals",
     path: () => "approvals/pending",
     content: "Approve publishing the pricing page",
-    primary: (main) => main.getByRole("button", { name: "Approve", exact: true }),
+    primary: (main) => main.getByRole("button", { name: byLocale("Approve", "Godkend") }),
   },
   {
     name: "Approval detail",
     path: (seed) => `approvals/${seed.approvalId}`,
     content: "Publish pricing page",
-    primary: (main) => main.getByRole("button", { name: "Approve", exact: true }),
+    primary: (main) => main.getByRole("button", { name: byLocale("Approve", "Godkend") }),
   },
   {
     name: "Inbox",
@@ -136,7 +136,7 @@ const SCREENS: Screen[] = [
   {
     name: "Apps",
     path: () => "apps",
-    primary: (main) => main.getByRole("searchbox", { name: "Search connections" }),
+    primary: (main) => main.getByRole("searchbox", { name: byLocale("Search connections", "Søg i forbindelser") }),
   },
   {
     name: "Company settings",
@@ -147,12 +147,12 @@ const SCREENS: Screen[] = [
   {
     name: "Company general settings",
     path: () => "company/settings/general",
-    primary: (main) => main.getByRole("textbox", { name: "Organization name", exact: true }),
+    primary: (main) => main.getByRole("textbox", { name: byLocale("Organization name", "Virksomhedsnavn") }),
   },
   {
     name: "Account profile",
     path: () => "company/settings/instance/profile",
-    primary: (main) => main.getByRole("button", { name: "Save profile", exact: true }),
+    primary: (main) => main.getByRole("button", { name: byLocale("Save profile", "Gem profil") }),
   },
   {
     name: "Account security",

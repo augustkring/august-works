@@ -8,6 +8,9 @@ import { workflowRoutes } from "../../server/src/routes/workflows.ts";
 import { workflowService } from "../../server/src/services/workflows/workflow-service.ts";
 import { grantsForHumanRole } from "../../server/src/services/company-member-roles.ts";
 import { errorHandler } from "../../server/src/middleware/error-handler.ts";
+import { registerEnglishAccountLocaleIsolation } from "./account-locale-isolation";
+
+registerEnglishAccountLocaleIsolation(test);
 const require = createRequire(import.meta.url), axePath = require.resolve("axe-core/axe.min.js");
 const serverRequire = createRequire(new URL("../../server/package.json", import.meta.url));
 const express = serverRequire("express"), { eq } = serverRequire("drizzle-orm");

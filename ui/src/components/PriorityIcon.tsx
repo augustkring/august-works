@@ -1,6 +1,8 @@
 import { useState } from "react";
 import { ArrowUp, ArrowDown, Minus, AlertTriangle } from "lucide-react";
 import { cn } from "../lib/utils";
+import { useTranslation } from "react-i18next";
+import { screenText, valueLabel } from "../i18n/value-labels";
 import { priorityColor, priorityColorDefault } from "../lib/status-colors";
 import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover";
 import { Button } from "@/components/ui/button";
@@ -22,8 +24,10 @@ interface PriorityIconProps {
 }
 
 export function PriorityIcon({ priority, onChange, className, showLabel }: PriorityIconProps) {
+  useTranslation("experience");
   const [open, setOpen] = useState(false);
-  const config = priorityConfig[priority] ?? priorityConfig.medium!;
+  const baseConfig = priorityConfig[priority] ?? priorityConfig.medium!;
+  const config = { ...baseConfig, label: valueLabel("title", priorityConfig[priority] ? priority : "medium", baseConfig.label) };
   const Icon = config.icon;
 
   const icon = (
@@ -44,7 +48,7 @@ export function PriorityIcon({ priority, onChange, className, showLabel }: Prior
   const trigger = showLabel ? (
     <button
       type="button"
-      aria-label={`Change priority (current: ${config.label})`}
+      aria-label={screenText("priority.change", { current: config.label })}
       className="inline-flex min-h-5 items-center gap-1.5 cursor-pointer hover:bg-accent/50 rounded px-1 -mx-1 py-0.5 transition-colors"
     >
       {icon}
@@ -54,7 +58,7 @@ export function PriorityIcon({ priority, onChange, className, showLabel }: Prior
     <button
       type="button"
       data-slot="icon-button"
-      aria-label={`Change priority (current: ${config.label})`}
+      aria-label={screenText("priority.change", { current: config.label })}
       className="inline-flex cursor-pointer items-center justify-center rounded-sm focus-visible:outline-none focus-visible:ring-(length:--rad-3) focus-visible:ring-ring"
     >
       {icon}
@@ -80,7 +84,7 @@ export function PriorityIcon({ priority, onChange, className, showLabel }: Prior
               }}
             >
               <PIcon className={cn("h-3.5 w-3.5", c.color)} />
-              {c.label}
+              {valueLabel("title", p, c.label)}
             </Button>
           );
         })}

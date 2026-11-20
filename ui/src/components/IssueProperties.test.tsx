@@ -16,6 +16,7 @@ import type { Issue, IssueDocument } from "@paperclipai/shared";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import { IssueProperties } from "./IssueProperties";
 import { queryKeys } from "../lib/queryKeys";
+import { i18n } from "../i18n";
 
 const mockAgentsApi = vi.hoisted(() => ({
   list: vi.fn(),
@@ -512,6 +513,29 @@ describe("IssueProperties", () => {
 
   afterEach(() => {
     document.body.innerHTML = "";
+  });
+
+  it("shows the task properties panel in Danish without English labels (I18N-DA2)", async () => {
+    await act(async () => { await i18n.changeLanguage("da"); });
+    try {
+      const root = renderProperties(container, {
+        issue: createIssue(),
+        childIssues: [],
+        onUpdate: vi.fn(),
+        inline: true,
+      });
+      await flush();
+      const text = container.textContent ?? "";
+      for (const danish of ["Ansvarlig", "Projekt", "Etiketter", "Relationer", "Oprettet", "Opdateret"]) {
+        expect(text, `missing Danish label ${danish}`).toContain(danish);
+      }
+      for (const english of ["Priority", "Assignee", "Labels", "Relationships", "Created", "Updated", "Blocked by", "Subtasks"]) {
+        expect(text, `English label ${english} in Danish panel`).not.toContain(english);
+      }
+      act(() => root.unmount());
+    } finally {
+      await act(async () => { await i18n.changeLanguage("en"); });
+    }
   });
 
   it("marks the task-detail property typography and section rhythm", () => {

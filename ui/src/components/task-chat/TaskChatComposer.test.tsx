@@ -1013,6 +1013,32 @@ describe("TaskChatComposer", () => {
     ).not.toBeNull();
   });
 
+  it("names the attach button per language and opens the file picker from it", async () => {
+    const previousLocale = i18n.language;
+    const pickerClick = vi.spyOn(HTMLInputElement.prototype, "click").mockImplementation(() => {});
+    try {
+      for (const [locale, name] of [["en", "Attach file"], ["da", "Vedhæft fil"]] as const) {
+        await act(async () => { await i18n.changeLanguage(locale); });
+        render(
+          <TaskChatComposer
+            onAdd={vi.fn()}
+            workMode="standard"
+            onAttachImage={vi.fn().mockResolvedValue(undefined)}
+          />,
+        );
+        const attach = container.querySelector<HTMLButtonElement>('[data-testid="task-chat-composer-attach"]');
+        expect(attach?.getAttribute("aria-label")).toBe(name);
+        pickerClick.mockClear();
+        act(() => { attach?.click(); });
+        expect(pickerClick).toHaveBeenCalledTimes(1);
+        expect((pickerClick.mock.contexts[0] as HTMLInputElement).type).toBe("file");
+      }
+    } finally {
+      pickerClick.mockRestore();
+      await act(async () => { await i18n.changeLanguage(previousLocale); });
+    }
+  });
+
   it("wires the editor's inline image upload to onAttachImage and returns the attachment URL", async () => {
     const onAttachImage = vi.fn().mockResolvedValue({
       contentPath: "/attachments/shot.png",

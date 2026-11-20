@@ -281,7 +281,7 @@ export function CompanySettings() {
       // still makes sense (another active company, the Cloud portfolio, or
       // the companies list), with a toast naming what happened.
       const archived = companies.find((company) => company.id === companyId);
-      const archivedName = archived?.name ?? "Organization";
+      const archivedName = archived?.name ?? t("screens.company.organization");
       const departure = resolveCompanyArchiveDeparture({
         archivedCompanyId: companyId,
         companies,
@@ -296,8 +296,8 @@ export function CompanySettings() {
       }
       if (departure.kind === "company") {
         toastActions?.pushToast({
-          title: `${archivedName} is archived`,
-          body: `Switched to ${departure.company.name}.`,
+          title: t("screens.company.archivedTitle", { name: archivedName }),
+          body: t("screens.company.archivedSwitched", { name: departure.company.name }),
           tone: "info",
           dedupeKey: `company-archive-departure:${companyId}`,
         });
@@ -305,8 +305,8 @@ export function CompanySettings() {
         navigate(`/${departure.company.issuePrefix}/dashboard`, { replace: true });
       } else {
         toastActions?.pushToast({
-          title: `${archivedName} is archived`,
-          body: "You can unarchive it from this list.",
+          title: t("screens.company.archivedTitle", { name: archivedName }),
+          body: t("screens.company.archivedUnarchive"),
           tone: "info",
           dedupeKey: `company-archive-departure:${companyId}`,
         });
@@ -323,15 +323,15 @@ export function CompanySettings() {
 
   useEffect(() => {
     setBreadcrumbs([
-      { label: selectedCompany?.name ?? "Company", href: "/dashboard" },
-      { label: "Settings" }
+      { label: selectedCompany?.name ?? t("screens.company.company"), href: "/dashboard" },
+      { label: t("screens.company.settings") }
     ]);
-  }, [setBreadcrumbs, selectedCompany?.name]);
+  }, [setBreadcrumbs, selectedCompany?.name, t]);
 
   if (!selectedCompany) {
     return (
       <div className="text-sm text-muted-foreground">
-        No organization selected. Select an organization from the switcher above.
+        {t("screens.company.none")}
       </div>
     );
   }
@@ -349,16 +349,16 @@ export function CompanySettings() {
     <div className="max-w-6xl space-y-8">
       <div className="flex items-center gap-2">
         <SlidersHorizontal className="h-5 w-5 text-muted-foreground" />
-        <h1 className="text-lg font-semibold">General</h1>
+        <h1 className="text-lg font-semibold">{t("screens.company.general")}</h1>
       </div>
 
       {/* General */}
       <div className="max-w-2xl space-y-4">
         <div className="text-xs font-medium text-muted-foreground uppercase tracking-wide">
-          General
+          {t("screens.company.general")}
         </div>
         <div className="space-y-3">
-          <Field label="Organization name" hint="The display name for your organization.">
+          <Field label={t("screens.company.orgName")} hint={t("screens.company.orgNameHint")}>
             <input
               className="w-full rounded-md border border-border bg-transparent px-2.5 py-1.5 text-sm outline-none focus-visible:border-ring focus-visible:ring-ring/50 focus-visible:ring-(length:--rad-3)"
               type="text"
@@ -367,20 +367,19 @@ export function CompanySettings() {
             />
             {isCloudManaged && (
               <p className="mt-1 text-xs text-muted-foreground">
-                Renaming can change this company's task ID prefix. Existing task IDs are
-                renumbered and old task links stop resolving.
+                {t("screens.company.renameHint")}
               </p>
             )}
           </Field>
           <Field
-            label="Description"
-            hint="Optional description shown in the organization profile."
+            label={t("screens.company.description")}
+            hint={t("screens.company.descriptionHint")}
           >
             <input
               className="w-full rounded-md border border-border bg-transparent px-2.5 py-1.5 text-sm outline-none focus-visible:border-ring focus-visible:ring-ring/50 focus-visible:ring-(length:--rad-3)"
               type="text"
               value={description}
-              placeholder="Optional organization description"
+              placeholder={t("screens.company.descriptionPlaceholder")}
               onChange={(e) => setDescription(e.target.value)}
             />
           </Field>
@@ -424,7 +423,7 @@ export function CompanySettings() {
       {/* Appearance */}
       <div className="max-w-2xl space-y-4">
         <div className="text-xs font-medium text-muted-foreground uppercase tracking-wide">
-          Appearance
+          {t("screens.company.appearance")}
         </div>
         <div className="space-y-3">
           <div className="flex items-start gap-4">
@@ -437,8 +436,8 @@ export function CompanySettings() {
             </div>
             <div className="flex-1 space-y-3">
               <Field
-                label="Logo"
-                hint="Upload a PNG, JPEG, WEBP, GIF, or SVG logo image."
+                label={t("screens.company.logo")}
+                hint={t("screens.company.logoHint")}
                 htmlFor="company-logo-file"
               >
                 <div className="space-y-2">
@@ -457,7 +456,7 @@ export function CompanySettings() {
                         onClick={handleClearLogo}
                         disabled={clearLogoMutation.isPending}
                       >
-                        {clearLogoMutation.isPending ? "Removing..." : "Remove logo"}
+                        {clearLogoMutation.isPending ? t("screens.company.removing") : t("screens.company.removeLogo")}
                       </Button>
                     </div>
                   )}
@@ -466,7 +465,7 @@ export function CompanySettings() {
                       {logoUploadError ??
                         (logoUploadMutation.error instanceof Error
                           ? logoUploadMutation.error.message
-                          : "Logo upload failed")}
+                          : t("screens.company.logoFailed"))}
                     </span>
                   )}
                   {clearLogoMutation.isError && (
@@ -475,7 +474,7 @@ export function CompanySettings() {
                     </span>
                   )}
                   {logoUploadMutation.isPending && (
-                    <span className="text-xs text-muted-foreground">Uploading logo...</span>
+                    <span className="text-xs text-muted-foreground">{t("screens.company.uploading")}</span>
                   )}
                 </div>
               </Field>
@@ -492,16 +491,16 @@ export function CompanySettings() {
             onClick={handleSaveGeneral}
             disabled={generalMutation.isPending || !companyName.trim()}
           >
-            {generalMutation.isPending ? "Saving..." : "Save changes"}
+            {generalMutation.isPending ? t("screens.company.saving") : t("screens.company.saveChanges")}
           </Button>
           {generalMutation.isSuccess && (
-            <span className="text-xs text-muted-foreground">Saved</span>
+            <span className="text-xs text-muted-foreground">{t("screens.company.saved")}</span>
           )}
           {generalMutation.isError && (
             <span className="text-xs text-destructive">
               {generalMutation.error instanceof Error
                   ? generalMutation.error.message
-                  : "Failed to save"}
+                  : t("screens.company.saveFailed")}
             </span>
           )}
         </div>
@@ -509,34 +508,34 @@ export function CompanySettings() {
 
       {/* Hiring */}
       <div className="max-w-2xl space-y-4" data-testid="company-responsibility-contacts">
-        <div className="text-xs font-medium text-muted-foreground uppercase tracking-wide">Responsibility contacts</div>
-        <p className="text-sm text-muted-foreground">These contacts are accountable people for follow-up. Selecting someone does not grant access or change their permissions.</p>
-        <Field label="Security contact" hint="A current Human member for company security follow-up.">
-          <select aria-label="Security contact" data-testid="security-contact-select"
+        <div className="text-xs font-medium text-muted-foreground uppercase tracking-wide">{t("screens.company.contacts")}</div>
+        <p className="text-sm text-muted-foreground">{t("screens.company.contactsBody")}</p>
+        <Field label={t("screens.company.securityContact")} hint={t("screens.company.securityContactHint")}>
+          <select aria-label={t("screens.company.securityContact")} data-testid="security-contact-select"
             className="w-full rounded-md border border-border bg-transparent px-2.5 py-1.5 text-sm"
             disabled={!contactsReadReady || !contactsLoaded || contactsMutation.isPending}
             value={securityContactUserId} onChange={event => updateContactsField("securityContactUserId", event.target.value)}>
-            <option value="">No contact selected</option>
+            <option value="">{t("screens.company.noContact")}</option>
             {securityContactUserId && !responsibilityContacts?.eligibleUsers.some(user => user.id === securityContactUserId) &&
-              <option value={securityContactUserId}>Current contact is no longer eligible; clear or replace it</option>}
+              <option value={securityContactUserId}>{t("screens.company.contactIneligible")}</option>}
             {(responsibilityContacts?.eligibleUsers ?? []).map(entry =>
               <option key={entry.id} value={entry.id}>{entry.name || entry.email || entry.id}</option>)}
           </select>
         </Field>
-        <Field label="Support and incident contact" hint="A current Human member for customer support and incident coordination.">
-          <select aria-label="Support and incident contact" data-testid="support-incident-contact-select"
+        <Field label={t("screens.company.supportContact")} hint={t("screens.company.supportContactHint")}>
+          <select aria-label={t("screens.company.supportContact")} data-testid="support-incident-contact-select"
             className="w-full rounded-md border border-border bg-transparent px-2.5 py-1.5 text-sm"
             disabled={!contactsReadReady || !contactsLoaded || contactsMutation.isPending}
             value={supportIncidentContactUserId} onChange={event => updateContactsField("supportIncidentContactUserId", event.target.value)}>
-            <option value="">No contact selected</option>
+            <option value="">{t("screens.company.noContact")}</option>
             {supportIncidentContactUserId && !responsibilityContacts?.eligibleUsers.some(user => user.id === supportIncidentContactUserId) &&
-              <option value={supportIncidentContactUserId}>Current contact is no longer eligible; clear or replace it</option>}
+              <option value={supportIncidentContactUserId}>{t("screens.company.contactIneligible")}</option>}
             {(responsibilityContacts?.eligibleUsers ?? []).map(entry =>
               <option key={entry.id} value={entry.id}>{entry.name || entry.email || entry.id}</option>)}
           </select>
         </Field>
-        {!contactsReadReady && <span className="text-xs text-muted-foreground">Waiting for current Human settings access.</span>}
-        {contactsError && <span className="text-xs text-destructive">Could not load responsibility contacts.</span>}
+        {!contactsReadReady && <span className="text-xs text-muted-foreground">{t("screens.company.waitingAccess")}</span>}
+        {contactsError && <span className="text-xs text-destructive">{t("screens.company.contactsError")}</span>}
         {contactsLoaded && contactsReadReady && (securityContactUserId !== (responsibilityContacts?.securityContactUserId ?? "") ||
           supportIncidentContactUserId !== (responsibilityContacts?.supportIncidentContactUserId ?? "")) && (
           <div className="flex items-center gap-2">
@@ -544,7 +543,7 @@ export function CompanySettings() {
               sessionId: sessionId!, authorityEpoch: authority.epoch, scopeEpoch: contactsScopeRef.current.epoch,
               localImplicit: account.localImplicit, securityContactUserId, supportIncidentContactUserId })}
               disabled={!contactsReadReady || contactsMutation.isPending}>
-              {contactsMutation.isPending ? "Saving..." : "Save contacts"}
+              {contactsMutation.isPending ? t("screens.company.saving") : t("screens.company.saveContacts")}
             </Button>
             {contactsMutation.isError && contactsReadReady && <span className="text-xs text-destructive">{contactsMutation.error.message}</span>}
           </div>
@@ -554,12 +553,12 @@ export function CompanySettings() {
       {/* Hiring */}
       <div className="max-w-2xl space-y-4" data-testid="company-settings-team-section">
         <div className="text-xs font-medium text-muted-foreground uppercase tracking-wide">
-          Hiring
+          {t("screens.company.hiring")}
         </div>
         <div>
           <ToggleField
-            label="Require board approval for new hires"
-            hint="New agent hires stay pending until approved by board."
+            label={t("screens.company.requireApproval")}
+            hint={t("screens.company.requireApprovalHint")}
             checked={!!selectedCompany.requireBoardApprovalForNewAgents}
             onChange={(v) => settingsMutation.mutate(v)}
             toggleTestId="company-settings-team-approval-toggle"
@@ -576,7 +575,7 @@ export function CompanySettings() {
           governanceMutation.isError
             ? governanceMutation.error instanceof Error
               ? governanceMutation.error.message
-              : "Failed to save interaction governance"
+              : t("screens.company.governanceFailed")
             : null
         }
       />
@@ -588,12 +587,11 @@ export function CompanySettings() {
       {/* Danger Zone */}
       <div className="space-y-4">
         <div className="text-xs font-medium text-destructive uppercase tracking-wide">
-          Danger Zone
+          {t("screens.company.danger")}
         </div>
         <div className="space-y-3 bg-destructive/5 px-4 py-4">
           <p className="text-sm text-muted-foreground">
-            Archive this organization to hide it from the sidebar. This persists in
-            the database.
+            {t("screens.company.archiveBody")}
           </p>
           <div className="flex items-center gap-2">
             <Button
@@ -606,23 +604,23 @@ export function CompanySettings() {
               onClick={() => {
                 if (!selectedCompanyId) return;
                 const confirmed = window.confirm(
-                  `Archive organization "${selectedCompany.name}"? It will be hidden from the sidebar.`
+                  t("screens.company.archiveConfirm", { name: selectedCompany.name })
                 );
                 if (!confirmed) return;
                 archiveMutation.mutate({ companyId: selectedCompanyId });
               }}
             >
               {archiveMutation.isPending
-                ? "Archiving..."
+                ? t("screens.company.archiving")
                 : selectedCompany.status === "archived"
-                ? "Already archived"
-                : "Archive organization"}
+                ? t("screens.company.alreadyArchived")
+                : t("screens.company.archive")}
             </Button>
             {archiveMutation.isError && (
               <span className="text-xs text-destructive">
                 {archiveMutation.error instanceof Error
                   ? archiveMutation.error.message
-                  : "Failed to archive organization"}
+                  : t("screens.company.archiveFailed")}
               </span>
             )}
           </div>

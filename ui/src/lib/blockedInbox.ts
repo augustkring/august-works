@@ -1,3 +1,4 @@
+import { screenText } from "../i18n/value-labels";
 import type {
   Issue,
   IssueBlockedInboxAttention,
@@ -75,11 +76,11 @@ export function blockedReasonVariant(reason: IssueBlockedInboxReason): BlockedRe
 }
 
 export function blockedReasonLabel(reason: IssueBlockedInboxReason): string {
-  return REASON_LABELS[reason] ?? "Stopped";
+  return screenText(`blocked.reason.${reason}`, { defaultValue: REASON_LABELS[reason] ?? screenText("blocked.reason.fallback") });
 }
 
 export function blockedVariantLabel(variant: BlockedReasonVariant): string {
-  return BLOCKED_VARIANT_LABELS[variant];
+  return screenText(`blocked.variant.${variant}`, { defaultValue: BLOCKED_VARIANT_LABELS[variant] });
 }
 
 export function blockedSeverityRank(severity: IssueBlockedInboxSeverity): number {
@@ -210,7 +211,7 @@ export function groupBlockedInboxRows(
     const list = buckets.get(variant);
     if (!list || list.length === 0) continue;
     const sorted = sortBlockedInboxRows(list, sort);
-    groups.push({ variant, label: BLOCKED_VARIANT_LABELS[variant], rows: sorted });
+    groups.push({ variant, label: blockedVariantLabel(variant), rows: sorted });
   }
   return groups;
 }
