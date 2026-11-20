@@ -54,7 +54,11 @@ export function nativeSourceOperationMemoOpen(db: object): boolean {
   return memo?.open === true && memo.suspended === 0;
 }
 
-export function nativeSourceOperationMemoized<T>(db: object, family: string, key: string, load: () => Promise<T>): Promise<T> {
+/** `retain` (optional) keeps a resolved value only when it returns true; a read
+ * whose refusal is a value (for example null for an absent row, which no lock
+ * protects) passes it so that refusal is always read again. */
+export function nativeSourceOperationMemoized<T>(db: object, family: string, key: string, load: () => Promise<T>,
+  retain?: (value: T) => boolean): Promise<T> {
   const memo = operationMemos.get(db);
   if (!memo?.open || memo.suspended > 0) return load();
   const entryKey = `${family}\u0000${key}`;
@@ -63,6 +67,7 @@ export function nativeSourceOperationMemoized<T>(db: object, family: string, key
   if (memo.entries.size >= NATIVE_SOURCE_OPERATION_MEMO_BOUND) return load();
   const pending = load();
   memo.entries.set(entryKey, pending);
-  pending.catch(() => { if (memo.entries.get(entryKey) === pending) memo.entries.delete(entryKey); });
+  const forget = () => { if (memo.entries.get(entryKey) === pending) memo.entries.delete(entryKey); };
+  pending.then(value => { if (retain && !retain(value)) forget(); }, forget);
   return pending;
 }

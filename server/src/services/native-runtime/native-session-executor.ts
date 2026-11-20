@@ -4622,7 +4622,8 @@ function readWarmTransitionSnapshot(root: string) {
 }
 
 /** Forward receipts select a protocol boundary, never a process owner. */
-async function verifyWarmTransitionRestart(input: {
+/** Exported for the run-identity.ts lock-order test only. */
+export async function verifyWarmTransitionRestart(input: {
   db: Db;
   execution: NativeExecutionInput;
   restartRecovery?: NativeRestartRecoveryClaim;
@@ -4650,6 +4651,21 @@ async function verifyWarmTransitionRestart(input: {
   const binding = input.execution.binding;
   let finalAuthorityCheck: (() => boolean) | undefined;
   const verified = await input.db.transaction(async (tx) => {
+    // Lock order (run-identity.ts): the Task before its runs, as the finalizer
+    // (Task > run > coordinator). The Task id is the binding's, so these three
+    // independent reads only change order; every check below is unchanged.
+    const issue = await tx
+      .select()
+      .from(issues)
+      .where(
+        and(
+          eq(issues.id, binding.issueId),
+          eq(issues.companyId, binding.companyId),
+        ),
+      )
+      .for("update")
+      .limit(1)
+      .then((rows) => rows[0]);
     const current = await tx
       .select()
       .from(heartbeatRuns)
@@ -4669,18 +4685,6 @@ async function verifyWarmTransitionRestart(input: {
         and(
           eq(nativeRunFinalizations.runId, binding.runId),
           eq(nativeRunFinalizations.companyId, binding.companyId),
-        ),
-      )
-      .for("update")
-      .limit(1)
-      .then((rows) => rows[0]);
-    const issue = await tx
-      .select()
-      .from(issues)
-      .where(
-        and(
-          eq(issues.id, binding.issueId),
-          eq(issues.companyId, binding.companyId),
         ),
       )
       .for("update")

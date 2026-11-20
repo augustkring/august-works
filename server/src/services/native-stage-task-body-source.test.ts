@@ -4,7 +4,8 @@ import { PgDialect } from "drizzle-orm/pg-core";
 import type { SQL } from "drizzle-orm";
 import { describe, expect, it } from "vitest";
 import type { NativeRunInputSourceReceipt } from "@paperclipai/shared";
-import { nativeRunInputSourceReceiptPrefix, nativeRunInputSourceReceiptPrefixMatches, readNativeStageTaskBodyStep } from "./native-stage-task-body-source.js";
+import { captureNativeFinalizedStageTaskBodyRead, nativeRunInputSourceReceiptPrefix, nativeRunInputSourceReceiptPrefixMatches,
+  readNativeStageTaskBodyStep } from "./native-stage-task-body-source.js";
 import { openNativeSourceOperationMemo, retireNativeSourceOperationMemo } from "./native-source-operation-memo.js";
 
 const emptyPolicy={issueIds:[],projectIds:[],runIds:[],memoryIds:[],foundationRevisionIds:[]};
@@ -153,6 +154,21 @@ describe("Native Stage input-receipt prefix",()=>{
     try{
       await expect(readNativeStageTaskBodyStep(tx as never,{task,step})).rejects.toThrow("native_stage_body_transition_changed");
       await expect(readNativeStageTaskBodyStep(tx as never,{task,step})).rejects.toThrow("native_stage_body_transition_changed");
+    }finally{close();}
+    expect(selects).toBe(3);
+  });
+
+  it("never retains an absent finalized Stage body read inside an operation",async()=>{
+    let selects=0;
+    const chain={from:()=>chain,where:()=>chain,limit:()=>chain,for:async()=>[]};
+    const tx={select:()=>{selects+=1;return chain;}};
+    const input={companyId:randomUUID(),issueId:randomUUID(),runId:randomUUID(),
+      reader:{type:"agent" as const,source:"none" as const,companyId:randomUUID(),agentId:randomUUID(),runId:randomUUID()}};
+    expect(await captureNativeFinalizedStageTaskBodyRead(tx as never,input)).toBeNull();
+    const close=openNativeSourceOperationMemo(tx);
+    try{
+      expect(await captureNativeFinalizedStageTaskBodyRead(tx as never,input)).toBeNull();
+      expect(await captureNativeFinalizedStageTaskBodyRead(tx as never,input)).toBeNull();
     }finally{close();}
     expect(selects).toBe(3);
   });

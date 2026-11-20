@@ -305,6 +305,19 @@ export type NativeFinalizedStageTaskBodyRead = {
  * model turn accepts this object. The current reader is checked independently. */
 export async function captureNativeFinalizedStageTaskBodyRead(db:Db|Transaction,input:{companyId:string;issueId:string;
   runId:string;reader:import("./authorization.js").AuthorizationActor}):Promise<NativeFinalizedStageTaskBodyRead|null>{
+  // MS1f stop 8: read-only on share-locked rows, and its only privacy input is
+  // the reader's Run privacy decision; memoized under exactly that decision's
+  // per-operation key (never in a Routine/Workflow scope or the final pass).
+  const {nativeRunPrivacyOperationMemoKey}=await import("./authorization.js");
+  const privacyKey=nativeRunPrivacyOperationMemoKey(db,input.reader,{companyId:input.companyId,id:input.runId});
+  if(privacyKey===null) return captureNativeFinalizedStageTaskBodyReadUncached(db,input);
+  const read=await nativeSourceOperationMemoized(db as object,"finalized-stage-body-read",
+    JSON.stringify([input.companyId,input.issueId,input.runId,privacyKey]),()=>captureNativeFinalizedStageTaskBodyReadUncached(db,input),
+    value=>value!==null);
+  return read===null ? null : structuredClone(read);
+}
+async function captureNativeFinalizedStageTaskBodyReadUncached(db:Db|Transaction,input:{companyId:string;issueId:string;
+  runId:string;reader:import("./authorization.js").AuthorizationActor}):Promise<NativeFinalizedStageTaskBodyRead|null>{
   const [entry]=await db.select({run:heartbeatRuns,
     receiptDigestValid:sql<boolean>`(${heartbeatRuns.runnerProfileJson}->'nativeInputSourceReceipt'->>'digest')=encode(sha256(convert_to(((${heartbeatRuns.runnerProfileJson}->'nativeInputSourceReceipt')-'digest')::text,'UTF8')),'hex')`,
     inputDigestValid:sql<boolean>`(${heartbeatRuns.runnerProfileJson}->'nativeInputSourceReceipt'->'bootstrap'->>'executionInputDigest')=encode(sha256(convert_to((${heartbeatRuns.runnerProfileJson}->'nativeExecutionInput')::text,'UTF8')),'hex')`,
