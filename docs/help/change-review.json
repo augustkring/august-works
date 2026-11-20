@@ -2230,9 +2230,9 @@
       "source": "server/src/services/trust-documents.ts",
       "articleId": "help-and-human-support",
       "articleSha256": "bec6b2b830586252df7700cc8b8f23018da446ede36284d98e53f8db2b049a1b",
-      "sourceSha256": "76f0cec023ae7781f45b7938871a8c24f5d2c35f944b1ce1a46dc203cc5d0257",
-      "decision": "updated",
-      "rationale": "The paired article adds the reviewed Support-to-Task handoff and pending managed-file deletion explanation, alongside existing coverage/security and status guidance. This linked source is unchanged; its documented source access and owner controls remain intact."
+      "sourceSha256": "666bab7645d45f3d4c9c2e6189d933547a7080fe4885f85cfd62d86edb8db972",
+      "decision": "no_change",
+      "rationale": "NOTICE-500 (2026-11-20): the Action Needed notices projection now reads committed rows without row locks, so it cannot deadlock with a concurrent sign-in or security change; company access, session and membership checks are unchanged. No customer-visible behavior or support guidance changes, so the Help article needs no edit."
     },
     {
       "source": "packages/shared/src/trust-documents.ts",
@@ -2326,9 +2326,9 @@
       "source": "server/src/services/trust-documents.ts",
       "articleId": "help-and-human-support-da",
       "articleSha256": "2c92acfc98fc458e84cf4bf6fc421119816d6f471922dceee726e311804bf6b5",
-      "sourceSha256": "76f0cec023ae7781f45b7938871a8c24f5d2c35f944b1ce1a46dc203cc5d0257",
-      "decision": "updated",
-      "rationale": "Danish counterpart checked against the same source behavior. The paired article adds the reviewed Support-to-Task handoff and pending managed-file deletion explanation, alongside existing coverage/security and status guidance. This linked source is unchanged; its documented source access and owner controls remain intact."
+      "sourceSha256": "666bab7645d45f3d4c9c2e6189d933547a7080fe4885f85cfd62d86edb8db972",
+      "decision": "no_change",
+      "rationale": "NOTICE-500 (2026-11-20): the Action Needed notices projection now reads committed rows without row locks, so it cannot deadlock with a concurrent sign-in or security change; company access, session and membership checks are unchanged. No customer-visible behavior or support guidance changes, so the Help article needs no edit. Danish counterpart checked against the same source behavior."
     },
     {
       "source": "packages/shared/src/trust-documents.ts",
@@ -2406,9 +2406,9 @@
       "source": "server/src/routes/announcements.ts",
       "articleId": "help-and-human-support",
       "articleSha256": "bec6b2b830586252df7700cc8b8f23018da446ede36284d98e53f8db2b049a1b",
-      "sourceSha256": "9ccbaaed32ae26f22e2e730353db10c18e7b615060f0ece723814e626246fc92",
+      "sourceSha256": "759d0a7346cb6f8e30ff37d12ab7419e132d42252006d0c49a20fb9f0fec0a84",
       "decision": "no_change",
-      "rationale": "Reviewed current-company access, actual enabled model selections, duplicate-family aggregation and earliest retirement deadlines. The existing Help article already explains the direct company support action used by these notices."
+      "rationale": "NOTICE-500 (2026-11-20): the Action Needed notices projection now reads committed rows without row locks, so it cannot deadlock with a concurrent sign-in or security change; company access, session and membership checks are unchanged. No customer-visible behavior or support guidance changes, so the Help article needs no edit."
     },
     {
       "source": "server/src/services/announcement-feed.ts",
@@ -2446,9 +2446,9 @@
       "source": "server/src/routes/announcements.ts",
       "articleId": "help-and-human-support-da",
       "articleSha256": "2c92acfc98fc458e84cf4bf6fc421119816d6f471922dceee726e311804bf6b5",
-      "sourceSha256": "9ccbaaed32ae26f22e2e730353db10c18e7b615060f0ece723814e626246fc92",
+      "sourceSha256": "759d0a7346cb6f8e30ff37d12ab7419e132d42252006d0c49a20fb9f0fec0a84",
       "decision": "no_change",
-      "rationale": "Reviewed current-company access, actual enabled model selections, duplicate-family aggregation and earliest retirement deadlines. The existing Help article already explains the direct company support action used by these notices."
+      "rationale": "NOTICE-500 (2026-11-20): the Action Needed notices projection now reads committed rows without row locks, so it cannot deadlock with a concurrent sign-in or security change; company access, session and membership checks are unchanged. No customer-visible behavior or support guidance changes, so the Help article needs no edit. Danish counterpart checked against the same source behavior."
     },
     {
       "source": "server/src/services/announcement-feed.ts",

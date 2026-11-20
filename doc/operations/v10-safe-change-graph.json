@@ -14827,7 +14827,7 @@
         },
         {
           "path": "server/src/__tests__/announcements-routes.test.ts",
-          "sha256": "27579bcc513b33ede06da7e0b3b4e5a1b50f92fcd90c3dd331f896040de563c5"
+          "sha256": "71deb489f45c4f64afe38851da1087d710eccef2ce97a73aed8635611c97b931"
         },
         {
           "path": "server/src/__tests__/service-health-routes.test.ts",
@@ -14859,7 +14859,7 @@
         },
         {
           "path": "server/src/routes/announcements.ts",
-          "sha256": "9ccbaaed32ae26f22e2e730353db10c18e7b615060f0ece723814e626246fc92"
+          "sha256": "759d0a7346cb6f8e30ff37d12ab7419e132d42252006d0c49a20fb9f0fec0a84"
         },
         {
           "path": "server/src/routes/customer-support.ts",
@@ -14947,7 +14947,7 @@
         },
         {
           "path": "server/src/services/trust-documents.ts",
-          "sha256": "76f0cec023ae7781f45b7938871a8c24f5d2c35f944b1ce1a46dc203cc5d0257"
+          "sha256": "666bab7645d45f3d4c9c2e6189d933547a7080fe4885f85cfd62d86edb8db972"
         },
         {
           "path": "skills-releases/blentera-platform/v1/references/support-and-service-status.md",
@@ -53826,7 +53826,7 @@
       "id": "source:server/src/__tests__/announcements-routes.test.ts",
       "kind": "current_source_owner",
       "path": "server/src/__tests__/announcements-routes.test.ts",
-      "sha256": "27579bcc513b33ede06da7e0b3b4e5a1b50f92fcd90c3dd331f896040de563c5",
+      "sha256": "71deb489f45c4f64afe38851da1087d710eccef2ce97a73aed8635611c97b931",
       "changeIds": [
         "SCR-V10-SUPPORT-STATUS-TRUST-NOTICES"
       ],
@@ -53946,7 +53946,7 @@
       "id": "source:server/src/routes/announcements.ts",
       "kind": "current_source_owner",
       "path": "server/src/routes/announcements.ts",
-      "sha256": "9ccbaaed32ae26f22e2e730353db10c18e7b615060f0ece723814e626246fc92",
+      "sha256": "759d0a7346cb6f8e30ff37d12ab7419e132d42252006d0c49a20fb9f0fec0a84",
       "changeIds": [
         "SCR-V10-SUPPORT-STATUS-TRUST-NOTICES"
       ],
@@ -54276,7 +54276,7 @@
       "id": "source:server/src/services/trust-documents.ts",
       "kind": "current_source_owner",
       "path": "server/src/services/trust-documents.ts",
-      "sha256": "76f0cec023ae7781f45b7938871a8c24f5d2c35f944b1ce1a46dc203cc5d0257",
+      "sha256": "666bab7645d45f3d4c9c2e6189d933547a7080fe4885f85cfd62d86edb8db972",
       "changeIds": [
         "SCR-V10-SUPPORT-STATUS-TRUST-NOTICES"
       ],
