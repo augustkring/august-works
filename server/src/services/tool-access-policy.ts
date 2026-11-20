@@ -728,6 +728,11 @@ export interface ToolRateLimitTokenLedger {
 export interface ToolRateLimitTokenLedgerOptions {
   /** The call executes an action that a human already approved. */
   approvedExecution?: boolean;
+  /** APR-E2E-10. With approvedExecution only: the server executes a call that
+   * was parked for that approval (the approval re-check and its execution),
+   * not a live agent call. The managed-runtime commercial check then also
+   * accepts a STOPPED cell that is otherwise commercially current. */
+  parkedApprovedExecution?: boolean;
 }
 
 export interface ToolAccessDecisionInternalOptions {
@@ -745,6 +750,7 @@ type HeldRateLimitToken = {
 
 type RateLimitTokenLedgerState = {
   approvedExecution: boolean;
+  parkedApprovedExecution?: boolean;
   /** Restored from a stored charge: usable only by non-consuming re-checks, never released. */
   recheckOnly: boolean;
   tokens: Map<string, HeldRateLimitToken>;
@@ -766,7 +772,9 @@ function newRateLimitTokenLedger(state: RateLimitTokenLedgerState): ToolRateLimi
 }
 
 export function createToolRateLimitTokenLedger(options: ToolRateLimitTokenLedgerOptions = {}): ToolRateLimitTokenLedger {
-  return newRateLimitTokenLedger({ approvedExecution: options.approvedExecution === true, recheckOnly: false, tokens: new Map() });
+  return newRateLimitTokenLedger({ approvedExecution: options.approvedExecution === true,
+    parkedApprovedExecution: options.approvedExecution === true && options.parkedApprovedExecution === true,
+    recheckOnly: false, tokens: new Map() });
 }
 
 /**
@@ -1650,7 +1658,11 @@ export function toolAccessPolicyService(db: Db) {
     if (!base.allowed && base.decision !== "require_approval") return base;
     const loaded = await loadContext(input); if (!loaded.ok) return loaded.decision;
     if (loaded.ctx.agentId && (input.actor.actorType === "agent" || loaded.ctx.heartbeatRunId)) {
-      try { await assertManagedRuntimeCommercialAuthority(db, input.companyId, loaded.ctx.agentId); }
+      const ledgerState = internal.rateLimitTokens ? rateLimitTokenLedgerStates.get(internal.rateLimitTokens) : undefined;
+      const parkedApprovedExecution = ledgerState?.approvedExecution === true && ledgerState.parkedApprovedExecution === true &&
+        !ledgerState.recheckOnly;
+      try { await assertManagedRuntimeCommercialAuthority(db, input.companyId, loaded.ctx.agentId,
+        parkedApprovedExecution ? { acceptStoppedCell: true } : {}); }
       catch (error) { if (error && typeof error === "object" && "status" in error && error.status === 403) return decision("deny", "deny_policy_block", "Current managed runtime capacity is required.", base.effectiveProfileIds, base.matchedPolicyIds); throw error; }
     }
     const packageRestriction = await packageToolRestriction(db, loaded.ctx);

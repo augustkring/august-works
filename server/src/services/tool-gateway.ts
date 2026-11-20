@@ -9718,7 +9718,7 @@ export function createToolGatewayService(
     let approvedMemoryOriginSessionId: string | undefined;
     // This execution's rate-limit admission record. The first check below only
     // peeks; the token is taken immediately before dispatch.
-    const rateLimitTokens = createToolRateLimitTokenLedger({ approvedExecution: true });
+    const rateLimitTokens = createToolRateLimitTokenLedger({ approvedExecution: true, parkedApprovedExecution: true });
     try {
       await restoreApprovedActionIdentity(
         session,
@@ -12473,7 +12473,7 @@ export function createToolGatewayService(
             tool,
             parameters: signedPayload.arguments,
           }),
-          { rateLimitTokens: createToolRateLimitTokenLedger({ approvedExecution: true }) },
+          { rateLimitTokens: createToolRateLimitTokenLedger({ approvedExecution: true, parkedApprovedExecution: true }) },
         );
         if (!access.allowed && access.decision !== "require_approval")
           throw policyRefusalError(access, { invocationId: invocation.id, tool: tool.name });

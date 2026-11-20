@@ -57,6 +57,21 @@ vi.mock("../services/ai-governance/execution-gate.js", async (importOriginal) =>
   };
 });
 
+// APR-E2E-10: observe which commercial-check mode decide() asks for; the
+// owner itself is covered by managed-runtime-admission.test.ts.
+const commercialCheck = vi.hoisted(() => ({ calls: [] as Array<Record<string, unknown> | undefined>, refuse: false }));
+vi.mock("../services/billing/managed-runtime-admission.js", async (importOriginal) => {
+  const actual = await importOriginal<typeof import("../services/billing/managed-runtime-admission.js")>();
+  return {
+    ...actual,
+    assertManagedRuntimeCommercialAuthority: async (...args: Parameters<typeof actual.assertManagedRuntimeCommercialAuthority>) => {
+      commercialCheck.calls.push(args[3]);
+      if (commercialCheck.refuse) throw Object.assign(new Error("capacity"), { status: 403 });
+      return actual.assertManagedRuntimeCommercialAuthority(...args);
+    },
+  };
+});
+
 const embeddedPostgresSupport = await getEmbeddedPostgresTestSupport();
 const describeEmbeddedPostgres = embeddedPostgresSupport.supported ? describe : describe.skip;
 
@@ -264,6 +279,35 @@ describeEmbeddedPostgres("tool access policy service", () => {
       reasonCode: "allow_profile",
       effectiveProfileIds: [profile.id],
     });
+  });
+
+  it("accepts a stopped runtime cell only for the parked approved execution ledger (APR-E2E-10)", async () => {
+    const company = await createCompany(db);
+    const agent = await createAgent(db, company.id);
+    const { connection, catalogEntry } = await createTool(db, company.id);
+    const profile = await db.insert(toolProfiles).values({ companyId: company.id, profileKey: `profile-${randomUUID()}`,
+      name: "Write tools", defaultAction: "deny" }).returning().then((rows) => rows[0]!);
+    await db.insert(toolProfileBindings).values({ companyId: company.id, profileId: profile.id, targetType: "agent", targetId: agent.id });
+    await db.insert(toolProfileEntries).values({ companyId: company.id, profileId: profile.id, selectorType: "tool_name",
+      effect: "include", toolName: "send_email" });
+    const decide = (ledger?: ToolRateLimitTokenLedger) => toolAccessPolicyService(db).decide({
+      companyId: company.id,
+      actor: { actorType: "agent", actorId: agent.id, agentId: agent.id },
+      request: { connectionId: connection.id, catalogEntryId: catalogEntry.id, toolName: "send_email" },
+    }, ledger ? { rateLimitTokens: ledger } : {});
+    commercialCheck.calls.length = 0;
+    try {
+      await decide();
+      await decide(createToolRateLimitTokenLedger({ approvedExecution: true }));
+      await decide(createToolRateLimitTokenLedger({ parkedApprovedExecution: true }));
+      await decide(createToolRateLimitTokenLedger({ approvedExecution: true, parkedApprovedExecution: true }));
+      expect(commercialCheck.calls).toEqual([{}, {}, {}, { acceptStoppedCell: true }]);
+      commercialCheck.refuse = true;
+      expect(await decide(createToolRateLimitTokenLedger({ approvedExecution: true, parkedApprovedExecution: true })))
+        .toMatchObject({ allowed: false, reasonCode: "deny_policy_block" });
+    } finally {
+      commercialCheck.refuse = false;
+    }
   });
 
   it("uses issue-scoped profiles ahead of company defaults", async () => {
