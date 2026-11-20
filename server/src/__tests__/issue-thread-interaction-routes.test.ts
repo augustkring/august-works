@@ -1305,6 +1305,52 @@ describe.sequential("issue thread interaction routes", () => {
     );
   });
 
+  it("returns the gateway's refusal status and reason instead of a 500 (APR-E2E-8)", async () => {
+    const { ToolGatewayHttpError } = await import("../services/tool-gateway.js");
+    const approveToolActionRequest = vi.fn().mockRejectedValue(new ToolGatewayHttpError(
+      403, "Current managed runtime capacity is required.", "deny_policy_block", { matchedPolicyIds: ["internal"] }));
+    mockInteractionService.acceptInteraction.mockResolvedValueOnce({
+      interaction: {
+        id: "interaction-tool-action", companyId: "company-1", issueId: "aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaaa",
+        kind: "request_confirmation", status: "accepted", continuationPolicy: "wake_assignee",
+        payload: { version: 1, prompt: "Approve the action?",
+          toolAction: { version: 1, actionRequestId: "action-request-1", toolName: "google_sheets_add_row" } },
+        result: { version: 1, outcome: "accepted" },
+      },
+      createdIssues: [],
+    });
+    const app = await createApp(undefined, { approveToolActionRequest });
+    const res = await request(app)
+      .post("/api/issues/aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaaa/interactions/interaction-tool-action/accept")
+      .send({});
+    expect(res.status).toBe(403);
+    expect(res.body.error).toBe("Current managed runtime capacity is required.");
+    expect(res.body.details).toEqual({ code: "deny_policy_block" });
+    expect(JSON.stringify(res.body)).not.toContain("matchedPolicyIds");
+    expect(mockHeartbeatService.wakeup).not.toHaveBeenCalled();
+  });
+
+  it("keeps a gateway server error as a server error (APR-E2E-8)", async () => {
+    const { ToolGatewayHttpError } = await import("../services/tool-gateway.js");
+    const approveToolActionRequest = vi.fn().mockRejectedValue(new ToolGatewayHttpError(
+      500, "Approval request was not created", "approval_request_missing"));
+    mockInteractionService.acceptInteraction.mockResolvedValueOnce({
+      interaction: {
+        id: "interaction-tool-action", companyId: "company-1", issueId: "aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaaa",
+        kind: "request_confirmation", status: "accepted", continuationPolicy: "wake_assignee",
+        payload: { version: 1, prompt: "Approve the action?",
+          toolAction: { version: 1, actionRequestId: "action-request-1", toolName: "google_sheets_add_row" } },
+        result: { version: 1, outcome: "accepted" },
+      },
+      createdIssues: [],
+    });
+    const app = await createApp(undefined, { approveToolActionRequest });
+    const res = await request(app)
+      .post("/api/issues/aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaaa/interactions/interaction-tool-action/accept")
+      .send({});
+    expect(res.status).toBe(500);
+  });
+
   it("wakes with failure instructions after an accepted tool action fails", async () => {
     const approveToolActionRequest = vi.fn().mockResolvedValue({
       status: "failed",

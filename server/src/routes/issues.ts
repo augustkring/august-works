@@ -2537,6 +2537,31 @@ function buildRequestItemVerdictsWakeIdempotencyKey(args: {
   return `request_item_verdicts:${args.issueId}:${args.interactionId}:${bucket}`;
 }
 
+/** APR-E2E-8. The tool gateway refuses a review decision with its own
+ * ToolGatewayHttpError (policy refusal, changed target, stale request). The
+ * issue routes delegate to it, so translate a client-error refusal into the
+ * same status with its closed reason code instead of an opaque 500. Server
+ * errors and anything else are rethrown unchanged; nothing is admitted. */
+async function withToolReviewHttpErrors<T>(work: () => Promise<T>): Promise<T> {
+  try {
+    return await work();
+  } catch (error) {
+    const refusal = error as { status?: unknown; reasonCode?: unknown; message?: unknown } | null;
+    if (
+      error instanceof Error &&
+      !(error instanceof HttpError) &&
+      error.constructor?.name === "ToolGatewayHttpError" &&
+      typeof refusal?.status === "number" &&
+      Number.isInteger(refusal.status) &&
+      refusal.status >= 400 &&
+      refusal.status < 500 &&
+      typeof refusal.reasonCode === "string"
+    )
+      throw new HttpError(refusal.status, error.message, { code: refusal.reasonCode });
+    throw error;
+  }
+}
+
 /** APR-E2E-1. Returns true only when the Human's note was recorded as a
  * deferred note for the assignee's pending governed tool decision. Any doubt
  * or failure keeps today's comment wake. */
@@ -16763,7 +16788,7 @@ export function issueRoutes(
       ) {
         if (!opts.approveToolActionRequest)
           throw unprocessable("Tool review resolution is unavailable");
-        await opts.approveToolActionRequest({
+        const toolReviewApproval = {
           companyId: issue.companyId,
           issueId: issue.id,
           interactionId: current.id,
@@ -16773,7 +16798,8 @@ export function issueRoutes(
             agentId: actor.agentId,
             userId: actor.actorType === "user" ? actor.actorId : null,
           },
-        });
+        };
+        await withToolReviewHttpErrors(() => opts.approveToolActionRequest!(toolReviewApproval));
         res.json(await interactionSvc.getById(current.id));
         return;
       }
@@ -16814,7 +16840,7 @@ export function issueRoutes(
         typeof toolAction?.actionRequestId === "string" &&
         opts.approveToolActionRequest
       ) {
-        const approvalResult = await opts.approveToolActionRequest({
+        const acceptedToolReviewApproval = {
           companyId: issue.companyId,
           issueId: issue.id,
           interactionId: interaction.id,
@@ -16823,7 +16849,8 @@ export function issueRoutes(
             agentId: actor.agentId,
             userId: actor.actorType === "user" ? actor.actorId : null,
           },
-        });
+        };
+        const approvalResult = await withToolReviewHttpErrors(() => opts.approveToolActionRequest!(acceptedToolReviewApproval));
         const approval = readObject(approvalResult);
         const executionStatus = readToolActionExecutionStatus(approval.status);
         if (executionStatus) {
@@ -17085,7 +17112,7 @@ export function issueRoutes(
       ) {
         if (!opts.declineToolActionRequest)
           throw unprocessable("Tool review resolution is unavailable");
-        await opts.declineToolActionRequest({
+        const toolReviewDecline = {
           companyId: issue.companyId,
           issueId: issue.id,
           interactionId: current.id,
@@ -17095,7 +17122,8 @@ export function issueRoutes(
             agentId: actor.agentId,
             userId: actor.actorType === "user" ? actor.actorId : null,
           },
-        });
+        };
+        await withToolReviewHttpErrors(() => opts.declineToolActionRequest!(toolReviewDecline));
         res.json(await interactionSvc.getById(current.id));
         return;
       }
