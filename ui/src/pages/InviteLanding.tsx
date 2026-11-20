@@ -820,7 +820,7 @@ export function InviteLandingPage() {
                       aria-describedby={authFeedback ? authErrorId : undefined}
                     />
                   </label>
-                  {authMode === "sign_up" && <p className="text-xs text-muted-foreground">{t("authFlow.passwordMinimum")}</p>}
+                  {authMode === "sign_up" && <p className="text-xs text-zinc-400">{t("authFlow.passwordMinimum")}</p>}
                   {authFeedback ? (
                     <p
                       id={authErrorId}

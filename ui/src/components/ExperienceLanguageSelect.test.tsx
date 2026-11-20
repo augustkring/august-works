@@ -101,3 +101,8 @@ it("restores native focus after an asynchronous change without stealing a person
   await vi.waitFor(() => expect(newSelect.disabled).toBe(false));
   expect(document.activeElement).toBe(other);
 });
+it("pairs its background token with the foreground token so dark host pages keep readable text (AUTH-DA1)", async () => {
+  await mount();
+  const classes = container!.querySelector("select")!.className.split(/\s+/);
+  expect(classes).toEqual(expect.arrayContaining(["bg-background", "text-foreground"]));
+});

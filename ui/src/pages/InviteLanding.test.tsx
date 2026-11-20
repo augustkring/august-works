@@ -1319,6 +1319,8 @@ describe("InviteLandingPage", () => {
       const labels = Array.from(container.querySelectorAll("label")).map((label) => label.textContent?.trim());
       expect(labels).toEqual(["SprogEnglishDansk", "Navn", "E-mail", "Adgangskode"]);
       expect((container.querySelector("label select") as HTMLSelectElement).value).toBe("da");
+      // The page is a fixed dark surface: theme-relative muted text fails contrast there.
+      expect(container.querySelector("form .text-muted-foreground")).toBeNull();
       const modes = Array.from(container.querySelectorAll('[role="group"] button'));
       expect(modes.map((button) => [button.textContent, button.getAttribute("aria-pressed")])).toEqual([
         ["Opret konto", "true"], ["Jeg har allerede en konto", "false"],

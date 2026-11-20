@@ -416,13 +416,17 @@ test("account entry signs up, signs out and signs in again in Danish with access
   await page.getByLabel("Navn", { exact: true }).fill("Dansk kontoindgang");
   await page.getByLabel("E-mail", { exact: true }).fill(email);
   await page.getByLabel("Adgangskode", { exact: true }).fill("for kort");
-  await page.getByRole("button", { name: "Opret konto", exact: true }).click();
+  // The submit button stays operable but aria-disabled until the form is valid,
+  // so the person submits from the field, as a keyboard user would.
+  await expect(page.getByRole("button", { name: "Opret konto", exact: true })).toHaveAttribute("aria-disabled", "true");
+  await page.getByLabel("Adgangskode", { exact: true }).press("Enter");
   const tooShort = page.getByRole("alert").filter({ hasText: "Brug mindst 15 tegn. Mellemrum tæller med." });
   await expect(tooShort).toBeFocused();
   await expect(page.getByLabel("Adgangskode", { exact: true })).toHaveAttribute("aria-invalid", "true");
   await auditWcag(page, "auth sign-up DA error");
   await page.getByLabel("Adgangskode", { exact: true }).fill(password);
   const signedUp = page.waitForResponse(response => response.url().endsWith("/api/auth/sign-up/email"));
+  await expect(page.getByRole("button", { name: "Opret konto", exact: true })).not.toHaveAttribute("aria-disabled", "true");
   await page.getByRole("button", { name: "Opret konto", exact: true }).click();
   expect((await signedUp).status()).toBe(200);
   await expect(page).not.toHaveURL(/\/auth(\?|$)/);
