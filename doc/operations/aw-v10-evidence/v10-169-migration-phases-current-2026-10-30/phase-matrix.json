@@ -1410,7 +1410,7 @@
     },
     {
       "path": "server/src/__tests__/v7-sandbox-host-bridge.integration.test.ts",
-      "sha256": "0c2453111e02292a244b8816156ce79891d27ac0e320554739cf4141a61f2ada"
+      "sha256": "ed3ce8851aaf003cb9eb92d7250e0064557e3f2c2761c4f18243d439d8020f65"
     },
     {
       "path": "server/src/__tests__/v7-sandbox-policy.test.ts",
@@ -1502,7 +1502,7 @@
     },
     {
       "path": "server/src/services/execution-sandbox/sandbox-service.ts",
-      "sha256": "6fe77dc673589b8b24b92ca1f78d181c218a24804b10cb648745e2815b510ebb"
+      "sha256": "9fd922d31c6fbe8c5de750dc63e0d055d9486ab32ac1720b18e77ab52d6fb862"
     },
     {
       "path": "server/src/services/experience/company-responsibility-attention.ts",

@@ -5783,7 +5783,7 @@
         },
         {
           "path": "server/src/__tests__/v7-sandbox-host-bridge.integration.test.ts",
-          "sha256": "0c2453111e02292a244b8816156ce79891d27ac0e320554739cf4141a61f2ada"
+          "sha256": "ed3ce8851aaf003cb9eb92d7250e0064557e3f2c2761c4f18243d439d8020f65"
         },
         {
           "path": "server/src/__tests__/v7-worker-model-gateway.integration.test.ts",
@@ -9164,7 +9164,7 @@
         },
         {
           "path": "server/src/__tests__/v7-sandbox-host-bridge.integration.test.ts",
-          "sha256": "0c2453111e02292a244b8816156ce79891d27ac0e320554739cf4141a61f2ada"
+          "sha256": "ed3ce8851aaf003cb9eb92d7250e0064557e3f2c2761c4f18243d439d8020f65"
         },
         {
           "path": "server/src/__tests__/v7-worker-model-gateway.integration.test.ts",
@@ -10225,7 +10225,7 @@
         },
         {
           "path": "server/src/__tests__/v7-sandbox-host-bridge.integration.test.ts",
-          "sha256": "0c2453111e02292a244b8816156ce79891d27ac0e320554739cf4141a61f2ada"
+          "sha256": "ed3ce8851aaf003cb9eb92d7250e0064557e3f2c2761c4f18243d439d8020f65"
         },
         {
           "path": "server/src/__tests__/v7-worker-model-gateway.integration.test.ts",
@@ -10329,7 +10329,7 @@
         },
         {
           "path": "server/src/services/execution-sandbox/sandbox-service.ts",
-          "sha256": "6fe77dc673589b8b24b92ca1f78d181c218a24804b10cb648745e2815b510ebb"
+          "sha256": "9fd922d31c6fbe8c5de750dc63e0d055d9486ab32ac1720b18e77ab52d6fb862"
         },
         {
           "path": "server/src/services/heartbeat.ts",
@@ -25310,7 +25310,7 @@
         },
         {
           "path": "server/src/services/runtime/control.ts",
-          "sha256": "5f47557d4ec1864c615baccac294a882e30fe849ef2bbb0faf7ff2485e4b7b3b"
+          "sha256": "88296093ba8ded60eee525ccfcea4a174ac136da705a0dad0535054aaa18e315"
         },
         {
           "path": "server/src/services/runtime/fleet.ts",
@@ -48078,7 +48078,7 @@
       "id": "source:server/src/__tests__/v7-sandbox-host-bridge.integration.test.ts",
       "kind": "current_source_owner",
       "path": "server/src/__tests__/v7-sandbox-host-bridge.integration.test.ts",
-      "sha256": "0c2453111e02292a244b8816156ce79891d27ac0e320554739cf4141a61f2ada",
+      "sha256": "ed3ce8851aaf003cb9eb92d7250e0064557e3f2c2761c4f18243d439d8020f65",
       "changeIds": [
         "SCR-V10-HOTSPOT-02",
         "SCR-V10-HOTSPOT-06",
@@ -51501,7 +51501,7 @@
       "id": "source:server/src/services/execution-sandbox/sandbox-service.ts",
       "kind": "current_source_owner",
       "path": "server/src/services/execution-sandbox/sandbox-service.ts",
-      "sha256": "6fe77dc673589b8b24b92ca1f78d181c218a24804b10cb648745e2815b510ebb",
+      "sha256": "9fd922d31c6fbe8c5de750dc63e0d055d9486ab32ac1720b18e77ab52d6fb862",
       "changeIds": [
         "SCR-V10-HOTSPOT-07"
       ],
@@ -64858,7 +64858,7 @@
       "id": "source:server/src/services/runtime/control.ts",
       "kind": "current_source_owner",
       "path": "server/src/services/runtime/control.ts",
-      "sha256": "5f47557d4ec1864c615baccac294a882e30fe849ef2bbb0faf7ff2485e4b7b3b",
+      "sha256": "88296093ba8ded60eee525ccfcea4a174ac136da705a0dad0535054aaa18e315",
       "changeIds": [
         "SCR-V10-NATIVE-RUNTIME-AND-AUTHORITY"
       ],
