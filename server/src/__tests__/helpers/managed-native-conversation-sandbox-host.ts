@@ -4611,6 +4611,17 @@ async function configureManagedSandboxRun(input: ManagedSandboxHostInput,
     }
     preparationStage="create_binding";
     await createBindingForRun(runtimeCredentialBinding, taskRoot);
+    // APR-E2E-3: each Run's fresh per-Run Host is qualified here as an operator
+    // action, and production requires a recent operator authentication for it
+    // (`assertConfiguredOperatorAuthentication`, 300 s). A later Run of the same
+    // journey (a Human's note, the resolution after a review) starts minutes
+    // after sign-in, so the operator authenticates again (a step-up on the same
+    // session, as CONF15-P5 does for a re-qualified conformance Host) instead of
+    // the gate being relaxed.
+    if (actor.type !== "board" || !actor.sessionId || !actor.userId)
+      throw new Error("conversation_software_host_qualification_operator_session_missing");
+    await db.update(authSessions).set({ authenticatedAt: new Date() })
+      .where(and(eq(authSessions.id, actor.sessionId), eq(authSessions.userId, actor.userId)));
     preparationStage="qualify";await qualifyHost();preparationStage="compile";
     const boundary = policyFixture(); boundary.riskClass = "C3"; boundary.requiredControls = [...conversationRequiredControls];
     boundary.filesystem.readPaths = [...new Set([taskRoot, "/.openshell/runtime/openshell-sandbox", ...runtimeBrokerBinaryReadPaths])].sort();
