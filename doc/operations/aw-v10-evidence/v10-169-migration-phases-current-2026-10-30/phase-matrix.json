@@ -1454,7 +1454,7 @@
     },
     {
       "path": "server/src/routes/companies.ts",
-      "sha256": "76cfb993edac7ce27bcae130404f682e371f59324fd365812a8f8b29b1417ec6"
+      "sha256": "35997cc99f6ae43fe896c217d0145879803bfd637cb670dfc929f247c1e7c814"
     },
     {
       "path": "server/src/services/agents/authoring-model-migration-monitor.ts",
@@ -1578,7 +1578,7 @@
     },
     {
       "path": "ui/src/api/companies.ts",
-      "sha256": "229ba77be6dcd363c0b0e3cbc2564f1041851c55be5e35309c19c4ab7e28ab31"
+      "sha256": "95c7d11e0043a0e34e3b5d5fcf059d69e5bdfdf4797916e0cf46593ef1ebd310"
     },
     {
       "path": "ui/src/pages/CompanySettings.tsx",
