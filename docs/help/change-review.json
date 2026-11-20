@@ -309,10 +309,10 @@
     {
       "source": "cli/src/commands/client/company.ts",
       "articleId": "company-import-export",
-      "sourceSha256": "8553c79050f68ebaf0a8bf6433776105abf8aa74f40c31fe6bf0efec547eb0c4",
+      "sourceSha256": "883cd0393e4896af9825771b4a346976fea653c3195583b5e4d5543ad17ac8c7",
       "articleSha256": "60fb27696b7e053d78cfb8579ae3c99b826d0a97c62acbdce88ca3979e58747f",
-      "decision": "updated",
-      "rationale": "Reviewed the branded import-selection prompt and English company guide together. The .paperclip.yaml identifier, selection groups, preview/confirmation, paused defaults, source authorization and recovery contract stay unchanged; the guide now uses Blentera for the product."
+      "decision": "no_change",
+      "rationale": "Reviewed (EXIT-AUTH1): only company deletion changed (owner or instance admin, exact typed name, recent sign-in; the CLI sends the confirmed name). Import and export steps in this guide are unchanged; deletion is described in Export and deletion."
     },
     {
       "source": "packages/db/src/schema/customer_operations.ts",
@@ -365,10 +365,10 @@
     {
       "source": "server/src/routes/companies.ts",
       "articleId": "company-import-export",
-      "sourceSha256": "76cfb993edac7ce27bcae130404f682e371f59324fd365812a8f8b29b1417ec6",
+      "sourceSha256": "35997cc99f6ae43fe896c217d0145879803bfd637cb670dfc929f247c1e7c814",
       "articleSha256": "60fb27696b7e053d78cfb8579ae3c99b826d0a97c62acbdce88ca3979e58747f",
-      "decision": "updated",
-      "rationale": "Reviewed additive internal durable export routes, OpenAPI, original authority and storage-erasure handling plus the isolated organizationDeletion storage-namespace EN/DA reason. Existing synchronous UI/CLI export, billing, developer references, Task copy and customer Help/support behavior described by this article remain unchanged; these internal routes add no public integration or customer authorization."
+      "decision": "no_change",
+      "rationale": "Reviewed (EXIT-AUTH1): only company deletion changed (owner or instance admin, exact typed name, recent sign-in; the CLI sends the confirmed name). Import and export steps in this guide are unchanged; deletion is described in Export and deletion."
     },
     {
       "source": "server/src/routes/openapi.ts",
@@ -445,10 +445,10 @@
     {
       "source": "cli/src/commands/client/company.ts",
       "articleId": "company-import-export-da",
-      "sourceSha256": "8553c79050f68ebaf0a8bf6433776105abf8aa74f40c31fe6bf0efec547eb0c4",
+      "sourceSha256": "883cd0393e4896af9825771b4a346976fea653c3195583b5e4d5543ad17ac8c7",
       "articleSha256": "fde0e0a405c5576829b43ec70b1224abd15e44827d20aed3e786322f1dea2f04",
-      "decision": "updated",
-      "rationale": "Gennemg\u00e5et den omd\u00f8bte importv\u00e6lger og den danske virksomhedsvejledning sammen. .paperclip.yaml, valgmuligheder, forh\u00e5ndsvisning, bekr\u00e6ftelse, pausestandard, kildeadgang og genopretning er u\u00e6ndrede; vejledningen bruger nu Blentera og undlader en ekstra specifikationshenvisning."
+      "decision": "no_change",
+      "rationale": "Reviewed (EXIT-AUTH1): only company deletion changed (owner or instance admin, exact typed name, recent sign-in; the CLI sends the confirmed name). Import and export steps in this guide are unchanged; deletion is described in Export and deletion."
     },
     {
       "source": "packages/db/src/schema/customer_operations.ts",
@@ -501,10 +501,10 @@
     {
       "source": "server/src/routes/companies.ts",
       "articleId": "company-import-export-da",
-      "sourceSha256": "76cfb993edac7ce27bcae130404f682e371f59324fd365812a8f8b29b1417ec6",
+      "sourceSha256": "35997cc99f6ae43fe896c217d0145879803bfd637cb670dfc929f247c1e7c814",
       "articleSha256": "fde0e0a405c5576829b43ec70b1224abd15e44827d20aed3e786322f1dea2f04",
-      "decision": "updated",
-      "rationale": "Reviewed additive internal durable export routes, OpenAPI, original authority and storage-erasure handling plus the isolated organizationDeletion storage-namespace EN/DA reason. Existing synchronous UI/CLI export, billing, developer references, Task copy and customer Help/support behavior described by this article remain unchanged; these internal routes add no public integration or customer authorization."
+      "decision": "no_change",
+      "rationale": "Reviewed (EXIT-AUTH1): only company deletion changed (owner or instance admin, exact typed name, recent sign-in; the CLI sends the confirmed name). Import and export steps in this guide are unchanged; deletion is described in Export and deletion."
     },
     {
       "source": "server/src/routes/openapi.ts",
@@ -662,7 +662,7 @@
       "source": "server/src/routes/memory.ts",
       "articleId": "export-and-delete",
       "sourceSha256": "1fae08e6465ba1c6ea49efcafed34f650d4c0b5cf10a4f197a81ef9c297c3356",
-      "articleSha256": "5e5976e209cace00e9f65452a64f50b1e080f496cde942a93a356a11a96f746b",
+      "articleSha256": "73476587cc7574c56bcbc6f5bc3f692b7e953f9a9b46339d0d08f7577bebcf48",
       "decision": "updated",
       "rationale": "Reviewed EN/DA organization-deletion repair guidance for an original export storage namespace mismatch: retain the original request and involve Human/operator repair. Internal durable export routes do not change existing customer export controls. Personal account receipts, live provider confirmation and legal retention remain separately scoped."
     },
@@ -670,7 +670,7 @@
       "source": "server/src/services/memory/memory-privacy.ts",
       "articleId": "export-and-delete",
       "sourceSha256": "f9bfb8c209344dd73f5655caa0833adad00618874a61485c36dac76a73f41b62",
-      "articleSha256": "5e5976e209cace00e9f65452a64f50b1e080f496cde942a93a356a11a96f746b",
+      "articleSha256": "73476587cc7574c56bcbc6f5bc3f692b7e953f9a9b46339d0d08f7577bebcf48",
       "decision": "updated",
       "rationale": "Added that erasure also covers a session folder an interrupted run left before saving its state, stays pending while a recently used folder cannot yet be matched to an organization, and erases a folder no run claims after a day unused (PRIV-R8)."
     },
@@ -678,7 +678,7 @@
       "source": "server/src/services/memory/memory-service.ts",
       "articleId": "export-and-delete",
       "sourceSha256": "3ce39db7256780a86a89b3663e8e9163d18908c230b39c8afba7f61db179861c",
-      "articleSha256": "5e5976e209cace00e9f65452a64f50b1e080f496cde942a93a356a11a96f746b",
+      "articleSha256": "73476587cc7574c56bcbc6f5bc3f692b7e953f9a9b46339d0d08f7577bebcf48",
       "decision": "updated",
       "rationale": "Reviewed EN/DA organization-deletion repair guidance for an original export storage namespace mismatch: retain the original request and involve Human/operator repair. Internal durable export routes do not change existing customer export controls. Personal account receipts, live provider confirmation and legal retention remain separately scoped."
     },
@@ -686,7 +686,7 @@
       "source": "server/src/services/saas/account-deletion.ts",
       "articleId": "export-and-delete",
       "sourceSha256": "587dad80d99260da82f21d295f7453d161f00092c11284e724eb38861663e046",
-      "articleSha256": "5e5976e209cace00e9f65452a64f50b1e080f496cde942a93a356a11a96f746b",
+      "articleSha256": "73476587cc7574c56bcbc6f5bc3f692b7e953f9a9b46339d0d08f7577bebcf48",
       "decision": "updated",
       "rationale": "Reviewed EN/DA organization-deletion repair guidance for an original export storage namespace mismatch: retain the original request and involve Human/operator repair. Internal durable export routes do not change existing customer export controls. Personal account receipts, live provider confirmation and legal retention remain separately scoped."
     },
@@ -694,7 +694,7 @@
       "source": "server/src/services/saas/company-purge.ts",
       "articleId": "export-and-delete",
       "sourceSha256": "8e4b23a432b5448b44543ff3b776bb3fe595c4ec7396dbc238a1f2914c6172bd",
-      "articleSha256": "5e5976e209cace00e9f65452a64f50b1e080f496cde942a93a356a11a96f746b",
+      "articleSha256": "73476587cc7574c56bcbc6f5bc3f692b7e953f9a9b46339d0d08f7577bebcf48",
       "decision": "updated",
       "rationale": "Reviewed EN/DA Forget permanently and organization deletion guidance for PRIV-R5: erasure now also removes the control-plane durable session folder (saved run events, runner/provider state, continuity-break archives) of the erased Run session for any Native run once every Run of the session has stopped, and company purge/offboarding remove every such folder of the company. Added that a later run cannot resume from the erased state. Organization deletion wording is already generic. Provider-held data and personal account receipts remain separately scoped."
     },
@@ -702,23 +702,23 @@
       "source": "server/src/services/saas/offboarding.ts",
       "articleId": "export-and-delete",
       "sourceSha256": "b5b4ffc0b77b36e8c93abc738b9ad9ce2e4c5ef98cf73afb7856d1d739c492fa",
-      "articleSha256": "5e5976e209cace00e9f65452a64f50b1e080f496cde942a93a356a11a96f746b",
+      "articleSha256": "73476587cc7574c56bcbc6f5bc3f692b7e953f9a9b46339d0d08f7577bebcf48",
       "decision": "updated",
       "rationale": "Added that erasure also covers a session folder an interrupted run left before saving its state, stays pending while a recently used folder cannot yet be matched to an organization, and erases a folder no run claims after a day unused (PRIV-R8)."
     },
     {
       "source": "ui/src/pages/CompanyExport.tsx",
       "articleId": "export-and-delete",
-      "sourceSha256": "62870d1837e9b9a0ece5751c43e9b92c13f7ea2e4cf3b148e40aa11a6b8be4d8",
-      "articleSha256": "5e5976e209cace00e9f65452a64f50b1e080f496cde942a93a356a11a96f746b",
-      "decision": "no_change",
-      "rationale": "Reviewed (EXIT-R1): only the warning text tone changed (amber-700/300 for WCAG AA contrast). Export scope, controls and steps are unchanged, so the export section stays accurate."
+      "sourceSha256": "6d60a09975190a8df0e5abd3c091e3e11ea47f915fdf5feae5affc7d39042da8",
+      "articleSha256": "73476587cc7574c56bcbc6f5bc3f692b7e953f9a9b46339d0d08f7577bebcf48",
+      "decision": "updated",
+      "rationale": "EXIT-R1: the export screen now includes Tasks by default (routine history and attachments stay opt-in); the article states the default. The earlier warning-tone change did not alter steps."
     },
     {
       "source": "ui/src/pages/Memory.tsx",
       "articleId": "export-and-delete",
       "sourceSha256": "868990402f0308c8cf6640b7d2ff2d89265a29af3b4343dd7482a476ce675f74",
-      "articleSha256": "5e5976e209cace00e9f65452a64f50b1e080f496cde942a93a356a11a96f746b",
+      "articleSha256": "73476587cc7574c56bcbc6f5bc3f692b7e953f9a9b46339d0d08f7577bebcf48",
       "decision": "updated",
       "rationale": "Reviewed EN/DA organization-deletion repair guidance for an original export storage namespace mismatch: retain the original request and involve Human/operator repair. Internal durable export routes do not change existing customer export controls. Personal account receipts, live provider confirmation and legal retention remain separately scoped."
     },
@@ -726,7 +726,7 @@
       "source": "ui/src/pages/SaasAccount.tsx",
       "articleId": "export-and-delete",
       "sourceSha256": "9896df1b563a26874860b6565c141f9875aa06492412a4d9f48e675cebb5acb1",
-      "articleSha256": "5e5976e209cace00e9f65452a64f50b1e080f496cde942a93a356a11a96f746b",
+      "articleSha256": "73476587cc7574c56bcbc6f5bc3f692b7e953f9a9b46339d0d08f7577bebcf48",
       "decision": "updated",
       "rationale": "Reviewed EN/DA organization-deletion repair guidance for an original export storage namespace mismatch: retain the original request and involve Human/operator repair. Internal durable export routes do not change existing customer export controls. Personal account receipts, live provider confirmation and legal retention remain separately scoped."
     },
@@ -734,7 +734,7 @@
       "source": "ui/src/pages/SaasDeletion.tsx",
       "articleId": "export-and-delete",
       "sourceSha256": "bc5cfa5c7591c7585c1502130a6dab734ad41b340f1522f68f371d4f2e52ab38",
-      "articleSha256": "5e5976e209cace00e9f65452a64f50b1e080f496cde942a93a356a11a96f746b",
+      "articleSha256": "73476587cc7574c56bcbc6f5bc3f692b7e953f9a9b46339d0d08f7577bebcf48",
       "decision": "updated",
       "rationale": "EXIT-R1: added that cancelling the subscription in Billing keeps the data while deletion erases it and cancels the subscription unless the billing account pays for another organization, and that a self-hosted deployment links to the Organizations list, whose Delete Organization asks for confirmation, offers an export and names archiving as the keep-the-data path."
     },
@@ -742,7 +742,7 @@
       "source": "server/src/routes/memory.ts",
       "articleId": "export-and-delete-da",
       "sourceSha256": "1fae08e6465ba1c6ea49efcafed34f650d4c0b5cf10a4f197a81ef9c297c3356",
-      "articleSha256": "238648c4c6ba36d71d16ac1eb762362fc5f7d278d06bfc3b9e2df0d79d042294",
+      "articleSha256": "685fbb4f4ebddd5faa1f24036b1bbfee0ce773b0771956a998a7fef70552cb28",
       "decision": "updated",
       "rationale": "Reviewed EN/DA organization-deletion repair guidance for an original export storage namespace mismatch: retain the original request and involve Human/operator repair. Internal durable export routes do not change existing customer export controls. Personal account receipts, live provider confirmation and legal retention remain separately scoped."
     },
@@ -750,7 +750,7 @@
       "source": "server/src/services/memory/memory-privacy.ts",
       "articleId": "export-and-delete-da",
       "sourceSha256": "f9bfb8c209344dd73f5655caa0833adad00618874a61485c36dac76a73f41b62",
-      "articleSha256": "238648c4c6ba36d71d16ac1eb762362fc5f7d278d06bfc3b9e2df0d79d042294",
+      "articleSha256": "685fbb4f4ebddd5faa1f24036b1bbfee0ce773b0771956a998a7fef70552cb28",
       "decision": "updated",
       "rationale": "Added that erasure also covers a session folder an interrupted run left before saving its state, stays pending while a recently used folder cannot yet be matched to an organization, and erases a folder no run claims after a day unused (PRIV-R8)."
     },
@@ -758,7 +758,7 @@
       "source": "server/src/services/memory/memory-service.ts",
       "articleId": "export-and-delete-da",
       "sourceSha256": "3ce39db7256780a86a89b3663e8e9163d18908c230b39c8afba7f61db179861c",
-      "articleSha256": "238648c4c6ba36d71d16ac1eb762362fc5f7d278d06bfc3b9e2df0d79d042294",
+      "articleSha256": "685fbb4f4ebddd5faa1f24036b1bbfee0ce773b0771956a998a7fef70552cb28",
       "decision": "updated",
       "rationale": "Reviewed EN/DA organization-deletion repair guidance for an original export storage namespace mismatch: retain the original request and involve Human/operator repair. Internal durable export routes do not change existing customer export controls. Personal account receipts, live provider confirmation and legal retention remain separately scoped."
     },
@@ -766,7 +766,7 @@
       "source": "server/src/services/saas/account-deletion.ts",
       "articleId": "export-and-delete-da",
       "sourceSha256": "587dad80d99260da82f21d295f7453d161f00092c11284e724eb38861663e046",
-      "articleSha256": "238648c4c6ba36d71d16ac1eb762362fc5f7d278d06bfc3b9e2df0d79d042294",
+      "articleSha256": "685fbb4f4ebddd5faa1f24036b1bbfee0ce773b0771956a998a7fef70552cb28",
       "decision": "updated",
       "rationale": "Reviewed EN/DA organization-deletion repair guidance for an original export storage namespace mismatch: retain the original request and involve Human/operator repair. Internal durable export routes do not change existing customer export controls. Personal account receipts, live provider confirmation and legal retention remain separately scoped."
     },
@@ -774,7 +774,7 @@
       "source": "server/src/services/saas/company-purge.ts",
       "articleId": "export-and-delete-da",
       "sourceSha256": "8e4b23a432b5448b44543ff3b776bb3fe595c4ec7396dbc238a1f2914c6172bd",
-      "articleSha256": "238648c4c6ba36d71d16ac1eb762362fc5f7d278d06bfc3b9e2df0d79d042294",
+      "articleSha256": "685fbb4f4ebddd5faa1f24036b1bbfee0ce773b0771956a998a7fef70552cb28",
       "decision": "updated",
       "rationale": "Reviewed EN/DA Forget permanently and organization deletion guidance for PRIV-R5: erasure now also removes the control-plane durable session folder (saved run events, runner/provider state, continuity-break archives) of the erased Run session for any Native run once every Run of the session has stopped, and company purge/offboarding remove every such folder of the company. Added that a later run cannot resume from the erased state. Organization deletion wording is already generic. Provider-held data and personal account receipts remain separately scoped."
     },
@@ -782,23 +782,23 @@
       "source": "server/src/services/saas/offboarding.ts",
       "articleId": "export-and-delete-da",
       "sourceSha256": "b5b4ffc0b77b36e8c93abc738b9ad9ce2e4c5ef98cf73afb7856d1d739c492fa",
-      "articleSha256": "238648c4c6ba36d71d16ac1eb762362fc5f7d278d06bfc3b9e2df0d79d042294",
+      "articleSha256": "685fbb4f4ebddd5faa1f24036b1bbfee0ce773b0771956a998a7fef70552cb28",
       "decision": "updated",
       "rationale": "Added that erasure also covers a session folder an interrupted run left before saving its state, stays pending while a recently used folder cannot yet be matched to an organization, and erases a folder no run claims after a day unused (PRIV-R8)."
     },
     {
       "source": "ui/src/pages/CompanyExport.tsx",
       "articleId": "export-and-delete-da",
-      "sourceSha256": "62870d1837e9b9a0ece5751c43e9b92c13f7ea2e4cf3b148e40aa11a6b8be4d8",
-      "articleSha256": "238648c4c6ba36d71d16ac1eb762362fc5f7d278d06bfc3b9e2df0d79d042294",
-      "decision": "no_change",
-      "rationale": "Reviewed (EXIT-R1): only the warning text tone changed (amber-700/300 for WCAG AA contrast). Export scope, controls and steps are unchanged, so the export section stays accurate."
+      "sourceSha256": "6d60a09975190a8df0e5abd3c091e3e11ea47f915fdf5feae5affc7d39042da8",
+      "articleSha256": "685fbb4f4ebddd5faa1f24036b1bbfee0ce773b0771956a998a7fef70552cb28",
+      "decision": "updated",
+      "rationale": "EXIT-R1: the export screen now includes Tasks by default (routine history and attachments stay opt-in); the article states the default. The earlier warning-tone change did not alter steps."
     },
     {
       "source": "ui/src/pages/Memory.tsx",
       "articleId": "export-and-delete-da",
       "sourceSha256": "868990402f0308c8cf6640b7d2ff2d89265a29af3b4343dd7482a476ce675f74",
-      "articleSha256": "238648c4c6ba36d71d16ac1eb762362fc5f7d278d06bfc3b9e2df0d79d042294",
+      "articleSha256": "685fbb4f4ebddd5faa1f24036b1bbfee0ce773b0771956a998a7fef70552cb28",
       "decision": "updated",
       "rationale": "Reviewed EN/DA organization-deletion repair guidance for an original export storage namespace mismatch: retain the original request and involve Human/operator repair. Internal durable export routes do not change existing customer export controls. Personal account receipts, live provider confirmation and legal retention remain separately scoped."
     },
@@ -806,7 +806,7 @@
       "source": "ui/src/pages/SaasAccount.tsx",
       "articleId": "export-and-delete-da",
       "sourceSha256": "9896df1b563a26874860b6565c141f9875aa06492412a4d9f48e675cebb5acb1",
-      "articleSha256": "238648c4c6ba36d71d16ac1eb762362fc5f7d278d06bfc3b9e2df0d79d042294",
+      "articleSha256": "685fbb4f4ebddd5faa1f24036b1bbfee0ce773b0771956a998a7fef70552cb28",
       "decision": "updated",
       "rationale": "Reviewed EN/DA organization-deletion repair guidance for an original export storage namespace mismatch: retain the original request and involve Human/operator repair. Internal durable export routes do not change existing customer export controls. Personal account receipts, live provider confirmation and legal retention remain separately scoped."
     },
@@ -814,7 +814,7 @@
       "source": "ui/src/pages/SaasDeletion.tsx",
       "articleId": "export-and-delete-da",
       "sourceSha256": "bc5cfa5c7591c7585c1502130a6dab734ad41b340f1522f68f371d4f2e52ab38",
-      "articleSha256": "238648c4c6ba36d71d16ac1eb762362fc5f7d278d06bfc3b9e2df0d79d042294",
+      "articleSha256": "685fbb4f4ebddd5faa1f24036b1bbfee0ce773b0771956a998a7fef70552cb28",
       "decision": "updated",
       "rationale": "EXIT-R1: added that cancelling the subscription in Billing keeps the data while deletion erases it and cancels the subscription unless the billing account pays for another organization, and that a self-hosted deployment links to the Organizations list, whose Delete Organization asks for confirmation, offers an export and names archiving as the keep-the-data path."
     },
@@ -949,7 +949,7 @@
     {
       "source": "server/src/services/company-search-help.generated.ts",
       "articleId": "help-and-human-support",
-      "sourceSha256": "89f142b484f56793f8ba31c55e753c7daa9cee1bf81cdc40840ed91577c55e67",
+      "sourceSha256": "933fd28347428742046836ab278e108d3427cf2f0ab8c16a221c3bd4264a189c",
       "articleSha256": "bec6b2b830586252df7700cc8b8f23018da446ede36284d98e53f8db2b049a1b",
       "decision": "no_change",
       "rationale": "Reviewed (EXIT-R1): the regenerated search entries only pick up the updated Export and deletion article text. Help and human support steps are unchanged, so the article stays accurate."
@@ -1261,7 +1261,7 @@
     {
       "source": "server/src/services/company-search-help.generated.ts",
       "articleId": "help-and-human-support-da",
-      "sourceSha256": "89f142b484f56793f8ba31c55e753c7daa9cee1bf81cdc40840ed91577c55e67",
+      "sourceSha256": "933fd28347428742046836ab278e108d3427cf2f0ab8c16a221c3bd4264a189c",
       "articleSha256": "2c92acfc98fc458e84cf4bf6fc421119816d6f471922dceee726e311804bf6b5",
       "decision": "no_change",
       "rationale": "Reviewed (EXIT-R1): the regenerated search entries only pick up the updated Export and deletion article text. Help and human support steps are unchanged, so the article stays accurate."
@@ -2038,7 +2038,7 @@
       "source": "server/src/services/memory/memory-jobs.ts",
       "articleId": "export-and-delete",
       "sourceSha256": "8beffcf65e4879f904bb70bef7d395906a02647c6f7c2db30eae14173ffec58c",
-      "articleSha256": "5e5976e209cace00e9f65452a64f50b1e080f496cde942a93a356a11a96f746b",
+      "articleSha256": "73476587cc7574c56bcbc6f5bc3f692b7e953f9a9b46339d0d08f7577bebcf48",
       "decision": "updated",
       "rationale": "Reviewed EN/DA Forget permanently and organization deletion guidance for PRIV-R5: erasure now also removes the control-plane durable session folder (saved run events, runner/provider state, continuity-break archives) of the erased Run session for any Native run once every Run of the session has stopped, and company purge/offboarding remove every such folder of the company. Added that a later run cannot resume from the erased state. Organization deletion wording is already generic. Provider-held data and personal account receipts remain separately scoped."
     },
@@ -2046,7 +2046,7 @@
       "source": "server/src/services/native-runtime/runtime-asset-retention.ts",
       "articleId": "export-and-delete",
       "sourceSha256": "5eb4e556827828fc74a6fcb68dc389d38e1021f52b6f5e7dbf5a31a68586f220",
-      "articleSha256": "5e5976e209cace00e9f65452a64f50b1e080f496cde942a93a356a11a96f746b",
+      "articleSha256": "73476587cc7574c56bcbc6f5bc3f692b7e953f9a9b46339d0d08f7577bebcf48",
       "decision": "updated",
       "rationale": "Reviewed EN/DA Forget permanently and organization deletion guidance for PRIV-R5: erasure now also removes the control-plane durable session folder (saved run events, runner/provider state, continuity-break archives) of the erased Run session for any Native run once every Run of the session has stopped, and company purge/offboarding remove every such folder of the company. Added that a later run cannot resume from the erased state. Organization deletion wording is already generic. Provider-held data and personal account receipts remain separately scoped."
     },
@@ -2054,7 +2054,7 @@
       "source": "server/src/services/native-local-process-stop.ts",
       "articleId": "export-and-delete",
       "sourceSha256": "eb8b745482355d518555e4de7a11a06ac1d22abab150db061a8838ad2ffe265f",
-      "articleSha256": "5e5976e209cace00e9f65452a64f50b1e080f496cde942a93a356a11a96f746b",
+      "articleSha256": "73476587cc7574c56bcbc6f5bc3f692b7e953f9a9b46339d0d08f7577bebcf48",
       "decision": "updated",
       "rationale": "Reviewed EN/DA organization-deletion repair guidance for an original export storage namespace mismatch: retain the original request and involve Human/operator repair. Internal durable export routes do not change existing customer export controls. Personal account receipts, live provider confirmation and legal retention remain separately scoped."
     },
@@ -2062,7 +2062,7 @@
       "source": "server/src/services/memory/memory-jobs.ts",
       "articleId": "export-and-delete-da",
       "sourceSha256": "8beffcf65e4879f904bb70bef7d395906a02647c6f7c2db30eae14173ffec58c",
-      "articleSha256": "238648c4c6ba36d71d16ac1eb762362fc5f7d278d06bfc3b9e2df0d79d042294",
+      "articleSha256": "685fbb4f4ebddd5faa1f24036b1bbfee0ce773b0771956a998a7fef70552cb28",
       "decision": "updated",
       "rationale": "Reviewed EN/DA Forget permanently and organization deletion guidance for PRIV-R5: erasure now also removes the control-plane durable session folder (saved run events, runner/provider state, continuity-break archives) of the erased Run session for any Native run once every Run of the session has stopped, and company purge/offboarding remove every such folder of the company. Added that a later run cannot resume from the erased state. Organization deletion wording is already generic. Provider-held data and personal account receipts remain separately scoped."
     },
@@ -2070,7 +2070,7 @@
       "source": "server/src/services/native-runtime/runtime-asset-retention.ts",
       "articleId": "export-and-delete-da",
       "sourceSha256": "5eb4e556827828fc74a6fcb68dc389d38e1021f52b6f5e7dbf5a31a68586f220",
-      "articleSha256": "238648c4c6ba36d71d16ac1eb762362fc5f7d278d06bfc3b9e2df0d79d042294",
+      "articleSha256": "685fbb4f4ebddd5faa1f24036b1bbfee0ce773b0771956a998a7fef70552cb28",
       "decision": "updated",
       "rationale": "Reviewed EN/DA Forget permanently and organization deletion guidance for PRIV-R5: erasure now also removes the control-plane durable session folder (saved run events, runner/provider state, continuity-break archives) of the erased Run session for any Native run once every Run of the session has stopped, and company purge/offboarding remove every such folder of the company. Added that a later run cannot resume from the erased state. Organization deletion wording is already generic. Provider-held data and personal account receipts remain separately scoped."
     },
@@ -2078,7 +2078,7 @@
       "source": "server/src/services/native-local-process-stop.ts",
       "articleId": "export-and-delete-da",
       "sourceSha256": "eb8b745482355d518555e4de7a11a06ac1d22abab150db061a8838ad2ffe265f",
-      "articleSha256": "238648c4c6ba36d71d16ac1eb762362fc5f7d278d06bfc3b9e2df0d79d042294",
+      "articleSha256": "685fbb4f4ebddd5faa1f24036b1bbfee0ce773b0771956a998a7fef70552cb28",
       "decision": "updated",
       "rationale": "Reviewed EN/DA organization-deletion repair guidance for an original export storage namespace mismatch: retain the original request and involve Human/operator repair. Internal durable export routes do not change existing customer export controls. Personal account receipts, live provider confirmation and legal retention remain separately scoped."
     },
@@ -2086,7 +2086,7 @@
       "source": "server/src/services/heartbeat.ts",
       "articleId": "export-and-delete",
       "sourceSha256": "f3ad159065f8b3278a51b67a776cbcaeba2bf9fd85dae5bad6ec5cdac618e128",
-      "articleSha256": "5e5976e209cace00e9f65452a64f50b1e080f496cde942a93a356a11a96f746b",
+      "articleSha256": "73476587cc7574c56bcbc6f5bc3f692b7e953f9a9b46339d0d08f7577bebcf48",
       "decision": "no_change",
       "rationale": "2026-11-20 D5d review: claim release (a just-claimed run put back in the queue when scheduling becomes suppressed) now locks the run's Task row before the run row and retries once if the run names another Task; only database lock order changed, not what is read, decided or written. Task status, retry, stop, continuation, recovery, export and deletion behavior shown to people is unchanged; no article change needed. 2026-11-19 MS1f round history and stop 7 review: a stage Reviewer in a later round now sees the earlier returned rounds' sealed Task comments (bound to the Run and Agent that wrote them) and always starts a fresh model session instead of resuming its earlier private one (internal Native input construction); Task status, retry, stop, continuation, recovery, export and deletion behavior shown to people is unchanged; no article change needed. 2026-11-19 MS1f stop 4 review: a Worker that the board returns after a stage review round now receives only that round's sealed Task comments (its own and the stage Reviewer's) through an exact board-return owner that heartbeat records and rechecks at dispatch (internal Native input construction); Task status, retry, stop, continuation, recovery, export and deletion behavior shown to people is unchanged; no article change needed. 2026-11-19 F5 review: a queued run whose claim was deferred by issue row lock contention at the chat-control recovery gate is now retried up to three times within about 2 seconds instead of waiting for the 30 second scheduler sweep (claim latency only; the gate, its locks and every refusal are unchanged). Task status, retry, stop, continuation, recovery, export and deletion behavior shown to people is unchanged; no article change needed. 2026-11-19 MS1f phase 4 review: a stage Reviewer's first-input source closure now admits the stage executor's own accepted summary and its presentation comment (only that Run and Agent, internal Native input construction); Task status, retry, stop, continuation, recovery, export and deletion behavior shown to people is unchanged; no article change needed. 2026-11-18 MS1h17 review: a Native completion Reviewer\u2019s own sandbox is no longer copied back into the Task workspace and is released with the destroy disposition (the run log records the discard); the Reviewer never changes the Task\u2019s files, and strictly less data is kept. Task status, retry, stop, recovery, export and deletion behavior shown to people is unchanged; no article change needed. 2026-11-18 MS1h8 review: a Native completion Reviewer\u2019s first-input wake source now takes its wake reason from the exactly bound status-review request when its delivered wake was deferred and promoted (internal Native input construction only; an unbound request is refused before any model call). Task status, retry, stop, continuation, recovery, export and deletion behavior shown to people is unchanged; no article change needed. 2026-11-18 C2c review: a Native conversation wake (web or linked-Human Slack channel) is now matched against the Task fields it actually shows, without the Task description, so a current Slack channel turn gets its source record (internal Native input construction only). Task status, retry, stop, continuation, recovery, export and deletion behavior shown to people is unchanged; no article change needed. 2026-11-17 MS1h review: a Native completion Reviewer\u2019s wake payload no longer carries the Task assignee\u2019s issue continuation summary (internal Native input construction only; the Reviewer\u2019s prompt is its review request). Ordinary task runs, task status, retry, stop, continuation, recovery, export and deletion behavior are unchanged, so the article stays accurate. 2026-11-16 CONF15-W9R follow-up review: a verified retained resume now applies its empty delivered baseline to every copy of the continuation record (internal Native input construction only); every other run builds its continuation as before CONF15-W9. Task status, retry, stop, continuation, recovery, export and deletion behaviour shown to people is unchanged; no article change needed."
     },
@@ -2094,7 +2094,7 @@
       "source": "server/src/services/heartbeat.ts",
       "articleId": "export-and-delete-da",
       "sourceSha256": "f3ad159065f8b3278a51b67a776cbcaeba2bf9fd85dae5bad6ec5cdac618e128",
-      "articleSha256": "238648c4c6ba36d71d16ac1eb762362fc5f7d278d06bfc3b9e2df0d79d042294",
+      "articleSha256": "685fbb4f4ebddd5faa1f24036b1bbfee0ce773b0771956a998a7fef70552cb28",
       "decision": "no_change",
       "rationale": "2026-11-20 D5d review: claim release (a just-claimed run put back in the queue when scheduling becomes suppressed) now locks the run's Task row before the run row and retries once if the run names another Task; only database lock order changed, not what is read, decided or written. Task status, retry, stop, continuation, recovery, export and deletion behavior shown to people is unchanged; no article change needed. 2026-11-19 MS1f rundehistorik og trin 7-gennemgang: en gennemganger i en senere runde ser nu de tidligere tilbagesendte runders forseglede opgavekommentarer (bundet til den k\u00f8rsel og agent, der skrev dem) og starter altid en ny modelsession i stedet for at genoptage sin tidligere private session (intern Native-inputopbygning); opgavestatus, gentagelse, stop, forts\u00e6ttelse, gendannelse, eksport og sletning, som vises for folk, er u\u00e6ndret; ingen artikel\u00e6ndring er n\u00f8dvendig. 2026-11-19 MS1f trin 4-gennemgang: en Worker, som bestyrelsen sender tilbage efter en gennemgangsrunde, modtager nu kun rundens forseglede opgavekommentarer (sine egne og gennemgangerens) gennem en n\u00f8jagtig tilbagesendelsesejer, som heartbeat registrerer og kontrollerer igen ved afsendelse (intern Native-inputopbygning); opgavestatus, gentagelse, stop, forts\u00e6ttelse, gendannelse, eksport og sletning, som vises for folk, er u\u00e6ndret; ingen artikel\u00e6ndring er n\u00f8dvendig. 2026-11-19 F5-gennemgang: en k\u00f8rsel i k\u00f8, hvis start blev udskudt, fordi en anden transaktion holdt opgavens r\u00e6kke l\u00e5st ved chat-kontrollens genoptagelsesport, fors\u00f8ges nu igen op til tre gange inden for cirka 2 sekunder i stedet for at vente p\u00e5 planl\u00e6ggerens genneml\u00f8b hvert 30. sekund (kun ventetid; porten, dens l\u00e5se og alle afvisninger er u\u00e6ndrede). Opgavestatus, nyt fors\u00f8g, stop, genoptagelse, eksport og sletning, som personer ser, er u\u00e6ndret; artiklen kr\u00e6ver ingen \u00e6ndring. 2026-11-19 MS1f fase 4-gennemgang: kildelukningen for en trin-gennemgangs f\u00f8rste input tager nu imod den udf\u00f8rende k\u00f8rsels egen godkendte opsummering og pr\u00e6sentationskommentar (kun den k\u00f8rsel og agent, intern Native-inputopbygning); opgavestatus, nyt fors\u00f8g, stop, genoptagelse, eksport og sletning, som personer ser, er u\u00e6ndret; artiklen kr\u00e6ver ingen \u00e6ndring. 2026-11-18 MS1h17-gennemgang: En Native-gennemgangs egen sandkasse kopieres ikke l\u00e6ngere tilbage til opgavens arbejdsomr\u00e5de og frigives med destroy (k\u00f8rselsloggen registrerer det); den, der gennemg\u00e5r, \u00e6ndrer aldrig opgavens filer, og der gemmes strengt f\u00e6rre data. Opgavestatus, nyt fors\u00f8g, stop, genoptagelse, eksport og sletning, som personer ser, er u\u00e6ndret; artiklen kr\u00e6ver ingen \u00e6ndring. 2026-11-18 MS1h8 review: a Native completion Reviewer\u2019s first-input wake source now takes its wake reason from the exactly bound status-review request when its delivered wake was deferred and promoted (internal Native input construction only; an unbound request is refused before any model call). Task status, retry, stop, continuation, recovery, export and deletion behavior shown to people is unchanged; no article change needed. 2026-11-18 C2c review: a Native conversation wake (web or linked-Human Slack channel) is now matched against the Task fields it actually shows, without the Task description, so a current Slack channel turn gets its source record (internal Native input construction only). Task status, retry, stop, continuation, recovery, export and deletion behavior shown to people is unchanged; no article change needed. 2026-11-17 MS1h review: a Native completion Reviewer\u2019s wake payload no longer carries the Task assignee\u2019s issue continuation summary (internal Native input construction only; the Reviewer\u2019s prompt is its review request). Ordinary task runs, task status, retry, stop, continuation, recovery, export and deletion behavior are unchanged, so the article stays accurate. 2026-11-16 CONF15-W9R follow-up review: a verified retained resume now applies its empty delivered baseline to every copy of the continuation record (internal Native input construction only); every other run builds its continuation as before CONF15-W9. Task status, retry, stop, continuation, recovery, export and deletion behaviour shown to people is unchanged; no article change needed."
     },
@@ -2821,7 +2821,7 @@
     {
       "source": "ui/src/i18n/experience/en.json",
       "articleId": "create-and-track-work",
-      "sourceSha256": "2ae51109f9282a30fab906df2469e19413ca0180261d13b1ae5adbb9453e68b8",
+      "sourceSha256": "a99969b444e905932b9a09960cea5957a8e00fa68e23d1a94b585b1d4dfb9fb1",
       "articleSha256": "e08d017550dda25a9e6185a4478026f2affd445e16a1d10dff2464761537b328",
       "decision": "no_change",
       "rationale": "Reviewed (EXIT-R1): added EN/DA strings for the Organizations list and the organization deletion page. Task creation and tracking steps are unchanged, so the article stays accurate."
@@ -2829,7 +2829,7 @@
     {
       "source": "ui/src/i18n/experience/da.json",
       "articleId": "create-and-track-work-da",
-      "sourceSha256": "a4f08cb7a2bd77ceeb2ae55f0d8c77a942077748495a303d708102de1a0d01c4",
+      "sourceSha256": "56090e60158bebe4c2edce44e94ce106d717c347ea59fe2f07668b32ae544897",
       "articleSha256": "b36d116837115a674b3751f11ae3dcdd1a7fdcd9f31d26206feeec490f715e29",
       "decision": "no_change",
       "rationale": "Reviewed (EXIT-R1): added EN/DA strings for the Organizations list and the organization deletion page. Task creation and tracking steps are unchanged, so the article stays accurate."
@@ -2838,7 +2838,7 @@
       "source": "ui/src/pages/Auth.tsx",
       "articleId": "export-and-delete",
       "sourceSha256": "50a391c98431cf735bc349a531a8e566760993077a1c2e112eba2d0cc6f1f721",
-      "articleSha256": "5e5976e209cace00e9f65452a64f50b1e080f496cde942a93a356a11a96f746b",
+      "articleSha256": "73476587cc7574c56bcbc6f5bc3f692b7e953f9a9b46339d0d08f7577bebcf48",
       "decision": "updated",
       "rationale": "Reviewed EN/DA organization-deletion repair guidance for an original export storage namespace mismatch: retain the original request and involve Human/operator repair. Internal durable export routes do not change existing customer export controls. Personal account receipts, live provider confirmation and legal retention remain separately scoped."
     },
@@ -2846,7 +2846,7 @@
       "source": "ui/src/components/PersonalAccountDeletionReceipt.tsx",
       "articleId": "export-and-delete",
       "sourceSha256": "8be3d5194f6fcb654d53e64d79ff4a1f0921f883173b8cb36971b84be5026829",
-      "articleSha256": "5e5976e209cace00e9f65452a64f50b1e080f496cde942a93a356a11a96f746b",
+      "articleSha256": "73476587cc7574c56bcbc6f5bc3f692b7e953f9a9b46339d0d08f7577bebcf48",
       "decision": "updated",
       "rationale": "Reviewed EN/DA organization-deletion repair guidance for an original export storage namespace mismatch: retain the original request and involve Human/operator repair. Internal durable export routes do not change existing customer export controls. Personal account receipts, live provider confirmation and legal retention remain separately scoped."
     },
@@ -2854,7 +2854,7 @@
       "source": "ui/src/pages/Auth.tsx",
       "articleId": "export-and-delete-da",
       "sourceSha256": "50a391c98431cf735bc349a531a8e566760993077a1c2e112eba2d0cc6f1f721",
-      "articleSha256": "238648c4c6ba36d71d16ac1eb762362fc5f7d278d06bfc3b9e2df0d79d042294",
+      "articleSha256": "685fbb4f4ebddd5faa1f24036b1bbfee0ce773b0771956a998a7fef70552cb28",
       "decision": "updated",
       "rationale": "Reviewed EN/DA organization-deletion repair guidance for an original export storage namespace mismatch: retain the original request and involve Human/operator repair. Internal durable export routes do not change existing customer export controls. Personal account receipts, live provider confirmation and legal retention remain separately scoped."
     },
@@ -2862,7 +2862,7 @@
       "source": "ui/src/components/PersonalAccountDeletionReceipt.tsx",
       "articleId": "export-and-delete-da",
       "sourceSha256": "8be3d5194f6fcb654d53e64d79ff4a1f0921f883173b8cb36971b84be5026829",
-      "articleSha256": "238648c4c6ba36d71d16ac1eb762362fc5f7d278d06bfc3b9e2df0d79d042294",
+      "articleSha256": "685fbb4f4ebddd5faa1f24036b1bbfee0ce773b0771956a998a7fef70552cb28",
       "decision": "updated",
       "rationale": "Reviewed EN/DA organization-deletion repair guidance for an original export storage namespace mismatch: retain the original request and involve Human/operator repair. Internal durable export routes do not change existing customer export controls. Personal account receipts, live provider confirmation and legal retention remain separately scoped."
     }
