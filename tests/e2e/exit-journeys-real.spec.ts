@@ -143,6 +143,9 @@ async function storedSeedRows(seed: Seed) {
 type AxeViolation = { id: string; impact: string | null; help: string; nodes: { target: string[]; failureSummary?: string }[] };
 
 async function auditWcag(page: Page, label: string) {
+  // Audit the settled screen: buttons fade opacity on enable/disable and dialogs
+  // animate in, so measuring mid-transition reports colours no one ever reads.
+  await page.waitForFunction(() => document.getAnimations().every((animation) => animation.playState !== "running"));
   await page.addScriptTag({ path: axePath });
   const violations: AxeViolation[] = await page.evaluate(async (tags) => {
     const axe = (window as unknown as {
