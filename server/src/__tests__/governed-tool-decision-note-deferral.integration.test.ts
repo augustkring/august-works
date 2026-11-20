@@ -28,6 +28,7 @@ import { errorHandler } from "../middleware/index.js";
 import { issueRoutes } from "../routes/issues.js";
 import { heartbeatService } from "../services/heartbeat.js";
 import { toolActionDeliveryService } from "../services/tool-action-delivery.js";
+import { commitToolActionReview } from "../services/tool-action-review.js";
 import { GOVERNED_TOOL_DECISION_NOTE_DEFERRED_ACTION } from "../services/governed-tool-decision-wait.js";
 import { seedNativePasskeySession } from "./helpers/native-authentication-fixtures.js";
 import {
@@ -261,6 +262,27 @@ describeEmbeddedPostgres("governed tool decision: deferred Human note (routes + 
     const runContext = (runs[0]?.contextSnapshot ?? context) as Record<string, any>;
     expect(runContext.wakeCommentIds).toEqual([commentId]);
     expect(runContext.interactionId).toBe(seeded.interactionId);
+  });
+
+  it.each(["approved", "rejected"] as const)("returns the Task to todo when the governed card is %s through the gateway (APR-E2E-12)", async (decision) => {
+    const seeded = await seed();
+    await commitToolActionReview(db, { companyId: seeded.companyId, actionRequestId: seeded.actionRequestId,
+      issueId: seeded.issueId, interactionId: seeded.interactionId, decision, actor: { userId } });
+    const [issue] = await db.select().from(issues).where(eq(issues.id, seeded.issueId));
+    expect(issue?.status).toBe("todo");
+    const [card] = await db.select().from(issueThreadInteractions).where(eq(issueThreadInteractions.id, seeded.interactionId));
+    expect(card?.status).toBe(decision === "approved" ? "accepted" : "rejected");
+    const updates = await db.select().from(activityLog).where(and(eq(activityLog.companyId, seeded.companyId),
+      eq(activityLog.action, "issue.updated")));
+    expect(updates.some(row => (row.details as Record<string, unknown>).source === "tool_action_review")).toBe(true);
+  });
+
+  it("keeps the Task in review when the resolved card was not the Task's governed wait (APR-E2E-12)", async () => {
+    const seeded = await seed({ decisionReason: "execution_policy_stage_handoff" });
+    await commitToolActionReview(db, { companyId: seeded.companyId, actionRequestId: seeded.actionRequestId,
+      issueId: seeded.issueId, interactionId: seeded.interactionId, decision: "rejected", actor: { userId } });
+    const [issue] = await db.select().from(issues).where(eq(issues.id, seeded.issueId));
+    expect(issue?.status).toBe("in_review");
   });
 
   it.each([
