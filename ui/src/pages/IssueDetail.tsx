@@ -2735,8 +2735,7 @@ function IssueDetailActivityTab({
                     </span>
                   ) : null}
                   <span>
-                    {issueTreeCostSummary.issueCount} task
-                    {issueTreeCostSummary.issueCount === 1 ? "" : "s"}
+                    {screenText("task.taskCount", { count: issueTreeCostSummary.issueCount })}
                   </span>
                 </div>
               ) : null}
@@ -3365,7 +3364,7 @@ export function TaskDetailSurface({ conversation, tasksTab }: { tasksTab?: TaskS
   const sourceBreadcrumb = useMemo(
     () =>
       readIssueDetailBreadcrumb(issueId, location.state, location.search) ?? {
-        label: "Tasks",
+        label: screenText("issues.breadcrumb"),
         href: "/issues",
       },
     [issueId, location.state, location.search],
@@ -3866,7 +3865,7 @@ export function TaskDetailSurface({ conversation, tasksTab }: { tasksTab?: TaskS
       options.push({ id: `agent:${agent.id}`, label: agent.name });
     }
     if (currentUserId) {
-      options.push({ id: `user:${currentUserId}`, label: "Me" });
+      options.push({ id: `user:${currentUserId}`, label: screenText("issues.me") });
     }
     return options;
   }, [agents, companyMembers?.users, currentUserId]);
@@ -4481,8 +4480,8 @@ export function TaskDetailSurface({ conversation, tasksTab }: { tasksTab?: TaskS
       pushToast({
         title:
           status === "done"
-            ? "Run stopped and task done"
-            : "Run stopped and task cancelled",
+            ? screenText("task.m.run_stopped_and_task_done")
+            : screenText("task.m.run_stopped_and_task_cancelled"),
         tone: "success",
       });
     },
@@ -4490,10 +4489,10 @@ export function TaskDetailSurface({ conversation, tasksTab }: { tasksTab?: TaskS
       const runWasStopped = didRunCancelBeforeStatusUpdateFail(err);
       pushToast({
         title: runWasStopped
-          ? "Run stopped; task update failed"
+          ? screenText("task.m.run_stopped_task_update_failed")
           : status === "done"
-            ? "Stop and done failed"
-            : "Stop and cancel failed",
+            ? screenText("task.m.stop_and_done_failed")
+            : screenText("task.m.stop_and_cancel_failed"),
         body:
           err instanceof Error
             ? err.message
@@ -4652,8 +4651,8 @@ export function TaskDetailSurface({ conversation, tasksTab }: { tasksTab?: TaskS
       pushToast({
         title:
           variables.action === "approve"
-            ? "Approval approved"
-            : "Approval rejected",
+            ? screenText("task.m.approval_approved")
+            : screenText("task.m.approval_rejected"),
         tone: "success",
       });
     },
@@ -4661,8 +4660,8 @@ export function TaskDetailSurface({ conversation, tasksTab }: { tasksTab?: TaskS
       pushToast({
         title:
           variables.action === "approve"
-            ? "Approval failed"
-            : "Rejection failed",
+            ? screenText("task.m.approval_failed")
+            : screenText("task.m.rejection_failed"),
         body: err instanceof Error ? err.message : screenText("task.m.unable_to_update_approval"),
         tone: "error",
       });
@@ -4817,8 +4816,8 @@ export function TaskDetailSurface({ conversation, tasksTab }: { tasksTab?: TaskS
       pushToast({
         title:
           err instanceof CommentSubmissionUnknownError
-            ? "Comment save unconfirmed"
-            : "Comment failed",
+            ? screenText("task.m.comment_save_unconfirmed")
+            : screenText("task.m.comment_failed"),
         body: err instanceof Error ? err.message : screenText("task.m.unable_to_post_comment"),
         tone: "error",
       });
@@ -4885,12 +4884,12 @@ export function TaskDetailSurface({ conversation, tasksTab }: { tasksTab?: TaskS
       pushToast({
         title:
           interaction.kind === "request_confirmation"
-            ? "Request confirmed"
+            ? screenText("task.m.request_confirmed")
             : interaction.kind === "request_checkbox_confirmation"
               ? screenText("task.m.selection_confirmed")
               : skippedCount > 0
-                ? `Accepted ${createdCount} draft${createdCount === 1 ? "" : "s"} and skipped ${skippedCount}`
-                : "Suggested tasks accepted",
+                ? screenText("task.m.accepted_drafts", { count: createdCount, created: createdCount, skipped: skippedCount })
+                : screenText("task.m.suggested_tasks_accepted"),
         tone: "success",
       });
     },
@@ -4921,7 +4920,7 @@ export function TaskDetailSurface({ conversation, tasksTab }: { tasksTab?: TaskS
         title:
           interaction.kind === "request_confirmation"
             ? buildIssueThreadInteractionSummary(interaction)
-            : "Suggestion rejected",
+            : screenText("task.m.suggestion_rejected"),
         tone: "success",
       });
     },
@@ -4986,8 +4985,8 @@ export function TaskDetailSurface({ conversation, tasksTab }: { tasksTab?: TaskS
           : false;
       pushToast({
         title: complete
-          ? "All verdicts applied"
-          : `Applied ${applied} decision${applied === 1 ? "" : "s"}`,
+          ? screenText("task.m.all_verdicts_applied")
+          : screenText("task.m.applied", { count: applied }),
         tone: "success",
       });
     },
@@ -5209,8 +5208,8 @@ export function TaskDetailSurface({ conversation, tasksTab }: { tasksTab?: TaskS
       pushToast({
         title:
           err instanceof CommentSubmissionUnknownError
-            ? "Comment save unconfirmed"
-            : "Comment failed",
+            ? screenText("task.m.comment_save_unconfirmed")
+            : screenText("task.m.comment_failed"),
         body: err instanceof Error ? err.message : screenText("task.m.unable_to_post_comment"),
         tone: "error",
       });
@@ -5393,11 +5392,11 @@ export function TaskDetailSurface({ conversation, tasksTab }: { tasksTab?: TaskS
         title:
           variables.sharingPreferenceAtSubmit === "prompt"
             ? variables.allowSharing
-              ? "Feedback saved. Future votes will share"
-              : "Feedback saved. Future votes will stay local"
+              ? screenText("task.m.feedback_saved_future_votes_will_share")
+              : screenText("task.m.feedback_saved_future_votes_will_stay_local")
             : variables.allowSharing
-              ? "Feedback saved and sharing enabled"
-              : "Feedback saved",
+              ? screenText("task.m.feedback_saved_and_sharing_enabled")
+              : screenText("task.m.feedback_saved"),
         tone: "success",
       });
     },
@@ -5565,7 +5564,7 @@ export function TaskDetailSurface({ conversation, tasksTab }: { tasksTab?: TaskS
         label: conversationAgent.name,
         leading: <Avatar className="size-6 shrink-0"><AvatarFallback>{deriveInitials(conversationAgent.name)}</AvatarFallback></Avatar>,
         leadingKey: `agent:${conversationAgent.id}`,
-        trailing: <Button variant="ghost" size="icon-xs" asChild aria-label={`Configure ${conversationAgent.name}`}><Link to={agentDetailHref(conversationAgent.id, "runtime")}><ChatSettings /></Link></Button>,
+        trailing: <Button variant="ghost" size="icon-xs" asChild aria-label={screenText("task.configure", { name: conversationAgent.name })}><Link to={agentDetailHref(conversationAgent.id, "runtime")}><ChatSettings /></Link></Button>,
         trailingKey: `configure:${conversationAgent.id}`,
       }]);
       return;
@@ -7440,7 +7439,7 @@ export function TaskDetailSurface({ conversation, tasksTab }: { tasksTab?: TaskS
                         }}
                       >
                         <Archive className="h-3 w-3" />
-                        Archive from inbox
+                        {screenText("task.archiveInbox")}
                       </button>
                     ) : null}
                   </>
