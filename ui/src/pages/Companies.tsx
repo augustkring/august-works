@@ -307,7 +307,9 @@ export function Companies() {
               </div>
 
               {/* Delete confirmation. Deleting erases the data; archiving (Company
-                  settings) keeps it. Export is offered, never required. */}
+                  settings) keeps it. Export is offered, never required. The title
+                  uses the foreground tone: destructive red on the tint measured
+                  4.36:1 (EXIT-R1); the border and Delete button carry the danger. */}
               {isConfirmingDelete && (
                 <div
                   role="alertdialog"
@@ -318,7 +320,7 @@ export function Companies() {
                 >
                   <div className="flex flex-wrap items-start justify-between gap-3">
                     <div className="min-w-0 space-y-1">
-                      <p id={`${confirmId}-title`} className="text-sm text-destructive font-medium">
+                      <p id={`${confirmId}-title`} className="text-sm text-foreground font-medium">
                         {t("screens.companies.deleteTitle")}
                       </p>
                       <p id={`${confirmId}-body`} className="text-sm text-muted-foreground">

@@ -162,6 +162,7 @@ describe("Companies page", () => {
     expect(dialog).not.toBeNull();
     expect(document.getElementById(dialog!.getAttribute("aria-labelledby")!)?.textContent)
       .toBe("Delete this organization and all its data? This cannot be undone.");
+    expect(document.getElementById(dialog!.getAttribute("aria-labelledby")!)?.className).not.toContain("text-destructive");
     expect(document.getElementById(dialog!.getAttribute("aria-describedby")!)?.textContent)
       .toContain("archive it in Company settings instead");
     expect(dialog!.querySelector("a")?.getAttribute("href")).toBe("/PAP/company/export");
