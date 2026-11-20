@@ -885,10 +885,10 @@
     {
       "source": "server/src/app.ts",
       "articleId": "help-and-human-support",
-      "sourceSha256": "055d5edd13a88bc5a5207ba5879f5604ea95045f2843dab163e8335febc4e9d7",
+      "sourceSha256": "5fef59a8b7fc1d14b2065953ee3d7459156d725016d6757d76288799f0d1f00a",
       "articleSha256": "bec6b2b830586252df7700cc8b8f23018da446ede36284d98e53f8db2b049a1b",
       "decision": "no_change",
-      "rationale": "Reviewed additive internal durable export routes, OpenAPI, original authority and storage-erasure handling plus the isolated organizationDeletion storage-namespace EN/DA reason. Existing synchronous UI/CLI export, billing, developer references, Task copy and customer Help/support behavior described by this article remain unchanged; these internal routes add no public integration or customer authorization."
+      "rationale": "Reviewed (CACHE-STALE1): the Tasks list cache now drops cached and in-flight results after any committed write or company live event, so a list read after a write shows that write. Steps, controls and recovery guidance are unchanged, so the article stays accurate."
     },
     {
       "source": "server/src/routes/customer-support.ts",
@@ -901,10 +901,10 @@
     {
       "source": "server/src/routes/issues.ts",
       "articleId": "help-and-human-support",
-      "sourceSha256": "a1a9919d5ae3c714e751d18d20b202d5162ee7abc325f21bb15a3f021cd08718",
+      "sourceSha256": "e842fd22e27faf5fce1941426964fd0de822deb802f8a64c08a6772d536fd2af",
       "articleSha256": "bec6b2b830586252df7700cc8b8f23018da446ede36284d98e53f8db2b049a1b",
       "decision": "no_change",
-      "rationale": "2026-11-19 MS1f stop 5 review: when the board returns a Task from a review step to the Co-worker that did the work, the Task keeps its saved Native sources (migration 0587 records the return), so that Co-worker can work on it again; previously the update dropped those sources and later Native runs on the Task were refused. Task status, retry, stop, continuation, recovery, support, export and deletion behavior shown to people is unchanged; no article change needed. 2026-11-18 MS1f phase 1 review: the final approval of an execution-policy review or approval stage on a Task covered by an unfinished orchestration plan now keeps the Task in review, returns it to the plan Worker without a wake and records taskCompletion awaiting_plan_verification and the plan id in the issue.updated activity; without a covering plan, changes-requested and every other route behaviour are unchanged. Support intake, contacts, recovery actions, retry and stop steps and Help navigation are unchanged, and these articles do not describe stage approvals, so the existing English and Danish guidance remains accurate."
+      "rationale": "Reviewed (CACHE-STALE1): the Tasks list cache now drops cached and in-flight results after any committed write or company live event, so a list read after a write shows that write. Steps, controls and recovery guidance are unchanged, so the article stays accurate."
     },
     {
       "source": "server/src/routes/saas.ts",
@@ -1197,10 +1197,10 @@
     {
       "source": "server/src/app.ts",
       "articleId": "help-and-human-support-da",
-      "sourceSha256": "055d5edd13a88bc5a5207ba5879f5604ea95045f2843dab163e8335febc4e9d7",
+      "sourceSha256": "5fef59a8b7fc1d14b2065953ee3d7459156d725016d6757d76288799f0d1f00a",
       "articleSha256": "2c92acfc98fc458e84cf4bf6fc421119816d6f471922dceee726e311804bf6b5",
       "decision": "no_change",
-      "rationale": "Reviewed additive internal durable export routes, OpenAPI, original authority and storage-erasure handling plus the isolated organizationDeletion storage-namespace EN/DA reason. Existing synchronous UI/CLI export, billing, developer references, Task copy and customer Help/support behavior described by this article remain unchanged; these internal routes add no public integration or customer authorization."
+      "rationale": "Reviewed (CACHE-STALE1): the Tasks list cache now drops cached and in-flight results after any committed write or company live event, so a list read after a write shows that write. Steps, controls and recovery guidance are unchanged, so the article stays accurate."
     },
     {
       "source": "server/src/routes/customer-support.ts",
@@ -1213,10 +1213,10 @@
     {
       "source": "server/src/routes/issues.ts",
       "articleId": "help-and-human-support-da",
-      "sourceSha256": "a1a9919d5ae3c714e751d18d20b202d5162ee7abc325f21bb15a3f021cd08718",
+      "sourceSha256": "e842fd22e27faf5fce1941426964fd0de822deb802f8a64c08a6772d536fd2af",
       "articleSha256": "2c92acfc98fc458e84cf4bf6fc421119816d6f471922dceee726e311804bf6b5",
       "decision": "no_change",
-      "rationale": "2026-11-19 MS1f stop 5-gennemgang: n\u00e5r bestyrelsen sender en opgave tilbage fra et gennemgangstrin til den Co-worker, der udf\u00f8rte arbejdet, beholder opgaven sine gemte Native-kilder (migration 0587 registrerer tilbagesendelsen), s\u00e5 den Co-worker kan arbejde p\u00e5 den igen; tidligere fjernede opdateringen kilderne, og senere Native-k\u00f8rsler p\u00e5 opgaven blev afvist. Opgavestatus, nyt fors\u00f8g, stop, genoptagelse, gendannelse, support, eksport og sletning, som personer ser, er u\u00e6ndret; artiklen kr\u00e6ver ingen \u00e6ndring. 2026-11-18 MS1f phase 1 review: the final approval of an execution-policy review or approval stage on a Task covered by an unfinished orchestration plan now keeps the Task in review, returns it to the plan Worker without a wake and records taskCompletion awaiting_plan_verification and the plan id in the issue.updated activity; without a covering plan, changes-requested and every other route behaviour are unchanged. Support intake, contacts, recovery actions, retry and stop steps and Help navigation are unchanged, and these articles do not describe stage approvals, so the existing English and Danish guidance remains accurate."
+      "rationale": "Reviewed (CACHE-STALE1): the Tasks list cache now drops cached and in-flight results after any committed write or company live event, so a list read after a write shows that write. Steps, controls and recovery guidance are unchanged, so the article stays accurate."
     },
     {
       "source": "server/src/routes/saas.ts",
@@ -1541,10 +1541,10 @@
     {
       "source": "server/src/routes/issues.ts",
       "articleId": "recovering-work",
-      "sourceSha256": "a1a9919d5ae3c714e751d18d20b202d5162ee7abc325f21bb15a3f021cd08718",
+      "sourceSha256": "e842fd22e27faf5fce1941426964fd0de822deb802f8a64c08a6772d536fd2af",
       "articleSha256": "0296c2c8ae18c613eef9c17ea9679b146e8afbcd3504451a5511a218d6d8b955",
       "decision": "no_change",
-      "rationale": "2026-11-19 MS1f stop 5 review: when the board returns a Task from a review step to the Co-worker that did the work, the Task keeps its saved Native sources (migration 0587 records the return), so that Co-worker can work on it again; previously the update dropped those sources and later Native runs on the Task were refused. Task status, retry, stop, continuation, recovery, support, export and deletion behavior shown to people is unchanged; no article change needed. 2026-11-18 MS1f phase 1 review: the final approval of an execution-policy review or approval stage on a Task covered by an unfinished orchestration plan now keeps the Task in review, returns it to the plan Worker without a wake and records taskCompletion awaiting_plan_verification and the plan id in the issue.updated activity; without a covering plan, changes-requested and every other route behaviour are unchanged. Support intake, contacts, recovery actions, retry and stop steps and Help navigation are unchanged, and these articles do not describe stage approvals, so the existing English and Danish guidance remains accurate."
+      "rationale": "Reviewed (CACHE-STALE1): the Tasks list cache now drops cached and in-flight results after any committed write or company live event, so a list read after a write shows that write. Steps, controls and recovery guidance are unchanged, so the article stays accurate."
     },
     {
       "source": "server/src/services/execution-workspaces.ts",
@@ -1645,10 +1645,10 @@
     {
       "source": "server/src/routes/issues.ts",
       "articleId": "recovering-work-da",
-      "sourceSha256": "a1a9919d5ae3c714e751d18d20b202d5162ee7abc325f21bb15a3f021cd08718",
+      "sourceSha256": "e842fd22e27faf5fce1941426964fd0de822deb802f8a64c08a6772d536fd2af",
       "articleSha256": "ce0a7beaa56a5db23963d81eed8c19687d2efc5405773ec33dfd635a377090bc",
       "decision": "no_change",
-      "rationale": "2026-11-19 MS1f stop 5-gennemgang: n\u00e5r bestyrelsen sender en opgave tilbage fra et gennemgangstrin til den Co-worker, der udf\u00f8rte arbejdet, beholder opgaven sine gemte Native-kilder (migration 0587 registrerer tilbagesendelsen), s\u00e5 den Co-worker kan arbejde p\u00e5 den igen; tidligere fjernede opdateringen kilderne, og senere Native-k\u00f8rsler p\u00e5 opgaven blev afvist. Opgavestatus, nyt fors\u00f8g, stop, genoptagelse, gendannelse, support, eksport og sletning, som personer ser, er u\u00e6ndret; artiklen kr\u00e6ver ingen \u00e6ndring. 2026-11-18 MS1f phase 1 review: the final approval of an execution-policy review or approval stage on a Task covered by an unfinished orchestration plan now keeps the Task in review, returns it to the plan Worker without a wake and records taskCompletion awaiting_plan_verification and the plan id in the issue.updated activity; without a covering plan, changes-requested and every other route behaviour are unchanged. Support intake, contacts, recovery actions, retry and stop steps and Help navigation are unchanged, and these articles do not describe stage approvals, so the existing English and Danish guidance remains accurate."
+      "rationale": "Reviewed (CACHE-STALE1): the Tasks list cache now drops cached and in-flight results after any committed write or company live event, so a list read after a write shows that write. Steps, controls and recovery guidance are unchanged, so the article stays accurate."
     },
     {
       "source": "server/src/services/execution-workspaces.ts",

@@ -4461,7 +4461,7 @@
         },
         {
           "path": "server/src/app.ts",
-          "sha256": "055d5edd13a88bc5a5207ba5879f5604ea95045f2843dab163e8335febc4e9d7"
+          "sha256": "5fef59a8b7fc1d14b2065953ee3d7459156d725016d6757d76288799f0d1f00a"
         },
         {
           "path": "server/src/routes/agents.ts",
@@ -4473,7 +4473,7 @@
         },
         {
           "path": "server/src/routes/issues.ts",
-          "sha256": "a1a9919d5ae3c714e751d18d20b202d5162ee7abc325f21bb15a3f021cd08718"
+          "sha256": "e842fd22e27faf5fce1941426964fd0de822deb802f8a64c08a6772d536fd2af"
         },
         {
           "path": "server/src/services/agent-runtime-fabric.ts",
@@ -5799,7 +5799,7 @@
         },
         {
           "path": "server/src/app.ts",
-          "sha256": "055d5edd13a88bc5a5207ba5879f5604ea95045f2843dab163e8335febc4e9d7"
+          "sha256": "5fef59a8b7fc1d14b2065953ee3d7459156d725016d6757d76288799f0d1f00a"
         },
         {
           "path": "server/src/routes/access.ts",
@@ -6331,7 +6331,7 @@
         },
         {
           "path": "server/src/app.ts",
-          "sha256": "055d5edd13a88bc5a5207ba5879f5604ea95045f2843dab163e8335febc4e9d7"
+          "sha256": "5fef59a8b7fc1d14b2065953ee3d7459156d725016d6757d76288799f0d1f00a"
         },
         {
           "path": "server/src/routes/access.ts",
@@ -7247,11 +7247,11 @@
         },
         {
           "path": "server/src/app.ts",
-          "sha256": "055d5edd13a88bc5a5207ba5879f5604ea95045f2843dab163e8335febc4e9d7"
+          "sha256": "5fef59a8b7fc1d14b2065953ee3d7459156d725016d6757d76288799f0d1f00a"
         },
         {
           "path": "server/src/routes/issues.ts",
-          "sha256": "a1a9919d5ae3c714e751d18d20b202d5162ee7abc325f21bb15a3f021cd08718"
+          "sha256": "e842fd22e27faf5fce1941426964fd0de822deb802f8a64c08a6772d536fd2af"
         },
         {
           "path": "server/src/services/company-search.ts",
@@ -7642,7 +7642,7 @@
         },
         {
           "path": "server/src/routes/issues.ts",
-          "sha256": "a1a9919d5ae3c714e751d18d20b202d5162ee7abc325f21bb15a3f021cd08718"
+          "sha256": "e842fd22e27faf5fce1941426964fd0de822deb802f8a64c08a6772d536fd2af"
         },
         {
           "path": "server/src/services/chat-channels.ts",
@@ -9216,7 +9216,7 @@
         },
         {
           "path": "server/src/routes/issues.ts",
-          "sha256": "a1a9919d5ae3c714e751d18d20b202d5162ee7abc325f21bb15a3f021cd08718"
+          "sha256": "e842fd22e27faf5fce1941426964fd0de822deb802f8a64c08a6772d536fd2af"
         },
         {
           "path": "server/src/routes/pipelines.ts",
@@ -10265,7 +10265,7 @@
         },
         {
           "path": "server/src/app.ts",
-          "sha256": "055d5edd13a88bc5a5207ba5879f5604ea95045f2843dab163e8335febc4e9d7"
+          "sha256": "5fef59a8b7fc1d14b2065953ee3d7459156d725016d6757d76288799f0d1f00a"
         },
         {
           "path": "server/src/routes/plugins.ts",
@@ -10824,7 +10824,7 @@
         },
         {
           "path": "server/src/app.ts",
-          "sha256": "055d5edd13a88bc5a5207ba5879f5604ea95045f2843dab163e8335febc4e9d7"
+          "sha256": "5fef59a8b7fc1d14b2065953ee3d7459156d725016d6757d76288799f0d1f00a"
         },
         {
           "path": "server/src/middleware/auth.ts",
@@ -46900,7 +46900,7 @@
       "id": "source:server/src/app.ts",
       "kind": "current_source_owner",
       "path": "server/src/app.ts",
-      "sha256": "055d5edd13a88bc5a5207ba5879f5604ea95045f2843dab163e8335febc4e9d7",
+      "sha256": "5fef59a8b7fc1d14b2065953ee3d7459156d725016d6757d76288799f0d1f00a",
       "changeIds": [
         "SCR-V10-HOTSPOT-01",
         "SCR-V10-HOTSPOT-02",
@@ -46953,7 +46953,7 @@
       "id": "source:server/src/routes/issues.ts",
       "kind": "current_source_owner",
       "path": "server/src/routes/issues.ts",
-      "sha256": "a1a9919d5ae3c714e751d18d20b202d5162ee7abc325f21bb15a3f021cd08718",
+      "sha256": "e842fd22e27faf5fce1941426964fd0de822deb802f8a64c08a6772d536fd2af",
       "changeIds": [
         "SCR-V10-HOTSPOT-01",
         "SCR-V10-HOTSPOT-04",
