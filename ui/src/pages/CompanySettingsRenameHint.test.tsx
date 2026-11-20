@@ -3,6 +3,7 @@
 import { act } from "react";
 import { flushSync } from "react-dom";
 import { createRoot } from "react-dom/client";
+import "../i18n";
 import { MemoryRouter } from "react-router-dom";
 import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
