@@ -1981,10 +1981,10 @@
     {
       "source": "ui/src/pages/AgentDetail.tsx",
       "articleId": "working-with-coworkers",
-      "sourceSha256": "9d1a4e559740061a45ac36a3735b4e6c85996f407fbd4e3bb4fbd3827460a554",
+      "sourceSha256": "44a2377bd341bc0e52344dfa46705e2a6f677b1022347c402967066a1c7c2d6b",
       "articleSha256": "f7967586b023dc5f5b8db075f0748a96bf09f03f5e55d854e383be3e26ba0d72",
       "decision": "no_change",
-      "rationale": "Reviewed (I18N-DA2): the screen text moved into the English and Danish catalogues. Behaviour, steps and controls are unchanged, so the article stays accurate."
+      "rationale": "Reviewed (CREATE-R1): the Run now button, the Latest/Live Run label and the audit link labels moved into the English and Danish catalogues. Behaviour, steps and controls are unchanged, so the article stays accurate."
     },
     {
       "source": "ui/src/pages/Agents.tsx",
@@ -2021,10 +2021,10 @@
     {
       "source": "ui/src/pages/AgentDetail.tsx",
       "articleId": "working-with-coworkers-da",
-      "sourceSha256": "9d1a4e559740061a45ac36a3735b4e6c85996f407fbd4e3bb4fbd3827460a554",
+      "sourceSha256": "44a2377bd341bc0e52344dfa46705e2a6f677b1022347c402967066a1c7c2d6b",
       "articleSha256": "fc9836e25ab493bfe26f82d6a0b0dbaa7fc0407e1b8d92d640acdd495d0e7e7d",
       "decision": "no_change",
-      "rationale": "Reviewed (I18N-DA2): the screen text moved into the English and Danish catalogues. Behaviour, steps and controls are unchanged, so the article stays accurate."
+      "rationale": "Reviewed (CREATE-R1): the Run now button, the Latest/Live Run label and the audit link labels moved into the English and Danish catalogues. Behaviour, steps and controls are unchanged, so the article stays accurate."
     },
     {
       "source": "ui/src/pages/Agents.tsx",
@@ -2821,18 +2821,18 @@
     {
       "source": "ui/src/i18n/experience/en.json",
       "articleId": "create-and-track-work",
-      "sourceSha256": "a99969b444e905932b9a09960cea5957a8e00fa68e23d1a94b585b1d4dfb9fb1",
+      "sourceSha256": "bb3c2c484e3afe0c69374e3e15158cdad63a734bca9429cb878e88ef2c9ca249",
       "articleSha256": "e08d017550dda25a9e6185a4478026f2affd445e16a1d10dff2464761537b328",
       "decision": "no_change",
-      "rationale": "Reviewed (EXIT-R1): added EN/DA strings for the Organizations list and the organization deletion page. Task creation and tracking steps are unchanged, so the article stays accurate."
+      "rationale": "Reviewed (CREATE-R1): added EN/DA strings for the New Agent wizard, the New Task dialog, the runtime test card, the model and secret pickers and the shared dialog Close label. Task creation and tracking steps are unchanged, so the article stays accurate."
     },
     {
       "source": "ui/src/i18n/experience/da.json",
       "articleId": "create-and-track-work-da",
-      "sourceSha256": "56090e60158bebe4c2edce44e94ce106d717c347ea59fe2f07668b32ae544897",
+      "sourceSha256": "8f6375de9264feeaf67bb4ba4697127338b06d454a02c87dd0005bd62c91c847",
       "articleSha256": "b36d116837115a674b3751f11ae3dcdd1a7fdcd9f31d26206feeec490f715e29",
       "decision": "no_change",
-      "rationale": "Reviewed (EXIT-R1): added EN/DA strings for the Organizations list and the organization deletion page. Task creation and tracking steps are unchanged, so the article stays accurate."
+      "rationale": "Reviewed (CREATE-R1): added EN/DA strings for the New Agent wizard, the New Task dialog, the runtime test card, the model and secret pickers and the shared dialog Close label. Task creation and tracking steps are unchanged, so the article stays accurate."
     },
     {
       "source": "ui/src/pages/Auth.tsx",
