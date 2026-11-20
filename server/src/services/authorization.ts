@@ -1559,15 +1559,10 @@ function taskSourcePrivacySqlCondition(db: Db | DbTransaction, kind: "issue" | "
   )`;
 }
 
-export async function canActorReadIssuePrivacy(db: Db | DbTransaction, actor: AuthorizationActor, issue: IssuePrivacyRow,
-): Promise<boolean> {
-  const taskPrivacyBatch = nativeTaskPrivacyBatches.get(db as object);
-  if (taskPrivacyBatch?.active && taskPrivacyBatch.companyId === issue.companyId && taskPrivacyBatch.actorKey === routineActorKey(actor)) {
-    return taskPrivacyBatch.issues.get(issue.id) ?? false;
-  }
-  const activeRoutineScope = nativeRoutineReadScopes.get(db as object);
-  if (!activeRoutineScope?.active && actor.type !== "none" && actor.source !== "local_implicit") {
-    const sourceGraphQuery = sql`
+/** The Task's retained Routine sources, read by the canonical single-Task
+ * privacy owner before it chooses the ordinary or the Routine-scoped reader. */
+async function readIssuePrivacyRoutineSources(db: Db | DbTransaction, issue: IssuePrivacyRow) {
+  const [sourceRows] = await db.execute<{ ids: string[]; overflow: boolean }>(sql`
       with recursive issue_chain(id) as (
         select ${issue.id}::uuid
         union
@@ -1587,10 +1582,21 @@ export async function canActorReadIssuePrivacy(db: Db | DbTransaction, actor: Au
       ), bounded as materialized (select distinct id from routine_ids limit 257)
       select coalesce(array_agg(id::text) filter(where id is not null),array[]::text[]) as ids,
         ((select count(*) from bounded_nodes)>256 or (select count(*) from bounded)>256) as overflow from bounded
-    `;
-    const [sourceRows] = await db.execute<{ ids: string[]; overflow: boolean }>(sourceGraphQuery);
-    const routineIds = sourceRows?.ids ?? [];
-    if (sourceRows?.overflow) return false;
+    `);
+  return { routineIds: sourceRows?.ids ?? [], overflow: sourceRows?.overflow === true };
+}
+
+export async function canActorReadIssuePrivacy(db: Db | DbTransaction, actor: AuthorizationActor, issue: IssuePrivacyRow,
+): Promise<boolean> {
+  const taskPrivacyBatch = nativeTaskPrivacyBatches.get(db as object);
+  if (taskPrivacyBatch?.active && taskPrivacyBatch.companyId === issue.companyId && taskPrivacyBatch.actorKey === routineActorKey(actor)) {
+    return taskPrivacyBatch.issues.get(issue.id) ?? false;
+  }
+  const activeRoutineScope = nativeRoutineReadScopes.get(db as object);
+  if (!activeRoutineScope?.active && actor.type !== "none" && actor.source !== "local_implicit") {
+    const sources = await readIssuePrivacyRoutineSources(db, issue);
+    const routineIds = sources.routineIds;
+    if (sources.overflow) return false;
     if (routineIds.length) {
       if (is(db, PgTransaction)) {
         return authorizationService(db).withReadRoutineSources(issue.companyId, actor, routineIds, async () =>
@@ -1729,6 +1735,54 @@ export async function canActorReadIssuePrivacy(db: Db | DbTransaction, actor: Au
       scopeRunMember: actor.type === "agent" && actor.runId ? temporalScope.runIds.has(actor.runId) : false,
       snapshotPredicateCaptured: Boolean(captureSnapshotDiagnostic?.valid && captureSnapshotDiagnostic.corrupt),
       facts: facts ?? null }));
+  }
+  return readable;
+}
+
+/** PERF5: the same per-Task results as calling `canActorReadIssuePrivacy` for
+ * each id in turn, with fewer copies of the ~220 KB reader statement. Every
+ * Task keeps its own canonical steps: an active batch/Routine scope, a
+ * non-UUID id, a retained Routine source or diagnostics send it through the
+ * single-Task owner unchanged; an overflowing source graph denies it. The
+ * remaining Tasks would each run the exact-id reader with the same predicate
+ * for their memory scope, so they share one exact-id reader statement per
+ * scope. The predicate is evaluated per row, so a Task's result never depends
+ * on which other ids share the statement. Nothing is cached across calls. */
+export async function canActorReadIssuePrivacyMany(db: Db | DbTransaction, actor: AuthorizationActor,
+  companyId: string, issueIds: readonly string[]): Promise<Map<string, boolean>> {
+  const ids = [...new Set(issueIds)];
+  const readable = new Map<string, boolean>();
+  const single = (id: string) => canActorReadIssuePrivacy(db, actor, { id, companyId });
+  if (ids.length < 2 || nativeTaskPrivacyBatches.get(db as object)?.active ||
+    process.env.PAPERCLIP_NATIVE_SOURCE_CLOSURE_DIAGNOSTICS === "1") {
+    for (const id of ids) readable.set(id, await single(id));
+    return readable;
+  }
+  const activeRoutineScope = nativeRoutineReadScopes.get(db as object);
+  const groups = new Map<string, { contextIds: readonly string[] | undefined; ids: string[] }>();
+  for (const id of ids) {
+    if (!privacyUuid.test(id)) { readable.set(id, await single(id)); continue; }
+    if (!activeRoutineScope?.active && actor.type !== "none" && actor.source !== "local_implicit") {
+      const sources = await readIssuePrivacyRoutineSources(db, { id, companyId });
+      if (sources.overflow) { readable.set(id, false); continue; }
+      if (sources.routineIds.length) { readable.set(id, await single(id)); continue; }
+    }
+    const contextIds = activeMemoryTemporalContexts(db, actor, "issue", id);
+    const key = contextIds === undefined ? "unscoped" : JSON.stringify(contextIds);
+    const group = groups.get(key) ?? { contextIds, ids: [] };
+    group.ids.push(id);
+    groups.set(key, group);
+  }
+  for (const group of groups.values()) {
+    const condition = group.contextIds === undefined ? await issueReadSqlCondition(db, actor)
+      : taskSourcePrivacySqlCondition(db, "issue", sql`${issues.id}`, sql`${issues.companyId}`, actor, group.contextIds);
+    for (let offset = 0; offset < group.ids.length; offset += 256) {
+      const chunk = group.ids.slice(offset, offset + 256);
+      const rows = await executePrivacyIdSelect(db, exactIssueReaderQuery(db, companyId, chunk, condition));
+      // PostgreSQL returns lower-case UUID text; a caller's id may not be.
+      const found = new Set(rows.map(row => row.id.toLowerCase()));
+      for (const id of chunk) readable.set(id, found.has(id.toLowerCase()));
+    }
   }
   return readable;
 }
@@ -5126,13 +5180,41 @@ function createAuthorizationService(db: Db | DbTransaction, readSources?: ReadSo
     return { ...actor, keyScope };
   }
 
-  async function decide(input: {
+  type DecisionInput = {
     actor: AuthorizationActor;
     action: AuthorizationAction;
     resource: AuthorizationResource;
     scope?: Record<string, unknown> | null;
     enforceResponsibleUserIntersection?: boolean;
-  }): Promise<AuthorizationDecision> {
+  };
+  async function decide(input: DecisionInput): Promise<AuthorizationDecision> {
+    return decideWithIssuePrivacy(input, "check");
+  }
+
+  /** PERF5: exactly `decide` for each Task with action `issue:read`, in order.
+   * Each Task still gets its own complete base action/policy decision; only
+   * the final Task privacy probe of the Tasks that decision allowed runs as
+   * `canActorReadIssuePrivacyMany` (same per-Task result) instead of once per
+   * Task. Native Source read scopes and mixed companies use `decide` as is. */
+  async function decideIssueReads(actor: AuthorizationActor,
+    resources: readonly Extract<AuthorizationResource, { type: "issue" }>[]): Promise<AuthorizationDecision[]> {
+    const companyId = resources[0]?.companyId;
+    const decisions: AuthorizationDecision[] = [];
+    if (readSources || resources.length < 2 || resources.some(resource => resource.type !== "issue" || !resource.issueId ||
+      resource.companyId !== companyId)) {
+      for (const resource of resources) decisions.push(await decide({ actor, action: "issue:read", resource }));
+      return decisions;
+    }
+    for (const resource of resources)
+      decisions.push(await decideWithIssuePrivacy({ actor, action: "issue:read", resource }, "defer"));
+    const pending = resources.filter((_, index) => decisions[index]!.allowed).map(resource => resource.issueId!);
+    const privacy = pending.length ? await canActorReadIssuePrivacyMany(db, actor, companyId!, pending) : new Map<string, boolean>();
+    return decisions.map((decision, index) => decision.allowed && privacy.get(resources[index]!.issueId!) !== true
+      ? deny({ action: "issue:read", reason: "deny_issue_private", explanation: "Task source access is unavailable." })
+      : decision);
+  }
+
+  async function decideWithIssuePrivacy(input: DecisionInput, issuePrivacy: "check" | "defer"): Promise<AuthorizationDecision> {
     if (readSources?.purpose === "delegated_context" &&
       (input.action === "foundation:read" || input.action === "company_scope:read")) {
       const delegated = readSources.delegatedContext;
@@ -5232,7 +5314,9 @@ function createAuthorizationService(db: Db | DbTransaction, readSources?: ReadSo
     let decision = await applyResponsibleUserIntersection(input, agentDecision);
     if (decision.allowed && input.resource.type === "issue") {
       const issueId = input.resource.issueId ?? input.resource.parentIssueId;
-      if (issueId && !(await canActorReadIssuePrivacy(db, input.actor, { id: issueId, companyId: input.resource.companyId }))) {
+      // "defer": the caller (decideIssueReads) runs this same Task probe next.
+      if (issueId && issuePrivacy === "check" &&
+        !(await canActorReadIssuePrivacy(db, input.actor, { id: issueId, companyId: input.resource.companyId }))) {
         decision = deny({ action: input.action, reason: "deny_issue_private", explanation: "Task source access is unavailable." });
       }
       if (decision.allowed && input.resource.projectId && !input.resource.issueId &&
@@ -5289,6 +5373,7 @@ function createAuthorizationService(db: Db | DbTransaction, readSources?: ReadSo
 
   return {
     decide,
+    decideIssueReads,
     decidePrincipalGrant,
     withReadSources,
     withReadDelegatedContextSources,
