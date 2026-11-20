@@ -4398,7 +4398,30 @@
       "attention_one": "Blocked · {{count}} blocker needs attention",
       "attention_other": "Blocked · {{count}} blockers need attention",
       "attentionCovered_one": "Blocked · {{count}} blocker needs attention; {{covered}} covered by active work",
-      "attentionCovered_other": "Blocked · {{count}} blockers need attention; {{covered}} covered by active work"
+      "attentionCovered_other": "Blocked · {{count}} blockers need attention; {{covered}} covered by active work",
+      "variant": {
+        "needs_decision": "Needs decision",
+        "stalled": "Blocked chain stalled",
+        "needs_attention": "Needs attention",
+        "recovery_required": "Recovery required",
+        "external_wait": "External wait",
+        "owner_paused": "Owner paused"
+      },
+      "reason": {
+        "pending_board_decision": "Pending board decision",
+        "pending_user_decision": "Pending user decision",
+        "missing_successful_run_disposition": "Pick disposition",
+        "blocked_chain_stalled": "Blocked chain stalled",
+        "blocked_by_unassigned_issue": "Unassigned blocker",
+        "blocked_by_assigned_backlog_issue": "Parked blocker",
+        "blocked_by_cancelled_issue": "Cancelled blocker",
+        "in_review_without_action_path": "Review without action path",
+        "invalid_review_participant": "Invalid review participant",
+        "open_recovery_issue": "Recovery in progress",
+        "external_owner_action": "External owner action",
+        "blocked_by_uninvokable_assignee": "Owner paused",
+        "fallback": "Stopped"
+      }
     },
     "priority": {
       "change": "Change priority (current: {{current}})"
@@ -4644,6 +4667,89 @@
       "workflow": "Workflow",
       "run": "Run",
       "reversibility": "Reversibility"
+    },
+    "inbox": {
+      "breadcrumb": "Inbox",
+      "controls": "Inbox controls",
+      "tabMine": "Mine",
+      "tabRecent": "Recent",
+      "tabUnread": "Unread",
+      "tabBlocked": "Blocked",
+      "tabAll": "All",
+      "searchPlaceholder": "Search inbox…",
+      "group": "Group",
+      "sort": "Sort",
+      "chooseColumns": "Choose which inbox columns stay visible",
+      "selectOrg": "Select an organization to view inbox.",
+      "liveOnly": "Live runs only — tasks currently connected to an agent run.",
+      "activeStatuses": "Active statuses — open tasks, whether or not an agent is running.",
+      "markAllTitle": "Mark all as read?",
+      "markAllBody_one": "This will mark {{count}} unread item as read.",
+      "markAllBody_other": "This will mark {{count}} unread items as read.",
+      "cancel": "Cancel",
+      "markAll": "Mark all as read",
+      "marking": "Marking…",
+      "emptySearch": "No inbox items match your search.",
+      "emptyMine": "Inbox zero.",
+      "emptyUnread": "No new inbox items.",
+      "emptyRecent": "No recent inbox items.",
+      "emptyFilters": "No inbox items match these filters.",
+      "markRead": "Mark as read",
+      "dismiss": "Dismiss",
+      "retry": "Retry",
+      "retrying": "Retrying…",
+      "failedRun": "Failed run",
+      "failedRunNamed": "Failed run — {{name}}",
+      "runExited": "Run exited with an error.",
+      "requestedBy": "requested by {{name}}",
+      "updated": "updated {{when}}",
+      "joinRequested": "requested {{when}} from IP {{ip}}",
+      "adapter": "adapter: {{type}}",
+      "joinAgent": "Agent join request",
+      "joinAgentNamed": "Agent join request: {{name}}",
+      "joinHuman": "Human join request",
+      "failApprove": "Failed to approve",
+      "failReject": "Failed to reject",
+      "failApproveJoin": "Failed to approve join request",
+      "failRejectJoin": "Failed to reject join request",
+      "retryFailedTitle": "Run retry failed",
+      "retryFailedBody": "Unable to retry run",
+      "failArchive": "Failed to archive task",
+      "failUndo": "Failed to undo inbox archive",
+      "archivedDivider": "Archived",
+      "otherResults": "Other results",
+      "earlier": "Earlier",
+      "alerts": "Alerts",
+      "agentErrors_one": "{{count}} agent has errors",
+      "agentErrors_other": "{{count}} agents have errors",
+      "budgetAt": "Budget at {{percent}}% utilization this month",
+      "kind": {
+        "issue": "Tasks",
+        "approval": "Approvals",
+        "failed_run": "Failed runs",
+        "join_request": "Join requests"
+      },
+      "blockedGroup": {
+        "blocker_type": "Blocker type",
+        "none": "None"
+      },
+      "blockedSort": {
+        "urgency": "Most urgent",
+        "most_recent": "Most recent",
+        "longest_stopped": "Longest stopped"
+      },
+      "groupBy": {
+        "none": "None",
+        "type": "Type",
+        "assignee": "Responsible",
+        "project": "Project",
+        "workspace": "Workspace"
+      }
+    },
+    "date": {
+      "today": "Today",
+      "yesterday": "Yesterday",
+      "earlier": "Earlier"
     }
   }
 }

@@ -1,3 +1,5 @@
+import { screenText } from "../i18n/value-labels";
+
 export type TaskDateGroup = "today" | "yesterday" | "earlier";
 
 export const taskDateGroupLabels: Record<TaskDateGroup, string> = {
@@ -33,5 +35,5 @@ export function taskDateGroupSeparator(
 ): string | null {
   if (previous === current) return null;
   if (previous === null && current === "earlier") return null;
-  return taskDateGroupLabels[current];
+  return screenText(`date.${current}`, { defaultValue: taskDateGroupLabels[current] });
 }

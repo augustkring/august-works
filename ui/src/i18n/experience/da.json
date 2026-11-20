@@ -4398,7 +4398,30 @@
       "attention_one": "Blokeret · {{count}} blokering kræver opmærksomhed",
       "attention_other": "Blokeret · {{count}} blokeringer kræver opmærksomhed",
       "attentionCovered_one": "Blokeret · {{count}} blokering kræver opmærksomhed; {{covered}} dækket af igangværende arbejde",
-      "attentionCovered_other": "Blokeret · {{count}} blokeringer kræver opmærksomhed; {{covered}} dækket af igangværende arbejde"
+      "attentionCovered_other": "Blokeret · {{count}} blokeringer kræver opmærksomhed; {{covered}} dækket af igangværende arbejde",
+      "variant": {
+        "needs_decision": "Kræver beslutning",
+        "stalled": "Blokeret kæde står stille",
+        "needs_attention": "Kræver opmærksomhed",
+        "recovery_required": "Genopretning kræves",
+        "external_wait": "Venter på andre",
+        "owner_paused": "Ansvarlig er sat på pause"
+      },
+      "reason": {
+        "pending_board_decision": "Afventer beslutning fra Board",
+        "pending_user_decision": "Afventer beslutning fra bruger",
+        "missing_successful_run_disposition": "Vælg udfald",
+        "blocked_chain_stalled": "Blokeret kæde står stille",
+        "blocked_by_unassigned_issue": "Blokering uden ansvarlig",
+        "blocked_by_assigned_backlog_issue": "Udsat blokering",
+        "blocked_by_cancelled_issue": "Annulleret blokering",
+        "in_review_without_action_path": "Gennemgang uden vej videre",
+        "invalid_review_participant": "Ugyldig deltager i gennemgang",
+        "open_recovery_issue": "Genopretning i gang",
+        "external_owner_action": "Handling hos ekstern ejer",
+        "blocked_by_uninvokable_assignee": "Ansvarlig er sat på pause",
+        "fallback": "Stoppet"
+      }
     },
     "priority": {
       "change": "Skift prioritet (nu: {{current}})"
@@ -4644,6 +4667,89 @@
       "workflow": "Arbejdsgang",
       "run": "Kørsel",
       "reversibility": "Kan fortrydes"
+    },
+    "inbox": {
+      "breadcrumb": "Indbakke",
+      "controls": "Indbakkestyring",
+      "tabMine": "Mine",
+      "tabRecent": "Seneste",
+      "tabUnread": "Ulæste",
+      "tabBlocked": "Blokerede",
+      "tabAll": "Alle",
+      "searchPlaceholder": "Søg i indbakken…",
+      "group": "Gruppér",
+      "sort": "Sortér",
+      "chooseColumns": "Vælg, hvilke kolonner der vises i indbakken",
+      "selectOrg": "Vælg en organisation for at se indbakken.",
+      "liveOnly": "Kun kørsler i gang – opgaver, der lige nu er forbundet til en agentkørsel.",
+      "activeStatuses": "Aktive statusser – åbne opgaver, uanset om en agent kører.",
+      "markAllTitle": "Markér alt som læst?",
+      "markAllBody_one": "Det markerer {{count}} ulæst element som læst.",
+      "markAllBody_other": "Det markerer {{count}} ulæste elementer som læst.",
+      "cancel": "Annuller",
+      "markAll": "Markér alt som læst",
+      "marking": "Markerer…",
+      "emptySearch": "Ingen elementer i indbakken matcher din søgning.",
+      "emptyMine": "Indbakken er tom.",
+      "emptyUnread": "Ingen nye elementer i indbakken.",
+      "emptyRecent": "Ingen seneste elementer i indbakken.",
+      "emptyFilters": "Ingen elementer i indbakken matcher disse filtre.",
+      "markRead": "Markér som læst",
+      "dismiss": "Fjern",
+      "retry": "Genforsøg",
+      "retrying": "Forsøger igen…",
+      "failedRun": "Mislykket kørsel",
+      "failedRunNamed": "Mislykket kørsel – {{name}}",
+      "runExited": "Kørslen sluttede med en fejl.",
+      "requestedBy": "anmodet af {{name}}",
+      "updated": "opdateret {{when}}",
+      "joinRequested": "anmodet {{when}} fra IP {{ip}}",
+      "adapter": "adapter: {{type}}",
+      "joinAgent": "Anmodning om at tilføje agent",
+      "joinAgentNamed": "Anmodning om at tilføje agent: {{name}}",
+      "joinHuman": "Anmodning om at deltage",
+      "failApprove": "Godkendelsen mislykkedes",
+      "failReject": "Afvisningen mislykkedes",
+      "failApproveJoin": "Kunne ikke godkende anmodningen",
+      "failRejectJoin": "Kunne ikke afvise anmodningen",
+      "retryFailedTitle": "Nyt forsøg på kørslen mislykkedes",
+      "retryFailedBody": "Kørslen kunne ikke prøves igen",
+      "failArchive": "Opgaven kunne ikke arkiveres",
+      "failUndo": "Arkiveringen kunne ikke fortrydes",
+      "archivedDivider": "Arkiveret",
+      "otherResults": "Andre resultater",
+      "earlier": "Tidligere",
+      "alerts": "Advarsler",
+      "agentErrors_one": "{{count}} agent har fejl",
+      "agentErrors_other": "{{count}} agenter har fejl",
+      "budgetAt": "Budgettet er brugt {{percent}} % denne måned",
+      "kind": {
+        "issue": "Opgaver",
+        "approval": "Godkendelser",
+        "failed_run": "Mislykkede kørsler",
+        "join_request": "Anmodninger om at deltage"
+      },
+      "blockedGroup": {
+        "blocker_type": "Type af blokering",
+        "none": "Ingen"
+      },
+      "blockedSort": {
+        "urgency": "Mest presserende",
+        "most_recent": "Seneste først",
+        "longest_stopped": "Længst stoppet"
+      },
+      "groupBy": {
+        "none": "Ingen",
+        "type": "Type",
+        "assignee": "Ansvarlig",
+        "project": "Projekt",
+        "workspace": "Arbejdsområde"
+      }
+    },
+    "date": {
+      "today": "I dag",
+      "yesterday": "I går",
+      "earlier": "Tidligere"
     }
   }
 }
