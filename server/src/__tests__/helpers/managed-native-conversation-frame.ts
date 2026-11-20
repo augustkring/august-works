@@ -646,7 +646,9 @@ export async function runManagedNativeConversationFrame(input: {
   // Heartbeat delivers a run-scoped MCP URL to the actual runner. Give the
   // fixture that URL's real protocol endpoint instead of pointing it at a
   // dummy base URL or suppressing managed MCP delivery.
-  const assignedToolGateway = createToolGatewayService(db, { remoteHttpRequest: input.assignedToolGatewayHttpRequest });
+  const assignedToolGateway = createToolGatewayService(db, { remoteHttpRequest: input.assignedToolGatewayHttpRequest,
+    // APR-E2E-9: a test app may adopt this root gateway for review decisions.
+    ...(input.onToolActionSettled ? { onToolActionSettled: input.onToolActionSettled } : {}) });
   registerAssignedMcpGateway(db, assignedToolGateway);
   brokerApp.use(mcpGatewayProtocolRoutes(assignedToolGateway));
   const brokerRequestByObject = new WeakMap<object, (typeof brokerRequestFacts)[number]>();

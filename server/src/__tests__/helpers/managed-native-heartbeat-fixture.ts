@@ -619,7 +619,9 @@ export async function withManagedNativeHeartbeatFixture<T>(input: Omit<FrameInpu
   // dummy base URL or suppressing managed MCP delivery.
   const assignedGatewayObserver = input.afterSuccessfulAssignedToolResult
     ? createManagedAssignedGatewayResultObserver(input.afterSuccessfulAssignedToolResult) : null;
-  const assignedToolGateway = createToolGatewayService(db, { remoteHttpRequest: input.assignedToolGatewayHttpRequest });
+  const assignedToolGateway = createToolGatewayService(db, { remoteHttpRequest: input.assignedToolGatewayHttpRequest,
+    // APR-E2E-9: a test app may adopt this root gateway for review decisions.
+    ...(input.onToolActionSettled ? { onToolActionSettled: input.onToolActionSettled } : {}) });
   assignedGatewayObserver?.observe(assignedToolGateway, "fixture_root");
   registerAssignedMcpGateway(db, assignedToolGateway);
   brokerApp.use(mcpGatewayProtocolRoutes(assignedToolGateway));
