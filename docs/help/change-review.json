@@ -709,10 +709,10 @@
     {
       "source": "ui/src/pages/CompanyExport.tsx",
       "articleId": "export-and-delete",
-      "sourceSha256": "9b297a2235267531f717947eb1ae2a10b24ae0e0aa4ebe99bc786af2a1c2c0db",
-      "articleSha256": "25db726931b7999c19f56322106777efa7bb26904630c527dcdfc9a07286f0c7",
-      "decision": "updated",
-      "rationale": "Reviewed EN/DA organization-deletion repair guidance for an original export storage namespace mismatch: retain the original request and involve Human/operator repair. Internal durable export routes do not change existing customer export controls. Personal account receipts, live provider confirmation and legal retention remain separately scoped."
+      "sourceSha256": "62870d1837e9b9a0ece5751c43e9b92c13f7ea2e4cf3b148e40aa11a6b8be4d8",
+      "articleSha256": "5e5976e209cace00e9f65452a64f50b1e080f496cde942a93a356a11a96f746b",
+      "decision": "no_change",
+      "rationale": "Reviewed (EXIT-R1): only the warning text tone changed (amber-700/300 for WCAG AA contrast). Export scope, controls and steps are unchanged, so the export section stays accurate."
     },
     {
       "source": "ui/src/pages/Memory.tsx",
@@ -733,10 +733,10 @@
     {
       "source": "ui/src/pages/SaasDeletion.tsx",
       "articleId": "export-and-delete",
-      "sourceSha256": "0e11d7f56ff3cfe7db5745fe85adce6385fef1374c21b03dc9ea2f99d83eccc3",
-      "articleSha256": "25db726931b7999c19f56322106777efa7bb26904630c527dcdfc9a07286f0c7",
+      "sourceSha256": "bc5cfa5c7591c7585c1502130a6dab734ad41b340f1522f68f371d4f2e52ab38",
+      "articleSha256": "5e5976e209cace00e9f65452a64f50b1e080f496cde942a93a356a11a96f746b",
       "decision": "updated",
-      "rationale": "Added that erasure also covers a session folder an interrupted run left before saving its state, stays pending while a recently used folder cannot yet be matched to an organization, and erases a folder no run claims after a day unused (PRIV-R8)."
+      "rationale": "EXIT-R1: added that cancelling the subscription in Billing keeps the data while deletion erases it and cancels the subscription unless the billing account pays for another organization, and that a self-hosted deployment links to the Organizations list, whose Delete Organization asks for confirmation, offers an export and names archiving as the keep-the-data path."
     },
     {
       "source": "server/src/routes/memory.ts",
@@ -789,10 +789,10 @@
     {
       "source": "ui/src/pages/CompanyExport.tsx",
       "articleId": "export-and-delete-da",
-      "sourceSha256": "9b297a2235267531f717947eb1ae2a10b24ae0e0aa4ebe99bc786af2a1c2c0db",
-      "articleSha256": "1ac6922a3e3f6b16feb3d3756d7f980bae7e40608dcaa1f352f3d0b6822e773d",
-      "decision": "updated",
-      "rationale": "Reviewed EN/DA organization-deletion repair guidance for an original export storage namespace mismatch: retain the original request and involve Human/operator repair. Internal durable export routes do not change existing customer export controls. Personal account receipts, live provider confirmation and legal retention remain separately scoped."
+      "sourceSha256": "62870d1837e9b9a0ece5751c43e9b92c13f7ea2e4cf3b148e40aa11a6b8be4d8",
+      "articleSha256": "238648c4c6ba36d71d16ac1eb762362fc5f7d278d06bfc3b9e2df0d79d042294",
+      "decision": "no_change",
+      "rationale": "Reviewed (EXIT-R1): only the warning text tone changed (amber-700/300 for WCAG AA contrast). Export scope, controls and steps are unchanged, so the export section stays accurate."
     },
     {
       "source": "ui/src/pages/Memory.tsx",
@@ -813,10 +813,10 @@
     {
       "source": "ui/src/pages/SaasDeletion.tsx",
       "articleId": "export-and-delete-da",
-      "sourceSha256": "0e11d7f56ff3cfe7db5745fe85adce6385fef1374c21b03dc9ea2f99d83eccc3",
-      "articleSha256": "1ac6922a3e3f6b16feb3d3756d7f980bae7e40608dcaa1f352f3d0b6822e773d",
+      "sourceSha256": "bc5cfa5c7591c7585c1502130a6dab734ad41b340f1522f68f371d4f2e52ab38",
+      "articleSha256": "238648c4c6ba36d71d16ac1eb762362fc5f7d278d06bfc3b9e2df0d79d042294",
       "decision": "updated",
-      "rationale": "Added that erasure also covers a session folder an interrupted run left before saving its state, stays pending while a recently used folder cannot yet be matched to an organization, and erases a folder no run claims after a day unused (PRIV-R8)."
+      "rationale": "EXIT-R1: added that cancelling the subscription in Billing keeps the data while deletion erases it and cancels the subscription unless the billing account pays for another organization, and that a self-hosted deployment links to the Organizations list, whose Delete Organization asks for confirmation, offers an export and names archiving as the keep-the-data path."
     },
     {
       "source": "packages/shared/src/agent-packages.ts",
@@ -2821,18 +2821,18 @@
     {
       "source": "ui/src/i18n/experience/en.json",
       "articleId": "create-and-track-work",
-      "sourceSha256": "a3458841e8e727b7f658ee5860ce3c59813284b5a6835461fc9c615981cd7796",
+      "sourceSha256": "2ae51109f9282a30fab906df2469e19413ca0180261d13b1ae5adbb9453e68b8",
       "articleSha256": "e08d017550dda25a9e6185a4478026f2affd445e16a1d10dff2464761537b328",
       "decision": "no_change",
-      "rationale": "Reviewed (I18N-DA2): the screen text moved into the English and Danish catalogues. Behaviour, steps and controls are unchanged, so the article stays accurate."
+      "rationale": "Reviewed (EXIT-R1): added EN/DA strings for the Organizations list and the organization deletion page. Task creation and tracking steps are unchanged, so the article stays accurate."
     },
     {
       "source": "ui/src/i18n/experience/da.json",
       "articleId": "create-and-track-work-da",
-      "sourceSha256": "3902a0343e6f770e6064c04e6627d4b275c49ba2db9d1389682a9afc9da512de",
+      "sourceSha256": "a4f08cb7a2bd77ceeb2ae55f0d8c77a942077748495a303d708102de1a0d01c4",
       "articleSha256": "b36d116837115a674b3751f11ae3dcdd1a7fdcd9f31d26206feeec490f715e29",
       "decision": "no_change",
-      "rationale": "Reviewed (I18N-DA2): the screen text moved into the English and Danish catalogues. Behaviour, steps and controls are unchanged, so the article stays accurate."
+      "rationale": "Reviewed (EXIT-R1): added EN/DA strings for the Organizations list and the organization deletion page. Task creation and tracking steps are unchanged, so the article stays accurate."
     },
     {
       "source": "ui/src/pages/Auth.tsx",

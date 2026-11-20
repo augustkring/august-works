@@ -9,7 +9,7 @@ owner: augustkring/august-works
 maturity: preview
 applicable_product_versions: [V10]
 locale: en
-last_verified_at: 2026-11-18
+last_verified_at: 2026-11-20
 review_trigger: Export scope, deletion, retention, or private Memory sharing and source access changes
 security_or_privacy_sensitive: true
 linked_source_files: [ui/src/pages/CompanyExport.tsx, ui/src/pages/SaasDeletion.tsx, ui/src/pages/SaasAccount.tsx, ui/src/pages/Auth.tsx, ui/src/components/PersonalAccountDeletionReceipt.tsx, server/src/services/saas/account-deletion.ts, server/src/services/saas/offboarding.ts, server/src/services/saas/company-purge.ts, ui/src/pages/Memory.tsx, server/src/routes/memory.ts, server/src/services/memory/memory-service.ts, server/src/services/memory/memory-privacy.ts, server/src/services/memory/memory-jobs.ts, server/src/services/native-runtime/runtime-asset-retention.ts, server/src/services/native-local-process-stop.ts, server/src/services/heartbeat.ts]
@@ -24,6 +24,10 @@ Open **Company settings → Export** to choose the files included in a company p
 ## Request organization deletion
 
 Open **Company settings → Deletion** to review the organization deletion request. The page asks you to export the organization first, confirm its name, and acknowledge the deletion. Organization deletion stops work and begins the displayed offboarding process. It cannot be undone.
+
+Cancelling the subscription and deleting the organization are different actions. Deletion erases the organization's data and also cancels its subscription, unless the same billing account pays for another organization. To stop paying and keep your data, cancel the subscription in **Company settings → Billing** instead.
+
+A self-hosted deployment has no deletion request service, so this page links to the **Organizations** list instead. There, **Delete Organization** asks for confirmation before anything is deleted, offers an export first, and names archiving (in Company settings) as the way to hide an organization while keeping its data. A confirmed deletion there erases the organization's tasks, agents, projects and Memory and cannot be undone.
 
 Deletion may remain in a retention state while managed backups reach their deletion date. Financial records and a minimal deletion receipt may be retained where required. Follow the status and stage shown on the deletion page; a submitted request is not proof that final erasure has completed.
 

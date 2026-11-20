@@ -32185,11 +32185,11 @@
         },
         {
           "path": "ui/src/i18n/experience/da.json",
-          "sha256": "3902a0343e6f770e6064c04e6627d4b275c49ba2db9d1389682a9afc9da512de"
+          "sha256": "a4f08cb7a2bd77ceeb2ae55f0d8c77a942077748495a303d708102de1a0d01c4"
         },
         {
           "path": "ui/src/i18n/experience/en.json",
-          "sha256": "a3458841e8e727b7f658ee5860ce3c59813284b5a6835461fc9c615981cd7796"
+          "sha256": "2ae51109f9282a30fab906df2469e19413ca0180261d13b1ae5adbb9453e68b8"
         },
         {
           "path": "ui/src/i18n/index.ts",
@@ -35957,11 +35957,11 @@
         },
         {
           "path": "ui/src/pages/CompanyExport.test.tsx",
-          "sha256": "8e941e8eb39407b6014a8d7eaa66384b48148d664ab4f23689b6d375cd443f54"
+          "sha256": "506b624185eb0c3f72fd589d3d90062e0f989f96995ec816fd59626c44d34c70"
         },
         {
           "path": "ui/src/pages/CompanyExport.tsx",
-          "sha256": "9b297a2235267531f717947eb1ae2a10b24ae0e0aa4ebe99bc786af2a1c2c0db"
+          "sha256": "62870d1837e9b9a0ece5751c43e9b92c13f7ea2e4cf3b148e40aa11a6b8be4d8"
         },
         {
           "path": "ui/src/pages/CompanyImport.test.tsx",
@@ -36073,11 +36073,11 @@
         },
         {
           "path": "ui/src/pages/SaasDeletion.test.tsx",
-          "sha256": "5a17972995e6f741b4cca0f29e3bb9370a4ae94e77d50861627f6b63be50c196"
+          "sha256": "681e2517caa15708bb81f3f6e5a970a6d48199ecdcc0a112953baef71be656ce"
         },
         {
           "path": "ui/src/pages/SaasDeletion.tsx",
-          "sha256": "0e11d7f56ff3cfe7db5745fe85adce6385fef1374c21b03dc9ea2f99d83eccc3"
+          "sha256": "bc5cfa5c7591c7585c1502130a6dab734ad41b340f1522f68f371d4f2e52ab38"
         },
         {
           "path": "ui/src/pages/SaasOperations.test.tsx",
@@ -72810,7 +72810,7 @@
       "id": "source:ui/src/i18n/experience/da.json",
       "kind": "current_source_owner",
       "path": "ui/src/i18n/experience/da.json",
-      "sha256": "3902a0343e6f770e6064c04e6627d4b275c49ba2db9d1389682a9afc9da512de",
+      "sha256": "a4f08cb7a2bd77ceeb2ae55f0d8c77a942077748495a303d708102de1a0d01c4",
       "changeIds": [
         "SCR-V10-PRODUCT-IDENTITY-HELP-LANGUAGE"
       ],
@@ -72825,7 +72825,7 @@
       "id": "source:ui/src/i18n/experience/en.json",
       "kind": "current_source_owner",
       "path": "ui/src/i18n/experience/en.json",
-      "sha256": "a3458841e8e727b7f658ee5860ce3c59813284b5a6835461fc9c615981cd7796",
+      "sha256": "2ae51109f9282a30fab906df2469e19413ca0180261d13b1ae5adbb9453e68b8",
       "changeIds": [
         "SCR-V10-PRODUCT-IDENTITY-HELP-LANGUAGE"
       ],
@@ -76485,7 +76485,7 @@
       "id": "source:ui/src/pages/CompanyExport.test.tsx",
       "kind": "current_source_owner",
       "path": "ui/src/pages/CompanyExport.test.tsx",
-      "sha256": "8e941e8eb39407b6014a8d7eaa66384b48148d664ab4f23689b6d375cd443f54",
+      "sha256": "506b624185eb0c3f72fd589d3d90062e0f989f96995ec816fd59626c44d34c70",
       "changeIds": [
         "SCR-V10-CUSTOMER-EXPERIENCE"
       ],
@@ -76500,7 +76500,7 @@
       "id": "source:ui/src/pages/CompanyExport.tsx",
       "kind": "current_source_owner",
       "path": "ui/src/pages/CompanyExport.tsx",
-      "sha256": "9b297a2235267531f717947eb1ae2a10b24ae0e0aa4ebe99bc786af2a1c2c0db",
+      "sha256": "62870d1837e9b9a0ece5751c43e9b92c13f7ea2e4cf3b148e40aa11a6b8be4d8",
       "changeIds": [
         "SCR-V10-CUSTOMER-EXPERIENCE"
       ],
@@ -76890,7 +76890,7 @@
       "id": "source:ui/src/pages/SaasDeletion.test.tsx",
       "kind": "current_source_owner",
       "path": "ui/src/pages/SaasDeletion.test.tsx",
-      "sha256": "5a17972995e6f741b4cca0f29e3bb9370a4ae94e77d50861627f6b63be50c196",
+      "sha256": "681e2517caa15708bb81f3f6e5a970a6d48199ecdcc0a112953baef71be656ce",
       "changeIds": [
         "SCR-V10-CUSTOMER-EXPERIENCE"
       ],
@@ -76905,7 +76905,7 @@
       "id": "source:ui/src/pages/SaasDeletion.tsx",
       "kind": "current_source_owner",
       "path": "ui/src/pages/SaasDeletion.tsx",
-      "sha256": "0e11d7f56ff3cfe7db5745fe85adce6385fef1374c21b03dc9ea2f99d83eccc3",
+      "sha256": "bc5cfa5c7591c7585c1502130a6dab734ad41b340f1522f68f371d4f2e52ab38",
       "changeIds": [
         "SCR-V10-CUSTOMER-EXPERIENCE"
       ],

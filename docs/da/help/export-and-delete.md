@@ -9,7 +9,7 @@ owner: augustkring/august-works
 maturity: preview
 applicable_product_versions: [V10]
 locale: da
-last_verified_at: 2026-11-18
+last_verified_at: 2026-11-20
 review_trigger: Ændringer i eksport, sletning, opbevaring, privat Memory-deling eller kildeadgang
 security_or_privacy_sensitive: true
 linked_source_files: [ui/src/pages/CompanyExport.tsx, ui/src/pages/SaasDeletion.tsx, ui/src/pages/SaasAccount.tsx, ui/src/pages/Auth.tsx, ui/src/components/PersonalAccountDeletionReceipt.tsx, server/src/services/saas/account-deletion.ts, server/src/services/saas/offboarding.ts, server/src/services/saas/company-purge.ts, ui/src/pages/Memory.tsx, server/src/routes/memory.ts, server/src/services/memory/memory-service.ts, server/src/services/memory/memory-privacy.ts, server/src/services/memory/memory-jobs.ts, server/src/services/native-runtime/runtime-asset-retention.ts, server/src/services/native-local-process-stop.ts, server/src/services/heartbeat.ts]
@@ -24,6 +24,10 @@ Blentera har særskilte handlinger til at eksportere en virksomhed, slette en or
 ## Anmod om sletning af organisation
 
 Åbn **Company settings → Deletion** for at gennemgå anmodningen om at slette organisationen. Siden beder dig først eksportere organisationen, bekræfte dens navn og anerkende sletningen. Sletning stopper arbejdet og starter den viste afviklingsproces. Den kan ikke fortrydes.
+
+At opsige abonnementet og at slette organisationen er to forskellige handlinger. Sletning fjerner organisationens data og opsiger også abonnementet, medmindre den samme betalingskonto betaler for en anden organisation. Vil du stoppe betalingen og beholde dine data, så opsig i stedet abonnementet under **Company settings → Billing**.
+
+En selvhostet installation har ingen tjeneste til sletteanmodninger, så siden linker i stedet til listen over **Organisationer**. Dér beder **Slet organisation** om bekræftelse, før noget slettes, tilbyder først en eksport og nævner arkivering (under virksomhedsindstillinger) som måden at skjule en organisation og beholde dens data på. En bekræftet sletning dér fjerner organisationens opgaver, agenter, projekter og Memory og kan ikke fortrydes.
 
 Sletningen kan forblive i en opbevaringstilstand, mens administrerede sikkerhedskopier når deres slettefrist. Finansielle poster og en minimal kvittering for sletning kan blive gemt, hvor det kræves. Følg status og trin på sletningssiden. En indsendt anmodning beviser ikke, at den endelige sletning er gennemført.
 
