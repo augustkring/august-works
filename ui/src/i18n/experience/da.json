@@ -5489,7 +5489,9 @@
           "runs": "Kørsler",
           "costs": "Omkostninger",
           "budgets": "Budgetter"
-        }
+        },
+        "liveRun": "Aktiv kørsel",
+        "latestRun": "Seneste kørsel"
       },
       "rev": {
         "title": "Konfigurationsrevisioner",
@@ -5911,6 +5913,11 @@
       "selectRequired": "Vælg model (påkrævet)",
       "search": "Søg i modeller...",
       "searchCreate": "Søg i modeller... (skriv for at oprette)"
+    },
+    "secretPicker": {
+      "select": "Vælg hemmelighed…",
+      "search": "Søg i hemmeligheder…",
+      "empty": "Ingen matchende hemmeligheder"
     }
   }
 }

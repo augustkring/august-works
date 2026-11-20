@@ -5489,7 +5489,9 @@
           "runs": "Runs",
           "costs": "Costs",
           "budgets": "Budgets"
-        }
+        },
+        "liveRun": "Live Run",
+        "latestRun": "Latest Run"
       },
       "rev": {
         "title": "Configuration Revisions",
@@ -5911,6 +5913,11 @@
       "selectRequired": "Select model (required)",
       "search": "Search models...",
       "searchCreate": "Search models... (type to create)"
+    },
+    "secretPicker": {
+      "select": "Select secret…",
+      "search": "Search secrets…",
+      "empty": "No matching secrets"
     }
   }
 }
