@@ -1702,6 +1702,32 @@ describe("native bootstrap rendered-source closure", () => {
           contentHash: nativeSha256({ rendition: "native_tool_action_delivery_v1", projection: delivery }) } };
 
       expect(check(c)).toBe(c);
+      // APR-E2E-13: the rendered rejected interaction state of a declined
+      // tool-action card is owned by its governed decision, never a withdrawal.
+      {
+        const wakeSource = { kind: "native_task_wake" as const, runId, issueId, sourceVersion: "1", contentHash: "d".repeat(64) };
+        const governed = c.governedInteractions![0]!;
+        const stateReference = { kind: "task_wake_interaction_state" as const, id: interactionId,
+          interactionKind: "request_confirmation" as const, interactionStatus: "rejected" as const };
+        const build = (capture: NativeTaskContinuationCapture, sources = [governed.nativeSource, governed.continuationSource, c.delivery!.source]) =>
+          buildNativeBootstrapSourceSet({
+            companyId, runId, agentId, issueId, renderedMarkdown,
+            renderedMarkdownDigest: createHash("sha256").update(renderedMarkdown, "utf8").digest("hex"),
+            references: [{ kind: "task" as const, id: issueId }, stateReference],
+            candidates: [{ kind: "task" as const, id: issueId, input: { kind: "task" as const, issueId, sourceVersion: "1", contentHash: hash },
+              payloadSourceSnapshot: snapshot() }], runtimeInputs: [], additionalInputs: [wakeSource],
+            taskWakeInteractionSources: sources,
+            taskWakeInteractionStateOwner: { source: wakeSource, capture, responsibleUserId, wakeupRequestId,
+              wakeReason: "issue_commented", taskObjective: c.envelope.objective },
+            contextManifestIds: [], rolePackInputs: [], unsupportedInputPresent: false,
+          });
+        if (status === "rejected") {
+          expect(build(c)?.inputs).toEqual(expect.arrayContaining([governed.nativeSource, governed.continuationSource]));
+          expect(build(c, [governed.nativeSource])).toBeNull();
+        } else {
+          expect(build(c)).toBeNull();
+        }
+      }
       // A new genuine Human comment is a separate trigger from recorded
       // historical review outcomes. Never borrow the historical resolver.
       const ordinary = structuredClone(c), laterCommentId = randomUUID();
