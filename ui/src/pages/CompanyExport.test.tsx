@@ -519,6 +519,21 @@ describe("CompanyExport", () => {
     expect(container.textContent).toContain("3 approvals are not included in the export bundle.");
   });
 
+  it("renders export warnings in an AA-contrast tone (EXIT-R1)", async () => {
+    // amber-500 on the light page measured below 4.5:1 in the real-route axe run.
+    mockCompaniesApi.exportFidelity.mockResolvedValue(buildFidelityReport([
+      { code: "approvals_not_exported", severity: "warning", message: "3 approvals are not included in the export bundle." },
+    ]));
+
+    await renderPage();
+
+    const warning = [...container.querySelectorAll("div")]
+      .find((element) => element.textContent === "3 approvals are not included in the export bundle.");
+    expect(warning?.className).toContain("text-amber-700");
+    expect(warning?.className).toContain("dark:text-amber-300");
+    expect(container.innerHTML).not.toContain("text-amber-500");
+  });
+
   it("renders no fidelity panel when the report has no warnings", async () => {
     await renderPage();
 

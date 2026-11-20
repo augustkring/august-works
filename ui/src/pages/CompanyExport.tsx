@@ -1112,7 +1112,7 @@ export function CompanyExport() {
               {selectedCount > 0 && ` (~${formatBytes(estimatedZipBytes)})`}
             </span>
             {warnings.length > 0 && (
-              <span className="text-amber-500">
+              <span className="text-amber-700 dark:text-amber-300">
                 {warnings.length} warning{warnings.length === 1 ? "" : "s"}
               </span>
             )}
@@ -1140,7 +1140,7 @@ export function CompanyExport() {
       {warnings.length > 0 && (
         <div className="mx-5 mt-3 rounded-md border border-amber-500/30 bg-amber-500/5 px-4 py-3">
           {warnings.map((w) => (
-            <div key={w} className="text-xs text-amber-500">{w}</div>
+            <div key={w} className="text-xs text-amber-700 dark:text-amber-300">{w}</div>
           ))}
         </div>
       )}
@@ -1154,7 +1154,7 @@ export function CompanyExport() {
               key={warning.code}
               className={cn(
                 "text-xs",
-                warning.severity === "blocker" ? "font-medium text-destructive" : "text-amber-500",
+                warning.severity === "blocker" ? "font-medium text-destructive" : "text-amber-700 dark:text-amber-300",
               )}
             >
               {warning.message}

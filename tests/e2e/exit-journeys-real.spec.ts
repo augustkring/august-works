@@ -47,12 +47,14 @@ async function seedCompany(api: APIRequestContext): Promise<Seed> {
   const company = await json(await api.post("/api/companies", { data: { name: companyName } }));
   const base = `/api/companies/${company.id}`;
   const taskTitle = `Close the quarterly books ${stamp}`;
-  const task = await json(await api.post(`${base}/issues`, { data: {
-    title: taskTitle, status: "todo", priority: "high",
-    description: "Reconcile the ledger before the export.",
+  // Memory evidence quotes the Task description and pins its current version.
+  const content = "The books close on the last working day of the quarter.";
+  const created = await json(await api.post(`${base}/issues`, { data: {
+    title: taskTitle, status: "todo", priority: "high", description: content,
   } }));
   const commentBody = `Ledger reconciled for the exit test ${stamp}.`;
-  await json(await api.post(`/api/issues/${task.id}/comments`, { data: { body: commentBody } }));
+  await json(await api.post(`/api/issues/${created.id}/comments`, { data: { body: commentBody } }));
+  const task = await json(await api.get(`/api/issues/${created.id}`));
 
   // Shared Memory record, accepted through the real Memory review routes
   // (same flow as aw-v4-completion.spec.ts).
@@ -61,7 +63,6 @@ async function seedCompany(api: APIRequestContext): Promise<Seed> {
   } }));
   const observedAt = new Date().toISOString();
   const memoryTitle = `Exit journey Memory record ${stamp}`;
-  const content = "The books close on the last working day of the quarter.";
   const candidate = await json(await api.post(`${base}/memory/candidates`, { data: {
     bindingId: binding.id, memoryType: "fact", scope: { type: "company", id: null }, ownerAgentId: null,
     subject: null, title: memoryTitle, content, summary: null,
@@ -130,6 +131,16 @@ test.describe("exit journeys on the real backend", () => {
     await expect(exportButton).toBeEnabled({ timeout: 30_000 });
     await auditWcag(page, "Company export (en)");
 
+    // A whole-company export: Task and routine history is opt-in on this screen
+    // ("it can be large"), so select every category, then wait for the preview.
+    const include = page.getByRole("group", { name: "What to include" });
+    for (const name of ["Agents", "Projects", "Skills", "Routines", "Tasks", "Attachments"]) {
+      const box = include.getByRole("checkbox", { name: new RegExp(`^${name}\\b`) });
+      if (!(await box.isChecked())) await box.check();
+      await expect(box).toBeChecked();
+    }
+    await expect(exportButton).toBeEnabled({ timeout: 30_000 });
+    await expect(page.locator('[data-file-tree-path="tasks"]')).toBeVisible();
     // Shared Memory travels in the company state extension; it is opt-in.
     await page.getByRole("checkbox", { name: /Include company V7 state/ }).check();
     const downloadPromise = page.waitForEvent("download");
@@ -150,8 +161,8 @@ test.describe("exit journeys on the real backend", () => {
     };
     const paths = Object.keys(archive.files);
     test.info().annotations.push({ type: "export files", description: paths.join(", ") });
-    const taskFiles = paths.filter((path) => text(path).includes(seed.taskTitle));
-    expect(taskFiles, "the seeded Task is in the archive").not.toEqual([]);
+    const taskFiles = paths.filter((path) => path.startsWith("tasks/") && text(path).includes(seed.taskTitle));
+    expect(taskFiles, "the seeded Task is in the archive as a Task file").not.toEqual([]);
     expect(paths.some((path) => text(path).includes(seed.commentBody)), "the Task comment is in the archive").toBe(true);
     const state = JSON.parse(text("august-works-state-v7.json") || "{}");
     expect(JSON.stringify(state), "the shared Memory record is in the archive").toContain(seed.memoryTitle);
