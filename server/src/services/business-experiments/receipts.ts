@@ -1,6 +1,6 @@
 import { createHash, createHmac } from "node:crypto";
 import { and, asc, eq, inArray, sql } from "drizzle-orm";
-import { analyticalLineageEdges, analyticalLineageManifests, businessExperimentAssignments, businessExperimentCompletions, businessExperimentExecutions, businessExperimentExposures, businessExperimentVersions, businessExperimentTransitions, type Db } from "@paperclipai/db";
+import { analyticalLineageEdges, analyticalLineageManifests, businessExperimentAnalyses, businessExperimentAssignments, businessExperimentCompletions, businessExperimentExecutions, businessExperimentExposures, businessExperimentOutcomes, businessExperimentVersions, businessExperimentTransitions, type Db } from "@paperclipai/db";
 import { ISSUE_STATUSES, PROJECT_STATUSES, type BusinessExperimentAssignmentView, type BusinessExperimentExposureView, type BusinessExperimentUnitSnapshot } from "@paperclipai/shared";
 import { conflict, notFound, unprocessable } from "../../errors.js";
 import type { AuthorizationActor } from "../authorization.js";
@@ -20,6 +20,42 @@ export type ExperimentCompletion = typeof businessExperimentCompletions.$inferSe
 export type ExperimentEdge = Pick<typeof analyticalLineageEdges.$inferInsert, "inputType" | "inputRef" | "inputHash" | "relationship">;
 export const EXPERIMENT_OWNER_ENGINE = "aw-native-business-experiment-owner-v1";
 export function experimentBudget(deadline: number) { if (performance.now() > deadline) throw unprocessable("Experiment receipt source budget exceeded"); }
+/** PERF-01 declared target for the two operations whose work grows with the
+ * outcome population: final analysis and replay of the signed receipts.
+ * The V8 per-operation receipt bound (30 s) stays the floor, so an operation
+ * with no outcomes keeps exactly 30 s; each outcome adds 0.5 ms, so the
+ * declared maximum (4,000 units x 17 metrics = 68,000 outcomes) gets 64 s;
+ * 90 s is the hard ceiling. Every other experiment operation keeps 30 s. */
+export const EXPERIMENT_OPERATION_BUDGET_FLOOR_MS = 30_000;
+export const EXPERIMENT_OPERATION_BUDGET_CEILING_MS = 90_000;
+export const EXPERIMENT_OPERATION_BUDGET_MS_PER_OUTCOME = 0.5;
+export function experimentOperationBudgetMs(outcomeCount: number) {
+  const outcomes = outcomeCount > 0 ? outcomeCount : 0; // NaN and negatives count as none
+  return Math.min(EXPERIMENT_OPERATION_BUDGET_CEILING_MS,
+    Math.max(EXPERIMENT_OPERATION_BUDGET_FLOOR_MS, EXPERIMENT_OPERATION_BUDGET_FLOOR_MS + EXPERIMENT_OPERATION_BUDGET_MS_PER_OUTCOME * outcomes));
+}
+/** Sizes the budget only. The count is never returned to a caller and grants
+ * nothing: the operation still inspects, verifies and locks every receipt.
+ * Final analysis: the outcomes it will capture (assignments x non-invariant
+ * metric pins). Replay: the outcomes the version's analysis stored. */
+export async function experimentOperationOutcomeCount(tx: Db, companyId: string, experimentId: string, versionId: string, operation: "final_analysis" | "replay") {
+  if (operation === "replay") {
+    const [analysis] = await tx.select({ id: businessExperimentAnalyses.id }).from(businessExperimentAnalyses)
+      .where(and(eq(businessExperimentAnalyses.companyId, companyId), eq(businessExperimentAnalyses.experimentId, experimentId), eq(businessExperimentAnalyses.versionId, versionId))).limit(1);
+    if (!analysis) return 0;
+    const [row] = await tx.select({ count: sql<number>`count(*)::int` }).from(businessExperimentOutcomes)
+      .where(and(eq(businessExperimentOutcomes.companyId, companyId), eq(businessExperimentOutcomes.analysisId, analysis.id)));
+    return Number(row?.count ?? 0);
+  }
+  const [version] = await tx.select({ metricPins: businessExperimentVersions.metricPins }).from(businessExperimentVersions)
+    .where(and(eq(businessExperimentVersions.companyId, companyId), eq(businessExperimentVersions.experimentId, experimentId), eq(businessExperimentVersions.id, versionId))).limit(1);
+  if (!version) return 0;
+  const metrics = (Array.isArray(version.metricPins) ? version.metricPins : []).filter(pin => pin?.role !== "invariant").length;
+  if (metrics === 0) return 0;
+  const [row] = await tx.select({ count: sql<number>`count(*)::int` }).from(businessExperimentAssignments)
+    .where(and(eq(businessExperimentAssignments.companyId, companyId), eq(businessExperimentAssignments.experimentId, experimentId), eq(businessExperimentAssignments.versionId, versionId)));
+  return Number(row?.count ?? 0) * metrics;
+}
 export function experimentEdges(edges: ExperimentEdge[]) {
   const result = new Map<string, ExperimentEdge>();
   for (const edge of edges) {

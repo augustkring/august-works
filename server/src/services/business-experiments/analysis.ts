@@ -13,7 +13,7 @@ import { businessMetricService } from "../business-metrics/service.js";
 import { prepareNativeMetric, prepareNativeMetricInput } from "../business-metrics/native-engine.js";
 import { admitBusinessExperiment,lockBusinessExperimentRoot,inspectBusinessExperimentVersion,businessExperimentRootView,auditBusinessExperiment } from "./service.js";
 import { transitionExperimentRecording } from "./recording.js";
-import { EXPERIMENT_OWNER_ENGINE,experimentBudget,experimentEdges,experimentOutcomeSourceHashFromCanonicalSnapshot,experimentStatementTime,signedExperimentReceipt } from "./receipts.js";
+import { EXPERIMENT_OWNER_ENGINE,experimentBudget,experimentEdges,experimentOperationBudgetMs,experimentOperationOutcomeCount,experimentOutcomeSourceHashFromCanonicalSnapshot,experimentStatementTime,signedExperimentReceipt } from "./receipts.js";
 import { evaluateNativeBusinessExperiment } from "./kernel.js";
 import { experimentCapture,experimentInvariantDiagnostics,experimentAnalysisMaterial,experimentOutcomeMaterial,experimentInterpretationMaterial,experimentAnalysisView,experimentInterpretationView,type ExperimentAnalysis,type ExperimentOutcome,type ExperimentInterpretation } from "./results.js";
 /** Sole final native capture owner. Commands supply identities/CAS only; never
@@ -24,8 +24,10 @@ export function businessExperimentAnalysisService(db:Db){return {
     // One capture signs 68,000 outcome receipts and verifies every assignment,
     // exposure and completion receipt: resolve the signing key once for it.
     return withV7ActivityTransaction(db,(tx,publications)=>withDecisionSigningKey(async()=>{
-      await admitBusinessExperiment(tx,companyId,actor,true);const row=await lockBusinessExperimentRoot(tx,companyId,id),deadline=performance.now()+30_000;
+      await admitBusinessExperiment(tx,companyId,actor,true);const row=await lockBusinessExperimentRoot(tx,companyId,id),started=performance.now();
       if(row.revision!==input.expectedRevision||row.currentVersionId!==input.versionId||row.state!=="completed")throw conflict("A single final analysis requires the exact completed protocol and revision");
+      // PERF-01: the final analysis budget scales with the outcomes it captures.
+      const deadline=started+experimentOperationBudgetMs(await experimentOperationOutcomeCount(tx,companyId,id,input.versionId,"final_analysis"));
       const pin=await inspectBusinessExperimentVersion(tx,row,actor,input.versionId,true,deadline),receipts=pin.receipts;
       if(!receipts.execution||!receipts.completion||receipts.analysis)throw conflict("An exact recording/completion is required and cannot be analyzed twice");
       const version=pin.value,plan=version.definition.sampleOrDurationPlan,analysisId=randomUUID(),outcomes:ExperimentOutcome[]=[],pendingEdges=new Map<string,{direct:ReturnType<typeof experimentEdges>;assignmentManifestId:string;assignmentLineageHash:string;completeLineageHash:string;lineageHash:string}>();
