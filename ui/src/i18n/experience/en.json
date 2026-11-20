@@ -4750,6 +4750,54 @@
       "today": "Today",
       "yesterday": "Yesterday",
       "earlier": "Earlier"
+    },
+    "agents": {
+      "breadcrumb": "Agents",
+      "selectCompany": "Select a company to view agents.",
+      "tab": {
+        "all": "All",
+        "active": "Active",
+        "paused": "Paused",
+        "error": "Error",
+        "builtin": "Built-in"
+      },
+      "local": "Local",
+      "localHost": "{{product}} host",
+      "localTitle": "Local - {{product}} host",
+      "loadingEnv": "Loading environment",
+      "unknownEnv": "Unknown environment",
+      "unknownEnvTitle": "Unknown environment - {{id}}",
+      "managedBy": "Managed by {{product}}",
+      "sandboxProvider": "{{provider}} sandbox provider",
+      "sandbox": "Sandbox",
+      "setUp": "Set up",
+      "chat": "Chat",
+      "invalidChain": "Invalid reporting chain",
+      "viewGroup": "Agent view",
+      "listView": "List view",
+      "orgView": "Org chart view",
+      "packages": "Specialist packages",
+      "hire": "Hire agent",
+      "newAgent": "New Agent",
+      "emptyFirst": "Create your first agent to get started.",
+      "noMatch": "No agents match the selected status.",
+      "noHierarchy": "No organizational hierarchy defined.",
+      "live": "Live",
+      "liveCount": "Live ({{count}})"
+    },
+    "roles": {
+      "ceo": "CEO",
+      "cto": "CTO",
+      "cmo": "CMO",
+      "cfo": "CFO",
+      "security": "Security",
+      "engineer": "Engineer",
+      "designer": "Designer",
+      "pm": "PM",
+      "qa": "QA",
+      "devops": "DevOps",
+      "researcher": "Researcher",
+      "general": "General"
     }
   }
 }

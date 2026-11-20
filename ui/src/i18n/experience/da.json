@@ -4750,6 +4750,54 @@
       "today": "I dag",
       "yesterday": "I går",
       "earlier": "Tidligere"
+    },
+    "agents": {
+      "breadcrumb": "Agenter",
+      "selectCompany": "Vælg en virksomhed for at se agenter.",
+      "tab": {
+        "all": "Alle",
+        "active": "Aktive",
+        "paused": "På pause",
+        "error": "Fejl",
+        "builtin": "Indbyggede"
+      },
+      "local": "Lokal",
+      "localHost": "{{product}}-vært",
+      "localTitle": "Lokal - {{product}}-vært",
+      "loadingEnv": "Indlæser miljø",
+      "unknownEnv": "Ukendt miljø",
+      "unknownEnvTitle": "Ukendt miljø - {{id}}",
+      "managedBy": "Administreres af {{product}}",
+      "sandboxProvider": "{{provider}}-sandbox",
+      "sandbox": "Sandbox",
+      "setUp": "Opsæt",
+      "chat": "Chat",
+      "invalidChain": "Ugyldig rapporteringskæde",
+      "viewGroup": "Agentvisning",
+      "listView": "Listevisning",
+      "orgView": "Organisationsdiagram",
+      "packages": "Specialistpakker",
+      "hire": "Ansæt agent",
+      "newAgent": "Ny agent",
+      "emptyFirst": "Opret din første agent for at komme i gang.",
+      "noMatch": "Ingen agenter har den valgte status.",
+      "noHierarchy": "Intet organisationshierarki er oprettet.",
+      "live": "I gang",
+      "liveCount": "I gang ({{count}})"
+    },
+    "roles": {
+      "ceo": "Direktør",
+      "cto": "Teknisk direktør",
+      "cmo": "Marketingdirektør",
+      "cfo": "Økonomidirektør",
+      "security": "Sikkerhed",
+      "engineer": "Udvikler",
+      "designer": "Designer",
+      "pm": "Projektleder",
+      "qa": "Kvalitetssikring",
+      "devops": "DevOps",
+      "researcher": "Researcher",
+      "general": "Generel"
     }
   }
 }
