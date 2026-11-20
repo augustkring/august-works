@@ -16,7 +16,7 @@ import { createHash, randomUUID } from "node:crypto";
 import { suppressAnalyticalSource } from "./analytical-privacy.js";
 import { forgetMemoryForDeletedIssue, lockMemoryPrivacy, canActorReadMemorySources } from "./memory/memory-privacy.js";
 import { lockBusinessEventCompany, suppressBusinessEventsForObject } from "./business-event-privacy.js";
-import { authorizationService, canActorReadHeartbeatRunPrivacy, canActorReadIssuePrivacy, canActorReadProjectPrivacy, canActorReadTypedTaskSourcePrivacy, issueReadSqlCondition, pinCurrentBoardActor, type AuthorizationActor } from "./authorization.js";
+import { authorizationService, canActorReadHeartbeatRunPrivacy, canActorReadIssuePrivacy, canActorReadProjectPrivacy, canActorReadTypedTaskSourcePrivacy, issueIdsMatchingReadCondition, issueReadSqlCondition, pinCurrentBoardActor, type AuthorizationActor } from "./authorization.js";
 import { assertHumanAuthentication, isAuthenticationStateBusy } from "../auth/authenticator-assurance.js";
 import { directHumanPayloadSnapshotSql, nativePayloadSnapshotSql, captureNativeTemporalContext,
   assertDirectInputSessionCurrent as assertManualInputCredentialCurrent, readNativeIssueEffectPrefix, assertManualRelatedSourcesCurrent } from "./native-direct-input.js";
@@ -25,6 +25,7 @@ import type { NativeModelOutputCapture } from "./native-runtime/native-execution
 import { resolveTaskWatchdogMutationScope, taskWatchdogScopeAllowsIssueMutation } from "./task-watchdog-scope.js";
 import {
   and,
+  type AnyColumn,
   asc,
   desc,
   eq,
@@ -4275,6 +4276,39 @@ async function terminalExplicitBlockersByRoot(
   return terminalByRoot;
 }
 
+/** `column = any($n::uuid[])`: one statement text for every frontier size.
+ * These blocker reads embed the ~220 KB Task reader predicate, so a text per
+ * `in ($1, ..., $n)` length meant a fresh parse and plan for each size
+ * (PERF6). The ids are Task ids read from issue rows. */
+const ISSUE_ID_UUID = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
+function issueIdInStableList(column: AnyColumn, ids: readonly string[]) {
+  if (ids.some((id) => !ISSUE_ID_UUID.test(id))) return inArray(column, [...ids]);
+  return sql<boolean>`${column} = any(${`{${ids.join(",")}}`}::uuid[])`;
+}
+
+/** Keep the rows whose Task (`idOf`) satisfies the caller's Task reader
+ * predicate, as if the statement that read them had included it. The
+ * predicate runs once for the whole id set as the shared exact-id reader
+ * statement instead of inside each blocker/inbox statement, where PostgreSQL
+ * planned ~220 KB of SQL on every execution (PERF6). Without a predicate the
+ * rows are returned as they are, as before. */
+async function rowsMatchingReadCondition<T>(
+  dbOrTx: any,
+  companyId: string,
+  rows: T[],
+  idOf: (row: T) => string,
+  readCondition: SQL<boolean> | undefined,
+): Promise<T[]> {
+  if (!readCondition || rows.length === 0) return rows;
+  const readable = await issueIdsMatchingReadCondition(
+    dbOrTx,
+    companyId,
+    rows.map(idOf),
+    readCondition,
+  );
+  return rows.filter((row) => readable.has(idOf(row)));
+}
+
 async function listIssueBlockerAttentionMap(
   dbOrTx: any,
   companyId: string,
@@ -4320,7 +4354,7 @@ async function listIssueBlockerAttentionMap(
           pendingFinalizeBlockerIssueIds.add(blockerIssueId);
         }
       }
-      const explicitBlockerRowsPromise: Promise<
+      const allExplicitBlockerRowsPromise: Promise<
         IssueBlockerAttentionQueryRow[]
       > = dbOrTx
         .select({
@@ -4342,12 +4376,11 @@ async function listIssueBlockerAttentionMap(
           and(
             eq(issueRelations.companyId, companyId),
             eq(issueRelations.type, "blocks"),
-            inArray(issueRelations.relatedIssueId, chunk),
+            issueIdInStableList(issueRelations.relatedIssueId, chunk),
             eq(issues.companyId, companyId),
-            readCondition,
           ),
         );
-      const childRowsPromise: Promise<IssueBlockerAttentionQueryRow[]> = dbOrTx
+      const allChildRowsPromise: Promise<IssueBlockerAttentionQueryRow[]> = dbOrTx
         .select({
           issueId: issues.parentId,
           blockerIssueId: issues.id,
@@ -4365,18 +4398,33 @@ async function listIssueBlockerAttentionMap(
         .where(
           and(
             eq(issues.companyId, companyId),
-            inArray(issues.parentId, chunk),
-            readCondition,
+            issueIdInStableList(issues.parentId, chunk),
             notInArray(
               issues.status,
               BLOCKER_ATTENTION_CHILD_TERMINAL_STATUSES,
             ),
           ),
         );
-      const [explicitBlockerRows, childRows] = await Promise.all([
-        explicitBlockerRowsPromise,
-        childRowsPromise,
+      const [allExplicitBlockerRows, allChildRows] = await Promise.all([
+        allExplicitBlockerRowsPromise,
+        allChildRowsPromise,
       ]);
+      // Both reads select the blocker Task's own row (`issues`); keep only
+      // rows whose blocker Task passes the reader predicate.
+      const readableBlockerRows = await rowsMatchingReadCondition(
+        dbOrTx,
+        companyId,
+        [...allExplicitBlockerRows, ...allChildRows],
+        (row) => row.blockerIssueId,
+        readCondition,
+      );
+      const readableBlockerRowSet = new Set(readableBlockerRows);
+      const explicitBlockerRows = allExplicitBlockerRows.filter((row) =>
+        readableBlockerRowSet.has(row),
+      );
+      const childRows = allChildRows.filter((row) =>
+        readableBlockerRowSet.has(row),
+      );
 
       const unresolvedExplicitBlockerRows = explicitBlockerRows.filter(
         (row) =>
@@ -4536,22 +4584,26 @@ async function listIssueBlockerAttentionMap(
     // Recovery rows are intentionally company-wide: a liveness escalation for
     // the same leaf blocker represents an active waiting path even when that
     // blocker is reached through another blocked graph.
-    const recoveryRows: Array<{ id: string; originId: string | null }> =
-      await dbOrTx
+    const recoveryRows = await rowsMatchingReadCondition(
+      dbOrTx,
+      companyId,
+      (await dbOrTx
         .select({ id: issues.id, originId: issues.originId })
         .from(issues)
         .where(
           and(
             eq(issues.companyId, companyId),
             eq(issues.originKind, BLOCKER_ATTENTION_OPEN_RECOVERY_ORIGIN_KIND),
-            readCondition,
             visibleIssueCondition(),
             notInArray(
               issues.status,
               BLOCKER_ATTENTION_OPEN_RECOVERY_TERMINAL_STATUSES,
             ),
           ),
-        );
+        )) as Array<{ id: string; originId: string | null }>,
+      (row) => row.id,
+      readCondition,
+    );
     for (const row of recoveryRows) {
       const parsed = parseIssueGraphLivenessIncidentKey(row.originId);
       if (!parsed || parsed.companyId !== companyId) continue;
@@ -6121,7 +6173,7 @@ async function listIssueBlockedInboxAttentionMap(
   const result = new Map<string, IssueBlockedInboxAttention>();
   if (rowIssueIds.length === 0) return result;
 
-  const [graphIssueRows, graphRelationRows, companyAgentRows] =
+  const [allGraphIssueRows, graphRelationRows, companyAgentRows] =
     await Promise.all([
       dbOrTx
         .select()
@@ -6130,7 +6182,6 @@ async function listIssueBlockedInboxAttentionMap(
           and(
             eq(issues.companyId, companyId),
             visibleIssueCondition(),
-            readCondition,
             ne(issues.status, "done"),
           ),
         ),
@@ -6161,7 +6212,13 @@ async function listIssueBlockedInboxAttentionMap(
         .where(eq(agents.companyId, companyId)),
     ]);
 
-  const graphIssues = graphIssueRows as IssueRow[];
+  const graphIssues = await rowsMatchingReadCondition(
+    dbOrTx,
+    companyId,
+    allGraphIssueRows as IssueRow[],
+    (row) => row.id,
+    readCondition,
+  );
   const graphRelations = graphRelationRows as Array<{
     companyId: string;
     blockerIssueId: string;
@@ -8418,8 +8475,9 @@ export function issueService(db: Db) {
 
     currentReadMetrics: async (companyId: string, issueIds: string[], readCondition: SQL<boolean>,
       include: { blockers: boolean; inbox: boolean; descendants: boolean }) => {
-      const rows = issueIds.length ? await db.select().from(issues).where(and(eq(issues.companyId, companyId),
-        inArray(issues.id, issueIds), readCondition)) : [];
+      const rows = issueIds.length ? await rowsMatchingReadCondition(db, companyId,
+        await db.select().from(issues).where(and(eq(issues.companyId, companyId), inArray(issues.id, issueIds))),
+        (row) => row.id, readCondition) : [];
       const [blockers, inbox, descendants] = await Promise.all([
         include.blockers ? listIssueBlockerAttentionMap(db, companyId, rows, readCondition) : Promise.resolve(new Map<string, IssueBlockerAttention>()),
         include.inbox ? listIssueBlockedInboxAttentionMap(db, companyId, rows, readCondition) : Promise.resolve(new Map<string, IssueBlockedInboxAttention>()),

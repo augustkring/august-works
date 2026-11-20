@@ -1581,10 +1581,10 @@
     {
       "source": "server/src/services/issues.ts",
       "articleId": "recovering-work",
-      "sourceSha256": "54d21c04d004281f6c766aed51d0091327e9d6aec28f49b7a94b92735a8b3cb5",
+      "sourceSha256": "1f02b2c0ce706da80039179f972300d524e10d2525d795043b89cd399525e3b6",
       "articleSha256": "0296c2c8ae18c613eef9c17ea9679b146e8afbcd3504451a5511a218d6d8b955",
       "decision": "no_change",
-      "rationale": "2026-11-19 MS1f stop 5 review: when the board returns a Task from a review step to the Co-worker that did the work, the Task keeps its saved Native sources (migration 0587 records the return), so that Co-worker can work on it again; previously the update dropped those sources and later Native runs on the Task were refused. Task status, retry, stop, continuation, recovery, support, export and deletion behavior shown to people is unchanged; no article change needed. Reviewed the complete English and Danish guidance. The source fix (D4) makes concurrent requests that replace an Agent Chat conversation whose sources became inaccessible return the one replacement conversation instead of a spurious not-found error, and returns it only for the same company, Agent and person. It adds no user action, retry, stop or support step, and the articles do not describe this flow, so the existing guidance remains accurate."
+      "rationale": "Reviewed (PERF6): the Task list's blocker, inbox and metrics reads now apply the Task reader predicate through the shared exact-id reader instead of inside each statement, with the same rows returned. Recovery, blocker attention and retry behaviour described in the article are unchanged."
     },
     {
       "source": "server/src/services/managed-repository-checkout.ts",
@@ -1685,10 +1685,10 @@
     {
       "source": "server/src/services/issues.ts",
       "articleId": "recovering-work-da",
-      "sourceSha256": "54d21c04d004281f6c766aed51d0091327e9d6aec28f49b7a94b92735a8b3cb5",
+      "sourceSha256": "1f02b2c0ce706da80039179f972300d524e10d2525d795043b89cd399525e3b6",
       "articleSha256": "ce0a7beaa56a5db23963d81eed8c19687d2efc5405773ec33dfd635a377090bc",
       "decision": "no_change",
-      "rationale": "2026-11-19 MS1f stop 5-gennemgang: n\u00e5r bestyrelsen sender en opgave tilbage fra et gennemgangstrin til den Co-worker, der udf\u00f8rte arbejdet, beholder opgaven sine gemte Native-kilder (migration 0587 registrerer tilbagesendelsen), s\u00e5 den Co-worker kan arbejde p\u00e5 den igen; tidligere fjernede opdateringen kilderne, og senere Native-k\u00f8rsler p\u00e5 opgaven blev afvist. Opgavestatus, nyt fors\u00f8g, stop, genoptagelse, gendannelse, support, eksport og sletning, som personer ser, er u\u00e6ndret; artiklen kr\u00e6ver ingen \u00e6ndring. Reviewed the complete English and Danish guidance. The source fix (D4) makes concurrent requests that replace an Agent Chat conversation whose sources became inaccessible return the one replacement conversation instead of a spurious not-found error, and returns it only for the same company, Agent and person. It adds no user action, retry, stop or support step, and the articles do not describe this flow, so the existing guidance remains accurate."
+      "rationale": "Gennemg\u00e5et (PERF6): opgavelistens l\u00e6sninger af blokeringer, indbakke og m\u00e5linger anvender nu opgavel\u00e6serens betingelse gennem den f\u00e6lles l\u00e6ser med eksakte id'er i stedet for i hver foresp\u00f8rgsel, med de samme r\u00e6kker. Gendannelse, opm\u00e6rksomhed p\u00e5 blokeringer og nye fors\u00f8g, som artiklen beskriver, er u\u00e6ndrede."
     },
     {
       "source": "server/src/services/managed-repository-checkout.ts",
