@@ -144,6 +144,8 @@ export async function runManagedNativeConversationFrame(input: {
   /** Fixed observation-only model-origin negative controls; serial integration only. */
   observeModelOriginDenials?: true;
   assignedToolGatewayHttpRequest?: NonNullable<Parameters<typeof createToolGatewayService>[1]>["remoteHttpRequest"];
+  /** The application's tool-action outbox hook (app.ts wires toolActionDeliveries.deliver). */
+  onToolActionSettled?: (actionRequestId: string) => Promise<unknown>;
   /** Use a policy-valid DNS name that resolves to loopback for the signed host relay case. */
   sandboxRelay?: boolean;
   sandboxRelayDnsLookup?: (hostname: string, options: { all: true }) => Promise<Array<{ address: string; family: number }>>;
@@ -205,6 +207,7 @@ export async function runManagedNativeConversationFrame(input: {
     opencodeBinary: string;
     observeModelOriginDenials?: true;
     assignedToolGatewayHttpRequest?: NonNullable<Parameters<typeof createToolGatewayService>[1]>["remoteHttpRequest"];
+    onToolActionSettled?: (actionRequestId: string) => Promise<unknown>;
     brokerOrigin: string;
     brokerProxyOrigin: string | null;
     certBundlePath: string;

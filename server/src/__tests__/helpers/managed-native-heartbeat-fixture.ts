@@ -1000,6 +1000,7 @@ export async function withManagedNativeHeartbeatFixture<T>(input: Omit<FrameInpu
       providerBindingId: providerBindingsByAgent.get(configuredAgentId)!, gateway,
       profile: profilesByAgent.get(configuredAgentId)!, runHome: hostRoot, opencodeBinary: input.opencodeBinary,
       brokerOrigin: origin, brokerProxyOrigin, certBundlePath, assignedToolGatewayHttpRequest: input.assignedToolGatewayHttpRequest,
+      ...(input.onToolActionSettled ? { onToolActionSettled: input.onToolActionSettled } : {}),
       observeModelOriginDenials: input.observeModelOriginDenials, setBrokerToken: token => { activeToken = token; },
       withVerifiedModelRun: (runId, work) => verifiedModelRun.run(runId, work),
       ...(!input.managedTwoAgentSignoff && !input.managedOpenCodeConformance

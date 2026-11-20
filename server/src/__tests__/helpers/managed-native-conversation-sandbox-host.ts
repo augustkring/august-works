@@ -240,6 +240,10 @@ type ManagedSandboxHostInput = {
   brokerOrigin: string;
   observeModelOriginDenials?: true;
   assignedToolGatewayHttpRequest?: NonNullable<Parameters<typeof createToolGatewayService>[1]>["remoteHttpRequest"];
+  /** APR-E2E-9: the application's tool-action outbox hook. app.ts wires its
+   * own gateway's onToolActionSettled to toolActionDeliveries.deliver; a test
+   * app that adopts this fixture gateway passes the same hook here. */
+  onToolActionSettled?: (actionRequestId: string) => Promise<unknown>;
   /** Fixture-only observer applied to each registered Gateway owner, including scoped DB owners. */
   observeAssignedToolGateway?: (owner: ReturnType<typeof createToolGatewayService>, kind: "host_root" | "scoped") => void;
   brokerProxyOrigin: string | null;
@@ -1226,6 +1230,7 @@ async function configureManagedSandboxRun(input: ManagedSandboxHostInput,
   // unreadable. Without one, the fixture keeps its own canary secret.
   const instanceToolActionSigningSecret=process.env.PAPERCLIP_TOOL_ACTION_SIGNING_SECRET?.trim()||"conversation-software-canary";
   const gatewayOptions:Parameters<typeof createToolGatewayService>[1]={operatorUserIds:[baseQualificationActor.userId],qualificationBrokerOrigin:brokerOrigin,toolActionSigningSecret:instanceToolActionSigningSecret,
+    ...(input.onToolActionSettled?{onToolActionSettled:input.onToolActionSettled}:{}),
     remoteHttpRequest:async(url,init)=>{
       if (url !== `${brokerOrigin}/mcp/qualification/credential-echo` && input.assignedToolGatewayHttpRequest)
         return input.assignedToolGatewayHttpRequest(url, init);

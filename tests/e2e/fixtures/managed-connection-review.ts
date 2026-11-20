@@ -18,6 +18,7 @@ import { verifyNativeCleanupRuntimeState } from "../../../server/src/services/ex
 import { issueService } from "../../../server/src/services/issues.js";
 import { createDecisionWakeOriginAgent } from "../../../server/src/services/decision-wakeup.js";
 import { orchestrationService } from "../../../server/src/services/orchestration/orchestration-service.js";
+import { toolActionDeliveryService } from "../../../server/src/services/tool-action-delivery.js";
 import { startEmbeddedPostgresTestDatabase } from "../../../server/src/__tests__/helpers/embedded-postgres.js";
 import { makeConversationFixtureTreeWritable } from "../../../server/src/__tests__/helpers/managed-native-conversation-frame.js";
 import { withManagedNativeHeartbeatFixture } from "../../../server/src/__tests__/helpers/managed-native-heartbeat-fixture.js";
@@ -97,6 +98,7 @@ export async function withManagedConnectionReview(input: {
   let laterTaskId: string | undefined, laterCommentId: string | undefined;
   const pendingNoteBody = "Keeping this review pending while I check.";
   let resolutionSawNote = false;
+  let settleToolAction: ((actionRequestId: string) => Promise<unknown>) | null = null;
   const providerRuns: string[] = [];
   let maxProviderRequestBytes = 0;
   let responseText = "";
@@ -234,6 +236,13 @@ export async function withManagedConnectionReview(input: {
     process.env.PAPERCLIP_NATIVE_SOURCE_CLOSURE_DIAGNOSTICS = "1";
     await withManagedNativeHeartbeatFixture({ db, root, opencodeBinary: binary, timeoutSec: 300,
       schedulerMode: "serial", assignedToolGatewayHttpRequest: request,
+      // APR-E2E-9: production wires the gateway's settled-review hook to the
+      // tool-action outbox (app.ts). This test app adopts the fixture gateway,
+      // so it supplies the same hook once the real heartbeat exists.
+      onToolActionSettled: async actionRequestId => {
+        if (!settleToolAction) throw new Error("managed_review_tool_action_outbox_unbound");
+        return settleToolAction(actionRequestId);
+      },
       prepareNativeRuntimeContext: async ({ companyId, agentId, actor }) => {
         assert(actor.type === "board" && actor.userId && actor.sessionId);
         scope = { companyId, agentId, userId: actor.userId };
@@ -463,6 +472,7 @@ export async function withManagedConnectionReview(input: {
         return { stop_reason: "end_turn", content: [{ type: "text", text: role === "resolution" || role === "later" ? responseText : "Waiting for the Human review." }] };
       },
       driveScheduler: async ({ actor, companyId, agentId, heartbeat, factsForRun }) => {
+        settleToolAction = actionRequestId => toolActionDeliveryService(db, heartbeat).deliver(actionRequestId);
         assert(railway && actor.type === "board" && actor.userId && actor.sessionId);
         const [session] = await db.select().from(authSessions).where(and(eq(authSessions.id, actor.sessionId),
           eq(authSessions.userId, actor.userId), sql`${authSessions.expiresAt} > now()`)).limit(1);
