@@ -21,7 +21,7 @@ function flatten(tree: Tree, prefix = ""): Map<string, string> {
 // Terms that are written the same in English and Danish (or are product names).
 const SAME_IN_DANISH = new Set([
   "Status", "ID", "Type", "Chat", "Logo", "Board", "Sandbox", "Adapter", "DevOps", "Designer", "Researcher",
-  "Backlog", "Dansk", "English", "Mine", "{{value}} tokens", "adapter: {{type}}", "{{count}} agent",
+  "Backlog", "Dansk", "English", "Mine", "{{value}} tokens", "adapter: {{type}}", "{{count}} agent", "via {{name}}", "Tokens {{value}}", "Upload",
 ]);
 
 function sourceFiles(dir: string): string[] {
