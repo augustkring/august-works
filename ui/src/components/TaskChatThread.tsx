@@ -502,6 +502,7 @@ export function TaskChatThread(props: TaskChatThreadProps) {
     showComposer = true,
     composerPause,
     composerDisabledReason,
+    composerHint = null,
     emptyMessage = "No messages yet.",
     companyId,
     linkedRuns,
@@ -3084,6 +3085,7 @@ export function TaskChatThread(props: TaskChatThreadProps) {
                       onWorkModeChange={onWorkModeChange}
                       disabled={Boolean(runtimeComposerDisabledReason)}
                       disabledReason={runtimeComposerDisabledReason}
+                      hint={composerHint}
                       onAttachImage={onAttachImage}
                       onImageUpload={imageUploadHandler}
                       mentions={mentions}
