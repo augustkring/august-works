@@ -194,6 +194,31 @@ describe("AuthPage", () => {
     });
   });
 
+  it("offers the explicit language choice on self-hosted account entry (AUTH-DA1)", async () => {
+    localStorage.removeItem("aw.v9.display-locale");
+    const { root } = await mount();
+    const select = container.querySelector("label select") as HTMLSelectElement;
+    expect(select).not.toBeNull();
+    expect(select.closest("label")?.textContent).toContain("Language");
+    expect(select.value).toBe("en");
+    const createOne = Array.from(container.querySelectorAll("button")).find((button) => button.textContent === "Create one");
+    await act(async () => { createOne?.dispatchEvent(new MouseEvent("click", { bubbles: true })); });
+    await flushReact();
+    await act(async () => {
+      select.value = "da";
+      select.dispatchEvent(new Event("change", { bubbles: true }));
+    });
+    await flushReact();
+    await flushReact();
+    expect(container.querySelector("h1")?.textContent).toBe("Opret din Blentera-konto");
+    expect(container.querySelector('label[for="name"]')?.textContent).toBe("Navn");
+    expect((container.querySelector('button[type="submit"]') as HTMLButtonElement).textContent).toBe("Opret konto");
+    expect(localStorage.getItem("aw.v9.display-locale")).toBe("da");
+    expect(signUpEmailMock).not.toHaveBeenCalled();
+    localStorage.removeItem("aw.v9.display-locale");
+    await act(async () => { root.unmount(); });
+  });
+
   it("uses new-password autocomplete in sign-up mode", async () => {
     const { root } = await mount();
 
