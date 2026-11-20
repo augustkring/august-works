@@ -103,6 +103,14 @@ export function isCurrentReviewedGatedTrustDocument(
     (row.expiresAt === null || row.expiresAt > now);
 }
 type TrustActor = Express.Request["actor"];
+/**
+ * "lock" (the default) holds the session, company, membership and source rows
+ * until the caller's mutation commits. "read" is for page-load projections that
+ * write nothing: they read committed rows without row locks, so they never wait
+ * on, deadlock with, or make a NOWAIT lock fail in a concurrent account or
+ * document write. Every completion route rechecks under "lock".
+ */
+export type TrustRowLocks = "lock" | "read";
 
 function actorUserId(actor: TrustActor, expectedUserId: string) {
   const userId = v5HumanActorId(actor);
@@ -118,6 +126,7 @@ export async function assertCurrentCompanyHuman(
   expectedUserId: string,
   requireAdmin = false,
   requireSession = false,
+  rowLocks: TrustRowLocks = "lock",
 ) {
   const userId = actorUserId(actor, expectedUserId);
   if (actor.source === "local_implicit")
@@ -128,7 +137,7 @@ export async function assertCurrentCompanyHuman(
     (actor.authenticatedCredentialExpiresAt !== undefined && actor.authenticatedCredentialExpiresAt <= Date.now()))
     throw forbidden("A current authenticated Human session is required");
   const now = new Date();
-  const [session] = await tx.select({ id: authSessions.id, userId: authSessions.userId, expiresAt: authSessions.expiresAt })
+  const sessionQuery = tx.select({ id: authSessions.id, userId: authSessions.userId, expiresAt: authSessions.expiresAt })
     .from(authSessions)
     .innerJoin(authUsers, eq(authUsers.id, authSessions.userId))
     .where(and(eq(authSessions.id, actor.sessionId), eq(authSessions.userId, userId), gt(authSessions.expiresAt, now),
@@ -136,20 +145,23 @@ export async function assertCurrentCompanyHuman(
         and(isNull(authSessions.authenticatorVersion), eq(authUsers.authenticatorVersion, 0))),
       notExists(tx.select({ userId: accountDeletionOperations.userId }).from(accountDeletionOperations)
         .where(eq(accountDeletionOperations.userId, authUsers.id)))))
-    .limit(1).for("share");
+    .limit(1);
+  const [session] = await (rowLocks === "lock" ? sessionQuery.for("share") : sessionQuery);
   if (!isCurrentHumanSession({ source: actor.source, actorUserId: actor.userId,
     actorSessionId: actor.sessionId, expectedUserId, databaseSession: session ?? null, now }))
     throw forbidden("The authenticated Human session is no longer current");
-  const [company] = await tx.select({ status: companies.status }).from(companies)
-    .where(eq(companies.id, companyId)).limit(1).for("share");
+  const companyQuery = tx.select({ status: companies.status }).from(companies)
+    .where(eq(companies.id, companyId)).limit(1);
+  const [company] = await (rowLocks === "lock" ? companyQuery.for("share") : companyQuery);
   if (company?.status !== "active") throw forbidden("The current company is unavailable");
-  const [membership] = await tx.select({ principalType: companyMemberships.principalType,
+  const membershipQuery = tx.select({ principalType: companyMemberships.principalType,
     principalId: companyMemberships.principalId, status: companyMemberships.status,
     membershipRole: companyMemberships.membershipRole })
     .from(companyMemberships)
     .where(and(eq(companyMemberships.companyId, companyId), eq(companyMemberships.principalType, "user"),
       eq(companyMemberships.principalId, userId), eq(companyMemberships.status, "active")))
-    .limit(1).for("share");
+    .limit(1);
+  const [membership] = await (rowLocks === "lock" ? membershipQuery.for("share") : membershipQuery);
   if (!currentHumanMembershipAllows(membership ?? null, userId, requireAdmin))
     throw forbidden(requireAdmin ? "Current company owner or administrator access is required" : "Current company membership is required");
   return userId;
@@ -199,6 +211,7 @@ export async function privateOwnerLinkedDocumentIds(
  * Human. The caller must pass its transaction and actor context; this function
  * locks source rows, rechecks current account/company authorization after the
  * lock wait, and returns only the same metadata-safe DTO as the trust route.
+ * With `rowLocks: "read"` it takes no row locks (see TrustRowLocks).
  */
 export async function resolveCurrentTrustDocuments(
   tx: Db,
@@ -207,9 +220,10 @@ export async function resolveCurrentTrustDocuments(
   expectedUserId: string,
   acceptanceRequiredOnly = false,
   visibility: "public" | "gated" = "public",
+  rowLocks: TrustRowLocks = "lock",
 ): Promise<TrustDocument[]> {
   const queryAt = new Date();
-  const rows = await tx.select({
+  const sourceQuery = tx.select({
     id: trustDocumentRegistry.id,
     documentId: trustDocumentRegistry.documentId,
     documentRevisionId: trustDocumentRegistry.documentRevisionId,
@@ -262,8 +276,9 @@ export async function resolveCurrentTrustDocuments(
       sql`${trustDocumentRegistry.effectiveAt} is not null`,
       lte(trustDocumentRegistry.effectiveAt, queryAt),
       or(isNull(trustDocumentRegistry.expiresAt), gt(trustDocumentRegistry.expiresAt, queryAt)),
-    )).for("update");
-  await assertCurrentCompanyHuman(tx, actor, companyId, expectedUserId);
+    ));
+  const rows = await (rowLocks === "lock" ? sourceQuery.for("update") : sourceQuery);
+  await assertCurrentCompanyHuman(tx, actor, companyId, expectedUserId, false, false, rowLocks);
   const linkedDocuments = await privateOwnerLinkedDocumentIds(tx, companyId,
     rows.map(row => ({ documentId: row.documentId, revisionId: row.documentRevisionId })));
   const projectionAt = new Date();
@@ -400,13 +415,15 @@ export async function resolveCurrentTrustMaterialChangeRequirements(
   actor: TrustActor,
   companyId: string,
   expectedUserId: string,
+  rowLocks: TrustRowLocks = "lock",
 ) {
-  const documents = await resolveCurrentTrustDocuments(tx, actor, companyId, expectedUserId);
-  const [membership] = await tx.select({ membershipRole: companyMemberships.membershipRole })
+  const documents = await resolveCurrentTrustDocuments(tx, actor, companyId, expectedUserId, false, "public", rowLocks);
+  const membershipQuery = tx.select({ membershipRole: companyMemberships.membershipRole })
     .from(companyMemberships)
     .where(and(eq(companyMemberships.companyId, companyId), eq(companyMemberships.principalType, "user"),
       eq(companyMemberships.principalId, expectedUserId), eq(companyMemberships.status, "active")))
-    .limit(1).for("share");
+    .limit(1);
+  const [membership] = await (rowLocks === "lock" ? membershipQuery.for("share") : membershipQuery);
   return {
     documents: documents.filter(document => document.materialChangeAction !== "no_action"),
     membershipRole: membership?.membershipRole ?? null,
