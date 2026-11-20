@@ -8295,6 +8295,10 @@ export function issueRoutes(
         const scopedListFilters: IssueFilters = {
           ...listFilters,
           readCondition: await issueReadSqlCondition(queryDb, req.actor),
+          // Every response body passes through currentIssueListBody, which
+          // recomputes these metrics under the reader's current ACLs and
+          // replaces whatever this shared compute put there.
+          deferCurrentReadMetrics: true,
         };
         return coordinateIssueListGet({
           req,

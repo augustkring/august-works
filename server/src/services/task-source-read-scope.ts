@@ -9,6 +9,36 @@ import {
 import { logPostgresLockUnavailable } from "./postgres-lock-diagnostics.js";
 import { forbidden } from "../errors.js";
 
+/** Plan the Task reader predicate once per connection for this read scope.
+ * `issueReadSqlCondition` is about 200 KB of SQL, and PostgreSQL spends about
+ * 100 ms custom-planning each statement that embeds it. A company issue list
+ * runs about 20 such statements (list, per-row access, edge redaction, the
+ * current-body recheck), so a two-Task list spent about 2 s planning and about
+ * 25 ms executing. The Context and Memory privacy owners already make the same
+ * choice (F10c). The settings choose plans only: every statement still runs
+ * against current rows in this transaction. They are transaction-local, and a
+ * caller's own transaction gets its previous values back when this scope ends. */
+async function useGenericTaskReaderPlans(tx: Db) {
+  const [previous] = await tx.execute<{ planCacheMode: string; jit: string }>(sql`
+    with previous as materialized (
+      select current_setting('plan_cache_mode') as plan_cache_mode, current_setting('jit') as jit
+    )
+    select plan_cache_mode as "planCacheMode", jit,
+      set_config('plan_cache_mode', 'force_generic_plan', true) as plan_cache_mode_set,
+      set_config('jit', 'off', true) as jit_set
+    from previous
+  `);
+  return {
+    async restore() {
+      if (!previous || (previous.planCacheMode === "force_generic_plan" && previous.jit === "off")) return;
+      await tx.execute(sql`
+        select set_config('plan_cache_mode', ${previous.planCacheMode}, true),
+          set_config('jit', ${previous.jit}, true)
+      `);
+    },
+  };
+}
+
 /** Run a route's Task/Project SQL reads inside the original native read scope.
  * Typed run IDs are candidate hints only: the original Routine/Workflow owners
  * pin and recheck current source policy before and after the caller's SQL. */
@@ -27,7 +57,8 @@ export async function withCurrentTaskSourceRead<T>(
   try {
     return await db.transaction(async (rawTx) => {
     const tx = rawTx as unknown as Db;
-    return authorizationService(tx).withReadCompany(companyId, async (owner) => {
+    const planner = await useGenericTaskReaderPlans(tx);
+    const result = await authorizationService(tx).withReadCompany(companyId, async (owner) => {
       const decision = await owner.decide({
         actor,
         action: "company_scope:read",
@@ -143,6 +174,8 @@ export async function withCurrentTaskSourceRead<T>(
         throw forbidden("Current Task source recheck exceeded its budget.");
       return preserveBoardDeadline(Promise.resolve(result));
     });
+    await planner.restore();
+    return result;
     });
   } catch (error) {
     await logPostgresLockUnavailable(db, error, "current_task_source_read");

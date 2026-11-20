@@ -4473,7 +4473,7 @@
         },
         {
           "path": "server/src/routes/issues.ts",
-          "sha256": "a1a9919d5ae3c714e751d18d20b202d5162ee7abc325f21bb15a3f021cd08718"
+          "sha256": "efadf6ee6a058d67c4cd8b0d5cf2eb63fac8194b4da7b77caae0507b1bae43a2"
         },
         {
           "path": "server/src/services/agent-runtime-fabric.ts",
@@ -5863,7 +5863,7 @@
         },
         {
           "path": "server/src/services/issues.ts",
-          "sha256": "54d21c04d004281f6c766aed51d0091327e9d6aec28f49b7a94b92735a8b3cb5"
+          "sha256": "ccec6ad70ef2410c8826c47c6c90de56ad972ef2299e78d912ba6425f661b231"
         },
         {
           "path": "server/src/services/native-execution-failure-log.test.ts",
@@ -7251,7 +7251,7 @@
         },
         {
           "path": "server/src/routes/issues.ts",
-          "sha256": "a1a9919d5ae3c714e751d18d20b202d5162ee7abc325f21bb15a3f021cd08718"
+          "sha256": "efadf6ee6a058d67c4cd8b0d5cf2eb63fac8194b4da7b77caae0507b1bae43a2"
         },
         {
           "path": "server/src/services/company-search.ts",
@@ -7642,7 +7642,7 @@
         },
         {
           "path": "server/src/routes/issues.ts",
-          "sha256": "a1a9919d5ae3c714e751d18d20b202d5162ee7abc325f21bb15a3f021cd08718"
+          "sha256": "efadf6ee6a058d67c4cd8b0d5cf2eb63fac8194b4da7b77caae0507b1bae43a2"
         },
         {
           "path": "server/src/services/chat-channels.ts",
@@ -9216,7 +9216,7 @@
         },
         {
           "path": "server/src/routes/issues.ts",
-          "sha256": "a1a9919d5ae3c714e751d18d20b202d5162ee7abc325f21bb15a3f021cd08718"
+          "sha256": "efadf6ee6a058d67c4cd8b0d5cf2eb63fac8194b4da7b77caae0507b1bae43a2"
         },
         {
           "path": "server/src/routes/pipelines.ts",
@@ -9276,7 +9276,7 @@
         },
         {
           "path": "server/src/services/issues.ts",
-          "sha256": "54d21c04d004281f6c766aed51d0091327e9d6aec28f49b7a94b92735a8b3cb5"
+          "sha256": "ccec6ad70ef2410c8826c47c6c90de56ad972ef2299e78d912ba6425f661b231"
         },
         {
           "path": "server/src/services/memory/memory-agent-tools.test.ts",
@@ -11808,7 +11808,7 @@
         },
         {
           "path": "server/src/services/issues.ts",
-          "sha256": "54d21c04d004281f6c766aed51d0091327e9d6aec28f49b7a94b92735a8b3cb5"
+          "sha256": "ccec6ad70ef2410c8826c47c6c90de56ad972ef2299e78d912ba6425f661b231"
         },
         {
           "path": "server/src/services/memory/memory-privacy.ts",
@@ -27705,7 +27705,7 @@
         },
         {
           "path": "server/src/services/task-source-read-scope.ts",
-          "sha256": "9e4a718cec6e36daf98a1b0979835ba2a79fd4a79aa350d422d57eb9a83e4bcf"
+          "sha256": "c0a651fda12e00fa94beb47e6f426ea63b4282cb8b15165b01e8f3096024811d"
         },
         {
           "path": "server/src/services/tool-access-policy.ts",
@@ -46953,7 +46953,7 @@
       "id": "source:server/src/routes/issues.ts",
       "kind": "current_source_owner",
       "path": "server/src/routes/issues.ts",
-      "sha256": "a1a9919d5ae3c714e751d18d20b202d5162ee7abc325f21bb15a3f021cd08718",
+      "sha256": "efadf6ee6a058d67c4cd8b0d5cf2eb63fac8194b4da7b77caae0507b1bae43a2",
       "changeIds": [
         "SCR-V10-HOTSPOT-01",
         "SCR-V10-HOTSPOT-04",
@@ -48384,7 +48384,7 @@
       "id": "source:server/src/services/issues.ts",
       "kind": "current_source_owner",
       "path": "server/src/services/issues.ts",
-      "sha256": "54d21c04d004281f6c766aed51d0091327e9d6aec28f49b7a94b92735a8b3cb5",
+      "sha256": "ccec6ad70ef2410c8826c47c6c90de56ad972ef2299e78d912ba6425f661b231",
       "changeIds": [
         "SCR-V10-HOTSPOT-02",
         "SCR-V10-HOTSPOT-06",
@@ -67783,7 +67783,7 @@
       "id": "source:server/src/services/task-source-read-scope.ts",
       "kind": "current_source_owner",
       "path": "server/src/services/task-source-read-scope.ts",
-      "sha256": "9e4a718cec6e36daf98a1b0979835ba2a79fd4a79aa350d422d57eb9a83e4bcf",
+      "sha256": "c0a651fda12e00fa94beb47e6f426ea63b4282cb8b15165b01e8f3096024811d",
       "changeIds": [
         "SCR-V10-UNCLASSIFIED-REGISTERED-OWNER"
       ],

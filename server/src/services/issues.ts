@@ -1909,6 +1909,13 @@ export interface IssueFilters {
   hasPlanDocument?: boolean;
   lowTrustBoundary?: LowTrustBoundary & { companyId: string };
   readCondition?: SQL<boolean>;
+  /** Internal, never from a query string. The caller recomputes blocker
+   * attention, blocked-inbox attention and live descendant counts for the
+   * rows it returns under its own current read condition, so `list` returns
+   * placeholders for them instead of computing values that are discarded.
+   * The placeholders keep each field present so the caller knows to fill it.
+   * Ignored by `attention=blocked` lists. */
+  deferCurrentReadMetrics?: boolean;
   q?: string;
   limit?: number;
   offset?: number;
@@ -4320,36 +4327,31 @@ async function listIssueBlockerAttentionMap(
           pendingFinalizeBlockerIssueIds.add(blockerIssueId);
         }
       }
-      const explicitBlockerRowsPromise: Promise<
-        IssueBlockerAttentionQueryRow[]
-      > = dbOrTx
+      // One statement per frontier chunk: explicit `blocks` relations and
+      // non-terminal children are both candidate blocker issues, filtered by
+      // the same reader predicate on the same issue row. The predicate is
+      // about 200 KB of SQL and costs about 100 ms to plan per statement, so
+      // it appears once here instead of once per edge kind.
+      const chunkIds = sql.join(chunk.map((id) => sql`${id}`), sql`, `);
+      const blockerEdges = sql`(
+        select relation.related_issue_id as target_issue_id, relation.issue_id as blocker_issue_id,
+          'blocks'::text as edge_kind
+        from ${issueRelations} relation
+        where relation.company_id = ${companyId} and relation.type = 'blocks'
+          and relation.related_issue_id in (${chunkIds})
+        union all
+        select child.parent_id, child.id, 'child'::text
+        from ${issues} child
+        where child.company_id = ${companyId} and child.parent_id in (${chunkIds})
+          and child.status not in (${sql.join(
+            BLOCKER_ATTENTION_CHILD_TERMINAL_STATUSES.map((status) => sql`${status}`),
+            sql`, `,
+          )})
+      ) blocker_edge`;
+      const blockerRows: Array<IssueBlockerAttentionQueryRow & { edgeKind: string }> = await dbOrTx
         .select({
-          issueId: issueRelations.relatedIssueId,
-          blockerIssueId: issues.id,
-          id: issues.id,
-          companyId: issues.companyId,
-          parentId: issues.parentId,
-          identifier: issues.identifier,
-          title: issues.title,
-          status: issues.status,
-          executionRunId: issues.executionRunId,
-          assigneeAgentId: issues.assigneeAgentId,
-          assigneeUserId: issues.assigneeUserId,
-        })
-        .from(issueRelations)
-        .innerJoin(issues, eq(issueRelations.issueId, issues.id))
-        .where(
-          and(
-            eq(issueRelations.companyId, companyId),
-            eq(issueRelations.type, "blocks"),
-            inArray(issueRelations.relatedIssueId, chunk),
-            eq(issues.companyId, companyId),
-            readCondition,
-          ),
-        );
-      const childRowsPromise: Promise<IssueBlockerAttentionQueryRow[]> = dbOrTx
-        .select({
-          issueId: issues.parentId,
+          issueId: sql<string | null>`blocker_edge.target_issue_id`,
+          edgeKind: sql<string>`blocker_edge.edge_kind`,
           blockerIssueId: issues.id,
           id: issues.id,
           companyId: issues.companyId,
@@ -4362,21 +4364,13 @@ async function listIssueBlockerAttentionMap(
           assigneeUserId: issues.assigneeUserId,
         })
         .from(issues)
-        .where(
-          and(
-            eq(issues.companyId, companyId),
-            inArray(issues.parentId, chunk),
-            readCondition,
-            notInArray(
-              issues.status,
-              BLOCKER_ATTENTION_CHILD_TERMINAL_STATUSES,
-            ),
-          ),
-        );
-      const [explicitBlockerRows, childRows] = await Promise.all([
-        explicitBlockerRowsPromise,
-        childRowsPromise,
-      ]);
+        .innerJoin(blockerEdges, sql`blocker_edge.blocker_issue_id = ${issues.id}`)
+        .where(and(eq(issues.companyId, companyId), readCondition));
+      const explicitBlockerRows: IssueBlockerAttentionQueryRow[] = [];
+      const childRows: IssueBlockerAttentionQueryRow[] = [];
+      for (const { edgeKind, ...row } of blockerRows) {
+        (edgeKind === "blocks" ? explicitBlockerRows : childRows).push(row);
+      }
 
       const unresolvedExplicitBlockerRows = explicitBlockerRows.filter(
         (row) =>
@@ -8481,6 +8475,7 @@ export function issueService(db: Db) {
         filters?.includeBlockedInboxAttention === true;
       const includeLiveDescendantSummary =
         filters?.includeLiveDescendantSummary === true;
+      const deferCurrentReadMetrics = filters?.deferCurrentReadMetrics === true;
       const rawSearch = filters?.q?.trim() ?? "";
       const hasSearch = rawSearch.length > 0;
       const taskSearch = parseTaskSearch(rawSearch);
@@ -8668,7 +8663,7 @@ export function issueService(db: Db) {
         includeBlockedBy
           ? blockedByMapForIssues(db, companyId, issueIds)
           : Promise.resolve(new Map<string, IssueRelationIssueSummary[]>()),
-        includeLiveDescendantSummary
+        includeLiveDescendantSummary && !deferCurrentReadMetrics
           ? liveDescendantCountMapForIssues(db, companyId, issueIds, filters?.readCondition)
           : Promise.resolve(new Map<string, number>()),
       ]);
@@ -8686,9 +8681,11 @@ export function issueService(db: Db) {
         reviewAttentionByIssueId,
         blockedInboxAttentionByIssueId,
       ] = await Promise.all([
-        listIssueBlockerAttentionMap(db, companyId, withRuns, filters?.readCondition),
+        deferCurrentReadMetrics
+          ? Promise.resolve(new Map(withRuns.map((row) => [row.id, createIssueBlockerAttention()])))
+          : listIssueBlockerAttentionMap(db, companyId, withRuns, filters?.readCondition),
         listIssueReviewAttentionMap(db, companyId, withRuns),
-        includeBlockedInboxAttention
+        includeBlockedInboxAttention && !deferCurrentReadMetrics
           ? listIssueBlockedInboxAttentionMap(db, companyId, withRuns, filters?.readCondition)
           : Promise.resolve(new Map<string, IssueBlockedInboxAttention>()),
       ]);
