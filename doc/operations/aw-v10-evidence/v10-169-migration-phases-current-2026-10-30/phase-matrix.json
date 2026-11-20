@@ -1582,7 +1582,7 @@
     },
     {
       "path": "ui/src/pages/CompanySettings.tsx",
-      "sha256": "fe6e05de7f9e176e9a23650d613b9896a37fc05faeea3d8d41b6cd486dddbdc6"
+      "sha256": "baf71ff2c36a113620e3624483faf784025ff40ae819011909b566d28ac53aa5"
     },
     {
       "path": "ui/src/pages/CompanySettingsArchive.test.tsx",
