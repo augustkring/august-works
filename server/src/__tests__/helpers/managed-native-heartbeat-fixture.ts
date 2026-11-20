@@ -1526,6 +1526,11 @@ export async function withManagedNativeHeartbeatFixture<T>(input: Omit<FrameInpu
         ["Manual Task workspace binding requires its running Native Run", "native_run_required"],
         ["This orchestration attempt no longer has write authority", "orchestration_stopped"],
         ["This run was cancelled", "run_cancelled"],
+        // APR-E2E-1: the cost-capped native draft admission refuses a Task
+        // that is not backlog/todo/in_progress (for example `in_review` while
+        // a governed tool decision is pending).
+        ["Native draft Task assignment, topology or work mode changed", "native_draft_assignment_changed"],
+        ["Authenticate again to continue", "recent_authentication_required"],
       ]);
       const storedRunCodes = new Set(["adapter_failed", "setup_failed", "configuration_incomplete"]);
       for (const [index, failedRun] of failedRuns.entries()) {
