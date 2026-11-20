@@ -2948,23 +2948,6 @@ async function assertNativeTaskWakeSourceCurrentInScope(db: Db | Transaction, sc
   }
   if (run && admittedWake && Array.isArray(outcomes) && outcomes.length > 0 && outcomes.length <= 256 &&
     outcomes.every(value => { const row = nativeSourceRecord(value); return typeof row.id === "string" &&
-      ((row.kind === "ask_user_questions" && row.status === "cancelled") ||
-       (["request_confirmation", "request_checkbox_confirmation"].includes(String(row.kind)) && row.status === "rejected")); })) {
-    const { materializeNativeInteractionResponses } = await import("./native-runtime/native-interaction-bridge.js");
-    await prepareNativeSourceEffectBoundary(scope);
-    await materializeNativeInteractionResponses({ db: db as Db, companyId: input.companyId, issueId: input.issueId,
-      runId: input.runId, agentId: run.agentId, interactionIds: outcomes.map(value => String(nativeSourceRecord(value).id)),
-      sourceReader: input.actor, onHumanReviewWithdrawalCapture: value => { humanReviewWithdrawals.push(value); } });
-    if (humanReviewWithdrawals.length !== outcomes.length || humanReviewWithdrawals.some(value =>
-      !isDeepStrictEqual(value.interactionOutcome, outcomes.find(outcome => nativeSourceRecord(outcome).id === value.projection.interactionId)) ||
-      !input.bootstrapInputs.some(source => isDeepStrictEqual(source, value.nativeSource)) ||
-      !input.bootstrapInputs.some(source => isDeepStrictEqual(source, value.continuationSource)) ||
-      !input.inputs.some(source => isDeepStrictEqual(source, value.nativeSource)) ||
-      !input.inputs.some(source => isDeepStrictEqual(source, value.continuationSource))))
-      throw forbidden("A Human review-withdrawal source is missing or changed");
-  }
-  if (run && admittedWake && Array.isArray(outcomes) && outcomes.length > 0 && outcomes.length <= 256 &&
-    outcomes.every(value => { const row = nativeSourceRecord(value); return typeof row.id === "string" &&
       row.kind === "request_confirmation" && ["accepted", "rejected"].includes(String(row.status)); })) {
     const { materializeNativeInteractionResponses } = await import("./native-runtime/native-interaction-bridge.js");
     await prepareNativeSourceEffectBoundary(scope);
@@ -2974,6 +2957,31 @@ async function assertNativeTaskWakeSourceCurrentInScope(db: Db | Transaction, sc
     if (governedInteractions.some(value => !input.inputs.some(source => isDeepStrictEqual(source, value.nativeSource)) ||
       !input.inputs.some(source => isDeepStrictEqual(source, value.continuationSource))))
       throw forbidden("A governed continuation source is missing");
+  }
+  if (run && admittedWake && Array.isArray(outcomes) && outcomes.length > 0 && outcomes.length <= 256 &&
+    outcomes.every(value => { const row = nativeSourceRecord(value); return typeof row.id === "string" &&
+      ((row.kind === "ask_user_questions" && row.status === "cancelled") ||
+       (["request_confirmation", "request_checkbox_confirmation"].includes(String(row.kind)) && row.status === "rejected")); })) {
+    const { materializeNativeInteractionResponses } = await import("./native-runtime/native-interaction-bridge.js");
+    await prepareNativeSourceEffectBoundary(scope);
+    await materializeNativeInteractionResponses({ db: db as Db, companyId: input.companyId, issueId: input.issueId,
+      runId: input.runId, agentId: run.agentId, interactionIds: outcomes.map(value => String(nativeSourceRecord(value).id)),
+      sourceReader: input.actor, onHumanReviewWithdrawalCapture: value => { humanReviewWithdrawals.push(value); } });
+    // APR-E2E-15. A declined tool-action card is never a withdrawal; its owner
+    // is the governed decision verified above. Accept it only as exactly one
+    // rejected governed capture for that card with both renditions sealed.
+    const { nativeGovernedDeclineOutcomeIds } = await import("./native-runtime/native-governed-wake-sources.js");
+    const governedDeclines = nativeGovernedDeclineOutcomeIds({ outcomes, governedInteractions,
+      bootstrapInputs: input.bootstrapInputs, inputs: input.inputs });
+    if (humanReviewWithdrawals.length + governedDeclines.size !== outcomes.length ||
+      humanReviewWithdrawals.some(value => governedDeclines.has(value.projection.interactionId)) ||
+      humanReviewWithdrawals.some(value =>
+      !isDeepStrictEqual(value.interactionOutcome, outcomes.find(outcome => nativeSourceRecord(outcome).id === value.projection.interactionId)) ||
+      !input.bootstrapInputs.some(source => isDeepStrictEqual(source, value.nativeSource)) ||
+      !input.bootstrapInputs.some(source => isDeepStrictEqual(source, value.continuationSource)) ||
+      !input.inputs.some(source => isDeepStrictEqual(source, value.nativeSource)) ||
+      !input.inputs.some(source => isDeepStrictEqual(source, value.continuationSource))))
+      throw forbidden("A Human review-withdrawal source is missing or changed");
   }
   const adminExpiryOutcomes = run && admittedWake?.reason === "issue_assigned" &&
     !nativeTaskWakeInteraction(admittedWake.payload) && Array.isArray(outcomes)
@@ -3442,7 +3450,11 @@ async function assertNativeTaskWakeSourceCurrentInScope(db: Db | Transaction, sc
     throw forbidden("A Native task wake source changed");
   return [...answeredQuestions.flatMap(value => [value.nativeSource, value.continuationSource]),
     ...humanReviewWithdrawals.flatMap(value => [value.nativeSource, value.continuationSource]),
-    ...adminExpiredInteractions.map(value => value.source)];
+    ...adminExpiredInteractions.map(value => value.source),
+    // APR-E2E-15. The governed decision's continuation rendition and its
+    // delivery rendition were verified above and are bound by the wake source.
+    ...(await import("./native-runtime/native-governed-wake-sources.js")).nativeGovernedWakeHistoricalSources({
+      governedInteractions, delivery })];
 }
 
 /** Both Run and delivered-document source walkers consume this same rendition. */
