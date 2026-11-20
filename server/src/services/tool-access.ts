@@ -19458,20 +19458,77 @@ export function toolAccessService(
           if (!readable) invalidRequestIds.push(request.id);
         }
         if (invalidRequestIds.length > 0) {
-          await db
-            .update(toolActionRequests)
-            .set({
-              status: "cancelled",
-              resolvedAt: new Date(),
-              updatedAt: new Date(),
-            })
-            .where(
-              and(
-                eq(toolActionRequests.companyId, companyId),
-                eq(toolActionRequests.status, "pending"),
-                inArray(toolActionRequests.id, invalidRequestIds),
-              ),
-            );
+          // APR-E2E-11. Cancel the unreadable request and close its paired
+          // card in the same transaction, with a closed reason, so the task no
+          // longer offers an approval that can never run.
+          await db.transaction(async (tx) => {
+            const now = new Date();
+            const cancelled = await tx
+              .update(toolActionRequests)
+              .set({
+                status: "cancelled",
+                resolvedAt: now,
+                updatedAt: now,
+              })
+              .where(
+                and(
+                  eq(toolActionRequests.companyId, companyId),
+                  eq(toolActionRequests.status, "pending"),
+                  inArray(toolActionRequests.id, invalidRequestIds),
+                ),
+              )
+              .returning({
+                id: toolActionRequests.id,
+                interactionId: toolActionRequests.interactionId,
+                issueId: toolActionRequests.issueId,
+              });
+            for (const request of cancelled) {
+              if (!request.interactionId || !request.issueId) continue;
+              const [closed] = await tx
+                .update(issueThreadInteractions)
+                .set({
+                  status: "cancelled",
+                  resolvedAt: now,
+                  updatedAt: now,
+                  result: {
+                    version: 1,
+                    outcome: "stale_target",
+                    toolAction: {
+                      version: 1,
+                      status: "expired",
+                      errorCode: "action_request_invalidated",
+                      errorMessage: "This approval request could not be verified and can no longer run. Ask the agent to request it again.",
+                      resultSummary: null,
+                      updatedAt: now.toISOString(),
+                    },
+                  } as unknown as NonNullable<typeof issueThreadInteractions.$inferInsert.result>,
+                })
+                .where(
+                  and(
+                    eq(issueThreadInteractions.companyId, companyId),
+                    eq(issueThreadInteractions.id, request.interactionId),
+                    eq(issueThreadInteractions.issueId, request.issueId),
+                    eq(issueThreadInteractions.status, "pending"),
+                  ),
+                )
+                .returning({ id: issueThreadInteractions.id });
+              if (!closed) continue;
+              await logActivity(tx as unknown as Db, {
+                companyId,
+                actorType: "system",
+                actorId: "tool-review-queue",
+                action: "issue.thread_interaction_updated",
+                entityType: "issue",
+                entityId: request.issueId,
+                details: {
+                  interactionId: request.interactionId,
+                  actionRequestId: request.id,
+                  executionStatus: "cancelled",
+                  reason: "action_request_invalidated",
+                },
+              });
+            }
+          });
         }
         const hiddenIds = new Set([
           ...invalidRequestIds,
