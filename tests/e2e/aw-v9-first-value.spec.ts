@@ -5,6 +5,7 @@ import {
   initialActivationState,
 } from "../../packages/shared/src/activation.ts";
 import { registerEnglishAccountLocaleIsolation } from "./account-locale-isolation";
+import { deleteCompany } from "./company-cleanup";
 
 registerEnglishAccountLocaleIsolation(test);
 const axePath = createRequire(import.meta.url).resolve("axe-core/axe.min.js");
@@ -84,7 +85,7 @@ test("change setup recovers a missing acknowledgement through a current read and
     expect(await page.evaluate(() => document.documentElement.scrollWidth <= innerWidth)).toBe(true);
     await page.screenshot({ path: info.outputPath("v9-change-setup-mobile.png"), fullPage: true });
   } finally {
-    await json(await request.delete(`/api/companies/${company.id}`));
+    await json(await deleteCompany(request, company.id));
   }
 });
 

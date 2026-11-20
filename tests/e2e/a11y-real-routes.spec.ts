@@ -8,6 +8,7 @@ import {
   type Page,
 } from "@playwright/test";
 import { registerEnglishAccountLocaleIsolation } from "./account-locale-isolation";
+import { deleteCompany } from "./company-cleanup";
 
 // Accessibility sweep over the assembled product (Phase 5 gap 7, ledger A11Y-R1).
 // Real backend only: the company, agent, project, tasks, comments and approval are
@@ -315,7 +316,7 @@ test.describe("accessibility of real routes in English and Danish", () => {
 
   test.afterAll(async () => {
     if (!api) return;
-    if (seed) await api.delete(`/api/companies/${seed.companyId}`);
+    if (seed) await deleteCompany(api, seed.companyId);
     if (originalFlags) await api.patch("/api/instance/settings/experimental", { data: originalFlags });
     await api.dispose();
   });

@@ -1,6 +1,7 @@
 import { createRequire } from "node:module";
 import { test, expect, type APIResponse } from "@playwright/test";
 import { V5_FEATURE_KEYS } from "../../packages/shared/src/index.ts";
+import { deleteCompany } from "./company-cleanup";
 const axePath = createRequire(import.meta.url).resolve("axe-core/axe.min.js");
 async function json(response: APIResponse) { expect(response.ok(), `${response.status()}: ${await response.text()}`).toBe(true); return response.json(); }
 
@@ -49,6 +50,6 @@ for (const locale of ["en", "da"] as const) {
       await region.getByRole("link", { name: locale === "da" ? "Rediger en privat kladde" : "Edit a private draft", exact: true }).click();
       await expect(page).toHaveURL(new RegExp(`/agents/custom\\?agentId=${agent.id}$`));
       expect(writes).toBe(0);
-    } finally { await json(await request.delete(`/api/companies/${company.id}`)); }
+    } finally { await json(await deleteCompany(request, company.id)); }
   });
 }

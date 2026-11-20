@@ -1,5 +1,6 @@
 import { createRequire } from "node:module";
 import { expect, test, type APIResponse } from "@playwright/test";
+import { deleteCompany } from "./company-cleanup";
 
 const axePath = createRequire(import.meta.url).resolve("axe-core/axe.min.js");
 async function json(response: APIResponse) {
@@ -46,7 +47,7 @@ for (const [policy, locale] of [["drain", "en"], ["cancel", "da"]] as const) {
       const runs = await json(await request.get(`/api/companies/${company.id}/heartbeat-runs`));
       expect(Array.isArray(runs) ? runs : runs.items).toEqual([]);
     } finally {
-      await json(await request.delete(`/api/companies/${company.id}`));
+      await json(await deleteCompany(request, company.id));
     }
   });
 }

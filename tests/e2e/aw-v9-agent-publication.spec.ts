@@ -1,6 +1,7 @@
 import { createRequire } from "node:module";
 import { expect, test, type APIResponse } from "@playwright/test";
 import { V5_FEATURE_KEYS, agentAuthoringContentSchema, agentAuthoringDraftViewSchema, agentDraftSaveSchema, agentDraftPublicationCommandSchema, agentDraftPublicationReceiptSchema, agentPackageSetupCommandSchema, agentPackageSetupReceiptSchema } from "../../packages/shared/src/index.ts";
+import { deleteCompany } from "./company-cleanup";
 const axePath = createRequire(import.meta.url).resolve("axe-core/axe.min.js");
 async function json(response: APIResponse) { expect(response.ok(), `${response.status()}: ${await response.text()}`).toBe(true); return response.json(); }
 
@@ -139,6 +140,6 @@ for (const [kind, locale] of [["custom", "en"], ["hire", "da"], ["hire", "en"]] 
       expect(await page.evaluate(async () => (await (window as unknown as { axe: { run(scope: string): Promise<{ violations: unknown[] }> } }).axe.run('main')).violations)).toEqual([]);
       expect(await json(await request.get(`/api/companies/${company.id}/agents`))).toEqual([]);
       expect(await json(await request.get(`/api/companies/${company.id}/heartbeat-runs`))).toEqual([]);
-    } finally { await json(await request.delete(`/api/companies/${company.id}`)); }
+    } finally { await json(await deleteCompany(request, company.id)); }
   });
 }

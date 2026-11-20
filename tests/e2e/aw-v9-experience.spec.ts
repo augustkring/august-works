@@ -1,5 +1,6 @@
 import { expect, test, type APIResponse } from "@playwright/test";
 import { registerEnglishAccountLocaleIsolation } from "./account-locale-isolation";
+import { deleteCompany } from "./company-cleanup";
 
 registerEnglishAccountLocaleIsolation(test);
 
@@ -871,6 +872,6 @@ test("feedback recovers an actually committed lost acknowledgement by reading it
     expect(history).toHaveLength(1); expect(history[0].id).toBe(committedId);
   } finally {
     await json(await request.patch("/api/instance/settings/experimental", { data: original }));
-    await json(await request.delete(`/api/companies/${company.id}`));
+    await json(await deleteCompany(request, company.id));
   }
 });

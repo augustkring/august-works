@@ -1,5 +1,6 @@
 import { test, expect, request as pwRequest, type APIRequestContext } from "@playwright/test";
 import { withManagedSignoffCommentRequirement } from "./fixtures/managed-signoff-comment";
+import { deleteCompany } from "./company-cleanup";
 
 /**
  * E2E: Signoff execution policy flow.
@@ -471,7 +472,7 @@ test.describe("Signoff execution policy", () => {
       await board.delete(`${BASE_URL}/api/agents/${agent.agentId}/keys/${agent.keyId}`).catch(() => {});
       await board.delete(`${BASE_URL}/api/agents/${agent.agentId}`).catch(() => {});
     }
-    await board.delete(`${BASE_URL}/api/companies/${ctx.companyId}`).catch(() => {});
+    await deleteCompany(board, ctx.companyId, BASE_URL).catch(() => {});
     await board.dispose();
   });
 

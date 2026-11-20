@@ -1,6 +1,7 @@
 import { createRequire } from "node:module";
 import { expect, test, type APIResponse } from "@playwright/test";
 import { registerEnglishAccountLocaleIsolation } from "./account-locale-isolation";
+import { deleteCompany } from "./company-cleanup";
 registerEnglishAccountLocaleIsolation(test);
 const axePath = createRequire(import.meta.url).resolve("axe-core/axe.min.js");
 async function json(response: APIResponse) {
@@ -71,7 +72,7 @@ test("described workflow recovers its original request after reload, with Danish
     expect(await page.evaluate(() => document.documentElement.scrollWidth <= innerWidth)).toBe(true);
     await page.screenshot({ path: info.outputPath("v9-workflow-intent-receipt-da-mobile.png"), fullPage: true });
   } finally {
-    await request.delete(`/api/companies/${company.id}`);
+    await deleteCompany(request, company.id);
     await request.patch("/api/instance/settings/experimental", { data: flags });
   }
 });

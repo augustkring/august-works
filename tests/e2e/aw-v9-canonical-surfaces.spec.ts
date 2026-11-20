@@ -1,6 +1,7 @@
 import { createRequire } from "node:module";
 import { expect, test } from "@playwright/test";
 import { json } from "./agent-chat.shared";
+import { deleteCompany } from "./company-cleanup";
 const axePath = createRequire(import.meta.url).resolve("axe-core/axe.min.js");
 async function auditMain(page: import("@playwright/test").Page) {
   await page.addScriptTag({ path: axePath });
@@ -79,6 +80,6 @@ for (const mode of ["classic", "current"] as const) test(`${mode} canonical Agen
     expect(Array.isArray(runs) ? runs : runs.items).toEqual([]);
   } finally {
     await json(await request.patch("/api/instance/settings/experimental", { data: { enableStreamlinedUi: flags.enableStreamlinedUi } }));
-    await json(await request.delete(`/api/companies/${company.id}`));
+    await json(await deleteCompany(request, company.id));
   }
 });

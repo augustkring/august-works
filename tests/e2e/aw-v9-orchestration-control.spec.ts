@@ -1,6 +1,7 @@
 import { createRequire } from "node:module";
 import { expect, test, type APIResponse } from "@playwright/test";
 import { registerEnglishAccountLocaleIsolation } from "./account-locale-isolation";
+import { deleteCompany } from "./company-cleanup";
 const axePath = createRequire(import.meta.url).resolve("axe-core/axe.min.js");
 registerEnglishAccountLocaleIsolation(test);
 async function json(response: APIResponse) { expect(response.ok(), `${response.status()}: ${await response.text()}`).toBe(true); return response.json(); }
@@ -85,6 +86,6 @@ test("work Stop recovers one Original request after lost response and rollout wi
     for (const release of sessions.splice(0)) release();
     for (const release of controls.splice(0)) release();
     await request.patch("/api/instance/settings/experimental", { data: flags }).catch(() => {});
-    await request.delete(`/api/companies/${company.id}`).catch(() => {});
+    await deleteCompany(request, company.id).catch(() => {});
   }
 });

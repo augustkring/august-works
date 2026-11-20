@@ -2,6 +2,7 @@ import { createRequire } from "node:module";
 import { expect, test, type APIResponse } from "@playwright/test";
 import { randomUUID } from "node:crypto";
 import { registerEnglishAccountLocaleIsolation } from "./account-locale-isolation";
+import { deleteCompany } from "./company-cleanup";
 
 registerEnglishAccountLocaleIsolation(test);
 const axePath = createRequire(import.meta.url).resolve("axe-core/axe.min.js");
@@ -98,6 +99,6 @@ test("selected images survive an unknown transport reply through read-only statu
   } finally {
     holdSession = false; releaseSession?.();
     await json(await request.patch("/api/instance/settings/experimental", { data: flags }));
-    await json(await request.delete(`/api/companies/${company.id}`));
+    await json(await deleteCompany(request, company.id));
   }
 });

@@ -13,6 +13,7 @@ import { eq } from "../../server/node_modules/drizzle-orm/index.js";
 import { companies, createDb, issueComments, issues, memoryRecords } from "../../packages/db/src/index.ts";
 import { readZipArchive } from "../../packages/shared/src/portability-zip.ts";
 import { registerEnglishAccountLocaleIsolation } from "./account-locale-isolation";
+import { BOOTSTRAP_OWNER, deleteCompany } from "./company-cleanup";
 
 // Exit journeys on the real backend (Phase 5 gap 5, brief section 25, ledger EXIT-R1).
 // The company, Task, comment and shared Memory record are created through the
@@ -37,6 +38,7 @@ const DELETION_COPY = {
     exportLink: "Export a copy first",
     confirm: "Delete",
     cancel: "Cancel",
+    typeName: (name: string) => `Type ${name} to confirm`,
   },
   da: {
     heading: "Slet organisation",
@@ -47,6 +49,7 @@ const DELETION_COPY = {
     exportLink: "Eksportér en kopi først",
     confirm: "Slet",
     cancel: "Annuller",
+    typeName: (name: string) => `Skriv ${name} for at bekræfte`,
   },
 } as const;
 
@@ -176,7 +179,7 @@ test.describe("exit journeys on the real backend", () => {
 
   test.afterAll(async () => {
     if (!api) return;
-    if (seed && !deleted) await api.delete(`/api/companies/${seed.companyId}`);
+    if (seed && !deleted) await deleteCompany(api, seed.companyId);
     if (originalFlags) await api.patch("/api/instance/settings/experimental", { data: originalFlags });
     await api.dispose();
   });
@@ -284,7 +287,13 @@ test.describe("exit journeys on the real backend", () => {
       for (const phrase of copy.confirmation) await expect(confirm).toContainText(phrase);
       await expect(confirm.getByRole("link", { name: copy.exportLink, exact: true })).toBeVisible();
       const confirmDelete = confirm.getByRole("button", { name: copy.confirm, exact: true });
-      await expect(confirmDelete).toBeVisible();
+      // Delete enables only for the exact organization name (EXIT-AUTH1).
+      const typedName = confirm.getByRole("textbox", { name: copy.typeName(seed.companyName), exact: true });
+      await expect(confirmDelete).toBeDisabled();
+      await typedName.fill(seed.companyName.toLowerCase());
+      await expect(confirmDelete).toBeDisabled();
+      await typedName.fill(seed.companyName);
+      await expect(confirmDelete).toBeEnabled();
       await auditWcag(page, `Organization delete confirmation (${locale})`);
 
       // Nothing is deleted while the confirmation is open.
@@ -297,15 +306,25 @@ test.describe("exit journeys on the real backend", () => {
   }
 
   test("confirmed deletion removes the company with its Task, comment and Memory", async ({ page }) => {
+    // The server, not only the screen, insists on the exact name (422).
+    for (const data of [{}, { confirmName: seed.companyName.toUpperCase() }]) {
+      const refused = await api.delete(`/api/companies/${seed.companyId}`, { data });
+      expect(refused.status(), await refused.text()).toBe(422);
+    }
     await expectSeedIntact(api, seed, "before deletion");
     expect(await storedSeedRows(seed)).toEqual({ company: 1, task: 1, comments: 1, memory: 1 });
+    // The server asks a signed-in Human for a sign-in within the last 5 minutes
+    // before deleting; sign in again in this browser, as a person would.
+    expect((await page.request.post("/api/auth/sign-in/email", { data: BOOTSTRAP_OWNER })).ok()).toBe(true);
     await page.goto(`/${seed.prefix}/companies`);
     const card = page.getByRole("article").filter({ has: page.getByRole("heading", { name: seed.companyName, exact: true }) });
     await card.getByRole("button", { name: DELETION_COPY.en.actions(seed.companyName), exact: true }).click();
     await page.getByRole("menuitem", { name: DELETION_COPY.en.deleteItem, exact: true }).click();
+    const confirm = card.getByRole("alertdialog");
+    await confirm.getByRole("textbox", { name: DELETION_COPY.en.typeName(seed.companyName), exact: true }).fill(seed.companyName);
     const removal = page.waitForResponse((response) => response.request().method() === "DELETE"
       && new URL(response.url()).pathname === `/api/companies/${seed.companyId}`);
-    await card.getByRole("alertdialog").getByRole("button", { name: DELETION_COPY.en.confirm, exact: true }).click();
+    await confirm.getByRole("button", { name: DELETION_COPY.en.confirm, exact: true }).click();
     expect((await removal).status()).toBe(200);
     await expect(card).toBeHidden();
     deleted = true;

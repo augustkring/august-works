@@ -8,6 +8,7 @@ import { authUsers, companyMemberships, createDb, closeRegisteredClients, princi
 import { workflowRoutes } from "../../server/src/routes/workflows.ts";
 import { errorHandler } from "../../server/src/middleware/error-handler.ts";
 import { registerEnglishAccountLocaleIsolation } from "./account-locale-isolation";
+import { deleteCompany } from "./company-cleanup";
 
 registerEnglishAccountLocaleIsolation(test);
 const requireServer = createRequire(new URL("../../server/package.json", import.meta.url));
@@ -113,7 +114,7 @@ test("current ordered review shows exact private input and missing connection ac
     await expect(page.getByRole("main")).not.toContainText("PRIVATE revised objective");
   } finally {
     await new Promise<void>((resolve, reject) => bridge.close(err => err ? reject(err) : resolve()));
-    await request.patch("/api/instance/settings/experimental", { data: flags }).catch(() => {}); await request.delete(`/api/companies/${company.id}`).catch(() => {});
+    await request.patch("/api/instance/settings/experimental", { data: flags }).catch(() => {}); await deleteCompany(request, company.id).catch(() => {});
     await db.delete(authUsers).where(eq(authUsers.id, userId)); await closeRegisteredClients(databaseUrl);
   }
 });
