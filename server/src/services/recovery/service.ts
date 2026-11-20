@@ -4554,6 +4554,17 @@ export function recoveryService(
         continue;
       }
 
+      // `latestRun` was read before the live-path check above. The Run can
+      // finish in between: its own finalizer marks it failed before it
+      // releases the Task, so the check above no longer sees a live path.
+      // Deciding from the earlier queued or running snapshot treats that Run
+      // as unclassified work and schedules a transient retry. The retry then
+      // counts as the Task's successor, so the release does not block the
+      // Task (for example after a `configuration_incomplete` failure) and the
+      // Task stays `in_progress`. A Run with no live path is terminal and
+      // stays terminal, so decide from the Run as it is now.
+      latestRun = await getLatestIssueRun(issue.companyId, issue.id);
+
       if (await hasPendingWakeInteraction(issue.companyId, issue.id)) {
         result.skipped += 1;
         continue;

@@ -19,6 +19,24 @@ import {
 const mockTelemetryClient = vi.hoisted(() => ({ track: vi.fn() }));
 vi.mock("../telemetry.ts", () => ({ getTelemetryClient: () => mockTelemetryClient }));
 
+// The sweep checks the assignee's invokability after it reads the Task's
+// latest Run and before it checks for a live execution path. A test can use
+// this hook to finish the Run at exactly that point, as the Run's own
+// finalizer can on a busy server.
+const invokabilityHook = vi.hoisted(() => ({ beforeEvaluate: null as null | (() => Promise<void>) }));
+vi.mock("../services/agent-invokability.ts", async (importOriginal) => {
+  const actual = await importOriginal<typeof import("../services/agent-invokability.ts")>();
+  return {
+    ...actual,
+    evaluateAgentInvokabilityFromDb: async (...args: Parameters<typeof actual.evaluateAgentInvokabilityFromDb>) => {
+      const hook = invokabilityHook.beforeEvaluate;
+      invokabilityHook.beforeEvaluate = null;
+      if (hook) await hook();
+      return actual.evaluateAgentInvokabilityFromDb(...args);
+    },
+  };
+});
+
 import {
   NATIVE_PAID_ADMISSION_REASON,
   NATIVE_PAID_RUNTIME_UNAVAILABLE_MESSAGE,
@@ -52,6 +70,8 @@ describeEmbeddedPostgres("stranded recovery notice idempotency", () => {
   }, 20_000);
 
   afterEach(async () => {
+    invokabilityHook.beforeEvaluate = null;
+    await db.update(issues).set({ executionRunId: null, checkoutRunId: null });
     await db.delete(issueComments);
     await db.delete(issueRecoveryActions);
     await db.delete(activityLog);
@@ -195,5 +215,51 @@ describeEmbeddedPostgres("stranded recovery notice idempotency", () => {
     expect(retained[0]!.body).toContain(NATIVE_PAID_RUNTIME_UNAVAILABLE_MESSAGE);
     expect(retained[0]!.body).toContain(`[Runtime settings](/agents/${agentId}/runtime)`);
     expect(retained[0]!.body).not.toContain("Paperclip classified the latest adapter failure");
+  });
+
+  // The sweep reads the latest Run while it is still running. The Run's own
+  // finalizer then marks it failed (`configuration_incomplete`) before it
+  // releases the Task. The sweep must classify the Run as it is after its
+  // live-path check: block the Task with the Run's notice, and not schedule a
+  // transient retry that the release would then treat as the Task's
+  // successor, leaving the Task `in_progress` with no notice.
+  it("classifies a Run that fails during the sweep from its terminal state, not its running snapshot", async () => {
+    const { agentId, issueId, runId } = await seedUnqualifiedPaidTransportFailure();
+    const [failed] = await db.select().from(heartbeatRuns).where(eq(heartbeatRuns.id, runId));
+    await db.update(heartbeatRuns).set({
+      status: "running",
+      error: null,
+      errorCode: null,
+      resultJson: null,
+      finishedAt: null,
+    }).where(eq(heartbeatRuns.id, runId));
+    await db.update(issues).set({ status: "in_progress", executionRunId: runId, checkoutRunId: runId })
+      .where(eq(issues.id, issueId));
+    let finishedDuringSweep = false;
+    invokabilityHook.beforeEvaluate = async () => {
+      await db.update(heartbeatRuns).set({
+        status: "failed",
+        error: failed!.error,
+        errorCode: failed!.errorCode,
+        resultJson: failed!.resultJson,
+        finishedAt: new Date(),
+      }).where(eq(heartbeatRuns.id, runId));
+      finishedDuringSweep = true;
+    };
+    const scheduleRecoveryRetry = vi.fn(async () => ({ id: randomUUID() }) as typeof heartbeatRuns.$inferSelect);
+    const recovery = recoveryService(db, { enqueueWakeup: vi.fn(async () => null), scheduleRecoveryRetry });
+
+    const result = await recovery.reconcileStrandedAssignedIssues();
+
+    expect(finishedDuringSweep).toBe(true);
+    expect(scheduleRecoveryRetry).not.toHaveBeenCalled();
+    expect(result.continuationRequeued).toBe(0);
+    expect(result.escalated).toBe(1);
+    expect(result.issueIds).toEqual([issueId]);
+    const [blocked] = await db.select({ status: issues.status }).from(issues).where(eq(issues.id, issueId));
+    expect(blocked?.status).toBe("blocked");
+    const retained = await notices(issueId, runId);
+    expect(retained).toHaveLength(1);
+    expect(retained[0]!.body).toContain(`[Runtime settings](/agents/${agentId}/runtime)`);
   });
 });
