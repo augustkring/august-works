@@ -35613,7 +35613,7 @@
         },
         {
           "path": "ui/src/components/AgentChatPicker.test.tsx",
-          "sha256": "d320a3b790aad5bf8312eae3cf8d2ebea3158bfc51ed03997beb1b28275bccf1"
+          "sha256": "063e97c43b4061e65c1397a5067a69befd8bfa75d1c35735b184add126931870"
         },
         {
           "path": "ui/src/components/AgentChatPicker.tsx",
@@ -75195,7 +75195,7 @@
       "id": "source:ui/src/components/AgentChatPicker.test.tsx",
       "kind": "current_source_owner",
       "path": "ui/src/components/AgentChatPicker.test.tsx",
-      "sha256": "d320a3b790aad5bf8312eae3cf8d2ebea3158bfc51ed03997beb1b28275bccf1",
+      "sha256": "063e97c43b4061e65c1397a5067a69befd8bfa75d1c35735b184add126931870",
       "changeIds": [
         "SCR-V10-CUSTOMER-EXPERIENCE"
       ],
