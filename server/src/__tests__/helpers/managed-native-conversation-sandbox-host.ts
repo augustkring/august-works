@@ -1219,7 +1219,13 @@ async function configureManagedSandboxRun(input: ManagedSandboxHostInput,
   const hostLifecycleObservations:Array<Record<string,unknown>>=[];
   const softwareOnlyPolicyProofObservations:Array<Record<string,unknown>>=[];
   const softwareOnlyPolicyProofSidecarHashes = new Map<string, string>();
-  const gatewayOptions:Parameters<typeof createToolGatewayService>[1]={operatorUserIds:[baseQualificationActor.userId],qualificationBrokerOrigin:brokerOrigin,toolActionSigningSecret:"conversation-software-canary",
+  // APR-E2E-7: one instance signs and verifies tool-action approvals with one
+  // secret. Where the deployment configures PAPERCLIP_TOOL_ACTION_SIGNING_SECRET
+  // (the e2e server), the review queue verifies with it, so this gateway must
+  // sign with it too; otherwise the queue cancels the card's request as
+  // unreadable. Without one, the fixture keeps its own canary secret.
+  const instanceToolActionSigningSecret=process.env.PAPERCLIP_TOOL_ACTION_SIGNING_SECRET?.trim()||"conversation-software-canary";
+  const gatewayOptions:Parameters<typeof createToolGatewayService>[1]={operatorUserIds:[baseQualificationActor.userId],qualificationBrokerOrigin:brokerOrigin,toolActionSigningSecret:instanceToolActionSigningSecret,
     remoteHttpRequest:async(url,init)=>{
       if (url !== `${brokerOrigin}/mcp/qualification/credential-echo` && input.assignedToolGatewayHttpRequest)
         return input.assignedToolGatewayHttpRequest(url, init);
