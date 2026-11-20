@@ -19,7 +19,7 @@ Blentera has separate actions for exporting a company, deleting an organization,
 
 ## Export company data
 
-Open **Company settings → Export** to choose the files included in a company package. You can separately include the support cases you can currently view; that archive contains customer-visible history, excludes internal notes and access grants, and cannot restore live cases. Review the export preview and its **Not included in this export** report before downloading. A company export is a portable package, not a copy of every database record or provider-held item. See [Importing and exporting companies](/guides/board-operator/importing-and-exporting) for the current package contents and import recovery guidance.
+Open **Company settings → Export** to choose the files included in a company package. Tasks are included by default; you can untick them. Routine history and attachments are opt-in because they can be large. You can separately include the support cases you can currently view; that archive contains customer-visible history, excludes internal notes and access grants, and cannot restore live cases. Review the export preview and its **Not included in this export** report before downloading. A company export is a portable package, not a copy of every database record or provider-held item. See [Importing and exporting companies](/guides/board-operator/importing-and-exporting) for the current package contents and import recovery guidance.
 
 ## Request organization deletion
 
@@ -27,7 +27,7 @@ Open **Company settings → Deletion** to review the organization deletion reque
 
 Cancelling the subscription and deleting the organization are different actions. Deletion erases the organization's data and also cancels its subscription, unless the same billing account pays for another organization. To stop paying and keep your data, cancel the subscription in **Company settings → Billing** instead.
 
-A self-hosted deployment has no deletion request service, so this page links to the **Organizations** list instead. There, **Delete Organization** asks for confirmation before anything is deleted, offers an export first, and names archiving (in Company settings) as the way to hide an organization while keeping its data. A confirmed deletion there erases the organization's tasks, agents, projects and Memory and cannot be undone.
+A self-hosted deployment has no deletion request service, so this page links to the **Organizations** list instead. There, only an owner of the organization (or the instance administrator) can use **Delete Organization**. It asks you to type the organization name before anything is deleted, offers an export first, and names archiving (in Company settings) as the way to hide an organization while keeping its data. If you signed in more than 5 minutes ago, sign in again first. A confirmed deletion there erases the organization's tasks, agents, projects and Memory and cannot be undone.
 
 Deletion may remain in a retention state while managed backups reach their deletion date. Financial records and a minimal deletion receipt may be retained where required. Follow the status and stage shown on the deletion page; a submitted request is not proof that final erasure has completed.
 

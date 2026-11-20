@@ -19,7 +19,7 @@ Blentera har særskilte handlinger til at eksportere en virksomhed, slette en or
 
 ## Eksportér virksomhedsdata
 
-Åbn **Company settings → Export** for at vælge de filer, der skal med i virksomhedspakken. Du kan særskilt inkludere de supportsager, du aktuelt kan se; arkivet indeholder den kundesynlige historik, men ikke interne noter eller adgangstilladelser, og det gendanner ikke aktive sager. Gennemgå forhåndsvisningen og rapporten **Not included in this export**, før du henter pakken. En virksomhedseksport er en flytbar pakke, ikke en kopi af alle databaseposter eller data hos eksterne udbydere. Se [Importér og eksportér virksomheder](/da/guides/board-operator/importing-and-exporting) for pakkens aktuelle indhold og hjælp til importgenopretning.
+Åbn **Company settings → Export** for at vælge de filer, der skal med i virksomhedspakken. Opgaver er med som standard; du kan fravælge dem. Rutinehistorik og vedhæftede filer skal vælges til, fordi de kan fylde meget. Du kan særskilt inkludere de supportsager, du aktuelt kan se; arkivet indeholder den kundesynlige historik, men ikke interne noter eller adgangstilladelser, og det gendanner ikke aktive sager. Gennemgå forhåndsvisningen og rapporten **Not included in this export**, før du henter pakken. En virksomhedseksport er en flytbar pakke, ikke en kopi af alle databaseposter eller data hos eksterne udbydere. Se [Importér og eksportér virksomheder](/da/guides/board-operator/importing-and-exporting) for pakkens aktuelle indhold og hjælp til importgenopretning.
 
 ## Anmod om sletning af organisation
 
@@ -27,7 +27,7 @@ Blentera har særskilte handlinger til at eksportere en virksomhed, slette en or
 
 At opsige abonnementet og at slette organisationen er to forskellige handlinger. Sletning fjerner organisationens data og opsiger også abonnementet, medmindre den samme betalingskonto betaler for en anden organisation. Vil du stoppe betalingen og beholde dine data, så opsig i stedet abonnementet under **Company settings → Billing**.
 
-En selvhostet installation har ingen tjeneste til sletteanmodninger, så siden linker i stedet til listen over **Organisationer**. Dér beder **Slet organisation** om bekræftelse, før noget slettes, tilbyder først en eksport og nævner arkivering (under virksomhedsindstillinger) som måden at skjule en organisation og beholde dens data på. En bekræftet sletning dér fjerner organisationens opgaver, agenter, projekter og Memory og kan ikke fortrydes.
+En selvhostet installation har ingen tjeneste til sletteanmodninger, så siden linker i stedet til listen over **Organisationer**. Dér kan kun en ejer af organisationen (eller instansens administrator) bruge **Slet organisation**. Du skal skrive organisationens navn, før noget slettes; siden tilbyder først en eksport og nævner arkivering (under virksomhedsindstillinger) som måden at skjule en organisation og beholde dens data på. Hvis du loggede ind for mere end 5 minutter siden, så log ind igen først. En bekræftet sletning dér fjerner organisationens opgaver, agenter, projekter og Memory og kan ikke fortrydes.
 
 Sletningen kan forblive i en opbevaringstilstand, mens administrerede sikkerhedskopier når deres slettefrist. Finansielle poster og en minimal kvittering for sletning kan blive gemt, hvor det kræves. Følg status og trin på sletningssiden. En indsendt anmodning beviser ikke, at den endelige sletning er gennemført.
 
