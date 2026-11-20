@@ -415,6 +415,20 @@ export class NativeInteractionBridgeError extends Error {
   }
 }
 
+/** APR-E2E-13. A cancelled or rejected question or confirmation can be a Human
+ * review withdrawal, but a tool-action card never is: it is a governed decision
+ * with its own owner (tool review, invocation, delivery). Capturing a declined
+ * tool-action card both ways made the resolution Run's continuation
+ * unreconstructable. */
+export function isNativeHumanReviewWithdrawalCandidate(
+  selected: { kind: string; status: string; payload?: unknown } | null | undefined,
+): boolean {
+  if (!selected) return false;
+  if (Object.keys(record(record(selected.payload).toolAction)).length > 0) return false;
+  return ["ask_user_questions", "request_confirmation", "request_checkbox_confirmation"].includes(selected.kind) &&
+    ["cancelled", "rejected"].includes(selected.status);
+}
+
 function record(value: unknown): Record<string, unknown> {
   return value && typeof value === "object" && !Array.isArray(value)
     ? value as Record<string, unknown>
@@ -874,9 +888,7 @@ export async function materializeNativeInteractionResponses(input: {
         const selected = interactions.find(row => row.id === response.interactionId);
         const result = selected?.result && typeof selected.result === "object" && !Array.isArray(selected.result)
           ? selected.result as unknown as Record<string, unknown> : null;
-        const withdrawalCandidate = Boolean(selected &&
-          ["ask_user_questions", "request_confirmation", "request_checkbox_confirmation"].includes(selected.kind) &&
-          ["cancelled", "rejected"].includes(selected.status));
+        const withdrawalCandidate = isNativeHumanReviewWithdrawalCandidate(selected);
         const resultValid = selected?.kind === "ask_user_questions"
           ? selected.status === "cancelled" && result?.cancelled === true && askUserQuestionsResultSchema.safeParse(result).success
           : selected?.kind === "request_confirmation" || selected?.kind === "request_checkbox_confirmation"

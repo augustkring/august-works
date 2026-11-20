@@ -133,22 +133,45 @@ export async function recordDeferredGovernedNote(
     wait: GovernedToolDecisionWait;
     actor: { actorType: "user"; actorId: string };
   },
-) {
-  await logActivity(db, {
-    companyId: input.companyId,
-    actorType: input.actor.actorType,
-    actorId: input.actor.actorId,
-    action: GOVERNED_TOOL_DECISION_NOTE_DEFERRED_ACTION,
-    entityType: "issue",
-    entityId: input.issueId,
-    details: {
-      commentId: input.commentId,
-      interactionId: input.wait.interactionId,
-      sourceRunId: input.wait.sourceRunId,
-      statusDecisionId: input.wait.statusDecisionId,
-      assigneeAgentId: input.assigneeAgentId,
-      reason: GOVERNED_TOOL_DECISION_NOTE_REASON,
-    },
+): Promise<boolean> {
+  // The note becomes one of the card's origin comments (APR-E2E-13): the
+  // resolution Run's continuation carries a card's origin comments, and the
+  // Native source closure accepts a wake comment only when the resolved card
+  // owns it. The card stays pending and its version (updatedAt) is unchanged.
+  // If the card is no longer pending, nothing is recorded and the caller keeps
+  // the ordinary wake.
+  return db.transaction(async (raw) => {
+    const tx = raw as unknown as Db;
+    const [linked] = await tx
+      .update(issueThreadInteractions)
+      .set({
+        originCommentIds: sql`(select coalesce(jsonb_agg(distinct value), '[]'::jsonb) from jsonb_array_elements_text(${issueThreadInteractions.originCommentIds} || ${JSON.stringify([input.commentId])}::jsonb) as value)`,
+      })
+      .where(and(
+        eq(issueThreadInteractions.companyId, input.companyId),
+        eq(issueThreadInteractions.issueId, input.issueId),
+        eq(issueThreadInteractions.id, input.wait.interactionId),
+        eq(issueThreadInteractions.status, "pending"),
+      ))
+      .returning({ id: issueThreadInteractions.id });
+    if (!linked) return false;
+    await logActivity(tx, {
+      companyId: input.companyId,
+      actorType: input.actor.actorType,
+      actorId: input.actor.actorId,
+      action: GOVERNED_TOOL_DECISION_NOTE_DEFERRED_ACTION,
+      entityType: "issue",
+      entityId: input.issueId,
+      details: {
+        commentId: input.commentId,
+        interactionId: input.wait.interactionId,
+        sourceRunId: input.wait.sourceRunId,
+        statusDecisionId: input.wait.statusDecisionId,
+        assigneeAgentId: input.assigneeAgentId,
+        reason: GOVERNED_TOOL_DECISION_NOTE_REASON,
+      },
+    });
+    return true;
   });
 }
 

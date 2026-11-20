@@ -2587,7 +2587,7 @@ async function deferHumanNoteForGovernedToolDecision(input: {
       assigneeAgentId: input.assigneeAgentId,
     });
     if (!wait) return false;
-    await recordDeferredGovernedNote(input.db, {
+    return await recordDeferredGovernedNote(input.db, {
       companyId: input.companyId,
       issueId: input.issueId,
       assigneeAgentId: input.assigneeAgentId,
@@ -2595,7 +2595,6 @@ async function deferHumanNoteForGovernedToolDecision(input: {
       wait,
       actor: { actorType: "user", actorId: input.actor.actorId },
     });
-    return true;
   } catch (err) {
     logger.warn(
       { err, issueId: input.issueId, commentId: input.comment.id },

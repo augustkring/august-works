@@ -195,6 +195,8 @@ describeEmbeddedPostgres("governed tool decision: deferred Human note (routes + 
 
   it("starts no Run for the note, records the deferral, and hands the note once to the review resolution wake", async () => {
     const seeded = await seed();
+    const [before] = await db.select().from(issueThreadInteractions).where(eq(issueThreadInteractions.id, seeded.interactionId));
+    const cardUpdatedAt = before!.updatedAt.getTime();
     const commentId = await postNote(seeded);
     await settleAfterDeferral(seeded.companyId);
     // Removal check: without the deferral this note wakes the assignee here.
@@ -205,6 +207,11 @@ describeEmbeddedPostgres("governed tool decision: deferred Human note (routes + 
     expect(recorded[0]!.details).toMatchObject({ commentId, interactionId: seeded.interactionId,
       sourceRunId: seeded.sourceRunId, assigneeAgentId: seeded.agentId, reason: "governed_tool_decision_pending" });
     expect(await db.select().from(agentWakeupRequests).where(eq(agentWakeupRequests.companyId, seeded.companyId))).toEqual([]);
+    // The note is one of the pending card's origin comments; the card's version is unchanged.
+    const [pendingCard] = await db.select().from(issueThreadInteractions).where(eq(issueThreadInteractions.id, seeded.interactionId));
+    expect(pendingCard?.status).toBe("pending");
+    expect(pendingCard?.originCommentIds).toEqual([commentId]);
+    expect(pendingCard?.updatedAt.getTime()).toBe(cardUpdatedAt);
 
     // The Human declines the card; the gateway records the decision and its outcome receipt.
     await db.update(issueThreadInteractions).set({ status: "rejected", resolvedByUserId: userId, resolvedAt: new Date(),
