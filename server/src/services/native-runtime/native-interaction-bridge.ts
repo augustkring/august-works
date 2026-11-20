@@ -265,6 +265,9 @@ export type NativeHistoricalPendingTransitionContext = {
   consumerRunId: string; parentRunId: string; parentReceiptDigest: string;
   terminalSources: NativeGovernedInteractionContinuationCapture[];
   lineage: Array<{ runId: string; receiptDigest: string }>;
+  /** APR-E2E-16. Set only when the consumer had no sealed receipt: the frame's
+   * inputs, re-verified against the consumer's prepared launch closure below. */
+  firstConstructorInputs?: NativePayloadSourceInput[];
 };
 
 /** A narrowly scoped historical fact, never live pending authority. Both the
@@ -290,16 +293,23 @@ export async function nativeGovernedPendingTransitionCurrent(input: {
   const [consumer] = await input.db.select().from(heartbeatRuns).where(and(eq(heartbeatRuns.companyId, input.companyId),
     eq(heartbeatRuns.id, c.consumerRunId), eq(heartbeatRuns.agentId, input.agentId), eq(heartbeatRuns.nativeIssueId, input.issueId),
     eq(heartbeatRuns.runtimeMode, "native"))).for("share");
-  if (!parent || !consumer || parent.digestValid !== true || parent.inputDigestValid !== true || parent.run.nativeInputSourceProtocolVersion !== 1 || consumer.nativeInputSourceProtocolVersion !== 1 || !parent.run.finishedAt || ["queued", "running"].includes(parent.run.status)) return null;
+  // APR-E2E-16. Before the consumer's receipt is sealed, only its exact
+  // prepared launch closure (running v0 Run, no effects) stands in for it.
+  const firstConstructor = consumer && consumer.nativeInputSourceProtocolVersion === 0 && c.firstConstructorInputs
+    ? await (await import("./native-first-constructor-bootstrap.js")).nativeFirstConstructorBootstrapInputsCurrent(input.db, consumer,
+        { companyId: input.companyId, issueId: input.issueId, agentId: input.agentId, candidate: c.firstConstructorInputs })
+    : null;
+  if (!parent || !consumer || parent.digestValid !== true || parent.inputDigestValid !== true || parent.run.nativeInputSourceProtocolVersion !== 1 || (consumer.nativeInputSourceProtocolVersion !== 1 && !firstConstructor) || !parent.run.finishedAt || ["queued", "running"].includes(parent.run.status)) return null;
   const parentReceipt = nativeRunInputSourceReceiptSchema.safeParse(record(parent.run.runnerProfileJson).nativeInputSourceReceipt);
   const consumerReceipt = nativeRunInputSourceReceiptSchema.safeParse(record(consumer.runnerProfileJson).nativeInputSourceReceipt);
-  if (!parentReceipt.success || !consumerReceipt.success || parentReceipt.data.digest !== c.parentReceiptDigest ||
+  if (!parentReceipt.success || (!firstConstructor && !consumerReceipt.success) || parentReceipt.data.digest !== c.parentReceiptDigest ||
     parentReceipt.data.binding.companyId !== input.companyId || parentReceipt.data.binding.issueId !== input.issueId ||
     parentReceipt.data.binding.agentId !== input.agentId || parentReceipt.data.binding.runId !== parent.run.id ||
     parentReceipt.data.binding.responsibleUserId !== parent.run.responsibleUserId ||
-    consumerReceipt.data.binding.companyId !== input.companyId || consumerReceipt.data.binding.issueId !== input.issueId ||
-    consumerReceipt.data.binding.agentId !== input.agentId || consumerReceipt.data.binding.runId !== consumer.id ||
-    consumerReceipt.data.binding.responsibleUserId !== consumer.responsibleUserId ||
+    (!firstConstructor && (!consumerReceipt.success ||
+      consumerReceipt.data.binding.companyId !== input.companyId || consumerReceipt.data.binding.issueId !== input.issueId ||
+      consumerReceipt.data.binding.agentId !== input.agentId || consumerReceipt.data.binding.runId !== consumer.id ||
+      consumerReceipt.data.binding.responsibleUserId !== consumer.responsibleUserId)) ||
     ![parentReceipt.data.bootstrap,...parentReceipt.data.dispatches,...parentReceipt.data.additionalInputs]
       .some(set => set.inputs.some(value => isDeepStrictEqual(value,source)))) return null;
   const [consumerDigest] = await input.db.select({valid:sql<boolean>`(${heartbeatRuns.runnerProfileJson}->'nativeInputSourceReceipt'->>'digest') =
@@ -307,11 +317,13 @@ export async function nativeGovernedPendingTransitionCurrent(input: {
     inputValid:sql<boolean>`(${heartbeatRuns.runnerProfileJson}->'nativeInputSourceReceipt'->'bootstrap'->>'executionInputDigest') =
       encode(sha256(convert_to((${heartbeatRuns.runnerProfileJson}->'nativeExecutionInput')::text,'UTF8')),'hex')`})
     .from(heartbeatRuns).where(and(eq(heartbeatRuns.companyId,input.companyId),eq(heartbeatRuns.id,consumer.id)));
-  if (consumerDigest?.valid !== true || consumerDigest.inputValid !== true) return null;
+  if (!firstConstructor && (consumerDigest?.valid !== true || consumerDigest.inputValid !== true)) return null;
+  const consumerBootstrapInputs = firstConstructor ?? (consumerReceipt.success ? consumerReceipt.data.bootstrap.inputs : null);
+  if (!consumerBootstrapInputs) return null;
   const { nativeRetainedRunResumeWitness, nativeToolContractFingerprintForTarget } = await import("./native-session-resume.js");
   const { parseNativeExecutionInput } = await import("../../vendor/paperclip-runner/index.js");
   const { captureNativeFinalizedContinuationSummary } = await import("../execution-continuation.js");
-  let lineageOwner = consumer, lineageReceipt = consumerReceipt.data;
+  let lineageOwner = consumer, lineageBootstrapInputs = consumerBootstrapInputs;
   for (const step of c.lineage) {
     input.readWork?.();
     const [selected] = await input.db.select({ run: heartbeatRuns,
@@ -337,7 +349,7 @@ export async function nativeGovernedPendingTransitionCurrent(input: {
           Number.isSafeInteger(generation) && Number(generation)>=0 ? Number(generation) : null,
         requireConversationGeneration:false,executionTargetKind:target}) : null;
     } catch { retained = null; }
-    const retainedEdge = retained && lineageReceipt.bootstrap.inputs.some(value => isDeepStrictEqual(value,retained!.source));
+    const retainedEdge = retained && lineageBootstrapInputs.some(value => isDeepStrictEqual(value,retained!.source));
     let summaryEdge = false;
     if (!retainedEdge && record(profile.nativeBootstrapFinalizedContinuationSummary).sourceRunId === step.runId) {
       const summary = await captureNativeFinalizedContinuationSummary({db:input.db,companyId:input.companyId,issueId:input.issueId,
@@ -346,7 +358,7 @@ export async function nativeGovernedPendingTransitionCurrent(input: {
         isDeepStrictEqual(summary,profile.nativeBootstrapFinalizedContinuationSummary));
     }
     if (!retainedEdge && !summaryEdge) return null;
-    lineageOwner=selected.run;lineageReceipt=receipt.data;
+    lineageOwner=selected.run;lineageBootstrapInputs=receipt.data.bootstrap.inputs;
   }
   const { canActorReadHeartbeatRunPrivacy } = await import("../authorization.js");
   if (!await canActorReadHeartbeatRunPrivacy(input.db,input.reader,parent.run) || !await canActorReadHeartbeatRunPrivacy(input.db,input.reader,consumer)) return null;
@@ -360,13 +372,13 @@ export async function nativeGovernedPendingTransitionCurrent(input: {
     const pending = await captureNativeGovernedPendingInteractions({db:input.db,companyId:input.companyId,
       issueId:input.issueId,agentId:input.agentId,runId:consumer.id,interactionIds:[source.interactionId],reader:input.reader});
     if (pending.length !== 1 || !isDeepStrictEqual(pending[0]!.source,source) ||
-      !consumerReceipt.data.bootstrap.inputs.some(value=>isDeepStrictEqual(value,source))) return null;
+      !consumerBootstrapInputs.some(value=>isDeepStrictEqual(value,source))) return null;
     // runId is only the enclosing historical rendition; its actor and all
     // live owner reads above remain bound to the current consumer.
     return {...pending[0]!,runId:parent.run.id};
   }
   const expected = c.terminalSources.filter(value => value.continuationSource.interactionId === source.interactionId);
-  if (expected.length !== 1 || !consumerReceipt.data.bootstrap.inputs.some(value => isDeepStrictEqual(value,expected[0]!.continuationSource))) return null;
+  if (expected.length !== 1 || !consumerBootstrapInputs.some(value => isDeepStrictEqual(value,expected[0]!.continuationSource))) return null;
   const current: NativeGovernedInteractionContinuationCapture[] = [];
   await materializeNativeInteractionResponses({ db: input.db, companyId: input.companyId, issueId: input.issueId,
     runId: consumer.id, agentId: input.agentId, interactionIds: [source.interactionId], onContinuationSourceCapture: value => { current.push(value); } });
@@ -378,7 +390,7 @@ export async function nativeGovernedPendingTransitionCurrent(input: {
       ${source.sourceVersion}::numeric >= extract(epoch from ${toolInvocations.createdAt}) and
       ${source.sourceVersion}::numeric < extract(epoch from ${toolActionRequests.decidedAt}) and
       ${source.sourceVersion}::numeric < extract(epoch from ${issueThreadInteractions.resolvedAt}) and
-      ${parent.run.finishedAt}::timestamptz <= ${toolActionRequests.decidedAt} and
+      ${parent.run.finishedAt.toISOString()}::timestamptz <= ${toolActionRequests.decidedAt} and
       (${toolActionRequests.expiresAt} is null or ${source.sourceVersion}::numeric < extract(epoch from ${toolActionRequests.expiresAt}))`,
   }).from(issueThreadInteractions).innerJoin(toolActionRequests,and(eq(toolActionRequests.interactionId,issueThreadInteractions.id),
     eq(toolActionRequests.id,owner.actionRequestId),eq(toolActionRequests.companyId,input.companyId),eq(toolActionRequests.issueId,input.issueId)))
