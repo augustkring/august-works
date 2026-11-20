@@ -668,9 +668,10 @@ export function CompanyExport() {
   const [expandedDirs, setExpandedDirs] = useState<Set<string>>(new Set());
   const [categories, setCategories] = useState<ExportCategorySelection>(() => ({
     ...buildDefaultExportCategorySelection(),
-    // Task history is the expensive part of a large-company export. Keep it
-    // opt-in so opening this settings page uses the lightweight preview path.
-    tasks: false,
+    // A whole-company export carries Task history by default (brief 25.3,
+    // EXIT-R1); the person can untick it. Routine history and attachments are
+    // the heavy optional parts and stay opt-in.
+    tasks: true,
     routines: false,
     attachments: false,
   }));
@@ -1217,7 +1218,7 @@ export function CompanyExport() {
               })}
             </div>
             <p className="mt-2 text-xs text-muted-foreground">
-              Task and routine history is opt-in because it can be large.
+              Tasks are included by default. Routine history and attachments are opt-in because they can be large.
             </p>
           </div>
           <div className="border-b border-border px-3 py-2 shrink-0">

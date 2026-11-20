@@ -239,7 +239,7 @@ describe("CompanyExport", () => {
     await flushReact();
   }
 
-  it("loads the no-task export automatically without an interstitial", async () => {
+  it("loads the export with Task history automatically without an interstitial", async () => {
     await renderPage();
 
     expect(container.textContent).not.toContain("Prepare export preview");
@@ -248,7 +248,7 @@ describe("CompanyExport", () => {
     expect(mockProjectsApi.list).toHaveBeenCalledWith("company-1");
     expect(mockCompaniesApi.exportPreview).toHaveBeenCalledTimes(1);
     expect(mockCompaniesApi.exportPreview.mock.calls[0]?.[1]).toMatchObject({
-      include: { company: true, agents: true, projects: true, issues: false, skills: true },
+      include: { company: true, agents: true, projects: true, issues: true, skills: true },
     });
     expect(mockCompaniesApi.exportFidelity).toHaveBeenCalledWith("company-1");
   });
@@ -322,17 +322,18 @@ describe("CompanyExport", () => {
     })).toBe("/api/companies/company-1/org.svg");
   });
 
-  it("keeps task history opt-in, then requests all selected files on download", async () => {
+  it("includes Task history by default (EXIT-R1), then requests all selected files on download", async () => {
     mockCompaniesApi.exportPreview.mockResolvedValue(buildRichExportPreviewResult());
 
     await renderPage();
 
     expect(mockCompaniesApi.exportPreview.mock.calls[0]?.[1]).toMatchObject({
-      include: { issues: false, skills: true },
+      include: { issues: true, skills: true },
     });
-    expect(container.textContent).toContain("Exporting 3 of 6 files");
+    expect(categoryInput("tasks").checked).toBe(true);
+    expect(categoryInput("routines").checked).toBe(false);
+    expect(container.textContent).toContain("Exporting 4 of 6 files");
 
-    await clickElement(categoryInput("tasks"));
     await clickElement(categoryInput("routines"));
     await clickElement(categoryInput("attachments"));
 
@@ -355,7 +356,7 @@ describe("CompanyExport", () => {
     ]);
   });
 
-  it("keeps controls mounted and aborts a slow task refetch when Tasks is unticked", async () => {
+  it("keeps controls mounted and aborts a slow refetch when Tasks is ticked again", async () => {
     let requestCount = 0;
     let slowRequestSignal: AbortSignal | undefined;
     mockCompaniesApi.exportPreview.mockImplementation((_companyId, _request, options) => {
@@ -373,7 +374,7 @@ describe("CompanyExport", () => {
     await clickElement(categoryInput("tasks"));
 
     expect(container.textContent).toContain("Updating export preview");
-    expect(categoryInput("tasks").checked).toBe(true);
+    expect(categoryInput("tasks").checked).toBe(false);
     expect(container.querySelector('[role="tree"]')).not.toBeNull();
     expect(exportButton()).toBeDefined();
 
@@ -382,9 +383,9 @@ describe("CompanyExport", () => {
     expect(slowRequestSignal?.aborted).toBe(true);
     expect(mockCompaniesApi.exportPreview).toHaveBeenCalledTimes(3);
     expect(mockCompaniesApi.exportPreview.mock.calls[2]?.[1]).toMatchObject({
-      include: { issues: false },
+      include: { issues: true },
     });
-    expect(categoryInput("tasks").checked).toBe(false);
+    expect(categoryInput("tasks").checked).toBe(true);
     expect(container.textContent).not.toContain("Updating export preview");
   });
 
@@ -437,7 +438,6 @@ describe("CompanyExport", () => {
     mockCompaniesApi.exportPreview.mockResolvedValue(buildRichExportPreviewResult());
 
     await renderPage();
-    await clickElement(categoryInput("tasks"));
     await clickElement(categoryInput("routines"));
     await clickElement(categoryInput("attachments"));
     await clickElement(categoryInput("tasks"));
@@ -465,6 +465,7 @@ describe("CompanyExport", () => {
     mockCompaniesApi.exportPreview.mockResolvedValue(buildRichExportPreviewResult());
 
     await renderPage();
+    await clickElement(categoryInput("tasks"));
 
     const attachments = categoryInput("attachments");
     expect(attachments.disabled).toBe(true);
@@ -477,7 +478,6 @@ describe("CompanyExport", () => {
     mockCompaniesApi.exportPreview.mockResolvedValue(buildRichExportPreviewResult());
 
     await renderPage();
-    await clickElement(categoryInput("tasks"));
     await clickElement(categoryInput("attachments"));
 
     const sizeText = () =>
