@@ -1466,7 +1466,7 @@
     },
     {
       "path": "server/src/services/authorization.ts",
-      "sha256": "0d5a322130a5356781cf43ff8993a490d2abf1185babe97ffa6c0cc433204195"
+      "sha256": "3f5cd145ec3f07e8739fa432c6cfe8f4b7d8211e26a846fa5fe36b8dfc1c920f"
     },
     {
       "path": "server/src/services/board-auth.ts",
@@ -1538,7 +1538,7 @@
     },
     {
       "path": "server/src/services/experience/service.ts",
-      "sha256": "1097d875101c74ac9a779f0a32614371ffeb2a22d66df0f10d45d2ac01bf67e1"
+      "sha256": "d6c09d00840eae8adf625a8cff5ce2658c662807a60d27dd90d349a2c0a163d9"
     },
     {
       "path": "server/src/services/memory/memory-maintenance.ts",

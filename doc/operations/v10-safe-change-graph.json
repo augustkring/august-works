@@ -4481,7 +4481,7 @@
         },
         {
           "path": "server/src/services/authorization.ts",
-          "sha256": "0d5a322130a5356781cf43ff8993a490d2abf1185babe97ffa6c0cc433204195"
+          "sha256": "3f5cd145ec3f07e8739fa432c6cfe8f4b7d8211e26a846fa5fe36b8dfc1c920f"
         },
         {
           "path": "server/src/services/chat-channels.ts",
@@ -5863,7 +5863,7 @@
         },
         {
           "path": "server/src/services/issues.ts",
-          "sha256": "54d21c04d004281f6c766aed51d0091327e9d6aec28f49b7a94b92735a8b3cb5"
+          "sha256": "1f02b2c0ce706da80039179f972300d524e10d2525d795043b89cd399525e3b6"
         },
         {
           "path": "server/src/services/native-execution-failure-log.test.ts",
@@ -9260,7 +9260,7 @@
         },
         {
           "path": "server/src/services/experience/service.ts",
-          "sha256": "1097d875101c74ac9a779f0a32614371ffeb2a22d66df0f10d45d2ac01bf67e1"
+          "sha256": "d6c09d00840eae8adf625a8cff5ce2658c662807a60d27dd90d349a2c0a163d9"
         },
         {
           "path": "server/src/services/foundation/foundation-bootstrap.ts",
@@ -9276,7 +9276,7 @@
         },
         {
           "path": "server/src/services/issues.ts",
-          "sha256": "54d21c04d004281f6c766aed51d0091327e9d6aec28f49b7a94b92735a8b3cb5"
+          "sha256": "1f02b2c0ce706da80039179f972300d524e10d2525d795043b89cd399525e3b6"
         },
         {
           "path": "server/src/services/memory/memory-agent-tools.test.ts",
@@ -10293,7 +10293,7 @@
         },
         {
           "path": "server/src/services/authorization.ts",
-          "sha256": "0d5a322130a5356781cf43ff8993a490d2abf1185babe97ffa6c0cc433204195"
+          "sha256": "3f5cd145ec3f07e8739fa432c6cfe8f4b7d8211e26a846fa5fe36b8dfc1c920f"
         },
         {
           "path": "server/src/services/capability-resolver.test.ts",
@@ -11808,7 +11808,7 @@
         },
         {
           "path": "server/src/services/issues.ts",
-          "sha256": "54d21c04d004281f6c766aed51d0091327e9d6aec28f49b7a94b92735a8b3cb5"
+          "sha256": "1f02b2c0ce706da80039179f972300d524e10d2525d795043b89cd399525e3b6"
         },
         {
           "path": "server/src/services/memory/memory-privacy.ts",
@@ -13174,7 +13174,7 @@
       "sources": [
         {
           "path": "packages/db/src/client.ts",
-          "sha256": "294af0069583236454c5b445e3218950d85634dd17a93c4cd8e73bd0004d52d4"
+          "sha256": "af688994da4b8e66495eccef1404bc6fc183d916d3b0325e68356479efa1304a"
         },
         {
           "path": "packages/db/src/migration-transaction-budget.test.ts",
@@ -16302,7 +16302,7 @@
         },
         {
           "path": "server/src/services/authorization.ts",
-          "sha256": "0d5a322130a5356781cf43ff8993a490d2abf1185babe97ffa6c0cc433204195"
+          "sha256": "3f5cd145ec3f07e8739fa432c6cfe8f4b7d8211e26a846fa5fe36b8dfc1c920f"
         },
         {
           "path": "server/src/services/board-auth.test.ts",
@@ -19768,7 +19768,7 @@
         },
         {
           "path": "packages/db/src/client.ts",
-          "sha256": "294af0069583236454c5b445e3218950d85634dd17a93c4cd8e73bd0004d52d4"
+          "sha256": "af688994da4b8e66495eccef1404bc6fc183d916d3b0325e68356479efa1304a"
         },
         {
           "path": "packages/db/src/index.ts",
@@ -21248,7 +21248,7 @@
         },
         {
           "path": "server/src/__tests__/task-privacy-prepared-plan.integration.test.ts",
-          "sha256": "3c26e1716c71f6163f7dc8a4c8a0fcfde8cf2345f8d290272c271a16f8c47f91"
+          "sha256": "aac92a8d6f091324bced9518436475b5d1025a329282ba9e11b5c0aac61f4457"
         },
         {
           "path": "server/src/__tests__/v10-private-payload.integration.test.ts",
@@ -27309,7 +27309,7 @@
         },
         {
           "path": "server/src/__tests__/v9-experience.integration.test.ts",
-          "sha256": "2afc6ab7e9d6e4e4d26eeed8b5e7ebf6170607dd2233aedefe6c56ef3c25e663"
+          "sha256": "75c0057cad5699497933a168200f090fed5cbd1bed3196023e56c87842201ea5"
         },
         {
           "path": "server/src/__tests__/v9-notification-channels.test.ts",
@@ -46988,7 +46988,7 @@
       "id": "source:server/src/services/authorization.ts",
       "kind": "current_source_owner",
       "path": "server/src/services/authorization.ts",
-      "sha256": "0d5a322130a5356781cf43ff8993a490d2abf1185babe97ffa6c0cc433204195",
+      "sha256": "3f5cd145ec3f07e8739fa432c6cfe8f4b7d8211e26a846fa5fe36b8dfc1c920f",
       "changeIds": [
         "SCR-V10-HOTSPOT-01",
         "SCR-V10-HOTSPOT-07",
@@ -48384,7 +48384,7 @@
       "id": "source:server/src/services/issues.ts",
       "kind": "current_source_owner",
       "path": "server/src/services/issues.ts",
-      "sha256": "54d21c04d004281f6c766aed51d0091327e9d6aec28f49b7a94b92735a8b3cb5",
+      "sha256": "1f02b2c0ce706da80039179f972300d524e10d2525d795043b89cd399525e3b6",
       "changeIds": [
         "SCR-V10-HOTSPOT-02",
         "SCR-V10-HOTSPOT-06",
@@ -50755,7 +50755,7 @@
       "id": "source:server/src/services/experience/service.ts",
       "kind": "current_source_owner",
       "path": "server/src/services/experience/service.ts",
-      "sha256": "1097d875101c74ac9a779f0a32614371ffeb2a22d66df0f10d45d2ac01bf67e1",
+      "sha256": "d6c09d00840eae8adf625a8cff5ce2658c662807a60d27dd90d349a2c0a163d9",
       "changeIds": [
         "SCR-V10-HOTSPOT-06"
       ],
@@ -52594,7 +52594,7 @@
       "id": "source:packages/db/src/client.ts",
       "kind": "current_source_owner",
       "path": "packages/db/src/client.ts",
-      "sha256": "294af0069583236454c5b445e3218950d85634dd17a93c4cd8e73bd0004d52d4",
+      "sha256": "af688994da4b8e66495eccef1404bc6fc183d916d3b0325e68356479efa1304a",
       "changeIds": [
         "SCR-V10-0554-company-import-lease-budget",
         "SCR-V10-DATABASE-SCHEMA-AND-MIGRATIONS"
@@ -59815,7 +59815,7 @@
       "id": "source:server/src/__tests__/task-privacy-prepared-plan.integration.test.ts",
       "kind": "current_source_owner",
       "path": "server/src/__tests__/task-privacy-prepared-plan.integration.test.ts",
-      "sha256": "3c26e1716c71f6163f7dc8a4c8a0fcfde8cf2345f8d290272c271a16f8c47f91",
+      "sha256": "aac92a8d6f091324bced9518436475b5d1025a329282ba9e11b5c0aac61f4457",
       "changeIds": [
         "SCR-V10-PRIVATE-DATA-ERASURE"
       ],
@@ -66313,7 +66313,7 @@
       "id": "source:server/src/__tests__/v9-experience.integration.test.ts",
       "kind": "current_source_owner",
       "path": "server/src/__tests__/v9-experience.integration.test.ts",
-      "sha256": "2afc6ab7e9d6e4e4d26eeed8b5e7ebf6170607dd2233aedefe6c56ef3c25e663",
+      "sha256": "75c0057cad5699497933a168200f090fed5cbd1bed3196023e56c87842201ea5",
       "changeIds": [
         "SCR-V10-UNCLASSIFIED-REGISTERED-OWNER"
       ],
