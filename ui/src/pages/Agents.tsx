@@ -535,7 +535,7 @@ export function Agents({ initialView = "list", presentation = "auto" }: { initia
 
       <TabsContent value={tab} className={cn("min-h-0", effectiveView === "org" ? "flex h-full flex-1 flex-col gap-4" : "space-y-4")}>
       {filtered.length > 0 && (
-        <p className="text-xs text-muted-foreground">{filtered.length} agent{filtered.length !== 1 ? "s" : ""}</p>
+        <p className="text-xs text-muted-foreground">{t("screens.agents.count", { count: filtered.length })}</p>
       )}
 
       {error && <p className="text-sm text-destructive">{error.message}</p>}

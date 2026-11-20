@@ -4786,7 +4786,9 @@
       "noMatch": "Ingen agenter har den valgte status.",
       "noHierarchy": "Intet organisationshierarki er oprettet.",
       "live": "I gang",
-      "liveCount": "I gang ({{count}})"
+      "liveCount": "I gang ({{count}})",
+      "count_one": "{{count}} agent",
+      "count_other": "{{count}} agenter"
     },
     "roles": {
       "ceo": "Direktør",
@@ -4836,7 +4838,9 @@
         "repos": "Kildekodelagre",
         "cancel": "Annuller",
         "creating": "Opretter…"
-      }
+      },
+      "count_one": "{{count}} projekt",
+      "count_other": "{{count}} projekter"
     },
     "apps": {
       "breadcrumb": "Forbindelser",

@@ -4786,7 +4786,9 @@
       "noMatch": "No agents match the selected status.",
       "noHierarchy": "No organizational hierarchy defined.",
       "live": "Live",
-      "liveCount": "Live ({{count}})"
+      "liveCount": "Live ({{count}})",
+      "count_one": "{{count}} agent",
+      "count_other": "{{count}} agents"
     },
     "roles": {
       "ceo": "CEO",
@@ -4836,7 +4838,9 @@
         "repos": "Source repositories",
         "cancel": "Cancel",
         "creating": "Creating…"
-      }
+      },
+      "count_one": "{{count}} project",
+      "count_other": "{{count}} projects"
     },
     "apps": {
       "breadcrumb": "Connections",
