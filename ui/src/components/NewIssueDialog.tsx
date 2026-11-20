@@ -40,6 +40,7 @@ import {
 import {
   Dialog,
   DialogContent,
+  DialogTitle,
 } from "@/components/ui/dialog";
 import { Button } from "@/components/ui/button";
 import { ToggleSwitch } from "@/components/ui/toggle-switch";
@@ -394,6 +395,7 @@ const IssueTitleTextarea = memo(function IssueTitleTextarea({
   projectSelectorRef: RefObject<HTMLButtonElement | null>;
   onChange: (value: string) => void;
 }) {
+  const { t } = useTranslation("experience");
   const [draftValue, setDraftValue] = useState(value);
 
   useEffect(() => {
@@ -403,7 +405,8 @@ const IssueTitleTextarea = memo(function IssueTitleTextarea({
   return (
     <textarea
       className="w-full text-lg font-semibold bg-transparent outline-none resize-none overflow-hidden placeholder:text-muted-foreground/50"
-      placeholder="Task title"
+      placeholder={t("screens.newTask.taskTitle")}
+      aria-label={t("screens.newTask.taskTitle")}
       rows={1}
       value={draftValue}
       onChange={(e) => {
@@ -457,6 +460,7 @@ const IssueDescriptionEditor = memo(function IssueDescriptionEditor({
   imageUploadHandler: (file: File) => Promise<string>;
   onChange: (value: string) => void;
 }) {
+  const { t } = useTranslation("experience");
   const [draftValue, setDraftValue] = useState(value);
 
   useEffect(() => {
@@ -471,7 +475,7 @@ const IssueDescriptionEditor = memo(function IssueDescriptionEditor({
         setDraftValue(nextValue);
         onChange(nextValue);
       }}
-      placeholder="Add description..."
+      placeholder={t("screens.newTask.description")}
       bordered={false}
       mentions={mentions}
       contentClassName={cn("text-sm text-muted-foreground pb-12", expanded ? "min-h-(--sz-220px)" : "min-h-(--sz-120px)")}
@@ -497,6 +501,7 @@ export function NewIssueDialog() {
 }
 
 function LegacyNewIssueDialog() {
+  const { t } = useTranslation("experience");
   const { visible: workspaceIsolationControlsVisible } = useWorkspaceIsolationControls();
   const { newIssueOpen, newIssueDefaults, closeNewIssue } = useDialog();
   const visualViewportLayout = useVisualViewportLayout(newIssueOpen);
@@ -1446,6 +1451,7 @@ function LegacyNewIssueDialog() {
                   data-slot="new-issue-compact-control"
                   className="rounded bg-muted p-1.5 text-xs font-semibold cursor-pointer hover:opacity-80 transition-opacity sm:px-1.5 sm:py-0.5"
                   disabled={isSubIssueMode}
+                  aria-label={`${t("screens.newTask.organization")}: ${dialogCompany?.name ?? dialogCompany?.issuePrefix ?? ""}`}
                 >
                   {dialogCompany?.issuePrefix ?? ""}
                 </button>
@@ -1472,7 +1478,9 @@ function LegacyNewIssueDialog() {
               </PopoverContent>
             </Popover>
             <span className="text-muted-foreground/60">&rsaquo;</span>
-            <span>{isSubIssueMode ? "New sub-task" : "New task"}</span>
+            <DialogTitle className="text-sm font-normal leading-normal">
+              {isSubIssueMode ? t("screens.newTask.subTitle") : t("screens.newTask.title")}
+            </DialogTitle>
           </div>
           <div className="flex items-center gap-1">
             <Button
@@ -1481,6 +1489,8 @@ function LegacyNewIssueDialog() {
               className="text-muted-foreground"
               onClick={() => setExpanded(!expanded)}
               disabled={createIssue.isPending}
+              aria-label={expanded ? t("screens.newTask.collapse") : t("screens.newTask.expand")}
+              aria-pressed={expanded}
             >
               {expanded ? <Minimize2 className="h-3.5 w-3.5" /> : <Maximize2 className="h-3.5 w-3.5" />}
             </Button>
@@ -1490,8 +1500,9 @@ function LegacyNewIssueDialog() {
               className="text-muted-foreground"
               onClick={() => closeNewIssue()}
               disabled={createIssue.isPending}
+              aria-label={t("screens.newTask.close")}
             >
-              <span className="text-lg leading-none">&times;</span>
+              <span className="text-lg leading-none" aria-hidden="true">&times;</span>
             </Button>
           </div>
         </div>
@@ -1525,19 +1536,19 @@ function LegacyNewIssueDialog() {
           <div className="px-4 pb-2">
             <div className="overflow-x-auto overscroll-x-contain">
               <div className="inline-flex items-center gap-2 text-sm text-muted-foreground flex-wrap sm:flex-nowrap sm:min-w-max">
-              <span className="w-6 shrink-0 text-center">For</span>
+              <span className="w-6 shrink-0 text-center">{t("screens.newTask.for")}</span>
               <InlineEntitySelector
                 ref={assigneeSelectorRef}
                 value={assigneeValue}
                 options={assigneeOptions}
                 recentOptionIds={recentAssigneeOptionIds}
-                placeholder="Assignee"
+                placeholder={t("screens.newTask.assignee")}
                 className="h-8 px-2.5 py-0 sm:h-auto sm:px-2 sm:py-1"
                 triggerDataSlot="new-issue-compact-control"
                 contentStyle={entityPickerViewportStyle}
-                noneLabel="No assignee"
-                searchPlaceholder="Search assignees..."
-                emptyMessage="No assignees found."
+                noneLabel={t("screens.newTask.noAssignee")}
+                searchPlaceholder={t("screens.newTask.searchAssignees")}
+                emptyMessage={t("screens.newTask.noAssignees")}
                 onChange={(value) => {
                   const nextAssignee = parseAssigneeValue(value);
                   if (nextAssignee.assigneeAgentId) {
@@ -1567,7 +1578,7 @@ function LegacyNewIssueDialog() {
                       <span className="truncate">{option.label}</span>
                     )
                   ) : (
-                    <span className="text-muted-foreground">Assignee</span>
+                    <span className="text-muted-foreground">{t("screens.newTask.assignee")}</span>
                   )
                 }
                 renderOption={(option) => {
@@ -1586,19 +1597,19 @@ function LegacyNewIssueDialog() {
                   );
                 }}
               />
-              <span>in</span>
+              <span>{t("screens.newTask.in")}</span>
               <InlineEntitySelector
                 ref={projectSelectorRef}
                 value={projectId}
                 options={projectOptions}
                 recentOptionIds={recentProjectIds}
-                placeholder="Project"
+                placeholder={t("screens.newTask.project")}
                 className="h-8 px-2.5 py-0 sm:h-auto sm:px-2 sm:py-1"
                 triggerDataSlot="new-issue-compact-control"
                 contentStyle={entityPickerViewportStyle}
-                noneLabel="No project"
-                searchPlaceholder="Search projects..."
-                emptyMessage="No projects found."
+                noneLabel={t("screens.newTask.noProject")}
+                searchPlaceholder={t("screens.newTask.searchProjects")}
+                emptyMessage={t("screens.newTask.noProjects")}
                 onChange={handleProjectChange}
                 onConfirm={() => {
                   descriptionEditorRef.current?.focus();
@@ -1613,7 +1624,7 @@ function LegacyNewIssueDialog() {
                       <span className="truncate">{option.label}</span>
                     </>
                   ) : (
-                    <span className="text-muted-foreground">Project</span>
+                    <span className="text-muted-foreground">{t("screens.newTask.project")}</span>
                   )
                 }
                 renderOption={(option) => {
@@ -1637,9 +1648,10 @@ function LegacyNewIssueDialog() {
                   <button
                     type="button"
                     className="inline-flex items-center justify-center rounded-md p-1 text-muted-foreground hover:bg-accent/50 transition-colors"
-                    title="Add reviewer, approver, or watchdog"
+                    title={t("screens.newTask.participants")}
+                    aria-label={t("screens.newTask.participants")}
                   >
-                    <MoreHorizontal className="h-4 w-4" />
+                    <MoreHorizontal className="h-4 w-4" aria-hidden="true" />
                   </button>
                 </PopoverTrigger>
                 <PopoverContent className="w-44 p-1" align="start">
@@ -2141,8 +2153,8 @@ function LegacyNewIssueDialog() {
                 data-slot="new-issue-compact-control"
                 className="inline-flex h-8 items-center gap-1.5 rounded-md border border-border px-2.5 py-0 text-xs hover:bg-accent/50 transition-colors sm:h-auto sm:px-2 sm:py-1"
               >
-                <CircleDot className={cn("h-3 w-3", currentStatus.color)} />
-                {currentStatus.label}
+                <CircleDot className={cn("h-3 w-3", currentStatus.color)} aria-hidden="true" />
+                {t(`screens.values.title.${currentStatus.value}`, { defaultValue: currentStatus.label })}
               </button>
             </PopoverTrigger>
             <PopoverContent className="w-56 p-1" align="start">
@@ -2157,7 +2169,7 @@ function LegacyNewIssueDialog() {
                 >
                   <CircleDot className={cn("h-3 w-3 mt-0.5 shrink-0", s.color)} />
                   <span className="flex flex-col text-left leading-tight">
-                    <span>{s.label}</span>
+                    <span>{t(`screens.values.title.${s.value}`, { defaultValue: s.label })}</span>
                     {s.description ? (
                       <span className="text-(length:--text-nano) text-muted-foreground">{s.description}</span>
                     ) : null}
@@ -2227,8 +2239,8 @@ function LegacyNewIssueDialog() {
             onClick={() => stageFileInputRef.current?.click()}
             disabled={createIssue.isPending}
           >
-            <Paperclip className="h-3 w-3" />
-            Upload
+            <Paperclip className="h-3 w-3" aria-hidden="true" />
+            {t("screens.task.upload")}
           </button>
 
           {/* Work mode chip */}
@@ -2282,8 +2294,9 @@ function LegacyNewIssueDialog() {
                 data-testid="new-issue-more-menu-trigger"
                 data-slot="new-issue-compact-control"
                 className="inline-flex size-8 items-center justify-center rounded-md border border-border p-0 text-xs text-muted-foreground transition-colors hover:bg-accent/50 sm:size-auto sm:p-1"
+                aria-label={t("screens.newTask.more")}
               >
-                <MoreHorizontal className="h-3 w-3" />
+                <MoreHorizontal className="h-3 w-3" aria-hidden="true" />
               </button>
             </PopoverTrigger>
             <PopoverContent className="w-44 p-1" align="start" data-testid="new-issue-more-menu">
@@ -2368,7 +2381,7 @@ function LegacyNewIssueDialog() {
             onClick={discardDraft}
             disabled={createIssue.isPending || !canDiscardDraft}
           >
-            Discard Draft
+            {t("screens.newTask.discard")}
           </Button>
           <div className="flex items-center gap-3">
             {createIssue.isError ? (
@@ -2385,7 +2398,7 @@ function LegacyNewIssueDialog() {
             >
               <span className="inline-flex items-center justify-center gap-1.5">
                 {createIssue.isPending ? <Loader2 className="h-3.5 w-3.5 animate-spin" /> : null}
-                <span>{createIssue.isPending ? "Creating..." : isSubIssueMode ? "Create Sub-Task" : "Create Task"}</span>
+                <span>{createIssue.isPending ? t("screens.newTask.creating") : isSubIssueMode ? t("screens.newTask.createSub") : t("screens.newTask.create")}</span>
               </span>
             </Button>
           </div>

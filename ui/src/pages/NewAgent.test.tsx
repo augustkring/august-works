@@ -7,6 +7,7 @@ import { TooltipProvider } from "@/components/ui/tooltip";
 import { queryKeys } from "@/lib/queryKeys";
 import { NewAgent } from "./NewAgent";
 import { ApiError } from "@/api/client";
+import { i18n } from "@/i18n";
 
 const api = vi.hoisted(() => ({
   get: vi.fn(),
@@ -367,6 +368,45 @@ describe("New agent setup", () => {
     expect(container.textContent).toContain("Connect Atlas to Grok");
     await render("opencode_local");
     expect(container.querySelector('[aria-label="Thinking effort"]')).toBeNull();
+  });
+  it("shows the name, adapter, configure and confirmation steps in Danish (CREATE-R1)", async () => {
+    // The real-backend journey found this whole wizard in English on a Danish screen.
+    await act(async () => { await i18n.changeLanguage("da"); });
+    try {
+      state.params = new URLSearchParams();
+      await act(async () =>
+        root.render(
+          <QueryClientProvider client={cache}>
+            <TooltipProvider><NewAgent /></TooltipProvider>
+          </QueryClientProvider>,
+        ),
+      );
+      await settle();
+      const page = () => document.body.textContent ?? "";
+      expect(page()).toContain("Mød din næste agent");
+      expect(document.body.querySelector("input[placeholder]")?.getAttribute("placeholder")).toBe("f.eks. Darnold");
+      for (const english of ["Meet your next agent", "Agent name", "Choose adapter", "Cancel"]) expect(page()).not.toContain(english);
+
+      await act(async () => root.unmount());
+      root = createRoot(container);
+      await render("gemini_local");
+      for (const danish of ["Konfigurér din agent", "Kørselsmiljø", "Miljø", "Test din agent", "Kør test", "Afslut opsætning", "Brug en Gemini API-nøgle"]) {
+        expect(page()).toContain(danish);
+      }
+      expect(container.querySelector('[aria-label="GEMINI_API_KEY"]')?.getAttribute("placeholder"))
+        .toBe("Valgfri, hvis den allerede er konfigureret");
+      expect(container.querySelector("nav")?.getAttribute("aria-label")).toBe("Trin i opsætning af agent");
+      for (const english of ["Configure your agent", "Finish setup", "Run test", "Optional if already configured"]) {
+        expect(page()).not.toContain(english);
+      }
+      await click("Afslut opsætning");
+      expect(api.hire).toHaveBeenCalledTimes(1);
+      expect(page()).toContain("Din agent er klar");
+      expect(page()).toContain("Tildel Atlas en opgave");
+      expect(page()).not.toContain("Your agent is ready");
+    } finally {
+      await act(async () => { await i18n.changeLanguage("en"); });
+    }
   });
   it("restores confirmation on refresh without hiring again", async () => {
     api.get.mockResolvedValue({

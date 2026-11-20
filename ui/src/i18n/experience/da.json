@@ -5483,7 +5483,13 @@
         "seeAll": "Se alle →",
         "noTasks": "Ingen seneste opgaver.",
         "moreTasks": "+{{count}} flere opgaver",
-        "audit": "Revision"
+        "audit": "Revision",
+        "auditLinks": {
+          "activity": "Aktivitet",
+          "runs": "Kørsler",
+          "costs": "Omkostninger",
+          "budgets": "Budgetter"
+        }
       },
       "rev": {
         "title": "Konfigurationsrevisioner",
@@ -5588,7 +5594,8 @@
         "failure_details": "Fejldetaljer",
         "error": "Fejl:",
         "adapter_result_json": "JSON for adapterresultat"
-      }
+      },
+      "runNow": "Kør nu"
     },
     "apd": {
       "approvals": "Godkendelser",
@@ -5893,6 +5900,17 @@
       "creating": "Opretter...",
       "create": "Opret opgave",
       "createSub": "Opret underopgave"
+    },
+    "dialog": {
+      "close": "Luk"
+    },
+    "modelPicker": {
+      "label": "Model",
+      "default": "Standard",
+      "select": "Vælg model",
+      "selectRequired": "Vælg model (påkrævet)",
+      "search": "Søg i modeller...",
+      "searchCreate": "Søg i modeller... (skriv for at oprette)"
     }
   }
 }

@@ -1290,6 +1290,7 @@ export function AgentDetail() {
             agent={agent}
             companyId={resolvedCompanyId}
             assignLabel={screenText("agent.assignTask")}
+            runLabel={screenText("agent.runNow")}
             showStatus={false}
             canRunWithProviderTrace={canUseProviderTrace}
             actionsDisabled={agentAction.isPending}
@@ -1850,7 +1851,7 @@ export function AgentOverview({
               to={agentScopedAuditHref(agent.id, section)}
               className="rounded-lg border border-border px-3 py-2 text-sm font-medium capitalize hover:bg-accent"
             >
-              {section}
+              {screenText(`agent.ov.auditLinks.${section}`)}
             </Link>
           ))}
         </div>

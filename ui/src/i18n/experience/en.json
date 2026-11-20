@@ -5483,7 +5483,13 @@
         "seeAll": "See All →",
         "noTasks": "No recent tasks.",
         "moreTasks": "+{{count}} more tasks",
-        "audit": "Audit"
+        "audit": "Audit",
+        "auditLinks": {
+          "activity": "Activity",
+          "runs": "Runs",
+          "costs": "Costs",
+          "budgets": "Budgets"
+        }
       },
       "rev": {
         "title": "Configuration Revisions",
@@ -5588,7 +5594,8 @@
         "failure_details": "Failure details",
         "error": "Error:",
         "adapter_result_json": "adapter result JSON"
-      }
+      },
+      "runNow": "Run now"
     },
     "apd": {
       "approvals": "Approvals",
@@ -5893,6 +5900,17 @@
       "creating": "Creating...",
       "create": "Create Task",
       "createSub": "Create Sub-Task"
+    },
+    "dialog": {
+      "close": "Close"
+    },
+    "modelPicker": {
+      "label": "Model",
+      "default": "Default",
+      "select": "Select model",
+      "selectRequired": "Select model (required)",
+      "search": "Search models...",
+      "searchCreate": "Search models... (type to create)"
     }
   }
 }
