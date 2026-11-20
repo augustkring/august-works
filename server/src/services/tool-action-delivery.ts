@@ -24,7 +24,7 @@ import {
 } from "@paperclipai/db";
 import type { heartbeatService } from "./heartbeat.js";
 import { deferredGovernedNoteCommentIds } from "./governed-tool-decision-wait.js";
-import { WAKE_COMMENT_IDS_KEY } from "../modules/run-dispatch/domain/wake-context.js";
+import { WAKE_COMMENT_IDS_KEY } from "../modules/run-dispatch/index.js";
 
 const terminalStatuses: Array<typeof toolActionRequests.$inferSelect.status> = [
   "executed",

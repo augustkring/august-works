@@ -27713,7 +27713,7 @@
         },
         {
           "path": "server/src/services/tool-action-delivery.ts",
-          "sha256": "3c5dd29c27f713152d5e33119660a5dd0cc57e028a1b5856608f723c425d8fe0"
+          "sha256": "5e10b2db1c9118c8d7d211f9a06179728a5a1414eed83d9952dca3157684bbc4"
         },
         {
           "path": "server/src/services/work-products.ts",
@@ -67813,7 +67813,7 @@
       "id": "source:server/src/services/tool-action-delivery.ts",
       "kind": "current_source_owner",
       "path": "server/src/services/tool-action-delivery.ts",
-      "sha256": "3c5dd29c27f713152d5e33119660a5dd0cc57e028a1b5856608f723c425d8fe0",
+      "sha256": "5e10b2db1c9118c8d7d211f9a06179728a5a1414eed83d9952dca3157684bbc4",
       "changeIds": [
         "SCR-V10-UNCLASSIFIED-REGISTERED-OWNER"
       ],
