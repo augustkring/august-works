@@ -363,6 +363,12 @@ import {
 } from "../services/issue-thread-interaction-resolution.js";
 import { resolveSelectedSuggestedTasks } from "../services/issue-thread-interactions.js";
 import {
+  deferredGovernedNoteCommentIds,
+  findGovernedToolDecisionWait,
+  recordDeferredGovernedNote,
+} from "../services/governed-tool-decision-wait.js";
+import { WAKE_COMMENT_IDS_KEY } from "../modules/run-dispatch/domain/wake-context.js";
+import {
   crossIssueInfluenceLimitError,
   crossIssueInfluenceRunContextError,
   observeCrossIssueInfluence,
@@ -2533,6 +2539,49 @@ function buildRequestItemVerdictsWakeIdempotencyKey(args: {
   return `request_item_verdicts:${args.issueId}:${args.interactionId}:${bucket}`;
 }
 
+/** APR-E2E-1. Returns true only when the Human's note was recorded as a
+ * deferred note for the assignee's pending governed tool decision. Any doubt
+ * or failure keeps today's comment wake. */
+async function deferHumanNoteForGovernedToolDecision(input: {
+  db: Db;
+  actor: { actorType: string; actorId: string };
+  companyId: string;
+  issueId: string;
+  assigneeAgentId: string;
+  comment: { id: string; createdByRunId?: string | null; authorUserId?: string | null };
+}): Promise<boolean> {
+  if (
+    input.actor.actorType !== "user" ||
+    input.comment.createdByRunId ||
+    !input.comment.authorUserId ||
+    input.comment.authorUserId !== input.actor.actorId
+  )
+    return false;
+  try {
+    const wait = await findGovernedToolDecisionWait(input.db, {
+      companyId: input.companyId,
+      issueId: input.issueId,
+      assigneeAgentId: input.assigneeAgentId,
+    });
+    if (!wait) return false;
+    await recordDeferredGovernedNote(input.db, {
+      companyId: input.companyId,
+      issueId: input.issueId,
+      assigneeAgentId: input.assigneeAgentId,
+      commentId: input.comment.id,
+      wait,
+      actor: { actorType: "user", actorId: input.actor.actorId },
+    });
+    return true;
+  } catch (err) {
+    logger.warn(
+      { err, issueId: input.issueId, commentId: input.comment.id },
+      "failed to defer a Human note for a pending governed tool decision; waking the assignee",
+    );
+    return false;
+  }
+}
+
 async function queueResolvedInteractionContinuationWakeup(input: {
   db: Db;
   heartbeat: ReturnType<typeof heartbeatService>;
@@ -2695,6 +2744,22 @@ async function queueResolvedInteractionContinuationWakeup(input: {
       publication.idempotencyKey ===
       `interaction:${input.interaction.id}:${publication.endpointId}`,
   );
+  // APR-E2E-1. Human notes deferred while this governed tool decision was
+  // pending reach the resolution Run once, through the wake's comment batch.
+  const deferredNoteCommentIds = toolAction
+    ? await deferredGovernedNoteCommentIds(input.db, {
+        companyId: input.issue.companyId,
+        issueId: input.issue.id,
+        interactionId: input.interaction.id,
+        assigneeAgentId: input.issue.assigneeAgentId,
+      }).catch((err) => {
+        logger.warn(
+          { err, issueId: input.issue.id, interactionId: input.interaction.id },
+          "failed to read deferred notes for a governed tool decision",
+        );
+        return [] as string[];
+      })
+    : [];
   await input.heartbeat
     .wakeup(input.issue.assigneeAgentId, {
       source: "automation",
@@ -2743,6 +2808,9 @@ async function queueResolvedInteractionContinuationWakeup(input: {
           ? { paperclipAgentMessage: rejectionAgentMessage }
           : {}),
         ...(reviewPathContext ?? {}),
+        ...(deferredNoteCommentIds.length > 0
+          ? { [WAKE_COMMENT_IDS_KEY]: deferredNoteCommentIds }
+          : {}),
         wakeReason: "issue_commented",
         source: input.source,
         ...(forceFreshSession ? { forceFreshSession: true } : {}),
@@ -15334,11 +15402,28 @@ export function issueRoutes(
               currentStatus: issue.status,
             });
 
+          // APR-E2E-1. Same deferral as a plain comment (see the comment route).
+          const deferredGovernedNote =
+            assigneeId &&
+            !assigneeChanged &&
+            !goalCommentSteered &&
+            shouldWakeAssigneeForComment &&
+            !reopened
+              ? await deferHumanNoteForGovernedToolDecision({
+                  db,
+                  actor,
+                  companyId: issue.companyId,
+                  issueId: issue.id,
+                  assigneeAgentId: assigneeId,
+                  comment,
+                })
+              : false;
           if (
             assigneeId &&
             !assigneeChanged &&
             !goalCommentSteered &&
-            shouldWakeAssigneeForComment
+            shouldWakeAssigneeForComment &&
+            !deferredGovernedNote
           ) {
             addWakeup(assigneeId, {
               source: "automation",
@@ -15403,7 +15488,8 @@ export function issueRoutes(
           for (const mentionedId of mentionedIds) {
             if (
               (actor.actorType === "agent" && actor.actorId === mentionedId) ||
-              (commentIsFromAssigneeRun && mentionedId === assigneeId)
+              (commentIsFromAssigneeRun && mentionedId === assigneeId) ||
+              (deferredGovernedNote && mentionedId === assigneeId)
             )
               continue;
             const delegation = commentIsFromAssigneeRun
@@ -18933,13 +19019,32 @@ export function issueRoutes(
           reopened,
           currentStatus: wakeIssueSnapshot.status,
         });
+        // APR-E2E-1. A Human's note while the Task waits only for its
+        // assignee's governed tool decision is handed to the resolution Run
+        // instead of starting a Run now.
+        const deferredGovernedNote =
+          assigneeId &&
+          !goalCommentSteered &&
+          !commentStagePlanHoldPlanId &&
+          shouldWakeAssigneeForComment &&
+          !reopened
+            ? await deferHumanNoteForGovernedToolDecision({
+                db,
+                actor,
+                companyId: currentIssue.companyId,
+                issueId: currentIssue.id,
+                assigneeAgentId: assigneeId,
+                comment,
+              })
+            : false;
         if (
           assigneeId &&
           !goalCommentSteered &&
           // MS1f. The plan Worker restored by a held final stage approval has
           // nothing to do until a person verifies the plan.
           !commentStagePlanHoldPlanId &&
-          shouldWakeAssigneeForComment
+          shouldWakeAssigneeForComment &&
+          !deferredGovernedNote
         ) {
           if (reopened) {
             addWakeup(assigneeId, {
@@ -19031,7 +19136,8 @@ export function issueRoutes(
         for (const mentionedId of mentionedIds) {
           if (
             (actorIsAgent && actor.actorId === mentionedId) ||
-            (commentIsFromAssigneeRun && mentionedId === assigneeId)
+            (commentIsFromAssigneeRun && mentionedId === assigneeId) ||
+            (deferredGovernedNote && mentionedId === assigneeId)
           )
             continue;
           const delegation = commentIsFromAssigneeRun
