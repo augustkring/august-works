@@ -13,6 +13,7 @@ import {
 } from "./local-process-sandbox.js";
 import { buildSshSpawnTarget, type SshRemoteExecutionSpec } from "./ssh.js";
 import { redactCommandText } from "./command-redaction.js";
+import { guardChildStdin, writeChildStdin } from "./child-stdin.js";
 import { paperclipChatFilePreparationDelivery } from "./chat-file-delivery.js";
 import {
   PAPERCLIP_RUNNER_PERMISSION_CAPABILITIES,
@@ -4825,10 +4826,17 @@ export async function runChildProcess(
 
         const stdin = child.stdin;
         if (opts.stdin != null && stdin) {
+          // Attach the error listener now, before the deferred write: a child
+          // that exits before reading stdin raises EPIPE on the pipe, and an
+          // unhandled stream error would stop the whole server process. The
+          // child's exit status and output still decide the run's outcome.
+          guardChildStdin(stdin, {
+            onError: (err) =>
+              onLogError(err, runId, "failed to write child process stdin"),
+          });
           void spawnPersistPromise.finally(() => {
             if (child.killed || stdin.destroyed) return;
-            stdin.write(opts.stdin as string);
-            stdin.end();
+            writeChildStdin(stdin, opts.stdin as string);
           });
         }
 

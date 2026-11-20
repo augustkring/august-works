@@ -1,6 +1,7 @@
 import {assertAnalyticalContextPayloadAccess} from "../services/analytical-context-authority.js";
 import { Router } from "express";
 import { spawn } from "node:child_process";
+import { writeChildStdin } from "@paperclipai/adapter-utils/child-stdin";
 import fs from "node:fs";
 import path from "node:path";
 import { fileURLToPath } from "node:url";
@@ -405,9 +406,13 @@ export function boardChatRoutes(
       }
     });
 
-    // Feed the prompt to the CLI via stdin.
-    proc.stdin.write(prompt);
-    proc.stdin.end();
+    // Feed the prompt to the CLI via stdin. The helper listens for stdin
+    // errors first: a CLI that exits before reading raises EPIPE, which must
+    // not become an uncaught exception that stops the server. The close
+    // handler above still reports the CLI's exit.
+    writeChildStdin(proc, prompt, {
+      onError: (err) => console.error("[board/chat/stream stdin error]", err),
+    });
   });
 
   return router;
