@@ -20,10 +20,11 @@ export type ExperimentCompletion = typeof businessExperimentCompletions.$inferSe
 export type ExperimentEdge = Pick<typeof analyticalLineageEdges.$inferInsert, "inputType" | "inputRef" | "inputHash" | "relationship">;
 export const EXPERIMENT_OWNER_ENGINE = "aw-native-business-experiment-owner-v1";
 export function experimentBudget(deadline: number) { if (performance.now() > deadline) throw unprocessable("Experiment receipt source budget exceeded"); }
-/** PERF-01 declared target for the two operations whose work grows with the
- * outcome population: final analysis and replay of the signed receipts.
- * The V8 per-operation receipt bound (30 s) stays the floor, so an operation
- * with no outcomes keeps exactly 30 s; each outcome adds 0.5 ms, so the
+/** PERF-01 declared target for the operations whose work grows with the
+ * outcome population: final analysis, and replay of the signed receipts
+ * (receipt reads and the human interpretation).
+ * The V8 per-operation receipt bound (30 s) stays the floor, so no operation
+ * gets less than 30 s; each outcome adds 0.5 ms, so the
  * declared maximum (4,000 units x 17 metrics = 68,000 outcomes) gets 64 s;
  * 90 s is the hard ceiling. Every other experiment operation keeps 30 s. */
 export const EXPERIMENT_OPERATION_BUDGET_FLOOR_MS = 30_000;

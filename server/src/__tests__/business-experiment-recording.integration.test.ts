@@ -266,6 +266,13 @@ suite("Native experiment assignment and human attestation on migrated PostgreSQL
     expect(replay.analysis!.receiptHash).toBe(result.analysis.receiptHash);
     expect(replay.analysis!.result).toEqual(result.analysis.result);
     process.stdout.write(`Maximum native outcome capture/replay ${JSON.stringify({units:4000,metrics:17,outcomes:stored.total,captureAndReadMs:Math.round(performance.now()-started),readMs:Math.round(performance.now()-readAt),fixture:"explicit_bulk_software_prerequisites"})}\n`);
+    // PERF-01: the human interpretation replays all 68,000 outcome receipts
+    // and is held to the same derived replay budget.
+    const interpretAt = performance.now();
+    const interpreted = await businessExperimentAnalysisService(db).interpret(companyId, actor, d.experiment.id, { expectedRevision: result.experiment.revision, versionId: d.version.id, analysisId: result.analysis.id,
+      conclusion: result.analysis.result.status === "invalid" ? "abstain" : "iterate", rationale, limitationsAcknowledged: true, executionAuthority: "advisory_only" });
+    expect(performance.now() - interpretAt).toBeLessThan(experimentOperationBudgetMs(stored.total));
+    expect(interpreted.interpretation.analysisId).toBe(result.analysis.id);
     const last=units[units.length-1];await db.update(issues).set({hiddenAt:new Date()}).where(eq(issues.id,last.id));
     await expect(recording().receipts(companyId,actor,d.experiment.id,d.version.id)).rejects.toMatchObject({status:404});
     await db.update(issues).set({hiddenAt:null}).where(eq(issues.id,last.id));

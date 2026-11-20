@@ -110,7 +110,10 @@ export function businessExperimentAnalysisService(db:Db){return {
   async interpret(companyId:string,actor:AuthorizationActor,id:string,raw:Parameters<typeof interpretBusinessExperimentSchema.parse>[0]){
     const input=interpretBusinessExperimentSchema.parse(raw);
     return withV7ActivityTransaction(db,async(tx,publications)=>{
-      await admitBusinessExperiment(tx,companyId,actor,true);const row=await lockBusinessExperimentRoot(tx,companyId,id),deadline=performance.now()+30_000;
+      await admitBusinessExperiment(tx,companyId,actor,true);const row=await lockBusinessExperimentRoot(tx,companyId,id),started=performance.now();
+      // PERF-01: interpretation replays every stored outcome receipt, so it
+      // takes the same derived replay budget as receipts().
+      const deadline=started+experimentOperationBudgetMs(await experimentOperationOutcomeCount(tx,companyId,id,input.versionId,"replay"));
       if(row.revision!==input.expectedRevision||row.currentVersionId!==input.versionId||row.state!=="analyzing")throw conflict("Human interpretation requires the exact analyzed version/revision");
       const pin=await inspectBusinessExperimentVersion(tx,row,actor,input.versionId,true,deadline),analysis=pin.receipts.analysis;
       if(!analysis||analysis.id!==input.analysisId||pin.receipts.interpretation)throw conflict("Human interpretation requires the exact immutable analysis");
