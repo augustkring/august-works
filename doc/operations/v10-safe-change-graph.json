@@ -25342,7 +25342,7 @@
         },
         {
           "path": "tests/e2e/fixtures/assert-unqualified-runtime.ts",
-          "sha256": "a0b31b1fe125d886e2f1ae37d554c80a5a118293409f05a7e26253dea460f71e"
+          "sha256": "a4342e082df0fc0e318694a1087c2a492b0a5aad1d440b5d79aa559c63e1b3df"
         },
         {
           "path": "third_party/openshell/rt01/metadata.json",
@@ -35465,7 +35465,7 @@
         },
         {
           "path": "tests/e2e/composer-stop.spec.ts",
-          "sha256": "b5156e316f8d604b9db6b71e6488f387c795cea9e267c1501d1ef2a78a9320ac"
+          "sha256": "d4bd06453b54968042501a3f9cee545ea6c720b884d6129ea0d25de6fafa5083"
         },
         {
           "path": "tests/e2e/conference-room-typing-intro.spec.ts",
@@ -64978,7 +64978,7 @@
       "id": "source:tests/e2e/fixtures/assert-unqualified-runtime.ts",
       "kind": "current_source_owner",
       "path": "tests/e2e/fixtures/assert-unqualified-runtime.ts",
-      "sha256": "a0b31b1fe125d886e2f1ae37d554c80a5a118293409f05a7e26253dea460f71e",
+      "sha256": "a4342e082df0fc0e318694a1087c2a492b0a5aad1d440b5d79aa559c63e1b3df",
       "changeIds": [
         "SCR-V10-NATIVE-RUNTIME-AND-AUTHORITY"
       ],
@@ -74640,7 +74640,7 @@
       "id": "source:tests/e2e/composer-stop.spec.ts",
       "kind": "current_source_owner",
       "path": "tests/e2e/composer-stop.spec.ts",
-      "sha256": "b5156e316f8d604b9db6b71e6488f387c795cea9e267c1501d1ef2a78a9320ac",
+      "sha256": "d4bd06453b54968042501a3f9cee545ea6c720b884d6129ea0d25de6fafa5083",
       "changeIds": [
         "SCR-V10-CUSTOMER-EXPERIENCE"
       ],
