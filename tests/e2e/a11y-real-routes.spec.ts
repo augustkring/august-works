@@ -101,7 +101,7 @@ const SCREENS: Screen[] = [
     name: "Agent detail",
     path: (seed) => `agents/${seed.agentKey}`,
     heading: { en: "Research assistant", da: "Research assistant" },
-    primary: (main) => main.getByRole("button", { name: "Assign Task", exact: true }),
+    primary: (main) => main.getByRole("button", { name: byLocale("Assign Task", "Tildel opgave") }),
   },
   {
     name: "Projects",

@@ -14,6 +14,9 @@ import { i18n } from "../i18n";
 import { ToastProvider } from "../context/ToastContext";
 import { Approvals } from "./Approvals";
 import { Projects } from "./Projects";
+import { AGENT_DETAIL_NAVIGATION } from "./agent-detail-navigation";
+import { workModeMetaFor } from "../lib/work-mode-meta";
+import { blockedReasonLabel } from "../lib/blockedInbox";
 
 const mockProjectsApi = vi.hoisted(() => ({ list: vi.fn() }));
 const mockMembershipsApi = vi.hoisted(() => ({ listMine: vi.fn(), updateProject: vi.fn() }));
@@ -147,6 +150,14 @@ describe("Danish customer screens (I18N-DA1)", () => {
     expect(text).toContain("Godkendelsesanmodning oprettet for 2 t. siden");
     expectNoEnglish(text);
     await act(async () => root.unmount());
+  });
+
+  it("shows Agent detail navigation and task work modes in Danish", () => {
+    const labels = AGENT_DETAIL_NAVIGATION.flatMap((section) => [section.label, ...section.items.map((item) => item.label)]);
+    expect(labels).toEqual(expect.arrayContaining(["Overblik", "Instruktioner", "Kompetencer", "Hemmeligheder", "Tilladelser / tillid", "API-nøgler"]));
+    for (const english of ["Overview", "Instructions", "Skills", "Secrets", "Governance"]) expect(labels).not.toContain(english);
+    expect(workModeMetaFor("planning").label).toBe("Plantilstand");
+    expect(blockedReasonLabel("pending_board_decision")).toBe("Afventer beslutning fra Board");
   });
 
   it("keeps the same screens in English when the language is English", async () => {
