@@ -448,12 +448,14 @@ class SteeredIdentityAcceptanceRequired extends Error {}
  * | initialize/reserve/reconcileSteeredIdentity             | Task FOR UPDATE > run FOR UPDATE                      |
  * | Steering delivery + durable ack (routes/issues.ts)      | Task > queue wake > run FOR UPDATE (held to accept)   |
  * | Queue edits, run dispatch, finalizer, restart recovery  | Task > run                                            |
+ * | Watchdog fold, warm restart, claim release (heartbeat)  | Task (the row each later writes) > run (D5d)          |
  * | Native source transactions (dispatch intent and ack,    | company A+M exclusive > lease > run FOR UPDATE >      |
  * |   tool-result and attachment intents)                   |   Task FOR SHARE (in source-closure checks)           |
  * | Tool authority mutation context                         | company A+M exclusive > plan > Task > run             |
  * | Sandbox exec checks (assertTaskExecutionContext: exec   | company A+M shared (relay authorization: exclusive) > |
  * |   initial, claim, relay authorization, output, result)  |   lease > Task FOR SHARE > run FOR SHARE              |
- * | Watchdog fold, warm restart, claim release (heartbeat)  | run > Task                                            |
+ * | Native finalization reconciler resume claim (ambiguous  | run + coordinator FOR UPDATE > Task (issue update)    |
+ * |   state), hidden conformance backend check              |   / run FOR SHARE > Task FOR SHARE                    |
  *
  * D5c. The sandbox exec checks used to lock the run and then the Task. Their
  * company locks are shared, so they overlap steering acceptance (also shared)
@@ -465,15 +467,19 @@ class SteeredIdentityAcceptanceRequired extends Error {}
  * run cannot wait on each other in a cycle over these two rows. Native source
  * transactions and tool authority mutation take the company locks exclusively
  * before any row, and the exec checks take them before any row too, so the
- * two never hold rows at the same time. Not ordered with the exec checks: the
- * run > Task writers in the last row (no company lock). Of those, the watchdog
- * fold can meet an exec (a silent running Run whose Task is already done or
- * cancelled); PostgreSQL then aborts one side with 40P01. An aborted exec
- * initial, claim or relay check leaves no claim or a PENDING one, which the
- * exec records FAILED (a known outcome); an aborted output or result check
- * comes after the claim and leaves it CLAIMED, like any failure there. An
- * aborted fold rolls back and leaves the Run to a later scan. Moving those
- * writers to Task > run is the open follow-up.
+ * two never hold rows at the same time.
+ *
+ * D5d. The watchdog fold, warm restart and claim release took the run and
+ * then the Task, without company locks. They now lock the Task row they later
+ * write first, with that write's lock mode and predicate (warm restart: its
+ * existing FOR UPDATE read, moved first, matching the finalizer's Task > run >
+ * coordinator). Claim release learns the Task from the run's context: it
+ * reads it unlocked, locks that Task, updates the run and checks the run still
+ * names it; otherwise it rolls back and retries once, and a second change
+ * proceeds as before. Still run first (not moved, open): the finalization
+ * reconciler's resume claim, which reaches the Task only for a run that no
+ * runner owns and that has no process, and the hidden conformance backend
+ * check, whose shared locks never conflict with the exec checks' shared ones.
  *
  * The run and Task orders differ between families, so the per-request path
  * takes only the run row and waits only before it holds any lock: it cannot

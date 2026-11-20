@@ -9778,6 +9778,89 @@ export function resolveHeartbeatSchedulingSuppression(
   return { suppressed: false, reason: null };
 }
 
+/** Rolls back a claim release whose run named another Task than the one it locked first. */
+class ClaimReleaseTaskChanged extends Error {}
+
+/** Puts a just-claimed run back in the queue when scheduling became suppressed. */
+export async function releaseRunClaimedJustBeforeSuppression(db: Db, runId: string) {
+  const now = new Date();
+  // Lock order (run-identity.ts): Task before run. The Task id is in the
+  // run's context, so read it unlocked, lock that Task (with the mode and
+  // predicate of the update below), then update the run and check it still
+  // names that Task. If it changed, roll back and retry once; a second
+  // change proceeds as before (run, then its current Task).
+  for (let attempt = 1; ; attempt += 1) {
+    try {
+      await releaseRunClaimedJustBeforeSuppressionOnce(db, runId, now, attempt > 1);
+      return;
+    } catch (error) {
+      if (!(error instanceof ClaimReleaseTaskChanged) || attempt > 1) throw error;
+    }
+  }
+}
+async function releaseRunClaimedJustBeforeSuppressionOnce(db: Db, runId: string, now: Date, lastAttempt: boolean) {
+  await db.transaction(async (tx) => {
+    const [unlocked] = await tx
+      .select({ companyId: heartbeatRuns.companyId, contextSnapshot: heartbeatRuns.contextSnapshot })
+      .from(heartbeatRuns)
+      .where(eq(heartbeatRuns.id, runId));
+    const lockedIssueId = unlocked ? readNonEmptyString(parseObject(unlocked.contextSnapshot).issueId) : null;
+    if (unlocked && lockedIssueId) {
+      await tx
+        .select({ id: issues.id })
+        .from(issues)
+        .where(and(
+          eq(issues.id, lockedIssueId),
+          eq(issues.companyId, unlocked.companyId),
+          eq(issues.executionRunId, runId),
+        ))
+        .for("no key update");
+    }
+    const released = await tx
+      .update(heartbeatRuns)
+      .set({
+        status: "queued",
+        startedAt: null,
+        responsibleUserId: null,
+        updatedAt: now,
+      })
+      .where(
+        and(eq(heartbeatRuns.id, runId), eq(heartbeatRuns.status, "running")),
+      )
+      .returning()
+      .then((rows) => rows[0] ?? null);
+    if (!released) return;
+
+    if (released.wakeupRequestId) {
+      await tx
+        .update(agentWakeupRequests)
+        .set({ status: "queued", claimedAt: null, updatedAt: now })
+        .where(eq(agentWakeupRequests.id, released.wakeupRequestId));
+    }
+
+    const context = parseObject(released.contextSnapshot);
+    const issueId = readNonEmptyString(context.issueId);
+    if (issueId !== lockedIssueId && !lastAttempt) throw new ClaimReleaseTaskChanged();
+    if (issueId) {
+      await tx
+        .update(issues)
+        .set({
+          executionRunId: null,
+          executionAgentNameKey: null,
+          executionLockedAt: null,
+          updatedAt: now,
+        })
+        .where(
+          and(
+            eq(issues.id, issueId),
+            eq(issues.companyId, released.companyId),
+            eq(issues.executionRunId, released.id),
+          ),
+        );
+    }
+  });
+}
+
 export function heartbeatService(
   db: Db,
   options: HeartbeatServiceOptions = {},
@@ -18157,53 +18240,6 @@ export function heartbeatService(
   // activeRunExecutionPromises while the wakeup stayed "claimed" or the
   // issue stayed locked to a queued run — task-drain status would then read
   // quiescent while the database still held part of the old claim.
-  async function releaseRunClaimedJustBeforeSuppression(runId: string) {
-    const now = new Date();
-    await db.transaction(async (tx) => {
-      const released = await tx
-        .update(heartbeatRuns)
-        .set({
-          status: "queued",
-          startedAt: null,
-          responsibleUserId: null,
-          updatedAt: now,
-        })
-        .where(
-          and(eq(heartbeatRuns.id, runId), eq(heartbeatRuns.status, "running")),
-        )
-        .returning()
-        .then((rows) => rows[0] ?? null);
-      if (!released) return;
-
-      if (released.wakeupRequestId) {
-        await tx
-          .update(agentWakeupRequests)
-          .set({ status: "queued", claimedAt: null, updatedAt: now })
-          .where(eq(agentWakeupRequests.id, released.wakeupRequestId));
-      }
-
-      const context = parseObject(released.contextSnapshot);
-      const issueId = readNonEmptyString(context.issueId);
-      if (issueId) {
-        await tx
-          .update(issues)
-          .set({
-            executionRunId: null,
-            executionAgentNameKey: null,
-            executionLockedAt: null,
-            updatedAt: now,
-          })
-          .where(
-            and(
-              eq(issues.id, issueId),
-              eq(issues.companyId, released.companyId),
-              eq(issues.executionRunId, released.id),
-            ),
-          );
-      }
-    });
-  }
-
   async function cancelQueuedRunForBlockedDependencies(
     run: typeof heartbeatRuns.$inferSelect,
     issueId: string,
@@ -20543,7 +20579,7 @@ export function heartbeatService(
     let attestedQuestionResponseAtMs: number | null = null;
     if ((await getSchedulingSuppression()).suppressed) {
       try {
-        await releaseRunClaimedJustBeforeSuppression(runId);
+        await releaseRunClaimedJustBeforeSuppression(db, runId);
       } catch (err) {
         logger.error(
           { err, runId },
