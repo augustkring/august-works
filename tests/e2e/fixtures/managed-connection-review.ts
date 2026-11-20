@@ -5,7 +5,7 @@ import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { and, eq, sql } from "../../../packages/db/node_modules/drizzle-orm/index.js";
 import { expect, type Page, type BrowserContext, type APIRequestContext } from "@playwright/test";
-import { createDb, agents, authSessions, authUsers, companies, heartbeatRuns, agentWakeupRequests,
+import { createDb, activityLog, agents, authSessions, authUsers, companies, heartbeatRuns, agentWakeupRequests,
   issueComments, issueThreadInteractions, issues, documents, issueDocuments, environmentLeases,
   connectionGrants, toolCatalogEntries, toolConnections } from "../../../packages/db/src/index.ts";
 import { createApp } from "../../../server/src/app.js";
@@ -89,13 +89,14 @@ export async function withManagedConnectionReview(input: {
   const request = async (...args: Parameters<NonNullable<typeof railway>["request"]>) => {
     assert(railway); return railway.request(...args);
   };
-  type Role = "request" | "pending_note" | "resolution" | "later";
+  type Role = "request" | "resolution" | "later";
   const rolesByRun = new Map<string, { role: Role; runId: string; wakeId: string; commentId: string | null; interactionId: string | null }>();
   let scope: { companyId: string; agentId: string; userId: string } | undefined;
   let reviewTaskId: string | undefined, firstCommentId: string | undefined;
   let pendingCommentId: string | undefined, pendingReviewId: string | undefined;
   let laterTaskId: string | undefined, laterCommentId: string | undefined;
   const pendingNoteBody = "Keeping this review pending while I check.";
+  let resolutionSawNote = false;
   const providerRuns: string[] = [];
   let maxProviderRequestBytes = 0;
   let responseText = "";
@@ -279,10 +280,9 @@ export async function withManagedConnectionReview(input: {
           else if (issueId === laterTaskId && comment.id === laterCommentId) {
             assert(input.journey === "always"); role = "later";
           } else {
-            assert(issueId === reviewTaskId && comment.body === pendingNoteBody && review);
-            assert(!pendingCommentId || pendingCommentId === comment.id);
-            assert.equal(review.status, "pending");
-            pendingCommentId = comment.id; pendingReviewId = review.id; role = "pending_note";
+            // APR-E2E-1: a Human note while the review is pending is deferred
+            // to the resolution Run; it never starts a Run of its own.
+            throw new Error("managed_review_unexpected_comment_wake");
           }
         }
         const prior = rolesByRun.get(runId);
@@ -429,7 +429,13 @@ export async function withManagedConnectionReview(input: {
           assert.match(resultText(approvalError.content), /human approval card/i);
           return finish(false);
         }
-        if (role === "pending_note" && callIndex === 1) return finish(false);
+        if (role === "resolution" && callIndex === 1) {
+          // APR-E2E-1: the deferred Human note reaches the resolution Run once.
+          const serialized = JSON.stringify(body.messages ?? []);
+          assert.equal(serialized.split(pendingNoteBody).length - 1, 1,
+            "The resolution Run's first model request carries the deferred Human note exactly once");
+          resolutionSawNote = true;
+        }
         if (role === "resolution" && callIndex === 1) {
           const responses = execution.interactionResponses;
           assert(responses && responses.length === 1);
@@ -582,21 +588,21 @@ export async function withManagedConnectionReview(input: {
               assert(note && note.body === pendingNoteBody && note.authorUserId === actor.userId && !note.createdByRunId && review);
               assert(!pendingCommentId || pendingCommentId === commentId);
               pendingCommentId = commentId; pendingReviewId = review.id;
-              // Await the actual durable wake acknowledgement, not an arbitrary delay.
-              await expect.poll(async () => (await db.select().from(agentWakeupRequests).where(and(
-                eq(agentWakeupRequests.companyId, companyId), eq(agentWakeupRequests.agentId, agentId),
-                sql`${agentWakeupRequests.payload}->>'issueId' = ${task.id}`)))
-                .some(wake => record(wake.payload).commentId === commentId), { timeout: remaining() }).toBe(true);
-              // Keep the real Human review pending until this note's actual Run has retired.
-              await expect.poll(async () => (await runRows()).some(row =>
-                record(row.wake.payload).commentId === commentId), { timeout: remaining() }).toBe(true);
+              // APR-E2E-1: the note is recorded as deferred for this review and
+              // starts no Run. Await the durable deferral, then confirm that no
+              // wake or Run names the note.
+              await expect.poll(async () => (await db.select().from(activityLog).where(and(
+                eq(activityLog.companyId, companyId), eq(activityLog.entityId, task.id),
+                eq(activityLog.action, "issue.comment_wake_deferred")))).some(row =>
+                record(row.details).commentId === commentId && record(row.details).interactionId === review.id),
+                { timeout: remaining() }).toBe(true);
               await heartbeat.drainActiveRunExecutions();
-              await expect.poll(async () => (await runRows()).find(row =>
-                record(row.wake.payload).commentId === commentId)?.run.status,
-                { timeout: remaining() }).toBe("succeeded");
-              const noteRun = (await runRows()).find(row => record(row.wake.payload).commentId === commentId);
-              assert(noteRun && rolesByRun.get(noteRun.run.id)?.role === "pending_note");
-              await verifyStopped(noteRun.run.id);
+              const noteWakes = (await db.select().from(agentWakeupRequests).where(and(
+                eq(agentWakeupRequests.companyId, companyId), eq(agentWakeupRequests.agentId, agentId))))
+                .filter(wake => record(wake.payload).commentId === commentId);
+              assert.deepEqual(noteWakes, [], "A Human note during a pending review starts no wake");
+              assert(!(await runRows()).some(row => record(row.wake.payload).commentId === commentId),
+                "A Human note during a pending review starts no Run");
               const [stillPending] = await db.select().from(issueThreadInteractions).where(and(
                 eq(issueThreadInteractions.companyId, companyId), eq(issueThreadInteractions.issueId, task.id),
                 eq(issueThreadInteractions.id, review.id)));
@@ -622,9 +628,9 @@ export async function withManagedConnectionReview(input: {
           assert.equal(rows.length, roles.length);
           assert.equal(roles.filter(entry => entry.role === "request").length, 1);
           assert.equal(roles.filter(entry => entry.role === "resolution").length, 1);
-          assert.equal(roles.filter(entry => entry.role === "pending_note").length, 1);
           assert.equal(roles.filter(entry => entry.role === "later").length, input.journey === "always" ? 1 : 0);
-          assert.equal(rows.length, 3 + Number(input.journey === "always"));
+          // APR-E2E-1: the Human's note started no Run of its own.
+          assert.equal(rows.length, 2 + Number(input.journey === "always"));
           const [card] = await db.select().from(issueThreadInteractions).where(and(eq(issueThreadInteractions.companyId, companyId),
             eq(issueThreadInteractions.issueId, task.id), eq(issueThreadInteractions.kind, "request_confirmation")));
           const first = rows.find(row => (row.wake.payload as Record<string, unknown>)?.commentId === firstCommentId);
@@ -639,14 +645,18 @@ export async function withManagedConnectionReview(input: {
             eq(agentWakeupRequests.companyId, companyId), eq(agentWakeupRequests.agentId, agentId),
             sql`${agentWakeupRequests.payload}->>'issueId' = ${task.id}`)))
             .filter(wake => record(wake.payload).commentId === pendingCommentId);
-          const pendingRole = roles.find(entry => entry.role === "pending_note");
-          assert(pendingRole && noteWakes.some(wake => wake.runId === pendingRole.runId));
+          assert.deepEqual(noteWakes, [], "The deferred note never had a wake of its own");
+          // The resolution Run received the note once, through its comment batch,
+          // and its first model request carried it (checked in providerReply).
+          const resolutionContext = record(second.run.contextSnapshot);
+          assert.deepEqual(resolutionContext.wakeCommentIds, [pendingCommentId]);
+          assert(resolutionSawNote, "The resolution Run's model request carried the deferred Human note");
           assert.deepEqual(new Set(providerRuns), new Set(rows.map(row => row.run.id)));
           for (const row of rows) {
             assert.equal(row.run.runtimeMode, "native"); assert.equal(row.run.responsibleUserId, actor.userId);
             const facts = factsForRun(row.run.id);
             const role = rolesByRun.get(row.run.id); assert(role);
-            assert(facts.providerCallCount >= (role.role === "pending_note" ? 1 : 2));
+            assert(facts.providerCallCount >= 2);
             assert(facts.issuerFacts.length > 0 && facts.issuerFacts.every(fact => fact.scope === "worker_model" && fact.runId === row.run.id));
             await verifyStopped(row.run.id);
           }

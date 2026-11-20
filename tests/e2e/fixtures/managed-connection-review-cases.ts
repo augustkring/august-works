@@ -52,6 +52,10 @@ export function registerManagedConnectionReviewCase(journey: ConnectionReviewJou
       await expect(
         page.getByRole("button", { name: "Approve & run", exact: true }),
       ).not.toBeVisible();
+      // APR-E2E-1: while the card is pending, the composer says the note waits
+      // for the decision.
+      await expect(page.getByTestId("task-chat-composer-hint").or(page.getByTestId("issue-chat-composer-hint")))
+        .toHaveText("The agent will see this after you decide.", { timeout: remaining() });
       const savedPendingNote = await json<{ id: string }>(
         await request.post(`/api/issues/${issue.id}/comments`, {
           data: { body: "Keeping this review pending while I check." },
