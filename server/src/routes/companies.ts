@@ -26,6 +26,7 @@ import {
   companyPortabilityImportSchema,
   companyPortabilityPreviewSchema,
   createCompanySchema,
+  deleteCompanyConfirmationSchema,
   feedbackTargetTypeSchema,
   feedbackTraceStatusSchema,
   feedbackVoteValueSchema,
@@ -43,6 +44,7 @@ import {
   type CompanyImportTransferStatus,
 } from "@paperclipai/shared/company-import-transfer";
 import { badRequest, conflict, forbidden, notFound, unprocessable, HttpError, ImportPreflightError, ImportSourceChangedError } from "../errors.js";
+import { assertHumanAuthentication } from "../auth/authenticator-assurance.js";
 import { PORTABLE_ZIP_UPLOAD_LIMIT_BYTES } from "../http/body-limits.js";
 import { logger } from "../middleware/logger.js";
 import { validate } from "../middleware/validate.js";
@@ -1616,10 +1618,49 @@ export function companyRoutes(db: Db, storage?: StorageService, options?: Compan
     res.json(company);
   });
 
+  // Deleting a company erases its data (brief 25.2, EXIT-AUTH1). Only the
+  // company's active owner, an instance admin (the self-hosted instance
+  // operator) or the local trusted operator may do it; ordinary members,
+  // viewers and agents are refused. Being the sole owner does not block it.
+  // The request must carry the organization's current name exactly, and a
+  // signed-in Human must have authenticated recently (the same step-up as
+  // security suspension). Activity is recorded before the purge.
   router.delete("/:companyId", async (req, res) => {
     const companyId = req.params.companyId as string;
     assertCompanyAccess(req, companyId);
     assertBoard(req);
+    if (req.actor.type !== "board") throw forbidden("Board access required");
+    const actor = req.actor;
+    if (actor.source !== "local_implicit" && !actor.isInstanceAdmin) {
+      const membership = actor.userId ? await access.getMembership(companyId, "user", actor.userId) : null;
+      if (membership?.status !== "active" || membership.membershipRole !== "owner") {
+        throw forbidden("Only a company owner can delete this organization", { code: "COMPANY_OWNER_REQUIRED" });
+      }
+    }
+    const existing = await svc.getById(companyId);
+    if (!existing) {
+      res.status(404).json({ error: "Company not found" });
+      return;
+    }
+    const confirmation = deleteCompanyConfirmationSchema.safeParse(req.body ?? {});
+    if (!confirmation.success || confirmation.data.confirmName !== existing.name) {
+      throw unprocessable("Type the organization name exactly to confirm deletion", {
+        code: "COMPANY_DELETE_CONFIRMATION_MISMATCH",
+      });
+    }
+    if (actor.source !== "local_implicit") {
+      await assertHumanAuthentication(db, actor, { requireRecent: true, phishingResistant: false });
+    }
+    const actorInfo = getActorInfo(req);
+    await logActivity(db, {
+      companyId,
+      actorType: actorInfo.actorType,
+      actorId: actorInfo.actorId,
+      action: "company.deletion_requested",
+      entityType: "company",
+      entityId: companyId,
+      details: { source: actor.source ?? null },
+    });
     const company = await svc.remove(companyId);
     if (!company) {
       res.status(404).json({ error: "Company not found" });
