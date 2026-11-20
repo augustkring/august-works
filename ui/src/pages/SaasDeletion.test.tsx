@@ -14,6 +14,7 @@ const fixture = vi.hoisted(() => ({
   deletion: vi.fn(),
   request: vi.fn(),
   deletionEnabled: true,
+  profile: "saas" as string,
 }));
 vi.mock("@/api/companies-query", () => ({
   useAccountIdentity: () => ({ userId: fixture.userId }),
@@ -25,7 +26,7 @@ vi.mock("@/context/CompanyContext", () => ({
   }),
 }));
 vi.mock("@/hooks/useSaasCapabilities", () => ({
-  useSaasCapabilities: () => ({ data: { profile: "saas", deletion: fixture.deletionEnabled } }),
+  useSaasCapabilities: () => ({ data: { profile: fixture.profile, deletion: fixture.deletionEnabled } }),
 }));
 vi.mock("@/api/saas", () => ({
   saasApi: { deletion: fixture.deletion, deleteCompany: fixture.request },
@@ -41,6 +42,7 @@ describe("Organization deletion consent scope", () => {
   beforeEach(async () => {
     await i18n.changeLanguage("en");
     fixture.deletionEnabled = true;
+    fixture.profile = "saas";
     fixture.userId = "owner-a";
     fixture.companyId = "company-a";
     vi.clearAllMocks();
@@ -186,6 +188,32 @@ describe("Organization deletion consent scope", () => {
     await render();
     expect(container.querySelector("form")).not.toBeNull();
     expect(fixture.request).not.toHaveBeenCalled();
+  });
+
+  it("tells cancelling the subscription apart from deleting the data before any request (EXIT-R1)", async () => {
+    await render();
+    expect(container.querySelector("form")).not.toBeNull();
+    expect(container.textContent).toContain("Deleting the organization erases its data and also cancels its subscription");
+    expect(container.textContent).toContain("To stop paying and keep your data, cancel the subscription in Billing instead.");
+    const billing = [...container.querySelectorAll("a")].find((link) => link.textContent === "Cancel the subscription in Billing");
+    expect(billing?.getAttribute("href")).toBe("/company/settings/billing");
+    expect(fixture.request).not.toHaveBeenCalled();
+    await act(async () => { await i18n.changeLanguage("da"); });
+    expect(container.textContent).toContain("Vil du stoppe betalingen og beholde dine data, så opsig abonnementet under Fakturering i stedet.");
+    expect(container.textContent).not.toContain("cancel the subscription in Billing");
+  });
+
+  it.each(["en", "da"] as const)("points a self-hosted deployment to the Organizations list instead of a disabled request (%s)", async (locale) => {
+    fixture.profile = "local";
+    await i18n.changeLanguage(locale);
+    await render();
+    expect(fixture.deletion).not.toHaveBeenCalled();
+    expect(container.querySelector("form")).toBeNull();
+    expect(container.querySelector("h1")?.textContent).toBe(locale === "da" ? "Slet organisation" : "Delete organization");
+    const link = container.querySelector("a");
+    expect(link?.getAttribute("href")).toBe("/companies");
+    expect(link?.textContent).toBe(locale === "da" ? "Åbn Organisationer" : "Open Organizations");
+    expect(container.textContent).not.toContain("not available yet");
   });
 
   it("blocks new requests when deletion admission is disabled", async () => {

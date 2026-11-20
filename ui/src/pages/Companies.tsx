@@ -4,9 +4,12 @@ import { useCompany } from "../context/CompanyContext";
 import { useDialogActions } from "../context/DialogContext";
 import { useBreadcrumbs } from "../context/BreadcrumbContext";
 import { useCloudInstance } from "../hooks/useCloudInstance";
+import { useTranslation } from "@/i18n";
+import { Link } from "@/lib/router";
 import { companiesApi } from "../api/companies";
 import { queryKeys } from "../lib/queryKeys";
-import { formatCents, relativeTime } from "../lib/utils";
+import { formatCents } from "../lib/utils";
+import { timeAgo } from "../lib/timeAgo";
 import { Input } from "@/components/ui/input";
 import { Button } from "@/components/ui/button";
 import { Card } from "@/components/ui/card";
@@ -42,6 +45,7 @@ export function Companies() {
   } = useCompany();
   const { openOnboarding } = useDialogActions();
   const { setBreadcrumbs } = useBreadcrumbs();
+  const { t } = useTranslation("experience");
   const queryClient = useQueryClient();
   // A cloud stack holds exactly one company; creating another is a 403 floor
   // server-side, so the wizard entry point is hidden rather than dead-ending.
@@ -89,8 +93,8 @@ export function Companies() {
   });
 
   useEffect(() => {
-    setBreadcrumbs([{ label: "Organizations" }]);
-  }, [setBreadcrumbs]);
+    setBreadcrumbs([{ label: t("screens.companies.title") }]);
+  }, [setBreadcrumbs, t]);
 
   function startEdit(companyId: string, currentName: string) {
     setEditingId(companyId);
@@ -113,13 +117,13 @@ export function Companies() {
         {isCloud ? null : (
           <Button size="sm" onClick={() => openOnboarding()}>
             <Plus className="h-3.5 w-3.5 mr-1.5" />
-            New Organization
+            {t("screens.companies.new")}
           </Button>
         )}
       </div>
 
       <div className="h-6">
-        {loading && <p className="text-sm text-muted-foreground">Loading organizations...</p>}
+        {loading && <p className="text-sm text-muted-foreground">{t("screens.companies.loading")}</p>}
         {error && <p className="text-sm text-destructive">{error.message}</p>}
       </div>
 
@@ -137,19 +141,19 @@ export function Companies() {
                   (company.spentMonthlyCents / company.budgetMonthlyCents) * 100,
                 )
               : 0;
+          const headingId = `company-card-${company.id}`;
+          const confirmId = `company-delete-${company.id}`;
 
+          // The card is a labelled region, not a button: it contains its own
+          // controls (rename, actions menu, delete confirmation), and nested
+          // interactive controls are unreachable for assistive technology. The
+          // name button selects the organization; a click anywhere still does.
           return (
             <Card
               key={company.id}
-              role="button"
-              tabIndex={0}
+              role="article"
+              aria-labelledby={headingId}
               onClick={() => setSelectedCompanyId(company.id)}
-              onKeyDown={(e) => {
-                if (e.key === "Enter" || e.key === " ") {
-                  e.preventDefault();
-                  setSelectedCompanyId(company.id);
-                }
-              }}
               interactive
               className={`block group text-left p-5 ${
                 selected ? "border-primary ring-1 ring-primary hover:border-primary" : ""
@@ -167,6 +171,7 @@ export function Companies() {
                         value={editName}
                         onChange={(e) => setEditName(e.target.value)}
                         className="h-7 text-sm"
+                        aria-label={t("screens.companies.nameLabel")}
                         autoFocus
                         onKeyDown={(e) => {
                           if (e.key === "Enter") saveEdit();
@@ -176,18 +181,31 @@ export function Companies() {
                       <Button
                         variant="ghost"
                         size="icon-xs"
+                        aria-label={t("screens.companies.saveName")}
                         onClick={saveEdit}
                         disabled={editMutation.isPending}
                       >
                         <Check className="h-3.5 w-3.5 text-green-500" />
                       </Button>
-                      <Button variant="ghost" size="icon-xs" onClick={cancelEdit}>
+                      <Button variant="ghost" size="icon-xs" aria-label={t("screens.companies.cancelRename")} onClick={cancelEdit}>
                         <X className="h-3.5 w-3.5 text-muted-foreground" />
                       </Button>
                     </div>
                   ) : (
                     <div className="flex items-center gap-2">
-                      <h3 className="font-semibold text-base">{company.name}</h3>
+                      <h3 id={headingId} className="font-semibold text-base">
+                        <button
+                          type="button"
+                          className="rounded-sm text-left focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
+                          aria-current={selected ? "true" : undefined}
+                          onClick={(e) => {
+                            e.stopPropagation();
+                            setSelectedCompanyId(company.id);
+                          }}
+                        >
+                          {company.name}
+                        </button>
+                      </h3>
                       <Badge variant="ghost"
                         className={`text-(length:--text-micro) ${
                           company.status === "active"
@@ -197,12 +215,13 @@ export function Companies() {
                               : "bg-muted text-muted-foreground"
                         }`}
                       >
-                        {company.status}
+                        {t(`screens.companies.status.${company.status}`, { defaultValue: company.status })}
                       </Badge>
                       <Button
                         variant="ghost"
                         size="icon-xs"
-                        className="text-muted-foreground opacity-0 group-hover:opacity-100"
+                        aria-label={t("screens.companies.rename", { name: company.name })}
+                        className="text-muted-foreground opacity-0 group-hover:opacity-100 focus-visible:opacity-100"
                         onClick={(e) => {
                           e.stopPropagation();
                           startEdit(company.id, company.name);
@@ -226,7 +245,8 @@ export function Companies() {
                       <Button
                         variant="ghost"
                         size="icon-xs"
-                        className="text-muted-foreground opacity-0 group-hover:opacity-100 data-[state=open]:opacity-100"
+                        aria-label={t("screens.companies.actions", { name: company.name })}
+                        className="text-muted-foreground opacity-0 group-hover:opacity-100 focus-visible:opacity-100 data-[state=open]:opacity-100"
                       >
                         <MoreHorizontal className="h-4 w-4" />
                       </Button>
@@ -236,7 +256,7 @@ export function Companies() {
                         onClick={() => startEdit(company.id, company.name)}
                       >
                         <Pencil className="h-3.5 w-3.5" />
-                        Rename
+                        {t("screens.companies.renameItem")}
                       </DropdownMenuItem>
                       {company.status === "archived" && (
                         <DropdownMenuItem
@@ -244,7 +264,7 @@ export function Companies() {
                           onClick={() => unarchiveMutation.mutate(company.id)}
                         >
                           <ArchiveRestore className="h-3.5 w-3.5" />
-                          Unarchive
+                          {t("screens.companies.unarchive")}
                         </DropdownMenuItem>
                       )}
                       <DropdownMenuSeparator />
@@ -253,7 +273,7 @@ export function Companies() {
                         onClick={() => setConfirmDeleteId(company.id)}
                       >
                         <Trash2 className="h-3.5 w-3.5" />
-                        Delete Organization
+                        {t("screens.companies.deleteItem")}
                       </DropdownMenuItem>
                     </DropdownMenuContent>
                   </DropdownMenu>
@@ -264,15 +284,11 @@ export function Companies() {
               <div className="flex items-center gap-3 sm:gap-5 mt-4 text-sm text-muted-foreground flex-wrap">
                 <div className="flex items-center gap-1.5">
                   <Users className="h-3.5 w-3.5" />
-                  <span>
-                    {agentCount} {agentCount === 1 ? "agent" : "agents"}
-                  </span>
+                  <span>{t("screens.companies.agentCount", { count: agentCount })}</span>
                 </div>
                 <div className="flex items-center gap-1.5">
                   <CircleDot className="h-3.5 w-3.5" />
-                  <span>
-                    {issueCount} {issueCount === 1 ? "task" : "tasks"}
-                  </span>
+                  <span>{t("screens.companies.taskCount", { count: issueCount })}</span>
                 </div>
                 <div className="flex items-center gap-1.5 tabular-nums">
                   <DollarSign className="h-3.5 w-3.5" />
@@ -280,36 +296,52 @@ export function Companies() {
                     {formatCents(company.spentMonthlyCents)}
                     {company.budgetMonthlyCents > 0
                       ? <> / {formatCents(company.budgetMonthlyCents)} <span className="text-xs">({budgetPct}%)</span></>
-                      : <span className="text-xs ml-1">Unlimited budget</span>}
+                      : <span className="text-xs ml-1">{t("screens.companies.unlimitedBudget")}</span>}
                   </span>
                 </div>
                 <div className="flex items-center gap-1.5 ml-auto">
                   <Calendar className="h-3.5 w-3.5" />
-                  <span>Created {relativeTime(company.createdAt)}</span>
+                  <span>{t("screens.companies.created", { time: timeAgo(company.createdAt) })}</span>
                 </div>
               </div>
 
-              {/* Delete confirmation */}
+              {/* Delete confirmation. Deleting erases the data; archiving (Company
+                  settings) keeps it. Export is offered, never required. */}
               {isConfirmingDelete && (
                 <div
+                  role="alertdialog"
+                  aria-labelledby={`${confirmId}-title`}
+                  aria-describedby={`${confirmId}-body`}
                   className="mt-4 bg-destructive/5 border border-destructive/20 rounded-md px-4 py-3"
                   onClick={(e) => e.stopPropagation()}
                 >
-                  <div className="flex items-center justify-between">
-                    <p className="text-sm text-destructive font-medium">
-                      Delete this organization and all its data? This cannot be undone.
-                    </p>
-                    <div className="flex items-center gap-2 ml-4 shrink-0">
+                  <div className="flex flex-wrap items-start justify-between gap-3">
+                    <div className="min-w-0 space-y-1">
+                      <p id={`${confirmId}-title`} className="text-sm text-destructive font-medium">
+                        {t("screens.companies.deleteTitle")}
+                      </p>
+                      <p id={`${confirmId}-body`} className="text-sm text-muted-foreground">
+                        {t("screens.companies.deleteBody")}
+                      </p>
+                      <Link
+                        className="text-sm underline underline-offset-2"
+                        to={`/${company.issuePrefix}/company/export`}
+                      >
+                        {t("screens.companies.exportFirst")}
+                      </Link>
+                    </div>
+                    <div className="flex items-center gap-2 shrink-0">
                       <Button
                         variant="ghost"
                         size="sm"
+                        autoFocus
                         onClick={() => {
                           deleteMutation.reset();
                           setConfirmDeleteId(null);
                         }}
                         disabled={deleteMutation.isPending}
                       >
-                        Cancel
+                        {t("screens.companies.cancel")}
                       </Button>
                       <Button
                         variant="destructive"
@@ -317,14 +349,14 @@ export function Companies() {
                         onClick={() => deleteMutation.mutate(company.id)}
                         disabled={deleteMutation.isPending}
                       >
-                        {deleteMutation.isPending ? "Deleting…" : "Delete"}
+                        {deleteMutation.isPending ? t("screens.companies.deleting") : t("screens.companies.delete")}
                       </Button>
                     </div>
                   </div>
                   {/* A refused removal (for example, a run is still active) deletes nothing; say why. */}
                   {deleteMutation.isError && deleteMutation.variables === company.id && (
                     <p role="alert" className="mt-2 text-sm text-destructive">
-                      {deleteMutation.error instanceof Error ? deleteMutation.error.message : "The organization could not be deleted."}
+                      {deleteMutation.error instanceof Error ? deleteMutation.error.message : t("screens.companies.deleteFailed")}
                     </p>
                   )}
                 </div>

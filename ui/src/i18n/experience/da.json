@@ -4234,6 +4234,10 @@
     "retainedRecords": "Finansielle poster og en minimal slettekvittering bevares, hvor det kræves.",
     "retry": "Kontrollér status igen",
     "consequences": "Sletning blokerer nyt agentarbejde og starter stop af aktivt arbejde, sletning af administrerede runtimes og fjernelse af organisationens indhold efter opbevaringsperioden. Det kan ikke fortrydes. Delte agenter skal først flyttes til en anden hjemmeorganisation.",
+    "selfHosted": "Denne installation har ingen tjeneste til anmodning om organisationssletning. Organisationer slettes fra listen over organisationer efter et bekræftelsestrin.",
+    "openOrganizations": "Åbn Organisationer",
+    "billing": "Når organisationen slettes, slettes dens data, og abonnementet opsiges også, medmindre den samme betalingskonto betaler for en anden organisation. Vil du stoppe betalingen og beholde dine data, så opsig abonnementet under Fakturering i stedet.",
+    "openBilling": "Opsig abonnementet under Fakturering",
     "export": "Eksportér organisationen før sletning",
     "exported": "Jeg har gemt de eksporter, jeg har brug for.",
     "confirm": "Skriv {{name}} for at bekræfte",
@@ -5724,6 +5728,37 @@
       "neverDesc": "Behold bedømt AI-output kun lokalt.",
       "signOut": "Log ud",
       "signOutBody": "Log ud af denne {{product}}-instans. Du sendes videre til loginsiden."
+    },
+    "companies": {
+      "title": "Organisationer",
+      "new": "Ny organisation",
+      "loading": "Indlæser organisationer…",
+      "nameLabel": "Organisationens navn",
+      "saveName": "Gem navn",
+      "cancelRename": "Annuller omdøbning",
+      "rename": "Omdøb {{name}}",
+      "actions": "Handlinger for {{name}}",
+      "renameItem": "Omdøb",
+      "unarchive": "Gendan fra arkiv",
+      "deleteItem": "Slet organisation",
+      "status": {
+        "active": "aktiv",
+        "paused": "sat på pause",
+        "archived": "arkiveret"
+      },
+      "agentCount_one": "{{count}} agent",
+      "agentCount_other": "{{count}} agenter",
+      "taskCount_one": "{{count}} opgave",
+      "taskCount_other": "{{count}} opgaver",
+      "unlimitedBudget": "Ubegrænset budget",
+      "created": "Oprettet {{time}}",
+      "deleteTitle": "Slet denne organisation og alle dens data? Det kan ikke fortrydes.",
+      "deleteBody": "Organisationens opgaver, agenter, projekter og Memory slettes. Vil du beholde dataene og blot skjule organisationen, så arkivér den i stedet under Virksomhedsindstillinger.",
+      "exportFirst": "Eksportér en kopi først",
+      "cancel": "Annuller",
+      "delete": "Slet",
+      "deleting": "Sletter…",
+      "deleteFailed": "Organisationen kunne ikke slettes."
     }
   }
 }

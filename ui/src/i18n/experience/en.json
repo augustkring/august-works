@@ -4234,6 +4234,10 @@
     "retainedRecords": "Financial records and a minimal deletion receipt are retained where required.",
     "retry": "Check status again",
     "consequences": "Deletion blocks new agent work and starts stopping active work, erasing managed runtimes and removing your organization’s content after the retention period. This cannot be undone. Shared agents must be moved to another home organization first.",
+    "selfHosted": "This deployment has no organization deletion request service. Organizations are deleted from the Organizations list, after a confirmation step.",
+    "openOrganizations": "Open Organizations",
+    "billing": "Deleting the organization erases its data and also cancels its subscription, unless the same billing account pays for another organization. To stop paying and keep your data, cancel the subscription in Billing instead.",
+    "openBilling": "Cancel the subscription in Billing",
     "export": "Export your organization before deletion",
     "exported": "I have saved the exports I need.",
     "confirm": "Type {{name}} to confirm",
@@ -5724,6 +5728,37 @@
       "neverDesc": "Keep voted AI outputs local only.",
       "signOut": "Sign out",
       "signOutBody": "Sign out of this {{product}} instance. You will be redirected to the login page."
+    },
+    "companies": {
+      "title": "Organizations",
+      "new": "New Organization",
+      "loading": "Loading organizations…",
+      "nameLabel": "Organization name",
+      "saveName": "Save name",
+      "cancelRename": "Cancel rename",
+      "rename": "Rename {{name}}",
+      "actions": "Actions for {{name}}",
+      "renameItem": "Rename",
+      "unarchive": "Unarchive",
+      "deleteItem": "Delete Organization",
+      "status": {
+        "active": "active",
+        "paused": "paused",
+        "archived": "archived"
+      },
+      "agentCount_one": "{{count}} agent",
+      "agentCount_other": "{{count}} agents",
+      "taskCount_one": "{{count}} task",
+      "taskCount_other": "{{count}} tasks",
+      "unlimitedBudget": "Unlimited budget",
+      "created": "Created {{time}}",
+      "deleteTitle": "Delete this organization and all its data? This cannot be undone.",
+      "deleteBody": "Its tasks, agents, projects and Memory are erased. To keep the data but hide the organization, archive it in Company settings instead.",
+      "exportFirst": "Export a copy first",
+      "cancel": "Cancel",
+      "delete": "Delete",
+      "deleting": "Deleting…",
+      "deleteFailed": "The organization could not be deleted."
     }
   }
 }

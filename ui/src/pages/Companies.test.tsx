@@ -6,6 +6,7 @@ import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import { queryKeys } from "@/lib/queryKeys";
 import { Companies } from "./Companies";
+import { i18n } from "../i18n";
 
 const mockCompaniesApi = vi.hoisted(() => ({
   stats: vi.fn(),
@@ -39,6 +40,12 @@ vi.mock("../context/CompanyContext", () => ({
 
 vi.mock("../context/DialogContext", () => ({
   useDialogActions: () => ({ openOnboarding: mockOpenOnboarding }),
+}));
+
+vi.mock("@/lib/router", () => ({
+  Link: ({ children, to, className }: { children: React.ReactNode; to: string; className?: string }) => (
+    <a href={to} className={className}>{children}</a>
+  ),
 }));
 
 vi.mock("../context/BreadcrumbContext", () => ({
@@ -122,6 +129,70 @@ describe("Companies page", () => {
     act(() => {
       root.unmount();
     });
+  });
+
+  async function openDeleteConfirmation() {
+    const pointerClick = (el: Element) => {
+      el.dispatchEvent(new PointerEvent("pointerdown", { bubbles: true, cancelable: true, button: 0 }));
+      el.dispatchEvent(new PointerEvent("pointerup", { bubbles: true, cancelable: true, button: 0 }));
+      (el as HTMLElement).click();
+    };
+    const trigger = container.querySelector("[aria-haspopup='menu']");
+    act(() => pointerClick(trigger!));
+    await flushReact();
+    const menuItem = [...document.querySelectorAll("[role='menuitem']")].at(-1);
+    act(() => pointerClick(menuItem!));
+    await flushReact();
+    return container.querySelector<HTMLElement>("[role='alertdialog']");
+  }
+
+  it("asks before deleting, names archive as the keep-the-data path and offers export (EXIT-R1)", async () => {
+    const root = await renderPage();
+    // A labelled region with its own controls, not a button wrapping buttons.
+    expect(container.querySelector("[role='button'][tabindex]")).toBeNull();
+    const article = container.querySelector("[role='article']");
+    expect(document.getElementById(article!.getAttribute("aria-labelledby")!)?.textContent).toBe("Acme Labs");
+    expect(container.querySelector("[aria-haspopup='menu']")?.getAttribute("aria-label")).toBe("Actions for Acme Labs");
+    expect(container.querySelector("button[aria-label='Rename Acme Labs']")).not.toBeNull();
+
+    const dialog = await openDeleteConfirmation();
+    expect(dialog).not.toBeNull();
+    expect(document.getElementById(dialog!.getAttribute("aria-labelledby")!)?.textContent)
+      .toBe("Delete this organization and all its data? This cannot be undone.");
+    expect(document.getElementById(dialog!.getAttribute("aria-describedby")!)?.textContent)
+      .toContain("archive it in Company settings instead");
+    expect(dialog!.querySelector("a")?.getAttribute("href")).toBe("/PAP/company/export");
+    expect(mockCompaniesApi.remove).not.toHaveBeenCalled();
+
+    const cancel = [...dialog!.querySelectorAll("button")].find((button) => button.textContent === "Cancel");
+    act(() => cancel!.click());
+    await flushReact();
+    expect(container.querySelector("[role='alertdialog']")).toBeNull();
+    expect(mockCompaniesApi.remove).not.toHaveBeenCalled();
+
+    act(() => {
+      root.unmount();
+    });
+  });
+
+  it("renders the deletion confirmation in Danish", async () => {
+    await i18n.changeLanguage("da");
+    try {
+      const root = await renderPage();
+      expect(container.textContent).toContain("Ny organisation");
+      expect(container.querySelector("[aria-haspopup='menu']")?.getAttribute("aria-label")).toBe("Handlinger for Acme Labs");
+      const dialog = await openDeleteConfirmation();
+      expect(dialog?.textContent).toContain("Slet denne organisation og alle dens data? Det kan ikke fortrydes.");
+      expect(dialog?.textContent).toContain("Eksportér en kopi først");
+      const labels = [...dialog!.querySelectorAll("button")].map((button) => button.textContent);
+      expect(labels).toEqual(["Annuller", "Slet"]);
+      expect(dialog?.textContent).not.toMatch(/Delete|Cancel|Export/);
+      act(() => {
+        root.unmount();
+      });
+    } finally {
+      await i18n.changeLanguage("en");
+    }
   });
 
   it("shows why a refused organization removal deleted nothing", async () => {
