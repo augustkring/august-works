@@ -304,6 +304,13 @@ test.describe("accessibility of real routes in English and Danish", () => {
     originalFlags = await json(await api.get("/api/instance/settings/experimental"));
     await json(await api.patch("/api/instance/settings/experimental", { data: CUSTOMER_SHELL_FLAGS }));
     seed = await seedCompany(api);
+    // A freshly started server can miss the Home projection's 1.5 s deadline
+    // on its first reads (503 experience_overloaded; Home then offers "Try
+    // again"). Warm the real projection before auditing; A11Y-R1 records it.
+    await expect.poll(async () => (await api.get(`/api/companies/${seed.companyId}/experience`)).status(), {
+      message: "Home projection answers after server start",
+      timeout: 30_000,
+    }).toBe(200);
   });
 
   test.afterAll(async () => {
