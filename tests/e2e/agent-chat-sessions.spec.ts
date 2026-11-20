@@ -775,7 +775,7 @@ test("Danish Stop cancels the running reply and starts no continuation", async (
   request = f.request;
   const session = await json(await request.get("/api/auth/get-session"));
   const expectedUserId: string = session.user.id;
-  const original = await json(await request.get(`/api/auth/preferences?expectedUserId=${encodeURIComponent(expectedUserId)}`));
+  const preferences = await json(await request.get(`/api/auth/preferences?expectedUserId=${encodeURIComponent(expectedUserId)}`));
   try {
     await json(await request.patch("/api/auth/preferences", { data: { expectedUserId, locale: "da" } }));
     await page.addInitScript(() => window.localStorage.setItem("aw.v9.display-locale", "da"));
@@ -823,7 +823,7 @@ test("Danish Stop cancels the running reply and starts no continuation", async (
     expect((await json(await request.get(`/api/heartbeat-runs/${active.id}`))).status).toBe("cancelled");
     await expect(page.getByRole("button", { name: danishComposer.stop, exact: true })).toHaveCount(0);
   } finally {
-    await request.patch("/api/auth/preferences", { data: { expectedUserId, locale: original.locale ?? null } });
+    await request.patch("/api/auth/preferences", { data: { expectedUserId, locale: preferences.locale ?? null } });
     await f.restore();
   }
 });
