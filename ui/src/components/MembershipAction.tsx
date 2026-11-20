@@ -3,6 +3,7 @@ import { Loader2, LogIn, LogOut } from "lucide-react";
 import type { ResourceMembershipState } from "@paperclipai/shared";
 import { Button } from "@/components/ui/button";
 import { cn } from "../lib/utils";
+import { screenText } from "../i18n/value-labels";
 
 interface MembershipActionProps {
   state: ResourceMembershipState;
@@ -25,9 +26,9 @@ export function MembershipAction({
 }: MembershipActionProps) {
   const isLeft = state === "left";
   const label = pending
-    ? pendingState === "left" ? "Leaving..." : "Joining..."
-    : isLeft ? "Join" : "Leave";
-  const ariaLabel = `${isLeft ? "Join" : "Leave"} ${resourceName}`;
+    ? pendingState === "left" ? screenText("projects.leaving") : screenText("projects.joining")
+    : isLeft ? screenText("projects.join") : screenText("projects.leave");
+  const ariaLabel = screenText(isLeft ? "projects.joinNamed" : "projects.leaveNamed", { name: resourceName });
   const Icon = pending ? Loader2 : isLeft ? LogIn : LogOut;
 
   function handleClick(event: MouseEvent<HTMLButtonElement>) {

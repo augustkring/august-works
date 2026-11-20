@@ -4315,7 +4315,8 @@
         "resolved": "Resolved",
         "completed": "Completed",
         "archived": "Archived",
-        "draft": "Draft"
+        "draft": "Draft",
+        "planned": "Planned"
       },
       "badge": {
         "backlog": "backlog",
@@ -4348,7 +4349,8 @@
         "resolved": "resolved",
         "completed": "completed",
         "archived": "archived",
-        "draft": "draft"
+        "draft": "draft",
+        "planned": "planned"
       },
       "sentence": {
         "backlog": "Backlog",
@@ -4381,7 +4383,8 @@
         "resolved": "Resolved",
         "completed": "Completed",
         "archived": "Archived",
-        "draft": "Draft"
+        "draft": "Draft",
+        "planned": "Planned"
       }
     },
     "blocked": {
@@ -4798,6 +4801,42 @@
       "devops": "DevOps",
       "researcher": "Researcher",
       "general": "General"
+    },
+    "projects": {
+      "breadcrumb": "Projects",
+      "selectOrg": "Select an organization to view projects.",
+      "sortName": "Name",
+      "sortUpdated": "Updated",
+      "sortCreated": "Created",
+      "sortTarget": "Target date",
+      "sort": "Sort",
+      "sortLabel": "Sort: {{label}}",
+      "asc": "Asc",
+      "desc": "Desc",
+      "add": "Add Project",
+      "none": "No projects yet.",
+      "mine": "My Projects",
+      "other": "Other Projects",
+      "tasks_one": "{{formattedCount}} task",
+      "tasks_other": "{{formattedCount}} tasks",
+      "join": "Join",
+      "leave": "Leave",
+      "joining": "Joining...",
+      "leaving": "Leaving...",
+      "joinNamed": "Join {{name}}",
+      "leaveNamed": "Leave {{name}}",
+      "star": "Star {{name}}",
+      "unstar": "Unstar {{name}}",
+      "saveRetry": "Couldn't save — retry",
+      "dialog": {
+        "connect": "Connect GitHub",
+        "create": "Create project",
+        "close": "Close new project",
+        "name": "Project name",
+        "repos": "Source repositories",
+        "cancel": "Cancel",
+        "creating": "Creating…"
+      }
     }
   }
 }

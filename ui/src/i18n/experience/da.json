@@ -4315,7 +4315,8 @@
         "resolved": "Løst",
         "completed": "Fuldført",
         "archived": "Arkiveret",
-        "draft": "Kladde"
+        "draft": "Kladde",
+        "planned": "Planlagt"
       },
       "badge": {
         "backlog": "Backlog",
@@ -4348,7 +4349,8 @@
         "resolved": "Løst",
         "completed": "Fuldført",
         "archived": "Arkiveret",
-        "draft": "Kladde"
+        "draft": "Kladde",
+        "planned": "Planlagt"
       },
       "sentence": {
         "backlog": "Backlog",
@@ -4381,7 +4383,8 @@
         "resolved": "Løst",
         "completed": "Fuldført",
         "archived": "Arkiveret",
-        "draft": "Kladde"
+        "draft": "Kladde",
+        "planned": "Planlagt"
       }
     },
     "blocked": {
@@ -4798,6 +4801,42 @@
       "devops": "DevOps",
       "researcher": "Researcher",
       "general": "Generel"
+    },
+    "projects": {
+      "breadcrumb": "Projekter",
+      "selectOrg": "Vælg en organisation for at se projekter.",
+      "sortName": "Navn",
+      "sortUpdated": "Opdateret",
+      "sortCreated": "Oprettet",
+      "sortTarget": "Måldato",
+      "sort": "Sortér",
+      "sortLabel": "Sortér: {{label}}",
+      "asc": "Stigende",
+      "desc": "Faldende",
+      "add": "Tilføj projekt",
+      "none": "Ingen projekter endnu.",
+      "mine": "Mine projekter",
+      "other": "Andre projekter",
+      "tasks_one": "{{formattedCount}} opgave",
+      "tasks_other": "{{formattedCount}} opgaver",
+      "join": "Deltag",
+      "leave": "Forlad",
+      "joining": "Tilmelder…",
+      "leaving": "Forlader…",
+      "joinNamed": "Deltag i {{name}}",
+      "leaveNamed": "Forlad {{name}}",
+      "star": "Tilføj {{name}} til favoritter",
+      "unstar": "Fjern {{name}} fra favoritter",
+      "saveRetry": "Kunne ikke gemme – prøv igen",
+      "dialog": {
+        "connect": "Forbind GitHub",
+        "create": "Opret projekt",
+        "close": "Luk nyt projekt",
+        "name": "Projektnavn",
+        "repos": "Kildekodelagre",
+        "cancel": "Annuller",
+        "creating": "Opretter…"
+      }
     }
   }
 }
