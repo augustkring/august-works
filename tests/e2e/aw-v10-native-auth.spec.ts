@@ -1,4 +1,4 @@
-import { readFile } from "node:fs/promises";
+import { readFile, writeFile } from "node:fs/promises";
 import { randomUUID } from "node:crypto";
 import { tmpdir } from "node:os";
 import { createDb, closeRegisteredClients } from "../../packages/db/src/index.ts";
@@ -8,8 +8,10 @@ import { createRequire } from "node:module";
 import path from "node:path";
 import { pathToFileURL } from "node:url";
 import { expect, test, type APIResponse, type Page } from "@playwright/test";
+import { deleteCompany } from "./company-cleanup";
 
 const serverRequire = createRequire(path.resolve("server/package.json"));
+const axePath = createRequire(import.meta.url).resolve("axe-core/axe.min.js");
 const { base32 } = await import(pathToFileURL(serverRequire.resolve("@better-auth/utils/base32")).href);
 const { createOTP } = await import(pathToFileURL(serverRequire.resolve("@better-auth/utils/otp")).href);
 async function json(response: APIResponse) {
@@ -20,7 +22,7 @@ async function json(response: APIResponse) {
 // Built application, native bootstrap/company owners, real HTTP-only cookies,
 // maintained OTP generation/verification and migrated PostgreSQL. The disposable
 // private profile does not qualify SaaS mail, external IdP, physical authenticators or hosts.
-test("native CLI consent and account settings use real session and authenticator lifecycles", async ({ page, baseURL, context }) => {
+test("native CLI consent and account settings use real session and authenticator lifecycles", async ({ page, baseURL, context, playwright }) => {
   const cdp = await context.newCDPSession(page);
   await cdp.send("WebAuthn.enable");
   let { authenticatorId } = await cdp.send("WebAuthn.addVirtualAuthenticator", { options: {
@@ -34,11 +36,7 @@ test("native CLI consent and account settings use real session and authenticator
   const signup = await json(await page.request.post("/api/auth/sign-up/email", { data: {
     name: "Disposable native authenticator reviewer", email, password,
   } }));
-  const invitation = execFileSync("pnpm", ["--filter", "@paperclipai/db", "exec", "tsx",
-    path.resolve("packages/db/scripts/create-auth-bootstrap-invite.ts"), "--config", config, "--base-url", baseURL],
-    { encoding: "utf8", env: process.env, stdio: ["ignore", "pipe", "pipe"] }).trim();
-  const token = new URL(invitation).pathname.split("/").at(-1);
-  await json(await page.request.post(`/api/invites/${token}/accept`, { data: { requestType: "human" } }));
+  await grantInstanceAdmin(playwright, baseURL, config, signup.user.id);
   const company = await json(await page.request.post("/api/companies", { data: { name: "Disposable native authentication company" } }));
   const manualProject = await json(await page.request.post(`/api/companies/${company.id}/projects`, { data: {
     name: "Direct Human project source", description: "An independent manual project.",
@@ -345,3 +343,168 @@ async function confirmCliConsent(page: Page, configPath: string, userId: string,
       .some(value => secrets.some(secret => value.includes(secret))), [password, challenge.boardApiToken])).toBe(false);
   } finally { await closeRegisteredClients(url); }
 }
+
+// The native bootstrap invite can be claimed once per isolated server. A
+// dedicated disposable administrator claims it through the real script and
+// route; its credentials stay beside that server's temporary config so a later
+// test (or a restarted worker) signs in and promotes its own principal.
+async function grantInstanceAdmin(playwright: typeof import("@playwright/test"), baseURL: string, config: string, userId: string) {
+  expect(config.startsWith(path.join(tmpdir(), "paperclip-e2e-home-"))).toBe(true);
+  const file = path.join(path.dirname(config), "native-auth-instance-admin.json");
+  const admin = await playwright.request.newContext({ baseURL, extraHTTPHeaders: { Origin: baseURL } });
+  try {
+    const saved = await readFile(file, "utf8").then(text => JSON.parse(text) as { email: string; password: string }).catch(() => null);
+    if (saved) {
+      await json(await admin.post("/api/auth/sign-in/email", { data: saved }));
+    } else {
+      const credentials = { email: `native-instance-admin-${randomUUID()}@test.invalid`, password: "Disposable native instance administrator 2026" };
+      await json(await admin.post("/api/auth/sign-up/email", { data: { name: "Disposable instance administrator", ...credentials } }));
+      const invitation = execFileSync("pnpm", ["--filter", "@paperclipai/db", "exec", "tsx",
+        path.resolve("packages/db/scripts/create-auth-bootstrap-invite.ts"), "--config", config, "--base-url", baseURL],
+        { encoding: "utf8", env: process.env, stdio: ["ignore", "pipe", "pipe"] }).trim();
+      const token = new URL(invitation).pathname.split("/").at(-1);
+      await json(await admin.post(`/api/invites/${token}/accept`, { data: { requestType: "human" } }));
+      await writeFile(file, JSON.stringify(credentials), { mode: 0o600 });
+    }
+    const promoted = await admin.post(`/api/admin/users/${encodeURIComponent(userId)}/promote-instance-admin`);
+    expect(promoted.status(), await promoted.text()).toBe(201);
+  } finally { await admin.dispose(); }
+}
+
+const WCAG_21_A_AA = ["wcag2a", "wcag2aa", "wcag21a", "wcag21aa"];
+type AxeViolation = { id: string; impact: string | null; help: string; nodes: { target: string[] }[] };
+async function auditWcag(page: Page, label: string) {
+  await page.addScriptTag({ path: axePath });
+  const violations: AxeViolation[] = await page.evaluate(async tags => {
+    const axe = (window as unknown as { axe: { run(context: Document, options: unknown): Promise<{ violations: AxeViolation[] }> } }).axe;
+    return (await axe.run(document, { runOnly: { type: "tag", values: tags } })).violations;
+  }, WCAG_21_A_AA);
+  const summary = violations.map(violation =>
+    `[${violation.impact}] ${violation.id}: ${violation.help} -> ${violation.nodes.slice(0, 3).map(node => node.target.join(" ")).join(" | ")}`);
+  if (summary.length) console.log(`axe ${label}\n  ${summary.join("\n  ")}`);
+  expect(violations.map(violation => violation.id), `WCAG 2.1 A/AA violations on ${label}`).toEqual([]);
+}
+
+async function expectLanguage(page: Page, locale: "en" | "da") {
+  await expect(page.locator("html")).toHaveAttribute("lang", locale);
+}
+
+// Real sign-up/sign-in forms in English and Danish on the built application.
+// No email delivery: self-hosted authenticated accounts need no confirmation.
+// Each principal here is disposable and unshared, so its saved language cannot
+// leak into another test's starting state.
+test("account entry signs up, signs out and signs in again in Danish with accessible forms", async ({ page }) => {
+  const email = `native-danish-entry-${Date.now()}@test.invalid`;
+  const password = "En rolig dansk adgangssætning til Blentera 2026";
+  await page.goto("/auth");
+  await expectLanguage(page, "en");
+  await expect(page.getByRole("heading", { level: 1, name: "Sign in to Blentera" })).toBeVisible();
+  await auditWcag(page, "auth sign-in EN");
+  await page.getByRole("button", { name: "Create one", exact: true }).click();
+  await expect(page.getByRole("heading", { level: 1, name: "Create your Blentera account" })).toBeVisible();
+  await auditWcag(page, "auth sign-up EN");
+
+  await page.getByLabel("Language").selectOption("da");
+  await expectLanguage(page, "da");
+  await expect(page.getByRole("heading", { level: 1, name: "Opret din Blentera-konto" })).toBeVisible();
+  await expect(page.getByLabel("Sprog")).toHaveValue("da");
+  await expect(page.getByLabel("Navn", { exact: true })).toHaveAttribute("autocomplete", "name");
+  await expect(page.getByLabel("E-mail", { exact: true })).toHaveAttribute("autocomplete", "username");
+  await expect(page.getByLabel("Adgangskode", { exact: true })).toHaveAttribute("autocomplete", "new-password");
+  await auditWcag(page, "auth sign-up DA");
+
+  await page.getByLabel("Navn", { exact: true }).fill("Dansk kontoindgang");
+  await page.getByLabel("E-mail", { exact: true }).fill(email);
+  await page.getByLabel("Adgangskode", { exact: true }).fill("for kort");
+  await page.getByRole("button", { name: "Opret konto", exact: true }).click();
+  const tooShort = page.getByRole("alert").filter({ hasText: "Brug mindst 15 tegn. Mellemrum tæller med." });
+  await expect(tooShort).toBeFocused();
+  await expect(page.getByLabel("Adgangskode", { exact: true })).toHaveAttribute("aria-invalid", "true");
+  await auditWcag(page, "auth sign-up DA error");
+  await page.getByLabel("Adgangskode", { exact: true }).fill(password);
+  const signedUp = page.waitForResponse(response => response.url().endsWith("/api/auth/sign-up/email"));
+  await page.getByRole("button", { name: "Opret konto", exact: true }).click();
+  expect((await signedUp).status()).toBe(200);
+  await expect(page).not.toHaveURL(/\/auth(\?|$)/);
+  const created = await json(await page.request.get("/api/auth/get-session"));
+  expect(created.user.email).toBe(email);
+  await expectLanguage(page, "da");
+
+  await json(await page.request.post("/api/auth/sign-out", { data: {} }));
+  expect((await page.request.get("/api/auth/get-session")).status()).toBe(401);
+  await page.goto("/auth");
+  await expectLanguage(page, "da");
+  await expect(page.getByRole("heading", { level: 1, name: "Log ind på Blentera" })).toBeVisible();
+  await expect(page.getByLabel("Adgangskode", { exact: true })).toHaveAttribute("autocomplete", "current-password");
+  await auditWcag(page, "auth sign-in DA");
+  await page.getByLabel("E-mail", { exact: true }).fill(email);
+  await page.getByLabel("Adgangskode", { exact: true }).fill(`${password} forkert`);
+  await page.getByRole("button", { name: "Log ind", exact: true }).click();
+  await expect(page.getByRole("alert").filter({ hasText: "Ugyldig e-mail eller adgangskode" })).toBeFocused();
+  await auditWcag(page, "auth sign-in DA error");
+  await page.getByLabel("Adgangskode", { exact: true }).fill(password);
+  await page.getByRole("button", { name: "Log ind", exact: true }).click();
+  await expect(page).not.toHaveURL(/\/auth(\?|$)/);
+  expect((await json(await page.request.get("/api/auth/get-session"))).user.id).toBe(created.user.id);
+  await expectLanguage(page, "da");
+});
+
+// Moved from multi-user-authenticated.spec.ts, which needs a hand-started
+// server and no CI workflow runs it. The owner creates invitations through the
+// real route; each invitee opens the link in a fresh browser whose language is
+// the only locale signal, signs up inline and joins.
+test("owners invite people who land, sign up and join in Danish and English", async ({ page, baseURL, browser, playwright }) => {
+  const config = process.env.PAPERCLIP_E2E_SERVER_CONFIG;
+  if (!config || !baseURL) throw new Error("An isolated authenticated server is required");
+  const owner = await json(await page.request.post("/api/auth/sign-up/email", { data: {
+    name: "Disposable inviting owner", email: `native-invite-owner-${Date.now()}@test.invalid`, password: "Disposable inviting owner passphrase 2026",
+  } }));
+  await grantInstanceAdmin(playwright, baseURL, config, owner.user.id);
+  const company = await json(await page.request.post("/api/companies", { data: { name: "Invitation language company" } }));
+  try {
+    for (const run of [
+      { locale: "da" as const, browserLocale: "da-DK", role: "viewer", heading: `Bliv medlem af ${company.name}`,
+        name: "Navn", email: "E-mail", password: "Adgangskode", submit: "Opret konto og fortsæt" },
+      { locale: "en" as const, browserLocale: "en-US", role: "operator", heading: `Join ${company.name}`,
+        name: "Name", email: "Email", password: "Password", submit: "Create account and continue" },
+    ]) {
+      const invite = await json(await page.request.post(`/api/companies/${company.id}/invites`, { data: { allowedJoinTypes: "human", humanRole: run.role } }));
+      expect(invite.inviteUrl).toMatch(/\/invite\/[^/]+$/);
+      const inviteeEmail = `native-invitee-${run.locale}-${Date.now()}@test.invalid`;
+      const invitee = await browser.newContext({ baseURL, extraHTTPHeaders: { Origin: baseURL }, locale: run.browserLocale });
+      try {
+        const landing = await invitee.newPage();
+        await landing.goto(new URL(invite.inviteUrl).pathname);
+        await expectLanguage(landing, run.locale);
+        await expect(landing.getByRole("heading", { level: 1, name: run.heading })).toBeVisible();
+        await auditWcag(landing, `invite landing ${run.locale.toUpperCase()}`);
+        await expect(landing.getByLabel(run.name, { exact: true })).toHaveAttribute("autocomplete", "name");
+        await expect(landing.getByLabel(run.email, { exact: true })).toHaveAttribute("autocomplete", "username");
+        await expect(landing.getByLabel(run.password, { exact: true })).toHaveAttribute("autocomplete", "new-password");
+        await landing.getByLabel(run.name, { exact: true }).fill(`Invited ${run.locale} person`);
+        await landing.getByLabel(run.email, { exact: true }).fill(inviteeEmail);
+        await landing.getByLabel(run.password, { exact: true }).fill("Disposable invited person passphrase 2026");
+        const accepted = landing.waitForResponse(response => response.url().endsWith(`/accept`) && response.request().method() === "POST");
+        await landing.getByRole("button", { name: run.submit, exact: true }).click();
+        expect((await accepted).status()).toBeLessThan(300);
+        await expect(landing).not.toHaveURL(/\/invite\//);
+        await expectLanguage(landing, run.locale);
+        await landing.waitForLoadState("networkidle");
+        await auditWcag(landing, `invite accept result ${run.locale.toUpperCase()}`);
+        const session = await json(await landing.request.get("/api/auth/get-session"));
+        expect(session.user.email).toBe(inviteeEmail);
+        const { members } = await json(await page.request.get(`/api/companies/${company.id}/members`));
+        expect(members.find((member: { user?: { email?: string } }) => member.user?.email === inviteeEmail)).toMatchObject({
+          status: "active", membershipRole: run.role, principalId: session.user.id,
+        });
+        if (run.role === "viewer") {
+          const refused = await landing.request.post(`/api/companies/${company.id}/invites`, { data: { allowedJoinTypes: "human", humanRole: "viewer" } });
+          expect(refused.status()).toBe(403);
+        }
+      } finally { await invitee.close(); }
+    }
+  } finally {
+    const removed = await deleteCompany(page.request, company.id);
+    expect(removed.ok(), String(removed.status())).toBe(true);
+  }
+});
