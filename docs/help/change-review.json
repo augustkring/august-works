@@ -13,10 +13,10 @@
     {
       "source": "ui/src/pages/Approvals.tsx",
       "articleId": "approvals-and-stop",
-      "sourceSha256": "a6dc309ff9123de2da5385ee8a402fbefe09b65997571591e60547db24dddbd3",
+      "sourceSha256": "e869c881d9f8c88f478b5adfba18ef9219ca9ec3f3119f959b7c8f14c8f28b30",
       "articleSha256": "601860635ecfdbef65d0703b3966a9af6429ec84d78d857ab85ac9863b77ba60",
       "decision": "no_change",
-      "rationale": "Reviewed (A11Y-R1): the Pending/All tab bar no longer points aria-controls at a missing panel. Approval review, decision and Stop behaviour described in the article are unchanged."
+      "rationale": "Reviewed (I18N-DA1): the screen text moved into the English and Danish catalogues. Behaviour, steps and controls are unchanged, so the article stays accurate."
     },
     {
       "source": "ui/src/pages/IssueDetail.tsx",
@@ -37,10 +37,10 @@
     {
       "source": "ui/src/pages/Approvals.tsx",
       "articleId": "approvals-and-stop-da",
-      "sourceSha256": "a6dc309ff9123de2da5385ee8a402fbefe09b65997571591e60547db24dddbd3",
+      "sourceSha256": "e869c881d9f8c88f478b5adfba18ef9219ca9ec3f3119f959b7c8f14c8f28b30",
       "articleSha256": "b9ef02341c31fea40d5b41c881d1cc60efe7e709a12b3942092001b7b91a91b6",
       "decision": "no_change",
-      "rationale": "Reviewed (A11Y-R1): the Pending/All tab bar no longer points aria-controls at a missing panel. Approval review, decision and Stop behaviour described in the article are unchanged."
+      "rationale": "Reviewed (I18N-DA1): the screen text moved into the English and Danish catalogues. Behaviour, steps and controls are unchanged, so the article stays accurate."
     },
     {
       "source": "ui/src/pages/IssueDetail.tsx",
@@ -1989,10 +1989,10 @@
     {
       "source": "ui/src/pages/Agents.tsx",
       "articleId": "working-with-coworkers",
-      "sourceSha256": "8040d7f0641c95f8b3d486fa148f4543c03aaf158d26632c5c9447f599dbec9b",
+      "sourceSha256": "fdb2e7fa82ab818f444d2f984c8978e4e2f963b7e9bcaf9f91eca909890e0099",
       "articleSha256": "f7967586b023dc5f5b8db075f0748a96bf09f03f5e55d854e383be3e26ba0d72",
-      "decision": "updated",
-      "rationale": "The agents list changes Paperclip labels to Blentera; the article\u2019s current team setup and activation guidance remains accurate."
+      "decision": "no_change",
+      "rationale": "Reviewed (I18N-DA1): the screen text moved into the English and Danish catalogues. Behaviour, steps and controls are unchanged, so the article stays accurate."
     },
     {
       "source": "server/src/services/agents.ts",
@@ -2029,10 +2029,10 @@
     {
       "source": "ui/src/pages/Agents.tsx",
       "articleId": "working-with-coworkers-da",
-      "sourceSha256": "8040d7f0641c95f8b3d486fa148f4543c03aaf158d26632c5c9447f599dbec9b",
+      "sourceSha256": "fdb2e7fa82ab818f444d2f984c8978e4e2f963b7e9bcaf9f91eca909890e0099",
       "articleSha256": "fc9836e25ab493bfe26f82d6a0b0dbaa7fc0407e1b8d92d640acdd495d0e7e7d",
-      "decision": "updated",
-      "rationale": "Danish version checked against the same source delta: the agents list changes Paperclip labels to Blentera; the article\u2019s current team setup and activation guidance remains accurate."
+      "decision": "no_change",
+      "rationale": "Reviewed (I18N-DA1): the screen text moved into the English and Danish catalogues. Behaviour, steps and controls are unchanged, so the article stays accurate."
     },
     {
       "source": "server/src/services/memory/memory-jobs.ts",
@@ -2101,10 +2101,10 @@
     {
       "source": "ui/src/pages/CompanySettings.tsx",
       "articleId": "people-and-company-access",
-      "sourceSha256": "baf71ff2c36a113620e3624483faf784025ff40ae819011909b566d28ac53aa5",
+      "sourceSha256": "a028a2332389ed74e8eafa70baff8bc52afb319b866c5b26e72cad95929d2d70",
       "articleSha256": "1e804cb7e33fe610120d6f30d6fa556cd27e382028ad43d939378cc88e7ec8af",
       "decision": "no_change",
-      "rationale": "Reviewed (A11Y-R1): company settings fields are now programmatically labelled, hint icons are named and inputs show keyboard focus. Membership, invitation and access guidance is unchanged."
+      "rationale": "Reviewed (I18N-DA1): the screen text moved into the English and Danish catalogues. Behaviour, steps and controls are unchanged, so the article stays accurate."
     },
     {
       "source": "ui/src/components/AccountExperienceLanguageSelect.tsx",
@@ -2149,10 +2149,10 @@
     {
       "source": "ui/src/pages/CompanySettings.tsx",
       "articleId": "people-and-company-access-da",
-      "sourceSha256": "baf71ff2c36a113620e3624483faf784025ff40ae819011909b566d28ac53aa5",
+      "sourceSha256": "a028a2332389ed74e8eafa70baff8bc52afb319b866c5b26e72cad95929d2d70",
       "articleSha256": "a5885bddfed301f22a7c86d5e7c45685fd1f9ea602296786e32451b6456e08e8",
       "decision": "no_change",
-      "rationale": "Reviewed (A11Y-R1): company settings fields are now programmatically labelled, hint icons are named and inputs show keyboard focus. Membership, invitation and access guidance is unchanged."
+      "rationale": "Reviewed (I18N-DA1): the screen text moved into the English and Danish catalogues. Behaviour, steps and controls are unchanged, so the article stays accurate."
     },
     {
       "source": "ui/src/components/AccountExperienceLanguageSelect.tsx",
@@ -2821,18 +2821,18 @@
     {
       "source": "ui/src/i18n/experience/en.json",
       "articleId": "create-and-track-work",
-      "sourceSha256": "7de235cf197e41899c14956da74edbb828a4e52a496282ab1493e5605542fe45",
+      "sourceSha256": "20a3cb8a476b72c93fd49b45079c59d04dc0591bc0624e58852241f9991957cd",
       "articleSha256": "e08d017550dda25a9e6185a4478026f2affd445e16a1d10dff2464761537b328",
       "decision": "no_change",
-      "rationale": "Reviewed (A11Y-R1): only new accessible names for icon-only controls (open assigned agent, open project, field hint buttons) were added; task creation and tracking steps in the article are unchanged."
+      "rationale": "Reviewed (I18N-DA1): the screen text moved into the English and Danish catalogues. Behaviour, steps and controls are unchanged, so the article stays accurate."
     },
     {
       "source": "ui/src/i18n/experience/da.json",
       "articleId": "create-and-track-work-da",
-      "sourceSha256": "a1b5ca5655fbc9990ea70978d9bb846debd2ad4ed689a1537e61a9b8e3a5af29",
+      "sourceSha256": "47ad1db3437919bc5894c068e6a02281fb9d08ce5a4e6d39d83521c394477433",
       "articleSha256": "b36d116837115a674b3751f11ae3dcdd1a7fdcd9f31d26206feeec490f715e29",
       "decision": "no_change",
-      "rationale": "Reviewed (A11Y-R1): only new Danish accessible names for icon-only controls (open assigned agent, open project, field hint buttons) were added; the Danish task creation and tracking steps are unchanged."
+      "rationale": "Reviewed (I18N-DA1): the screen text moved into the English and Danish catalogues. Behaviour, steps and controls are unchanged, so the article stays accurate."
     },
     {
       "source": "ui/src/pages/Auth.tsx",

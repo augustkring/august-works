@@ -8860,7 +8860,7 @@
         "put:`/companies/${companyId}/users/me/inbox-agent-policy`"
       ],
       "argumentsSignature": "companyId!, {\n        mode: next.mode,\n        allowedAgentIds: next.mode === \"allowlist\" ? next.allowedAgentIds : [],\n      }",
-      "line": 99,
+      "line": 92,
       "occurrence": 0,
       "owner": "server/src/services/inbox-agent-policy.ts",
       "classification": "HUMAN_ONLY",
@@ -11184,7 +11184,7 @@
         "post:`/companies/${companyId}/projects`"
       ],
       "argumentsSignature": "companyId, { name: name.trim(), status: \"planned\", repositoryIds: repos.map((repo) => repo.id) }",
-      "line": 38,
+      "line": 39,
       "occurrence": 0,
       "owner": "server/src/routes/projects.ts",
       "classification": "DIRECT_AGENT",
@@ -25801,7 +25801,7 @@
         "post:`/approvals/${id}/approve${account(principal)}`"
       ],
       "argumentsSignature": "id",
-      "line": 46,
+      "line": 48,
       "occurrence": 0,
       "owner": "server/src/services/approvals.ts",
       "classification": "HUMAN_ONLY",
@@ -25904,7 +25904,7 @@
         "post:`/approvals/${id}/reject${account(principal)}`"
       ],
       "argumentsSignature": "id",
-      "line": 58,
+      "line": 60,
       "occurrence": 0,
       "owner": "server/src/services/approvals.ts",
       "classification": "HUMAN_ONLY",
@@ -38900,7 +38900,7 @@
         "post:`/approvals/${id}/approve${account(principal)}`"
       ],
       "argumentsSignature": "id",
-      "line": 1741,
+      "line": 1746,
       "occurrence": 0,
       "owner": "server/src/services/approvals.ts",
       "classification": "HUMAN_ONLY",
@@ -39003,7 +39003,7 @@
         "post:`/approvals/${id}/reject${account(principal)}`"
       ],
       "argumentsSignature": "id",
-      "line": 1753,
+      "line": 1758,
       "occurrence": 0,
       "owner": "server/src/services/approvals.ts",
       "classification": "HUMAN_ONLY",
@@ -39116,7 +39116,7 @@
         "post:`/companies/${companyId}/join-requests/${requestId}/approve`"
       ],
       "argumentsSignature": "selectedCompanyId!, joinRequest.id",
-      "line": 1765,
+      "line": 1770,
       "occurrence": 0,
       "owner": "server/src/routes/access.ts",
       "classification": "DIRECT_AGENT",
@@ -39227,7 +39227,7 @@
         "post:`/companies/${companyId}/join-requests/${requestId}/reject`"
       ],
       "argumentsSignature": "selectedCompanyId!, joinRequest.id",
-      "line": 1780,
+      "line": 1785,
       "occurrence": 0,
       "owner": "server/src/routes/access.ts",
       "classification": "DIRECT_AGENT",
@@ -39338,7 +39338,7 @@
         "post:agentPath(id, companyId, \"/wakeup\")"
       ],
       "argumentsSignature": "run.agentId, run.id, run.companyId",
-      "line": 1795,
+      "line": 1800,
       "occurrence": 0,
       "owner": "server/src/services/agents.ts",
       "classification": "HUMAN_ONLY",
@@ -39446,7 +39446,7 @@
         "post:`/issues/${id}/inbox-archive`"
       ],
       "argumentsSignature": "id",
-      "line": 1871,
+      "line": 1876,
       "occurrence": 0,
       "owner": "server/src/routes/issues.ts",
       "classification": "DIRECT_AGENT",
@@ -39492,7 +39492,7 @@
         "delete:`/issues/${id}/inbox-archive`"
       ],
       "argumentsSignature": "id",
-      "line": 1921,
+      "line": 1926,
       "occurrence": 0,
       "owner": "server/src/routes/issues.ts",
       "classification": "DIRECT_AGENT",
@@ -39538,7 +39538,7 @@
         "post:`/issues/${id}/read`"
       ],
       "argumentsSignature": "id",
-      "line": 1952,
+      "line": 1957,
       "occurrence": 0,
       "owner": "server/src/routes/issues.ts",
       "classification": "HUMAN_ONLY",
@@ -39591,7 +39591,7 @@
         "post:`/issues/${id}/read`"
       ],
       "argumentsSignature": "issueId",
-      "line": 1972,
+      "line": 1977,
       "occurrence": 0,
       "owner": "server/src/routes/issues.ts",
       "classification": "HUMAN_ONLY",
@@ -39644,7 +39644,7 @@
         "delete:`/issues/${id}/read`"
       ],
       "argumentsSignature": "id",
-      "line": 1996,
+      "line": 2001,
       "occurrence": 0,
       "owner": "server/src/routes/issues.ts",
       "classification": "HUMAN_ONLY",
@@ -43150,7 +43150,7 @@
         "patch:`/issues/${id}`"
       ],
       "argumentsSignature": "id, data",
-      "line": 194,
+      "line": 196,
       "occurrence": 0,
       "owner": "server/src/routes/issues.ts",
       "classification": "DIRECT_AGENT",
@@ -48824,7 +48824,7 @@
         "patch:`/api/auth${path}`"
       ],
       "argumentsSignature": "input",
-      "line": 77,
+      "line": 79,
       "occurrence": 0,
       "owner": "server/src/routes/auth.ts",
       "classification": "HUMAN_ONLY",
@@ -48902,7 +48902,7 @@
         "postForm:`/companies/${companyId}/assets/images`"
       ],
       "argumentsSignature": "selectedCompanyId, file, `profiles/${sessionQuery.data?.user.id ?? \"board-user\"}`",
-      "line": 104,
+      "line": 106,
       "occurrence": 0,
       "owner": "server/src/routes/assets.ts",
       "classification": "DIRECT_AGENT",
@@ -57903,7 +57903,7 @@
         "post:`/chat-endpoints/${endpointId}/setup`"
       ],
       "argumentsSignature": "target.id, { action: \"remove\" }",
-      "line": 327,
+      "line": 330,
       "occurrence": 0,
       "owner": "server/src/services/chat-channels.ts",
       "classification": "HUMAN_ONLY",
@@ -57996,7 +57996,7 @@
         "delete:`/tool-connections/${connectionId}`"
       ],
       "argumentsSignature": "target.id",
-      "line": 329,
+      "line": 332,
       "occurrence": 0,
       "owner": "server/src/services/tool-access.ts",
       "classification": "HUMAN_ONLY",

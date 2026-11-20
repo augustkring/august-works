@@ -12973,7 +12973,7 @@
         },
         {
           "path": "ui/src/pages/Inbox.tsx",
-          "sha256": "5fd36a58c0f0aea24f3da94bc6889f05736d872abdb8b26532bf7dd36b0cc27a"
+          "sha256": "6e87c6985d275c05f9974b2e043af47257c547d4015a6640cb44764be26dcccf"
         }
       ],
       "kind": "safe_change_record",
@@ -32185,11 +32185,11 @@
         },
         {
           "path": "ui/src/i18n/experience/da.json",
-          "sha256": "a1b5ca5655fbc9990ea70978d9bb846debd2ad4ed689a1537e61a9b8e3a5af29"
+          "sha256": "47ad1db3437919bc5894c068e6a02281fb9d08ce5a4e6d39d83521c394477433"
         },
         {
           "path": "ui/src/i18n/experience/en.json",
-          "sha256": "7de235cf197e41899c14956da74edbb828a4e52a496282ab1493e5605542fe45"
+          "sha256": "20a3cb8a476b72c93fd49b45079c59d04dc0591bc0624e58852241f9991957cd"
         },
         {
           "path": "ui/src/i18n/index.ts",
@@ -32680,7 +32680,7 @@
         },
         {
           "path": "doc/operations/agent-native-ui-operation-coverage.json",
-          "sha256": "a5d07d724df2752aa1a107e3735286445488244f591b79c907e1eaf01fef435e"
+          "sha256": "8b43217ec8cf8e4d5df9aaa5898f14a1bdfd2f8106e8bb3e32fa21c47dc670b5"
         },
         {
           "path": "doc/operations/production-hotspot-responsibilities.json",
@@ -32692,7 +32692,7 @@
         },
         {
           "path": "doc/operations/v10-capability-projection.json",
-          "sha256": "1540985fe56843eb8af8b094b4a04de134c2fc915bb32823e70dadab85d703df"
+          "sha256": "082daff746a8de2f45edb6b3ebf443801611cbbee3e43cc7f517bb0b1ad8e76b"
         },
         {
           "path": "package.json",
@@ -35933,7 +35933,7 @@
         },
         {
           "path": "ui/src/pages/Agents.tsx",
-          "sha256": "8040d7f0641c95f8b3d486fa148f4543c03aaf158d26632c5c9447f599dbec9b"
+          "sha256": "fdb2e7fa82ab818f444d2f984c8978e4e2f963b7e9bcaf9f91eca909890e0099"
         },
         {
           "path": "ui/src/pages/BootstrapSetupUxLab.tsx",
@@ -35977,7 +35977,7 @@
         },
         {
           "path": "ui/src/pages/CompanySettings.tsx",
-          "sha256": "baf71ff2c36a113620e3624483faf784025ff40ae819011909b566d28ac53aa5"
+          "sha256": "a028a2332389ed74e8eafa70baff8bc52afb319b866c5b26e72cad95929d2d70"
         },
         {
           "path": "ui/src/pages/CompanySettingsArchive.test.tsx",
@@ -35985,7 +35985,7 @@
         },
         {
           "path": "ui/src/pages/CompanySettingsRenameHint.test.tsx",
-          "sha256": "0357a097b6d40c7b938f46eb3867d7d25797b71c22475b205feafb6900bacd4e"
+          "sha256": "ae5df62bc0fd50968bd841348db341a098f46e2edbd8b937362c357ae5853c82"
         },
         {
           "path": "ui/src/pages/CustomAgent.tsx",
@@ -36057,7 +36057,7 @@
         },
         {
           "path": "ui/src/pages/ProfileSettings.tsx",
-          "sha256": "05d663a02536960bd2db821233c956ad76ae5b20d50a81552d19a0b60a1078e7"
+          "sha256": "30d7212fcc1e4252cbc2ec2aa6ff2271764cf7d4f4804681959680b790c8e5ee"
         },
         {
           "path": "ui/src/pages/RunTranscriptUxLab.tsx",
@@ -36109,7 +36109,7 @@
         },
         {
           "path": "ui/src/pages/apps/Browse.tsx",
-          "sha256": "78314c8ded1d57b89d76a6c60461fb1d883ed0f712d8dd97d1282158f131c927"
+          "sha256": "07ba99b2da26d294aefab681d568b6db39edc2b892050d585c70024741a8f330"
         },
         {
           "path": "ui/src/pages/apps/Connections.tsx",
@@ -36193,7 +36193,7 @@
         },
         {
           "path": "ui/src/pages/apps/chat/chat-ui-contract.test.ts",
-          "sha256": "4bb943f822969704f4c059aebef24163c3362daacbf7ac8481f4cf4d6713d816"
+          "sha256": "aed569bc28e5e330909afb981ee2af55d37c8125c9b90d2e27ae5bcf42de4e58"
         },
         {
           "path": "ui/src/pages/apps/chat/github-private-key-file.test.ts",
@@ -52564,7 +52564,7 @@
       "id": "source:ui/src/pages/Inbox.tsx",
       "kind": "current_source_owner",
       "path": "ui/src/pages/Inbox.tsx",
-      "sha256": "5fd36a58c0f0aea24f3da94bc6889f05736d872abdb8b26532bf7dd36b0cc27a",
+      "sha256": "6e87c6985d275c05f9974b2e043af47257c547d4015a6640cb44764be26dcccf",
       "changeIds": [
         "SCR-V10-HOTSPOT-24"
       ],
@@ -72810,7 +72810,7 @@
       "id": "source:ui/src/i18n/experience/da.json",
       "kind": "current_source_owner",
       "path": "ui/src/i18n/experience/da.json",
-      "sha256": "a1b5ca5655fbc9990ea70978d9bb846debd2ad4ed689a1537e61a9b8e3a5af29",
+      "sha256": "47ad1db3437919bc5894c068e6a02281fb9d08ce5a4e6d39d83521c394477433",
       "changeIds": [
         "SCR-V10-PRODUCT-IDENTITY-HELP-LANGUAGE"
       ],
@@ -72825,7 +72825,7 @@
       "id": "source:ui/src/i18n/experience/en.json",
       "kind": "current_source_owner",
       "path": "ui/src/i18n/experience/en.json",
-      "sha256": "7de235cf197e41899c14956da74edbb828a4e52a496282ab1493e5605542fe45",
+      "sha256": "20a3cb8a476b72c93fd49b45079c59d04dc0591bc0624e58852241f9991957cd",
       "changeIds": [
         "SCR-V10-PRODUCT-IDENTITY-HELP-LANGUAGE"
       ],
@@ -73080,7 +73080,7 @@
       "id": "source:doc/operations/agent-native-ui-operation-coverage.json",
       "kind": "current_source_owner",
       "path": "doc/operations/agent-native-ui-operation-coverage.json",
-      "sha256": "a5d07d724df2752aa1a107e3735286445488244f591b79c907e1eaf01fef435e",
+      "sha256": "8b43217ec8cf8e4d5df9aaa5898f14a1bdfd2f8106e8bb3e32fa21c47dc670b5",
       "changeIds": [
         "SCR-V10-CI-RELEASE-AND-CATALOG-GOVERNANCE"
       ],
@@ -73125,7 +73125,7 @@
       "id": "source:doc/operations/v10-capability-projection.json",
       "kind": "current_source_owner",
       "path": "doc/operations/v10-capability-projection.json",
-      "sha256": "1540985fe56843eb8af8b094b4a04de134c2fc915bb32823e70dadab85d703df",
+      "sha256": "082daff746a8de2f45edb6b3ebf443801611cbbee3e43cc7f517bb0b1ad8e76b",
       "changeIds": [
         "SCR-V10-CI-RELEASE-AND-CATALOG-GOVERNANCE"
       ],
@@ -76395,7 +76395,7 @@
       "id": "source:ui/src/pages/Agents.tsx",
       "kind": "current_source_owner",
       "path": "ui/src/pages/Agents.tsx",
-      "sha256": "8040d7f0641c95f8b3d486fa148f4543c03aaf158d26632c5c9447f599dbec9b",
+      "sha256": "fdb2e7fa82ab818f444d2f984c8978e4e2f963b7e9bcaf9f91eca909890e0099",
       "changeIds": [
         "SCR-V10-CUSTOMER-EXPERIENCE"
       ],
@@ -76560,7 +76560,7 @@
       "id": "source:ui/src/pages/CompanySettings.tsx",
       "kind": "current_source_owner",
       "path": "ui/src/pages/CompanySettings.tsx",
-      "sha256": "baf71ff2c36a113620e3624483faf784025ff40ae819011909b566d28ac53aa5",
+      "sha256": "a028a2332389ed74e8eafa70baff8bc52afb319b866c5b26e72cad95929d2d70",
       "changeIds": [
         "SCR-V10-CUSTOMER-EXPERIENCE"
       ],
@@ -76590,7 +76590,7 @@
       "id": "source:ui/src/pages/CompanySettingsRenameHint.test.tsx",
       "kind": "current_source_owner",
       "path": "ui/src/pages/CompanySettingsRenameHint.test.tsx",
-      "sha256": "0357a097b6d40c7b938f46eb3867d7d25797b71c22475b205feafb6900bacd4e",
+      "sha256": "ae5df62bc0fd50968bd841348db341a098f46e2edbd8b937362c357ae5853c82",
       "changeIds": [
         "SCR-V10-CUSTOMER-EXPERIENCE"
       ],
@@ -76830,7 +76830,7 @@
       "id": "source:ui/src/pages/ProfileSettings.tsx",
       "kind": "current_source_owner",
       "path": "ui/src/pages/ProfileSettings.tsx",
-      "sha256": "05d663a02536960bd2db821233c956ad76ae5b20d50a81552d19a0b60a1078e7",
+      "sha256": "30d7212fcc1e4252cbc2ec2aa6ff2271764cf7d4f4804681959680b790c8e5ee",
       "changeIds": [
         "SCR-V10-CUSTOMER-EXPERIENCE"
       ],
@@ -77025,7 +77025,7 @@
       "id": "source:ui/src/pages/apps/Browse.tsx",
       "kind": "current_source_owner",
       "path": "ui/src/pages/apps/Browse.tsx",
-      "sha256": "78314c8ded1d57b89d76a6c60461fb1d883ed0f712d8dd97d1282158f131c927",
+      "sha256": "07ba99b2da26d294aefab681d568b6db39edc2b892050d585c70024741a8f330",
       "changeIds": [
         "SCR-V10-CUSTOMER-EXPERIENCE"
       ],
@@ -77340,7 +77340,7 @@
       "id": "source:ui/src/pages/apps/chat/chat-ui-contract.test.ts",
       "kind": "current_source_owner",
       "path": "ui/src/pages/apps/chat/chat-ui-contract.test.ts",
-      "sha256": "4bb943f822969704f4c059aebef24163c3362daacbf7ac8481f4cf4d6713d816",
+      "sha256": "aed569bc28e5e330909afb981ee2af55d37c8125c9b90d2e27ae5bcf42de4e58",
       "changeIds": [
         "SCR-V10-CUSTOMER-EXPERIENCE"
       ],
