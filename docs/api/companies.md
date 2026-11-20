@@ -84,6 +84,22 @@ POST /api/companies/{companyId}/archive
 
 Archives a company. Archived companies are hidden from default listings.
 
+## Delete Company
+
+```
+DELETE /api/companies/{companyId}
+{
+  "confirmName": "Acme Labs"
+}
+```
+
+Permanently erases the company and its data (Tasks, agents, projects, Memory and the rest of its records). It cannot be undone; archive the company instead to hide it while keeping its data.
+
+- Only an active owner of the company, an instance admin or the local trusted operator may delete it. Other members, viewers and agents receive `403` (`COMPANY_OWNER_REQUIRED` for non-owner members). Being the sole owner does not block deletion.
+- `confirmName` must equal the company's current name exactly; otherwise the server returns `422` (`COMPANY_DELETE_CONFIRMATION_MISMATCH`) and deletes nothing.
+- A signed-in user must have authenticated within the last 5 minutes; otherwise the server returns `403` (`recent_authentication_required`). Board API keys cannot delete a company in authenticated deployments.
+- A `company.deletion_requested` activity entry is written before the data is purged. The removal can still be refused with `409` while a run is active or protected files await erasure; nothing is deleted then.
+
 ## Company Fields
 
 | Field | Type | Description |
