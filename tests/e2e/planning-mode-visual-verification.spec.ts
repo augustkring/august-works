@@ -4,6 +4,9 @@ import {
   expectLandsOnFirstTaskWithoutDashboardBounce,
   instrumentNavLog,
 } from "./helpers/onboarding-landing";
+import { registerEnglishAccountLocaleIsolation } from "./account-locale-isolation";
+
+registerEnglishAccountLocaleIsolation(test);
 
 /** The name the CEO role fills in — see AGENT_ROLE_LABELS. */
 const AGENT_NAME = "CEO";

@@ -7,6 +7,9 @@ import { authUsers, companyMemberships, createDb, closeRegisteredClients, princi
   agents, toolApplications, toolConnections, toolCatalogEntries, workflowRuns } from "../../packages/db/src/index.ts";
 import { workflowRoutes } from "../../server/src/routes/workflows.ts";
 import { errorHandler } from "../../server/src/middleware/error-handler.ts";
+import { registerEnglishAccountLocaleIsolation } from "./account-locale-isolation";
+
+registerEnglishAccountLocaleIsolation(test);
 const requireServer = createRequire(new URL("../../server/package.json", import.meta.url));
 const express = requireServer("express"), { eq } = requireServer("drizzle-orm");
 const axePath = createRequire(import.meta.url).resolve("axe-core/axe.min.js");

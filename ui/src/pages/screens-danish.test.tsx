@@ -164,6 +164,7 @@ describe("Danish customer screens (I18N-DA1)", () => {
     await act(async () => { await i18n.changeLanguage("en"); });
     const root = await render(<Projects />);
     expect(visibleText()).toContain("Add Project");
+    expect(workModeMetaFor("planning").label).toBe("Plan mode");
     await act(async () => root.unmount());
   });
 });

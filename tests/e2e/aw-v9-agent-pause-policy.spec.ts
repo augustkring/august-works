@@ -26,7 +26,7 @@ for (const [policy, locale] of [["drain", "en"], ["cancel", "da"]] as const) {
         }
       });
       await page.goto(`/${company.issuePrefix}/agents/${agent.id}/dashboard`);
-      await page.getByRole("button", { name: "Pause", exact: true }).click();
+      await page.getByRole("button", { name: locale === "en" ? "Pause" : "Sæt på pause", exact: true }).click();
       const dialog = page.getByRole("alertdialog");
       await expect(dialog).toBeVisible();
       expect(writes).toBe(0);

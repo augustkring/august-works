@@ -1,6 +1,9 @@
 import { createRequire } from "node:module";
 import { expect, test, type APIResponse } from "@playwright/test";
 import { V5_FEATURE_KEYS, agentAuthoringContentSchema, agentAuthoringDraftViewSchema } from "../../packages/shared/src/index.ts";
+import { registerEnglishAccountLocaleIsolation } from "./account-locale-isolation";
+
+registerEnglishAccountLocaleIsolation(test);
 const axePath = createRequire(import.meta.url).resolve("axe-core/axe.min.js");
 async function json(response: APIResponse) {
   expect(response.ok(), `${response.status()}: ${await response.text()}`).toBe(true);

@@ -1,6 +1,9 @@
 import { createRequire } from "node:module";
 import { expect, test, type APIResponse } from "@playwright/test";
 import { agentRetirementViewSchema, type AgentRetirementView } from "../../packages/shared/src/agent-retirement.ts";
+import { registerEnglishAccountLocaleIsolation } from "./account-locale-isolation";
+
+registerEnglishAccountLocaleIsolation(test);
 const axePath = createRequire(import.meta.url).resolve("axe-core/axe.min.js");
 async function json(response: APIResponse) {
   expect(response.ok(), `${response.status()}: ${await response.text()}`).toBe(true); return response.json();

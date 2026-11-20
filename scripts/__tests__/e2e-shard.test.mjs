@@ -361,3 +361,20 @@ test("all trusted PR lanes reject stale lockfiles independently", () => {
   assert.doesNotMatch(workflow, /--no-frozen-lockfile|--resolution-only/);
   assert.doesNotMatch(workflow, /Restore regenerated PR lockfile|lockfile_regenerated|name: pr-lockfile/);
 });
+
+// Every default-lane spec shares one signed-in owner account. A spec that saves
+// Danish as that account's language must put the previous value back, or every
+// later spec in the same shard starts in Danish and English locators fail
+// (I18N-DA1/DA2 translated the composer, Inbox and work-mode labels).
+test("default-lane specs that switch the account language restore it", () => {
+  const switchesAccountToDanish =
+    /getByRole\(\s*"combobox",\s*\{\s*name:\s*"Language"[^}]*\}\s*\)\s*\.selectOption\(\s*"da"\s*\)|\/api\/auth\/preferences"[^\n]*locale:\s*"da"/;
+  const restoresAccountLanguage =
+    /registerEnglishAccountLocaleIsolation\(test\)|\/api\/auth\/preferences"[^\n]*locale:\s*preferences\.locale/;
+  const leaking = listE2eSpecs()
+    .filter((spec) => {
+      const source = readFileSync(path.join(repoRoot, spec), "utf8");
+      return switchesAccountToDanish.test(source) && !restoresAccountLanguage.test(source);
+    });
+  assert.deepEqual(leaking, [], "register registerEnglishAccountLocaleIsolation(test) in these specs");
+});

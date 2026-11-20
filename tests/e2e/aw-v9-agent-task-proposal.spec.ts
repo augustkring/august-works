@@ -6,6 +6,9 @@ import path from "node:path";
 import { expect, test, type APIResponse } from "@playwright/test";
 import { createDb, closeRegisteredClients, agents, heartbeatRuns } from "../../packages/db/src/index.ts";
 import { V5_FEATURE_KEYS } from "../../packages/shared/src/index.ts";
+import { registerEnglishAccountLocaleIsolation } from "./account-locale-isolation";
+
+registerEnglishAccountLocaleIsolation(test);
 
 const axePath = createRequire(import.meta.url).resolve("axe-core/axe.min.js");
 async function json(response: APIResponse) {

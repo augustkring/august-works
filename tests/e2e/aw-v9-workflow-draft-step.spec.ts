@@ -7,6 +7,9 @@ import { expect, test, type APIResponse } from "@playwright/test";
 import { agents, authUsers, companyMemberships, createDb, closeRegisteredClients, principalPermissionGrants, issues, workflowRuns, heartbeatRuns, toolApplications, toolConnections, toolCatalogEntries, toolInvocations, toolActionRequests } from "../../packages/db/src/index.ts";
 import { workflowRoutes } from "../../server/src/routes/workflows.ts";
 import { errorHandler } from "../../server/src/middleware/error-handler.ts";
+import { registerEnglishAccountLocaleIsolation } from "./account-locale-isolation";
+
+registerEnglishAccountLocaleIsolation(test);
 const axePath = createRequire(import.meta.url).resolve("axe-core/axe.min.js");
 const serverRequire = createRequire(new URL("../../server/package.json", import.meta.url));
 const express = serverRequire("express"), { eq } = serverRequire("drizzle-orm");
