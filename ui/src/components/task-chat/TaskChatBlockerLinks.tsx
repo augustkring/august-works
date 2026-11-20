@@ -112,7 +112,7 @@ function BlockerRow({
     >
       <span className="shrink-0 font-medium">{label}</span>
       <span className="shrink-0 font-mono">{blocker.identifier ?? blocker.id.slice(0, 8)}</span>
-      <span className="truncate text-amber-700/80 dark:text-amber-300/80">{blocker.title}</span>
+      <span className="truncate text-amber-700 dark:text-amber-300">{blocker.title}</span>
     </Link>
   ) : (
     <div className="flex min-w-0 items-baseline gap-1.5 whitespace-nowrap">
@@ -123,7 +123,7 @@ function BlockerRow({
         title={`${blocker.identifier ?? blocker.id.slice(0, 8)} — ${blocker.title}`}
       >
         <span className="shrink-0 font-mono">{blocker.identifier ?? blocker.id.slice(0, 8)}</span>
-        <span className="truncate text-amber-700/80 dark:text-amber-300/80">{blocker.title}</span>
+        <span className="truncate text-amber-700 dark:text-amber-300">{blocker.title}</span>
       </Link>
     </div>
   );

@@ -3,6 +3,7 @@ import { AgentIdentity } from "@/components/AgentIdentity";
 import { AgentAvatar } from "@/components/AgentAvatar";
 import { normalizeLegacyRunnerProvider } from "@paperclipai/adapter-utils";
 import { useCallback, useEffect, useMemo, useRef, useState, type ComponentType } from "react";
+import { useTranslation } from "react-i18next";
 import { createPortal } from "react-dom";
 import { PROPERTIES_PANE_HEADER_SLOT_ID } from "../PropertiesPanel";
 import { issueStatusText } from "@/lib/status-colors";
@@ -242,6 +243,7 @@ export function IssueProperties({
   documentDeepLink,
   sidePanelContentOnly = false,
 }: IssuePropertiesProps) {
+  const { t } = useTranslation("experience");
   const { selectedCompanyId } = useCompany();
   const { isMobile } = useSidebar();
   const queryClient = useQueryClient();
@@ -2364,9 +2366,11 @@ export function IssueProperties({
             <Link
               to={`/agents/${issue.assigneeAgentId}`}
               className="inline-flex items-center justify-center h-5 w-5 rounded hover:bg-accent/50 transition-colors text-muted-foreground hover:text-foreground"
+              title={t("controlLabels.openAssignedAgent")}
+              aria-label={t("controlLabels.openAssignedAgent")}
               onClick={(e) => e.stopPropagation()}
             >
-              <ArrowUpRight className="h-3 w-3" />
+              <ArrowUpRight className="h-3 w-3" aria-hidden="true" />
             </Link>
           ) : undefined}
         >
@@ -2399,9 +2403,11 @@ export function IssueProperties({
             <Link
               to={projectLink(issue.projectId)!}
               className="inline-flex items-center justify-center h-5 w-5 rounded hover:bg-accent/50 transition-colors text-muted-foreground hover:text-foreground"
+              title={t("controlLabels.openProject")}
+              aria-label={t("controlLabels.openProject")}
               onClick={(e) => e.stopPropagation()}
             >
-              <ArrowUpRight className="h-3 w-3" />
+              <ArrowUpRight className="h-3 w-3" aria-hidden="true" />
             </Link>
           ) : undefined}
         >

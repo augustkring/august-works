@@ -2218,7 +2218,7 @@ export function CompanyEnvironments({ mode = "list" }: CompanyEnvironmentsProps)
             <div className="space-y-4">
               <Field label="Name" hint="Operator-facing name for this execution target.">
                 <input
-                  className="w-full rounded-md border border-border bg-transparent px-2.5 py-1.5 text-sm outline-none"
+                  className="w-full rounded-md border border-border bg-transparent px-2.5 py-1.5 text-sm outline-none focus-visible:border-ring focus-visible:ring-ring/50 focus-visible:ring-(length:--rad-3)"
                   type="text"
                   value={environmentForm.name}
                   onChange={(e) => setEnvironmentForm((current) => ({ ...current, name: e.target.value }))}
@@ -2226,7 +2226,7 @@ export function CompanyEnvironments({ mode = "list" }: CompanyEnvironmentsProps)
               </Field>
               <Field label="Description" hint="Optional note about what this machine is for.">
                 <input
-                  className="w-full rounded-md border border-border bg-transparent px-2.5 py-1.5 text-sm outline-none"
+                  className="w-full rounded-md border border-border bg-transparent px-2.5 py-1.5 text-sm outline-none focus-visible:border-ring focus-visible:ring-ring/50 focus-visible:ring-(length:--rad-3)"
                   type="text"
                   value={environmentForm.description}
                   onChange={(e) => setEnvironmentForm((current) => ({ ...current, description: e.target.value }))}
@@ -2234,7 +2234,7 @@ export function CompanyEnvironments({ mode = "list" }: CompanyEnvironmentsProps)
               </Field>
               <Field label="Driver" hint="Sandbox stores plugin-backed provider config on the shared environment seam. SSH stores a remote machine target.">
                 <select
-                  className="w-full rounded-md border border-border bg-transparent px-2.5 py-1.5 text-sm outline-none"
+                  className="w-full rounded-md border border-border bg-transparent px-2.5 py-1.5 text-sm outline-none focus-visible:border-ring focus-visible:ring-ring/50 focus-visible:ring-(length:--rad-3)"
                   value={environmentForm.driver}
                   onChange={(e) =>
                     setEnvironmentForm((current) => ({
@@ -2270,7 +2270,7 @@ export function CompanyEnvironments({ mode = "list" }: CompanyEnvironmentsProps)
                 <div className="grid gap-3 md:grid-cols-2">
                   <Field label="Host" hint="DNS name or IP address for the remote machine.">
                     <input
-                      className="w-full rounded-md border border-border bg-transparent px-2.5 py-1.5 text-sm outline-none"
+                      className="w-full rounded-md border border-border bg-transparent px-2.5 py-1.5 text-sm outline-none focus-visible:border-ring focus-visible:ring-ring/50 focus-visible:ring-(length:--rad-3)"
                       type="text"
                       value={environmentForm.sshHost}
                       onChange={(e) => setEnvironmentForm((current) => ({ ...current, sshHost: e.target.value }))}
@@ -2278,7 +2278,7 @@ export function CompanyEnvironments({ mode = "list" }: CompanyEnvironmentsProps)
                   </Field>
                   <Field label="Port" hint="Defaults to 22.">
                     <input
-                      className="w-full rounded-md border border-border bg-transparent px-2.5 py-1.5 text-sm outline-none"
+                      className="w-full rounded-md border border-border bg-transparent px-2.5 py-1.5 text-sm outline-none focus-visible:border-ring focus-visible:ring-ring/50 focus-visible:ring-(length:--rad-3)"
                       type="number"
                       min={1}
                       max={65535}
@@ -2288,7 +2288,7 @@ export function CompanyEnvironments({ mode = "list" }: CompanyEnvironmentsProps)
                   </Field>
                   <Field label="Username" hint="SSH username.">
                     <input
-                      className="w-full rounded-md border border-border bg-transparent px-2.5 py-1.5 text-sm outline-none"
+                      className="w-full rounded-md border border-border bg-transparent px-2.5 py-1.5 text-sm outline-none focus-visible:border-ring focus-visible:ring-ring/50 focus-visible:ring-(length:--rad-3)"
                       type="text"
                       value={environmentForm.sshUsername}
                       onChange={(e) => setEnvironmentForm((current) => ({ ...current, sshUsername: e.target.value }))}
@@ -2303,7 +2303,7 @@ export function CompanyEnvironments({ mode = "list" }: CompanyEnvironmentsProps)
                   */}
                   <Field label="Remote workspace path" hint={`Absolute path that ${PRODUCT_IDENTITY.productName} will verify during SSH connection tests.`}>
                     <input
-                      className="w-full rounded-md border border-border bg-transparent px-2.5 py-1.5 text-sm outline-none"
+                      className="w-full rounded-md border border-border bg-transparent px-2.5 py-1.5 text-sm outline-none focus-visible:border-ring focus-visible:ring-ring/50 focus-visible:ring-(length:--rad-3)"
                       type="text"
                       placeholder="/Users/paperclip/workspace"
                       value={environmentForm.sshRemoteWorkspacePath}
@@ -2314,7 +2314,7 @@ export function CompanyEnvironments({ mode = "list" }: CompanyEnvironmentsProps)
                   <Field label="Private key" hint="Optional PEM private key. Leave blank to rely on the server's SSH agent or default keychain.">
                     <div className="space-y-2">
                       <select
-                        className="w-full rounded-md border border-border bg-transparent px-2.5 py-1.5 text-sm outline-none"
+                        className="w-full rounded-md border border-border bg-transparent px-2.5 py-1.5 text-sm outline-none focus-visible:border-ring focus-visible:ring-ring/50 focus-visible:ring-(length:--rad-3)"
                         value={environmentForm.sshPrivateKeySecretId}
                         onChange={(e) =>
                           setEnvironmentForm((current) => ({
@@ -2359,7 +2359,7 @@ export function CompanyEnvironments({ mode = "list" }: CompanyEnvironmentsProps)
                 <div className="space-y-3">
                   <Field label="Provider" hint="Installed run-capable sandbox provider plugins appear here.">
                     <select
-                      className="w-full rounded-md border border-border bg-transparent px-2.5 py-1.5 text-sm outline-none"
+                      className="w-full rounded-md border border-border bg-transparent px-2.5 py-1.5 text-sm outline-none focus-visible:border-ring focus-visible:ring-ring/50 focus-visible:ring-(length:--rad-3)"
                       value={environmentForm.sandboxProvider}
                       onChange={(e) => {
                         const nextProviderKey = e.target.value;

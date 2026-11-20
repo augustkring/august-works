@@ -105,6 +105,7 @@ export function SidePanelTab({
             aria-controls={`side-panel-content-${id}`}
             aria-selected={active}
             aria-label={ariaLabel ?? label}
+            aria-keyshortcuts={closable && onClose ? "Delete" : undefined}
             tabIndex={active ? 0 : -1}
             disabled={disabled}
             onClick={onSelect}
@@ -154,6 +155,10 @@ export function SidePanelTab({
           type="button"
           aria-label={closeLabel}
           title={closeLabel}
+          // A tablist may own only tabs (WCAG 1.3.1). Keyboard and screen
+          // reader users close the focused tab with Delete (aria-keyshortcuts).
+          aria-hidden="true"
+          tabIndex={-1}
           onPointerDown={(event) => {
             if (appearance !== "streamlined-task") return;
             event.preventDefault();

@@ -347,7 +347,7 @@ function IssueDateSeparator({ label }: { label: string }) {
     >
       <span className="h-px min-w-0 flex-1 bg-border/80" aria-hidden="true" data-date-group-rule="" />
       <span
-        className="shrink-0 text-(length:--text-nano) font-medium uppercase tracking-wider text-muted-foreground/70"
+        className="shrink-0 text-(length:--text-nano) font-medium uppercase tracking-wider text-muted-foreground"
         data-date-group-label=""
       >
         {label}
