@@ -4103,6 +4103,13 @@
       "when": 1795079388041,
       "tag": "0587_board_stage_return_source_transform",
       "breakpoints": true
+    },
+    {
+      "idx": 588,
+      "version": "7",
+      "when": 1795082988041,
+      "tag": "0588_parked_approved_tool_charge",
+      "breakpoints": true
     }
   ]
 }
