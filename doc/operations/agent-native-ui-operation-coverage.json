@@ -362,7 +362,7 @@
         "post:agentPath(id, companyId, \"/heartbeat/invoke\")"
       ],
       "argumentsSignature": "agent.id, resolvedCompanyId ?? undefined",
-      "line": 279,
+      "line": 280,
       "occurrence": 0,
       "owner": "server/src/services/agents.ts",
       "classification": "DIRECT_AGENT",
@@ -478,7 +478,7 @@
         "post:agentPath(id, companyId, \"/pause\")"
       ],
       "argumentsSignature": "agent.id, resolvedCompanyId ?? undefined, \"cancel\"",
-      "line": 280,
+      "line": 281,
       "occurrence": 0,
       "owner": "server/src/services/agents.ts",
       "classification": "HUMAN_ONLY",
@@ -591,7 +591,7 @@
         "post:agentPath(id, companyId, \"/pause\")"
       ],
       "argumentsSignature": "agent.id, resolvedCompanyId ?? undefined, \"drain\"",
-      "line": 281,
+      "line": 282,
       "occurrence": 0,
       "owner": "server/src/services/agents.ts",
       "classification": "HUMAN_ONLY",
@@ -704,7 +704,7 @@
         "post:agentPath(id, companyId, \"/resume\")"
       ],
       "argumentsSignature": "agent.id, resolvedCompanyId ?? undefined",
-      "line": 282,
+      "line": 283,
       "occurrence": 0,
       "owner": "server/src/services/agents.ts",
       "classification": "DIRECT_AGENT",
@@ -800,7 +800,7 @@
         "post:agentPath(id, companyId, \"/clear-error\")"
       ],
       "argumentsSignature": "agent.id, resolvedCompanyId ?? undefined",
-      "line": 283,
+      "line": 284,
       "occurrence": 0,
       "owner": "server/src/services/agents.ts",
       "classification": "HUMAN_ONLY",
@@ -913,7 +913,7 @@
         "post:agentPath(id, companyId, \"/approve\")"
       ],
       "argumentsSignature": "agent.id, resolvedCompanyId ?? undefined",
-      "line": 284,
+      "line": 285,
       "occurrence": 0,
       "owner": "server/src/services/agents.ts",
       "classification": "HUMAN_ONLY",
@@ -1026,7 +1026,7 @@
         "post:agentPath(id, companyId, \"/terminate\")"
       ],
       "argumentsSignature": "agent.id, resolvedCompanyId ?? undefined",
-      "line": 285,
+      "line": 286,
       "occurrence": 0,
       "owner": "server/src/services/agents.ts",
       "classification": "HUMAN_ONLY",
@@ -1139,7 +1139,7 @@
         "post:agentPath(id, companyId, \"/heartbeat/invoke\")"
       ],
       "argumentsSignature": "agent.id, resolvedCompanyId ?? undefined, {\n        debug: { providerTrace: \"raw\" },\n      }",
-      "line": 307,
+      "line": 308,
       "occurrence": 0,
       "owner": "server/src/services/agents.ts",
       "classification": "DIRECT_AGENT",
@@ -1255,7 +1255,7 @@
         "post:`/companies/${companyId}/agents`"
       ],
       "argumentsSignature": "resolvedCompanyId, payload",
-      "line": 331,
+      "line": 332,
       "occurrence": 0,
       "owner": "server/src/services/agents.ts",
       "classification": "DIRECT_AGENT",
@@ -1371,7 +1371,7 @@
         "post:`/companies/${companyId}/agent-hires`"
       ],
       "argumentsSignature": "resolvedCompanyId, payload",
-      "line": 334,
+      "line": 335,
       "occurrence": 0,
       "owner": "server/src/services/agents.ts",
       "classification": "DIRECT_AGENT",
@@ -1507,7 +1507,7 @@
         "post:agentPath(id, companyId, \"/runtime-state/reset-session\")"
       ],
       "argumentsSignature": "agent.id, null, resolvedCompanyId ?? undefined",
-      "line": 366,
+      "line": 367,
       "occurrence": 0,
       "owner": "server/src/services/agents.ts",
       "classification": "HUMAN_ONLY",
@@ -16853,7 +16853,7 @@
         "post:`/companies/${companyId}/labels`"
       ],
       "argumentsSignature": "companyId!, data",
-      "line": 477,
+      "line": 478,
       "occurrence": 0,
       "owner": "server/src/routes/issues.ts",
       "classification": "DIRECT_AGENT",
@@ -16899,7 +16899,7 @@
         "delete:`/issues/${id}/inbox-archive`"
       ],
       "argumentsSignature": "issue.id",
-      "line": 494,
+      "line": 495,
       "occurrence": 0,
       "owner": "server/src/routes/issues.ts",
       "classification": "DIRECT_AGENT",
@@ -16945,7 +16945,7 @@
         "post:`/execution-workspaces/${id}/runtime-commands/${action}`"
       ],
       "argumentsSignature": "workspaceId, request.action, request",
-      "line": 625,
+      "line": 626,
       "occurrence": 0,
       "owner": "server/src/services/execution-workspaces.ts",
       "classification": "DIRECT_AGENT",
@@ -17056,7 +17056,7 @@
         "put:`/issues/${id}/watchdog`"
       ],
       "argumentsSignature": "issue.id, data",
-      "line": 1101,
+      "line": 1102,
       "occurrence": 0,
       "owner": "server/src/routes/issues.ts",
       "classification": "DIRECT_AGENT",
@@ -17112,7 +17112,7 @@
         "delete:`/issues/${id}/watchdog`"
       ],
       "argumentsSignature": "issue.id",
-      "line": 1111,
+      "line": 1112,
       "occurrence": 0,
       "owner": "server/src/routes/issues.ts",
       "classification": "DIRECT_AGENT",
@@ -21760,7 +21760,7 @@
         "post:`/companies/${companyId}/built-in-agents/${key}/reset`"
       ],
       "argumentsSignature": "resolvedCompanyId!, builtInState!.definition.key",
-      "line": 869,
+      "line": 870,
       "occurrence": 0,
       "owner": "server/src/services/built-in-agents.ts",
       "classification": "DIRECT_AGENT",
@@ -21866,7 +21866,7 @@
         "post:`/companies/${companyId}/built-in-agents/${key}/reset`"
       ],
       "argumentsSignature": "resolvedCompanyId!, builtInState!.definition.key, [kind]",
-      "line": 876,
+      "line": 877,
       "occurrence": 0,
       "owner": "server/src/services/built-in-agents.ts",
       "classification": "DIRECT_AGENT",
@@ -21972,7 +21972,7 @@
         "post:`/companies/${companyId}/built-in-agents/${key}/routines/${routineKey}/run`"
       ],
       "argumentsSignature": "resolvedCompanyId!, builtInState!.definition.key, routineKey",
-      "line": 884,
+      "line": 885,
       "occurrence": 0,
       "owner": "server/src/services/built-in-agents.ts",
       "classification": "HUMAN_ONLY",
@@ -22095,7 +22095,7 @@
         "post:`/companies/${companyId}/built-in-agents/${key}/routines/${routineKey}/enable`"
       ],
       "argumentsSignature": "resolvedCompanyId!, builtInState!.definition.key, routineKey",
-      "line": 892,
+      "line": 893,
       "occurrence": 0,
       "owner": "server/src/services/built-in-agents.ts",
       "classification": "HUMAN_ONLY",
@@ -22213,7 +22213,7 @@
         "post:`/companies/${companyId}/built-in-agents/${key}/routines/${routineKey}/disable`"
       ],
       "argumentsSignature": "resolvedCompanyId!, builtInState!.definition.key, routineKey",
-      "line": 900,
+      "line": 901,
       "occurrence": 0,
       "owner": "server/src/services/built-in-agents.ts",
       "classification": "HUMAN_ONLY",
@@ -22331,7 +22331,7 @@
         "post:agentPath(id, companyId, \"/approve\")"
       ],
       "argumentsSignature": "agentLookupRef, resolvedCompanyId ?? undefined",
-      "line": 1007,
+      "line": 1008,
       "occurrence": 0,
       "owner": "server/src/services/agents.ts",
       "classification": "HUMAN_ONLY",
@@ -22444,7 +22444,7 @@
         "patch:agentPath(id, companyId)"
       ],
       "argumentsSignature": "agentLookupRef, { icon }, resolvedCompanyId ?? undefined",
-      "line": 1029,
+      "line": 1030,
       "occurrence": 0,
       "owner": "server/src/services/agents.ts",
       "classification": "DIRECT_AGENT",
@@ -22530,7 +22530,7 @@
         "patch:agentPath(id, companyId, \"/permissions\")"
       ],
       "argumentsSignature": "agentLookupRef, permissions, resolvedCompanyId ?? undefined",
-      "line": 1041,
+      "line": 1042,
       "occurrence": 0,
       "owner": "server/src/services/agents.ts",
       "classification": "DIRECT_AGENT",
@@ -22641,7 +22641,7 @@
         "post:agentPath(id, companyId, `/config-revisions/${revisionId}/rollback`)"
       ],
       "argumentsSignature": "agent.id, revisionId, companyId",
-      "line": 1902,
+      "line": 1903,
       "occurrence": 0,
       "owner": "server/src/services/agents.ts",
       "classification": "DIRECT_AGENT",
@@ -22752,7 +22752,7 @@
         "patch:agentPath(id, companyId)"
       ],
       "argumentsSignature": "agent.id, data, companyId",
-      "line": 2013,
+      "line": 2014,
       "occurrence": 0,
       "owner": "server/src/services/agents.ts",
       "classification": "DIRECT_AGENT",
@@ -22838,7 +22838,7 @@
         "patch:agentPath(id, companyId, \"/instructions-bundle\")"
       ],
       "argumentsSignature": "agent.id, data, companyId",
-      "line": 2316,
+      "line": 2317,
       "occurrence": 0,
       "owner": "server/src/services/agents.ts",
       "classification": "DIRECT_AGENT",
@@ -22959,7 +22959,7 @@
         "put:agentPath(id, companyId, \"/instructions-bundle/file\")"
       ],
       "argumentsSignature": "agent.id, data, companyId",
-      "line": 2331,
+      "line": 2332,
       "occurrence": 0,
       "owner": "server/src/services/agents.ts",
       "classification": "DIRECT_AGENT",
@@ -23070,7 +23070,7 @@
         "delete:agentPath(id, companyId, `/instructions-bundle/file?path=${encodeURIComponent(relativePath)}`)"
       ],
       "argumentsSignature": "agent.id, relativePath, companyId",
-      "line": 2347,
+      "line": 2348,
       "occurrence": 0,
       "owner": "server/src/services/agents.ts",
       "classification": "DIRECT_AGENT",
@@ -23181,7 +23181,7 @@
         "postForm:`/companies/${companyId}/assets/images`"
       ],
       "argumentsSignature": "selectedCompanyId, file, namespace",
-      "line": 2364,
+      "line": 2365,
       "occurrence": 0,
       "owner": "server/src/routes/assets.ts",
       "classification": "DIRECT_AGENT",
@@ -23237,7 +23237,7 @@
         "post:`/heartbeat-runs/${runId}/cancel`"
       ],
       "argumentsSignature": "run.id",
-      "line": 3280,
+      "line": 3281,
       "occurrence": 0,
       "owner": "server/src/services/heartbeat.ts",
       "classification": "HUMAN_ONLY",
@@ -23270,7 +23270,7 @@
         "post:agentPath(id, companyId, \"/wakeup\")"
       ],
       "argumentsSignature": "run.agentId, {\n        source: \"on_demand\",\n        triggerDetail: \"manual\",\n        reason: \"resume_process_lost_run\",\n        payload: resumePayload,\n      }, run.companyId",
-      "line": 3304,
+      "line": 3305,
       "occurrence": 0,
       "owner": "server/src/services/agents.ts",
       "classification": "DIRECT_AGENT",
@@ -23366,7 +23366,7 @@
         "post:agentPath(id, companyId, \"/wakeup\")"
       ],
       "argumentsSignature": "run.agentId, run.id, run.companyId",
-      "line": 3337,
+      "line": 3338,
       "occurrence": 0,
       "owner": "server/src/services/agents.ts",
       "classification": "HUMAN_ONLY",
@@ -23474,7 +23474,7 @@
         "post:agentPath(id, companyId, \"/wakeup\")"
       ],
       "argumentsSignature": "run.agentId, {\n        source: \"on_demand\",\n        triggerDetail: \"manual\",\n        reason: \"rerun_with_provider_trace\",\n        payload: retryPayload,\n        debug: { providerTrace: \"raw\" },\n      }, run.companyId",
-      "line": 3349,
+      "line": 3350,
       "occurrence": 0,
       "owner": "server/src/services/agents.ts",
       "classification": "DIRECT_AGENT",
@@ -23570,7 +23570,7 @@
         "post:agentPath(id, companyId, \"/runtime-state/reset-session\")"
       ],
       "argumentsSignature": "run.agentId, issueId, run.companyId",
-      "line": 3380,
+      "line": 3381,
       "occurrence": 0,
       "owner": "server/src/services/agents.ts",
       "classification": "HUMAN_ONLY",
@@ -23698,7 +23698,7 @@
         "post:agentPath(id, companyId, \"/claude-login\")"
       ],
       "argumentsSignature": "run.agentId, run.companyId",
-      "line": 3391,
+      "line": 3392,
       "occurrence": 0,
       "owner": "server/src/services/agents.ts",
       "classification": "HUMAN_ONLY",
@@ -23826,7 +23826,7 @@
         "post:agentPath(id, companyId, \"/keys\")"
       ],
       "argumentsSignature": "agentId, newKeyName.trim() || \"Default\", companyId",
-      "line": 4494,
+      "line": 4495,
       "occurrence": 0,
       "owner": "server/src/services/agents.ts",
       "classification": "HUMAN_ONLY",
@@ -23929,7 +23929,7 @@
         "delete:agentPath(agentId, companyId, `/keys/${encodeURIComponent(keyId)}`)"
       ],
       "argumentsSignature": "agentId, keyId, companyId",
-      "line": 4504,
+      "line": 4505,
       "occurrence": 0,
       "owner": "server/src/services/agents.ts",
       "classification": "HUMAN_ONLY",
@@ -25135,7 +25135,7 @@
         "post:`/approvals/${id}/approve${account(principal)}`"
       ],
       "argumentsSignature": "approvalId!",
-      "line": 89,
+      "line": 90,
       "occurrence": 0,
       "owner": "server/src/services/approvals.ts",
       "classification": "HUMAN_ONLY",
@@ -25238,7 +25238,7 @@
         "post:`/approvals/${id}/reject${account(principal)}`"
       ],
       "argumentsSignature": "approvalId!",
-      "line": 99,
+      "line": 100,
       "occurrence": 0,
       "owner": "server/src/services/approvals.ts",
       "classification": "HUMAN_ONLY",
@@ -25351,7 +25351,7 @@
         "post:`/approvals/${id}/request-revision`"
       ],
       "argumentsSignature": "approvalId!",
-      "line": 108,
+      "line": 109,
       "occurrence": 0,
       "owner": "server/src/services/approvals.ts",
       "classification": "HUMAN_ONLY",
@@ -25469,7 +25469,7 @@
         "post:`/approvals/${id}/resubmit`"
       ],
       "argumentsSignature": "approvalId!",
-      "line": 117,
+      "line": 118,
       "occurrence": 0,
       "owner": "server/src/services/approvals.ts",
       "classification": "PROPOSAL_ONLY",
@@ -25582,7 +25582,7 @@
         "post:`/approvals/${id}/comments`"
       ],
       "argumentsSignature": "approvalId!, commentBody.trim()",
-      "line": 126,
+      "line": 127,
       "occurrence": 0,
       "owner": "server/src/services/approvals.ts",
       "classification": "DIRECT_AGENT",
@@ -25708,7 +25708,7 @@
         "delete:agentPath(id, companyId)"
       ],
       "argumentsSignature": "agentId",
-      "line": 136,
+      "line": 137,
       "occurrence": 0,
       "owner": "server/src/services/agents.ts",
       "classification": "HUMAN_ONLY",
@@ -40476,7 +40476,7 @@
         "post:agentPath(id, companyId, \"/wakeup\")"
       ],
       "argumentsSignature": "failedRun.agentId, failedRun.runId, companyId",
-      "line": 1564,
+      "line": 1568,
       "occurrence": 0,
       "owner": "server/src/services/agents.ts",
       "classification": "HUMAN_ONLY",
@@ -40584,7 +40584,7 @@
         "patch:`/issues/${id}/queued-comments/${commentId}`"
       ],
       "argumentsSignature": "issueId, commentId, {\n            body,\n            queueId,\n            revision,\n          }",
-      "line": 2087,
+      "line": 2091,
       "occurrence": 0,
       "owner": "server/src/routes/issues.ts",
       "classification": "HUMAN_ONLY",
@@ -40637,7 +40637,7 @@
         "put:`/issues/${id}/queued-comments/order`"
       ],
       "argumentsSignature": "issueId, {\n            orderedCommentIds,\n            queueId,\n            revision,\n          }",
-      "line": 2118,
+      "line": 2122,
       "occurrence": 0,
       "owner": "server/src/routes/issues.ts",
       "classification": "HUMAN_ONLY",
@@ -40690,7 +40690,7 @@
         "post:`/issues/${id}/queued-comments/${commentId}/steer`"
       ],
       "argumentsSignature": "issueId, commentId, {\n            queueId,\n            targetRunId,\n            revision,\n          }",
-      "line": 2145,
+      "line": 2149,
       "occurrence": 0,
       "owner": "server/src/routes/issues.ts",
       "classification": "HUMAN_ONLY",
@@ -40743,7 +40743,7 @@
         "delete:`/issues/${id}/queued-comments/${commentId}`"
       ],
       "argumentsSignature": "issueId, commentId, {\n            queueId,\n            revision,\n          }",
-      "line": 2212,
+      "line": 2216,
       "occurrence": 0,
       "owner": "server/src/routes/issues.ts",
       "classification": "HUMAN_ONLY",
@@ -40796,7 +40796,7 @@
         "patch:`/issues/${id}`"
       ],
       "argumentsSignature": "resolved.id, { workMode: requestedMode }",
-      "line": 3041,
+      "line": 3044,
       "occurrence": 0,
       "owner": "server/src/routes/issues.ts",
       "classification": "DIRECT_AGENT",
@@ -40852,7 +40852,7 @@
         "post:`/companies/${companyId}/issues/${issueId}/workflows/${workflowId}/run`"
       ],
       "argumentsSignature": "resolvedCompanyId, issue.id, input.workflowId, { input: {} }, key, input.coverageId",
-      "line": 3115,
+      "line": 3118,
       "occurrence": 0,
       "owner": "server/src/services/workflows/workflow-executor.ts",
       "classification": "DIRECT_AGENT",
@@ -40897,7 +40897,7 @@
         "post:`/issues/${id}/tree-control/preview`"
       ],
       "argumentsSignature": "issueId!, {\n        mode: treeControlMode,\n        releasePolicy: {\n          strategy: \"manual\",\n        },\n      }",
-      "line": 3606,
+      "line": 3609,
       "occurrence": 0,
       "owner": "server/src/services/issue-tree-control.ts",
       "classification": "HUMAN_ONLY",
@@ -40940,7 +40940,7 @@
         "post:`/issues/${id}/tree-control/preview`"
       ],
       "argumentsSignature": "issueId!, {\n      mode: \"resume\", releasePolicy: { strategy: \"manual\" },\n    }",
-      "line": 3620,
+      "line": 3623,
       "occurrence": 0,
       "owner": "server/src/services/issue-tree-control.ts",
       "classification": "HUMAN_ONLY",
@@ -40983,7 +40983,7 @@
         "delete:`/issues/${id}/inbox-archive`"
       ],
       "argumentsSignature": "id",
-      "line": 4060,
+      "line": 4063,
       "occurrence": 0,
       "owner": "server/src/routes/issues.ts",
       "classification": "DIRECT_AGENT",
@@ -41029,7 +41029,7 @@
         "post:`/issues/${id}/read`"
       ],
       "argumentsSignature": "id",
-      "line": 4150,
+      "line": 4153,
       "occurrence": 0,
       "owner": "server/src/routes/issues.ts",
       "classification": "HUMAN_ONLY",
@@ -41082,7 +41082,7 @@
         "patch:`/issues/${id}`"
       ],
       "argumentsSignature": "issueId!, data",
-      "line": 4171,
+      "line": 4174,
       "occurrence": 0,
       "owner": "server/src/routes/issues.ts",
       "classification": "DIRECT_AGENT",
@@ -41138,7 +41138,7 @@
         "post:`/issues/${id}/recovery-actions/resolve`"
       ],
       "argumentsSignature": "issueId!, data",
-      "line": 4257,
+      "line": 4260,
       "occurrence": 0,
       "owner": "server/src/routes/issues.ts",
       "classification": "DIRECT_AGENT",
@@ -41204,7 +41204,7 @@
         "post:`/issues/${id}/recovery-actions/resolve`"
       ],
       "argumentsSignature": "issueId!, {\n        actionId,\n        outcome: \"restored\",\n        sourceIssueStatus: \"todo\",\n      }",
-      "line": 4291,
+      "line": 4294,
       "occurrence": 0,
       "owner": "server/src/routes/issues.ts",
       "classification": "DIRECT_AGENT",
@@ -41270,7 +41270,7 @@
         "post:`/issues/${id}/tree-holds/${holdId}/release`"
       ],
       "argumentsSignature": "issueId!, pauseHoldId, {\n            reason: null,\n            metadata: {\n              wakeAgents,\n            },\n          }",
-      "line": 4338,
+      "line": 4341,
       "occurrence": 0,
       "owner": "server/src/services/issue-tree-control.ts",
       "classification": "HUMAN_ONLY",
@@ -41323,7 +41323,7 @@
         "post:`/issues/${id}/tree-holds`"
       ],
       "argumentsSignature": "issueId!, {\n        mode,\n        reason: null,\n        releasePolicy: {\n          strategy: \"manual\",\n          ...(mode === \"pause\"\n            ? {\n                note: scope === \"leaf\" ? \"leaf_pause\" : \"full_pause\",\n              }\n            : {}),\n        },\n        ...(runId\n          ? { metadata: { source: \"issue_active_run_control\", runId } }\n          : {}),\n        ...(mode === \"restore\" ? { metadata: { wakeAgents } } : {}),\n      }",
-      "line": 4351,
+      "line": 4354,
       "occurrence": 0,
       "owner": "server/src/services/issue-tree-control.ts",
       "classification": "HUMAN_ONLY",
@@ -41366,7 +41366,7 @@
         "post:`/heartbeat-runs/${runId}/cancel`"
       ],
       "argumentsSignature": "runId",
-      "line": 4445,
+      "line": 4448,
       "occurrence": 0,
       "owner": "server/src/services/heartbeat.ts",
       "classification": "HUMAN_ONLY",
@@ -41399,7 +41399,7 @@
         "post:`/heartbeat-runs/${runId}/cancel`"
       ],
       "argumentsSignature": "runId",
-      "line": 4461,
+      "line": 4464,
       "occurrence": 0,
       "owner": "server/src/services/heartbeat.ts",
       "classification": "HUMAN_ONLY",
@@ -41432,7 +41432,7 @@
         "patch:`/issues/${id}`"
       ],
       "argumentsSignature": "issueId!, { status }",
-      "line": 4463,
+      "line": 4466,
       "occurrence": 0,
       "owner": "server/src/routes/issues.ts",
       "classification": "DIRECT_AGENT",
@@ -41488,7 +41488,7 @@
         "patch:`/issues/${id}`"
       ],
       "argumentsSignature": "id, data",
-      "line": 4521,
+      "line": 4524,
       "occurrence": 0,
       "owner": "server/src/routes/issues.ts",
       "classification": "DIRECT_AGENT",
@@ -41544,7 +41544,7 @@
         "post:`/issues/${id}/monitor/check-now`"
       ],
       "argumentsSignature": "issueId!",
-      "line": 4596,
+      "line": 4599,
       "occurrence": 0,
       "owner": "server/src/routes/issues.ts",
       "classification": "DIRECT_AGENT",
@@ -41590,7 +41590,7 @@
         "post:`/approvals/${id}/approve${account(principal)}`"
       ],
       "argumentsSignature": "approvalId",
-      "line": 4627,
+      "line": 4630,
       "occurrence": 0,
       "owner": "server/src/services/approvals.ts",
       "classification": "HUMAN_ONLY",
@@ -41693,7 +41693,7 @@
         "post:`/approvals/${id}/reject${account(principal)}`"
       ],
       "argumentsSignature": "approvalId",
-      "line": 4629,
+      "line": 4632,
       "occurrence": 0,
       "owner": "server/src/services/approvals.ts",
       "classification": "HUMAN_ONLY",
@@ -41806,7 +41806,7 @@
         "post:`/issues/${id}/comments`"
       ],
       "argumentsSignature": "await resolveWritableIssueId(), body, reopen, interrupt, attachmentIds, clientRequestId ?? crypto.randomUUID()",
-      "line": 4676,
+      "line": 4679,
       "occurrence": 0,
       "owner": "server/src/routes/issues.ts",
       "classification": "DIRECT_AGENT",
@@ -41852,7 +41852,7 @@
         "delete:`/issues/${id}/comments/${commentId}?mode=cancel`"
       ],
       "argumentsSignature": "comment.issueId, comment.id",
-      "line": 4742,
+      "line": 4745,
       "occurrence": 0,
       "owner": "server/src/routes/issues.ts",
       "classification": "DIRECT_AGENT",
@@ -41908,7 +41908,7 @@
         "post:`/issues/${id}/interactions/${interactionId}/accept`"
       ],
       "argumentsSignature": "issueId!, interaction.id, {\n        selectedClientKeys,\n        selectedOptionIds,\n        rememberAction,\n      }",
-      "line": 4855,
+      "line": 4858,
       "occurrence": 0,
       "owner": "server/src/routes/issues.ts",
       "classification": "DIRECT_AGENT",
@@ -41964,7 +41964,7 @@
         "post:`/issues/${id}/interactions/${interactionId}/reject`"
       ],
       "argumentsSignature": "issueId!, interaction.id, reason",
-      "line": 4911,
+      "line": 4914,
       "occurrence": 0,
       "owner": "server/src/routes/issues.ts",
       "classification": "DIRECT_AGENT",
@@ -42020,7 +42020,7 @@
         "post:`/issues/${id}/interactions/${interactionId}/respond`"
       ],
       "argumentsSignature": "issueId!, interaction.id, { answers }",
-      "line": 4942,
+      "line": 4945,
       "occurrence": 0,
       "owner": "server/src/routes/issues.ts",
       "classification": "DIRECT_AGENT",
@@ -42076,7 +42076,7 @@
         "post:`/issues/${id}/interactions/${interactionId}/verdicts`"
       ],
       "argumentsSignature": "issueId!, interaction.id, verdicts",
-      "line": 4973,
+      "line": 4976,
       "occurrence": 0,
       "owner": "server/src/routes/issues.ts",
       "classification": "DIRECT_AGENT",
@@ -42132,7 +42132,7 @@
         "post:`/issues/${id}/interactions/${interactionId}/cancel`"
       ],
       "argumentsSignature": "issueId!, interaction.id",
-      "line": 5005,
+      "line": 5008,
       "occurrence": 0,
       "owner": "server/src/routes/issues.ts",
       "classification": "HUMAN_ONLY",
@@ -42185,7 +42185,7 @@
         "post:`/issues/${id}/interactions/${interactionId}/skip`"
       ],
       "argumentsSignature": "issueId!, interaction.id",
-      "line": 5027,
+      "line": 5030,
       "occurrence": 0,
       "owner": "server/src/routes/issues.ts",
       "classification": "HUMAN_ONLY",
@@ -42238,7 +42238,7 @@
         "patch:`/issues/${id}`"
       ],
       "argumentsSignature": "issueId!, {\n        comment: body,\n        commentClientRequestId: clientRequestId,\n        ...(attachmentIds?.length ? { attachmentIds } : {}),\n        assigneeAgentId: reassignment.assigneeAgentId,\n        assigneeUserId: reassignment.assigneeUserId,\n        ...(reopen ? { status: \"todo\" } : {}),\n        ...(interrupt ? { interrupt } : {}),\n      }",
-      "line": 5059,
+      "line": 5062,
       "occurrence": 0,
       "owner": "server/src/routes/issues.ts",
       "classification": "DIRECT_AGENT",
@@ -42294,7 +42294,7 @@
         "delete:`/issues/${id}/comments/${commentId}?mode=cancel`"
       ],
       "argumentsSignature": "issueId!, comment.id",
-      "line": 5137,
+      "line": 5140,
       "occurrence": 0,
       "owner": "server/src/routes/issues.ts",
       "classification": "DIRECT_AGENT",
@@ -42351,7 +42351,7 @@
         "post:`/issues/${id}/queued-comments/interrupt`"
       ],
       "argumentsSignature": "issueId!, runId",
-      "line": 5232,
+      "line": 5235,
       "occurrence": 0,
       "owner": "server/src/routes/issues.ts",
       "classification": "HUMAN_ONLY",
@@ -42404,7 +42404,7 @@
         "delete:`/issues/${id}/comments/${commentId}?mode=cancel`"
       ],
       "argumentsSignature": "issueId!, commentId",
-      "line": 5258,
+      "line": 5261,
       "occurrence": 0,
       "owner": "server/src/routes/issues.ts",
       "classification": "DIRECT_AGENT",
@@ -42460,7 +42460,7 @@
         "delete:`/issues/${id}/comments/${commentId}`"
       ],
       "argumentsSignature": "issueId!, commentId",
-      "line": 5291,
+      "line": 5294,
       "occurrence": 0,
       "owner": "server/src/routes/issues.ts",
       "classification": "DIRECT_AGENT",
@@ -42516,7 +42516,7 @@
         "post:`/issues/${id}/feedback-votes`"
       ],
       "argumentsSignature": "issueId!, {\n        targetType: variables.targetType,\n        targetId: variables.targetId,\n        vote: variables.vote,\n        ...(variables.reason ? { reason: variables.reason } : {}),\n        ...(variables.allowSharing ? { allowSharing: true } : {}),\n      }",
-      "line": 5350,
+      "line": 5353,
       "occurrence": 0,
       "owner": "server/src/routes/issues.ts",
       "classification": "HUMAN_ONLY",
@@ -42559,7 +42559,7 @@
         "postForm:`/companies/${companyId}/issues/${issueId}/attachments`"
       ],
       "argumentsSignature": "conversation.agent.companyId, await resolveWritableIssueId(), file",
-      "line": 5418,
+      "line": 5421,
       "occurrence": 0,
       "owner": "server/src/routes/issues.ts",
       "classification": "DIRECT_AGENT",
@@ -42605,7 +42605,7 @@
         "postForm:`/companies/${companyId}/issues/${issueId}/attachments`"
       ],
       "argumentsSignature": "loadedIssue.companyId, loadedIssue.id, file",
-      "line": 5422,
+      "line": 5425,
       "occurrence": 0,
       "owner": "server/src/routes/issues.ts",
       "classification": "DIRECT_AGENT",
@@ -42651,7 +42651,7 @@
         "put:`/issues/${id}/documents/${encodeURIComponent(key)}`"
       ],
       "argumentsSignature": "await resolveWritableIssueId(), key, {\n        title: key === \"plan\" ? null : nextTitle,\n        format: \"markdown\",\n        body,\n        baseRevisionId: existing?.latestRevisionId ?? null,\n      }",
-      "line": 5450,
+      "line": 5453,
       "occurrence": 0,
       "owner": "server/src/services/documents.ts",
       "classification": "DIRECT_AGENT",
@@ -42707,7 +42707,7 @@
         "delete:`/attachments/${id}`"
       ],
       "argumentsSignature": "attachmentId",
-      "line": 5474,
+      "line": 5477,
       "occurrence": 0,
       "owner": "server/src/routes/issues.ts",
       "classification": "DIRECT_AGENT",
@@ -42763,7 +42763,7 @@
         "post:`/issues/${id}/inbox-archive`"
       ],
       "argumentsSignature": "id",
-      "line": 5488,
+      "line": 5491,
       "occurrence": 0,
       "owner": "server/src/routes/issues.ts",
       "classification": "DIRECT_AGENT",
@@ -42809,7 +42809,7 @@
         "post:agentPath(id, companyId, \"/resume\")"
       ],
       "argumentsSignature": "issueAssigneeAgentIdForResume, issueCompanyIdForResume ?? undefined",
-      "line": 6555,
+      "line": 6558,
       "occurrence": 0,
       "owner": "server/src/services/agents.ts",
       "classification": "DIRECT_AGENT",
@@ -42905,7 +42905,7 @@
         "post:agentPath(id, companyId, \"/wakeup\")"
       ],
       "argumentsSignature": "issueAssigneeAgentIdForResume, {\n              source: \"assignment\",\n              reason: \"Assignee resumed from the task page\",\n              payload: {\n                issueId: issueIdForResume,\n                mutation: \"assignee_resumed\",\n              },\n            }, issueCompanyIdForResume ?? undefined",
-      "line": 6569,
+      "line": 6572,
       "occurrence": 0,
       "owner": "server/src/services/agents.ts",
       "classification": "DIRECT_AGENT",
@@ -43001,7 +43001,7 @@
         "post:`/companies/${companyId}/issues`"
       ],
       "argumentsSignature": "issue.companyId, {\n        title: `Re-issue (isolated): ${issue.title ?? sourceLabel}`,\n        description: descriptionLines.join(\"\\n\"),\n        priority: issue.priority,\n        projectId: issue.projectId ?? null,\n        parentId: issue.parentId ?? null,\n        assigneeAgentId:\n          issue.activeRecoveryAction?.returnOwnerAgentId ??\n          issue.activeRecoveryAction?.previousOwnerAgentId ??\n          issue.assigneeAgentId ??\n          null,\n        executionWorkspacePreference: \"isolated_workspace\",\n        executionWorkspaceSettings: {\n          mode: \"isolated_workspace\",\n          workspaceStrategy: { type: \"git_worktree\", baseRef: request.baseRef },\n        },\n      }",
-      "line": 6669,
+      "line": 6672,
       "occurrence": 0,
       "owner": "server/src/routes/issues.ts",
       "classification": "DIRECT_AGENT",
@@ -43057,7 +43057,7 @@
         "post:`/execution-workspaces/${id}/reconcile-branch`"
       ],
       "argumentsSignature": "workspaceId, body",
-      "line": 6736,
+      "line": 6739,
       "occurrence": 0,
       "owner": "server/src/services/execution-workspaces.ts",
       "classification": "HUMAN_ONLY",
@@ -48958,7 +48958,7 @@
         "patch:`/issues/${id}`"
       ],
       "argumentsSignature": "id, data",
-      "line": 230,
+      "line": 231,
       "occurrence": 0,
       "owner": "server/src/routes/issues.ts",
       "classification": "DIRECT_AGENT",
@@ -49014,7 +49014,7 @@
         "patch:`/issues/${id}`"
       ],
       "argumentsSignature": "id, data",
-      "line": 300,
+      "line": 301,
       "occurrence": 0,
       "owner": "server/src/routes/issues.ts",
       "classification": "DIRECT_AGENT",
@@ -49070,7 +49070,7 @@
         "patch:projectPath(id, companyId)"
       ],
       "argumentsSignature": "projectLookupRef, data, resolvedCompanyId ?? lookupCompanyId",
-      "line": 452,
+      "line": 453,
       "occurrence": 0,
       "owner": "server/src/services/projects.ts",
       "classification": "DIRECT_AGENT",
@@ -49126,7 +49126,7 @@
         "patch:projectPath(id, companyId)"
       ],
       "argumentsSignature": "projectLookupRef, { archivedAt: archived ? new Date().toISOString() : null }, resolvedCompanyId ?? lookupCompanyId",
-      "line": 458,
+      "line": 459,
       "occurrence": 0,
       "owner": "server/src/services/projects.ts",
       "classification": "DIRECT_AGENT",
@@ -49182,7 +49182,7 @@
         "postForm:`/companies/${companyId}/assets/images`"
       ],
       "argumentsSignature": "resolvedCompanyId, file, `projects/${projectLookupRef || \"draft\"}`",
-      "line": 484,
+      "line": 485,
       "occurrence": 0,
       "owner": "server/src/routes/assets.ts",
       "classification": "DIRECT_AGENT",
@@ -49238,7 +49238,7 @@
         "patch:projectPath(id, companyId)"
       ],
       "argumentsSignature": "projectLookupRef, data, resolvedCompanyId ?? lookupCompanyId",
-      "line": 582,
+      "line": 583,
       "occurrence": 0,
       "owner": "server/src/services/projects.ts",
       "classification": "DIRECT_AGENT",
@@ -49294,7 +49294,7 @@
         "post:`/companies/${companyId}/budgets/policies`"
       ],
       "argumentsSignature": "resolvedCompanyId!, {\n        scopeType: \"project\",\n        scopeId: project?.id ?? routeProjectRef,\n        amount,\n        windowKind: \"lifetime\",\n      }",
-      "line": 626,
+      "line": 627,
       "occurrence": 0,
       "owner": "server/src/services/budgets.ts",
       "classification": "HUMAN_ONLY",

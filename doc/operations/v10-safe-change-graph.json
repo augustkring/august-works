@@ -10929,7 +10929,7 @@
         },
         {
           "path": "ui/src/pages/IssueDetail.tsx",
-          "sha256": "4c876067a992361473f5d3ec5de1016622d60ed0b669a6ca0c54ef687bbdb93d"
+          "sha256": "3d24f0b66808e8659b971a4cb1e82bf06f07efe9cf8766411793a2392f72a791"
         }
       ],
       "kind": "safe_change_record",
@@ -12333,7 +12333,7 @@
         },
         {
           "path": "ui/src/components/IssueChatThread.tsx",
-          "sha256": "1f512e2924b8ee173fef5027d470877d21d1b58f471ae9529c741fa9f7d9fe2e"
+          "sha256": "d507807b0cb0db26b9fafad9dc35cf473bda4ab484dfac11021f45effd0e0a6f"
         },
         {
           "path": "ui/src/components/IssueChatThreadSystemNotice.test.tsx",
@@ -12341,7 +12341,7 @@
         },
         {
           "path": "ui/src/pages/IssueDetail.tsx",
-          "sha256": "4c876067a992361473f5d3ec5de1016622d60ed0b669a6ca0c54ef687bbdb93d"
+          "sha256": "3d24f0b66808e8659b971a4cb1e82bf06f07efe9cf8766411793a2392f72a791"
         },
         {
           "path": "ui/src/pages/Pipelines.tsx",
@@ -12572,7 +12572,7 @@
         },
         {
           "path": "ui/src/pages/AgentDetail.tsx",
-          "sha256": "3bcc511b3687adb04671e7c8b5287fffff6d3aec3b6cef33f77c084a2fa6a875"
+          "sha256": "9d1a4e559740061a45ac36a3735b4e6c85996f407fbd4e3bb4fbd3827460a554"
         }
       ],
       "kind": "safe_change_record",
@@ -12747,7 +12747,7 @@
         },
         {
           "path": "ui/src/pages/AgentDetail.tsx",
-          "sha256": "3bcc511b3687adb04671e7c8b5287fffff6d3aec3b6cef33f77c084a2fa6a875"
+          "sha256": "9d1a4e559740061a45ac36a3735b4e6c85996f407fbd4e3bb4fbd3827460a554"
         },
         {
           "path": "ui/src/pages/CompanyImport.tsx",
@@ -32185,11 +32185,11 @@
         },
         {
           "path": "ui/src/i18n/experience/da.json",
-          "sha256": "47ad1db3437919bc5894c068e6a02281fb9d08ce5a4e6d39d83521c394477433"
+          "sha256": "3902a0343e6f770e6064c04e6627d4b275c49ba2db9d1389682a9afc9da512de"
         },
         {
           "path": "ui/src/i18n/experience/en.json",
-          "sha256": "20a3cb8a476b72c93fd49b45079c59d04dc0591bc0624e58852241f9991957cd"
+          "sha256": "a3458841e8e727b7f658ee5860ce3c59813284b5a6835461fc9c615981cd7796"
         },
         {
           "path": "ui/src/i18n/index.ts",
@@ -36033,7 +36033,7 @@
         },
         {
           "path": "ui/src/pages/InstanceGeneralSettings.tsx",
-          "sha256": "e940e487eaa464ee424246abd24f2cb92380786c05abb0e13a1747f1f7f43aac"
+          "sha256": "8ae6d9219d60800cc73755986860a330ff66d0bfca3b9b8e4618d18ca94d9b4f"
         },
         {
           "path": "ui/src/pages/Orchestration.test.tsx",
@@ -36193,7 +36193,7 @@
         },
         {
           "path": "ui/src/pages/apps/chat/chat-ui-contract.test.ts",
-          "sha256": "aed569bc28e5e330909afb981ee2af55d37c8125c9b90d2e27ae5bcf42de4e58"
+          "sha256": "10406b9cd8d60d59369075b8512b11f5f5f38fd5afd8e5ff61674b3ba0dbc36c"
         },
         {
           "path": "ui/src/pages/apps/chat/github-private-key-file.test.ts",
@@ -51822,7 +51822,7 @@
       "id": "source:ui/src/pages/IssueDetail.tsx",
       "kind": "current_source_owner",
       "path": "ui/src/pages/IssueDetail.tsx",
-      "sha256": "4c876067a992361473f5d3ec5de1016622d60ed0b669a6ca0c54ef687bbdb93d",
+      "sha256": "3d24f0b66808e8659b971a4cb1e82bf06f07efe9cf8766411793a2392f72a791",
       "changeIds": [
         "SCR-V10-HOTSPOT-10",
         "SCR-V10-HOTSPOT-16"
@@ -52335,7 +52335,7 @@
       "id": "source:ui/src/components/IssueChatThread.tsx",
       "kind": "current_source_owner",
       "path": "ui/src/components/IssueChatThread.tsx",
-      "sha256": "1f512e2924b8ee173fef5027d470877d21d1b58f471ae9529c741fa9f7d9fe2e",
+      "sha256": "d507807b0cb0db26b9fafad9dc35cf473bda4ab484dfac11021f45effd0e0a6f",
       "changeIds": [
         "SCR-V10-HOTSPOT-16"
       ],
@@ -52411,7 +52411,7 @@
       "id": "source:ui/src/pages/AgentDetail.tsx",
       "kind": "current_source_owner",
       "path": "ui/src/pages/AgentDetail.tsx",
-      "sha256": "3bcc511b3687adb04671e7c8b5287fffff6d3aec3b6cef33f77c084a2fa6a875",
+      "sha256": "9d1a4e559740061a45ac36a3735b4e6c85996f407fbd4e3bb4fbd3827460a554",
       "changeIds": [
         "SCR-V10-HOTSPOT-19",
         "SCR-V10-HOTSPOT-21"
@@ -72810,7 +72810,7 @@
       "id": "source:ui/src/i18n/experience/da.json",
       "kind": "current_source_owner",
       "path": "ui/src/i18n/experience/da.json",
-      "sha256": "47ad1db3437919bc5894c068e6a02281fb9d08ce5a4e6d39d83521c394477433",
+      "sha256": "3902a0343e6f770e6064c04e6627d4b275c49ba2db9d1389682a9afc9da512de",
       "changeIds": [
         "SCR-V10-PRODUCT-IDENTITY-HELP-LANGUAGE"
       ],
@@ -72825,7 +72825,7 @@
       "id": "source:ui/src/i18n/experience/en.json",
       "kind": "current_source_owner",
       "path": "ui/src/i18n/experience/en.json",
-      "sha256": "20a3cb8a476b72c93fd49b45079c59d04dc0591bc0624e58852241f9991957cd",
+      "sha256": "a3458841e8e727b7f658ee5860ce3c59813284b5a6835461fc9c615981cd7796",
       "changeIds": [
         "SCR-V10-PRODUCT-IDENTITY-HELP-LANGUAGE"
       ],
@@ -76770,7 +76770,7 @@
       "id": "source:ui/src/pages/InstanceGeneralSettings.tsx",
       "kind": "current_source_owner",
       "path": "ui/src/pages/InstanceGeneralSettings.tsx",
-      "sha256": "e940e487eaa464ee424246abd24f2cb92380786c05abb0e13a1747f1f7f43aac",
+      "sha256": "8ae6d9219d60800cc73755986860a330ff66d0bfca3b9b8e4618d18ca94d9b4f",
       "changeIds": [
         "SCR-V10-CUSTOMER-EXPERIENCE"
       ],
@@ -77340,7 +77340,7 @@
       "id": "source:ui/src/pages/apps/chat/chat-ui-contract.test.ts",
       "kind": "current_source_owner",
       "path": "ui/src/pages/apps/chat/chat-ui-contract.test.ts",
-      "sha256": "aed569bc28e5e330909afb981ee2af55d37c8125c9b90d2e27ae5bcf42de4e58",
+      "sha256": "10406b9cd8d60d59369075b8512b11f5f5f38fd5afd8e5ff61674b3ba0dbc36c",
       "changeIds": [
         "SCR-V10-CUSTOMER-EXPERIENCE"
       ],
