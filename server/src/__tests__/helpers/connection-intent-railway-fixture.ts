@@ -155,7 +155,7 @@ export async function prepareConnectionIntentRailwayFixture(input: {
     throw new Error("railway_fixture_canonical_discovery_failed");
   await toolAccessPolicyService(input.db).createPolicy(input.companyId, {
     name: "Read fixture Railway projects", policyType: input.reviewJourney ? "require_approval" : "allow", priority: 200, enabled: true,
-    selectors: { connectionId: connection.id, toolName: tool.toolName },
+    selectors: { connectionId: connection.id, toolName: tool.toolName, agentId: input.holderAgentId },
   }, { userId: input.userId });
   await access.putConnectionInstalls(connection.id, {
     installs: [{ targetType: "agent", targetId: input.holderAgentId }],
