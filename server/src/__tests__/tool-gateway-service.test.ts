@@ -64,6 +64,7 @@ import { preparePlatformSkillAdmission } from "../services/platform-skill-admiss
 import { toolAccessService } from "../services/tool-access.js";
 import {
   createToolGatewayService,
+  approvedExecutionTransitionRefusal,
   blenteraPlatformContractHashes,
   ToolGatewayHttpError,
   type ScopedToolGatewayContext,
@@ -1674,6 +1675,49 @@ describeEmbeddedPostgres("tool gateway service", () => {
     expect(message.untrustedToolResults).toMatchObject([{ actionRequestId: request.id, resultSummary: expect.stringContaining("bodyLength") }]);
   });
 
+  it("settles a refused executing transition as failed and still delivers the continuation (APR-E2E-17)", async () => {
+    const { company, agent, issue, run } = await createRunFixture(db);
+    await db.insert(toolPolicies).values({ companyId: company.id, name: "Ask first", policyType: "require_approval", selectors: { toolName: "mcp-remote-fixture:update_note" } });
+    const wakeup = vi.fn(async (agentId: string, input: any) => (await db.insert(agentWakeupRequests).values({ companyId: company.id, agentId, source: input.source, idempotencyKey: input.idempotencyKey, payload: input.payload }).returning())[0] as any);
+    const deliveries = toolActionDeliveryService(db, { wakeup });
+    const gateway = createTestToolGatewayService(db, { onToolActionSettled: deliveries.deliver });
+    const session = await gateway.createSession({ companyId: company.id, agentId: agent.id, runId: run.id });
+    await expect(gateway.executeTool({ sessionToken: session.token, tool: "mcp-remote-fixture:update_note", parameters: { noteId: "n1", body: "refused" } })).rejects.toMatchObject({ reasonCode: "approval_required" });
+    const [request] = await db.select().from(toolActionRequests);
+    // The requesting Run parked the call and ended before the Human decided.
+    await db.update(heartbeatRuns).set({ status: "succeeded", finishedAt: new Date() }).where(eq(heartbeatRuns.id, run.id));
+    // Stand-in for a database guard (such as the orchestration charge trigger)
+    // that refuses the executing transition with a check violation.
+    await db.execute(sql.raw(`CREATE OR REPLACE FUNCTION apr_e2e_17_refuse() RETURNS trigger LANGUAGE plpgsql AS $$
+      BEGIN IF NEW.status = 'executing' AND OLD.status = 'awaiting_approval' THEN
+        RAISE EXCEPTION 'orchestration_attempt_stopped' USING ERRCODE = '23514'; END IF; RETURN NEW; END $$`));
+    await db.execute(sql.raw(`CREATE TRIGGER apr_e2e_17_refuse BEFORE UPDATE ON tool_invocations FOR EACH ROW EXECUTE FUNCTION apr_e2e_17_refuse()`));
+    try {
+      const resolution = await gateway.approveActionRequest({ companyId: company.id, actionRequestId: request.id, actor: { userId: "reviewer" } });
+      expect(resolution).toMatchObject({ status: "failed" });
+    } finally {
+      await db.execute(sql.raw(`DROP TRIGGER IF EXISTS apr_e2e_17_refuse ON tool_invocations; DROP FUNCTION IF EXISTS apr_e2e_17_refuse()`));
+    }
+    const [settledRequest] = await db.select().from(toolActionRequests).where(eq(toolActionRequests.id, request.id));
+    expect(settledRequest).toMatchObject({ status: "failed", decidedByUserId: "reviewer" });
+    expect(settledRequest.resolvedAt).not.toBeNull();
+    const [invocation] = await db.select().from(toolInvocations).where(eq(toolInvocations.id, request.invocationId));
+    expect(invocation).toMatchObject({ status: "failed", errorCode: "approved_execution_refused", startedAt: null });
+    expect(invocation.errorMessage).toContain("orchestration_attempt_stopped");
+    const [interaction] = await db.select().from(issueThreadInteractions).where(eq(issueThreadInteractions.id, request.interactionId!));
+    expect(interaction).toMatchObject({ status: "accepted", result: { toolAction: { status: "failed", errorCode: "approved_execution_refused" } } });
+    const refused = await db.select().from(activityLog).where(and(eq(activityLog.companyId, company.id), eq(activityLog.action, "issue.tool_action_execution_refused")));
+    expect(refused).toHaveLength(1);
+    expect(refused[0]).toMatchObject({ entityId: issue.id, details: { actionRequestId: request.id, invocationId: request.invocationId,
+      errorCode: "approved_execution_refused", refusal: "orchestration_attempt_stopped" } });
+    expect(wakeup).toHaveBeenCalledTimes(1);
+    expect(wakeup.mock.calls[0][1].payload.toolAction).toMatchObject({ executionStatus: "failed" });
+    expect((await db.select().from(toolActionDeliveries))[0].deliveredAt).not.toBeNull();
+    // Nothing was dispatched to the provider.
+    expect(await db.select().from(toolCallEvents).where(and(eq(toolCallEvents.invocationId, request.invocationId),
+      eq(toolCallEvents.eventType, "call_completed")))).toHaveLength(0);
+  });
+
   it("waits for all reviews, then delivers both outcomes in one durable continuation", async () => {
     const { company, agent, issue, run } = await createRunFixture(db);
     await db.insert(toolPolicies).values({ companyId: company.id, name: "Ask first", policyType: "require_approval", selectors: { toolName: "mcp-remote-fixture:update_note" } });
@@ -3171,4 +3215,15 @@ describeEmbeddedPostgres("tool gateway service", () => {
     expect(invoke).not.toHaveBeenCalled();expect(await db.select().from(toolInvocations)).toEqual([]);
   });
 
+});
+
+describe("approvedExecutionTransitionRefusal (APR-E2E-17)", () => {
+  it("returns the closed code of a wrapped check violation and null for anything else", () => {
+    expect(approvedExecutionTransitionRefusal(Object.assign(new Error("Failed query"), {
+      cause: Object.assign(new Error("orchestration_attempt_stopped"), { code: "23514" }) }))).toBe("orchestration_attempt_stopped");
+    expect(approvedExecutionTransitionRefusal(Object.assign(new Error("new row violates check constraint \"x\""), { code: "23514" }))).toBe("check_violation");
+    expect(approvedExecutionTransitionRefusal(Object.assign(new Error("deadlock"), { code: "40P01" }))).toBeNull();
+    expect(approvedExecutionTransitionRefusal(new Error("connection reset"))).toBeNull();
+    expect(approvedExecutionTransitionRefusal(null)).toBeNull();
+  });
 });
