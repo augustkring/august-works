@@ -62,6 +62,9 @@ import { isCurrentConversationModelRoot } from "./native-runtime/worker-conversa
 import { readNativeChannelConversationScope } from "./native-runtime/native-channel-conversation-owner.js";
 import { issueTreeControlService, isVerifiedIssueTreeControlInteractionWake } from "./issue-tree-control.js";
 import type { NativeToolEffectClaim } from "../agent-auth-jwt.js";
+import { nativeSourceOperationMemoOpen, openNativeSourceOperationMemo, retireNativeSourceOperationMemo,
+  withNativeSourceOperationMemoSuspended } from "./native-source-operation-memo.js";
+import { withLocalEncryptedMasterKey } from "../secrets/local-encrypted-provider.js";
 
 type Transaction = Parameters<Parameters<Db["transaction"]>[0]>[0];
 const NATIVE_SOURCE_VALIDATION_WORK_LIMIT = 2048;
@@ -615,6 +618,8 @@ export interface NativeSourceGraphProofWorkProbe {
   markProofsIncompatible(): void;
   /** As the final reader pass does when it takes the pending reader groups. */
   takePendingReaderGroups(): number;
+  /** Whether this probe's per-operation memo still records reads (MS1f stop 8). */
+  operationMemoOpen(): boolean;
   /** The exact call proof recorded for a step, by content only. */
   exactProof(step: NativeSourceGraphProofWorkProbeStep): { readerSets: number | null; mutableRows: string[];
     descendants: string[] } | null;
@@ -632,6 +637,8 @@ export async function nativeSourceGraphProofWorkProbeForTest(input: { companyId:
     return scope;
   };
   const primary = scopeFor(input.actor);
+  // As the outermost source read scope does for its transaction (MS1f stop 8).
+  const closeOperationMemo = openNativeSourceOperationMemo(db as object);
   const policy: NativePayloadSourcePolicy = { issueIds: [], projectIds: [], runIds: [], memoryIds: [], foundationRevisionIds: [] };
   const context = (step: NativeSourceGraphProofWorkProbeStep) => step.exactContext === false ? undefined
     : nativePayloadSourceSetExactCallContext({ validatedDispatchSources: step.validatedDispatchSources, consumerCover: step.consumerCover });
@@ -662,7 +669,8 @@ export async function nativeSourceGraphProofWorkProbeForTest(input: { companyId:
         mutableRows: [...proof.mutableSources.rows.keys()].sort(), descendants: [...proof.descendants].sort() } : null;
     },
     work: () => ancestry.work,
-  });
+    operationMemoOpen: () => nativeSourceOperationMemoOpen(db as object),
+  }).finally(closeOperationMemo);
   return { work: ancestry.work };
 }
 function createNativeSourceReadAncestry(): NativeSourceReadAncestry {
@@ -973,8 +981,14 @@ async function prepareNativeSourceEffectBoundary(scope: NativeSourceReadScope): 
     // CONF15-W11: no exact call proof is read or recorded after an effect.
     closeNativeExactCallSourceProofs(ancestry.exactCallProofs);
   }
+  // MS1f stop 8: nor any per-operation memoized read.
+  for (const context of contexts) retireNativeSourceOperationMemo(context.db as object);
 }
 async function flushNativeSourceReaderChecks(context: NativeSourceReadContext) {
+  // MS1f stop 8: the final current-reader pass never reuses a memoized read.
+  return withNativeSourceOperationMemoSuspended(context.db as object, () => flushNativeSourceReaderChecksUncached(context));
+}
+async function flushNativeSourceReaderChecksUncached(context: NativeSourceReadContext) {
   const wasFlushing = context.flushingReaders;
   context.flushingReaders = true;
   try {
@@ -1103,7 +1117,11 @@ function withNativeSourceReadScope<T>(db: Db | Transaction, actor: Authorization
   scope.context.parentContext = current?.active ? current : undefined;
   for (let parent = scope.context.parentContext; parent; parent = parent.parentContext)
     if (parent.ancestry.graphProofsDisabled) scope.context.ancestry.graphProofsDisabled = true;
-  return nativeSourceReadScopes.run(scope.context, async () => {
+  // MS1f stop 8: deterministic same-transaction reads and the secrets master
+  // key are resolved once per outermost validation operation, never across.
+  // Only a real transaction holds the share locks that make a reread equal.
+  const closeOperationMemo = is(db, PgTransaction) ? openNativeSourceOperationMemo(db as object) : () => {};
+  return withLocalEncryptedMasterKey(() => nativeSourceReadScopes.run(scope.context, async () => {
     try {
       const result = await readPublicInvocation(scope);
       const parent = privateTaskParent?.scope;
@@ -1143,8 +1161,9 @@ function withNativeSourceReadScope<T>(db: Db | Transaction, actor: Authorization
       if (nativeSourceMemoDiagnosticsEnabled()) nativeSourceMemoDiagnostics.maxValidationWork =
         Math.max(nativeSourceMemoDiagnostics.maxValidationWork, scope.context.ancestry.work);
       scope.context.active = false;
+      closeOperationMemo();
     }
-  });
+  }));
 }
 function inNativeSourceReadTransaction<T>(db: Db | Transaction, read: (tx: Db | Transaction) => Promise<T>): Promise<T> {
   if (is(db, PgTransaction)) return read(db);

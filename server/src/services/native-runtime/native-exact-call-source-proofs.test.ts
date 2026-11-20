@@ -136,6 +136,24 @@ describe("CONF15-W11 exact call source proofs", () => {
     expect(spanning).toBe(201);
   });
 
+  it("retires the per-operation read memo at the same effect boundary (MS1f stop 8)", async () => {
+    let observed: boolean[] = [];
+    await probe(async call => {
+      observed.push(call.operationMemoOpen());
+      await call.validate({ key: "set-a", units: 10 });
+      observed.push(call.operationMemoOpen());
+      await call.effectBoundary();
+      observed.push(call.operationMemoOpen());
+      await call.validate({ key: "set-b", units: 10 });
+      observed.push(call.operationMemoOpen());
+    });
+    expect(observed).toEqual([true, true, false, false]);
+    // The next operation starts open again.
+    observed = [];
+    await probe(async call => { observed.push(call.operationMemoOpen()); });
+    expect(observed).toEqual([true]);
+  });
+
   it("does not memoize ineligible or incompatible validations", async () => {
     const project = [{ kind: "project", projectId: "00000000-0000-4000-8000-0000000000f1" }] as unknown as NativePayloadSourceInput[];
     const ineligible = await probe(async call => {

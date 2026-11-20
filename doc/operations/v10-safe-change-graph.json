@@ -4481,7 +4481,7 @@
         },
         {
           "path": "server/src/services/authorization.ts",
-          "sha256": "d4e9a33d7ba00d9f2fcb946109f3c12fadcd13368cbc8ae56d1ce2c6a20382b4"
+          "sha256": "c43e87e0470362ab8c0b275cbbdb393561a9f011d491010b306d511f660a80fe"
         },
         {
           "path": "server/src/services/chat-channels.ts",
@@ -9288,7 +9288,7 @@
         },
         {
           "path": "server/src/services/native-direct-input.ts",
-          "sha256": "fd93e37345b00ebe5acaa5d30e208522afe0fcaac655c39595f8294d0c3e91db"
+          "sha256": "f220c5b15faab1fff862cdef7d6ae03474ae47edb759bc54e4f6e2ecb0bb3e6a"
         },
         {
           "path": "server/src/services/native-project-output.ts",
@@ -10293,7 +10293,7 @@
         },
         {
           "path": "server/src/services/authorization.ts",
-          "sha256": "d4e9a33d7ba00d9f2fcb946109f3c12fadcd13368cbc8ae56d1ce2c6a20382b4"
+          "sha256": "c43e87e0470362ab8c0b275cbbdb393561a9f011d491010b306d511f660a80fe"
         },
         {
           "path": "server/src/services/capability-resolver.test.ts",
@@ -16302,7 +16302,7 @@
         },
         {
           "path": "server/src/services/authorization.ts",
-          "sha256": "d4e9a33d7ba00d9f2fcb946109f3c12fadcd13368cbc8ae56d1ce2c6a20382b4"
+          "sha256": "c43e87e0470362ab8c0b275cbbdb393561a9f011d491010b306d511f660a80fe"
         },
         {
           "path": "server/src/services/board-auth.test.ts",
@@ -27585,11 +27585,11 @@
         },
         {
           "path": "server/src/services/native-stage-task-body-source.test.ts",
-          "sha256": "49683505e76446dc54e83a5e54060c507a04ba94ee18100d4ba14e32753f1350"
+          "sha256": "e26a91f8914d1e281a48e15f68c81af163364e15486d17b7d0f6589d89a5de5d"
         },
         {
           "path": "server/src/services/native-stage-task-body-source.ts",
-          "sha256": "e3538e788529e4400d414f79fdd7c364deab31b10b09eae2966e05f6b084e491"
+          "sha256": "bd0d0f90a3aaba8fe5b275bbab9f9304325d454198bf66dcef24a3a68b9bf6ae"
         },
         {
           "path": "server/src/services/native-stage-wake-source.ts",
@@ -35465,7 +35465,7 @@
         },
         {
           "path": "tests/e2e/composer-stop.spec.ts",
-          "sha256": "cec92575344831cc9c536ae3e992adc25bf61ef6ed854233554c5282b11283be"
+          "sha256": "56b7296df0e1fe5da817053c8eb7d3858593053900ee15c313e237069ac27c37"
         },
         {
           "path": "tests/e2e/conference-room-typing-intro.spec.ts",
@@ -46988,7 +46988,7 @@
       "id": "source:server/src/services/authorization.ts",
       "kind": "current_source_owner",
       "path": "server/src/services/authorization.ts",
-      "sha256": "d4e9a33d7ba00d9f2fcb946109f3c12fadcd13368cbc8ae56d1ce2c6a20382b4",
+      "sha256": "c43e87e0470362ab8c0b275cbbdb393561a9f011d491010b306d511f660a80fe",
       "changeIds": [
         "SCR-V10-HOTSPOT-01",
         "SCR-V10-HOTSPOT-07",
@@ -50830,7 +50830,7 @@
       "id": "source:server/src/services/native-direct-input.ts",
       "kind": "current_source_owner",
       "path": "server/src/services/native-direct-input.ts",
-      "sha256": "fd93e37345b00ebe5acaa5d30e208522afe0fcaac655c39595f8294d0c3e91db",
+      "sha256": "f220c5b15faab1fff862cdef7d6ae03474ae47edb759bc54e4f6e2ecb0bb3e6a",
       "changeIds": [
         "SCR-V10-HOTSPOT-06"
       ],
@@ -67333,7 +67333,7 @@
       "id": "source:server/src/services/native-stage-task-body-source.test.ts",
       "kind": "current_source_owner",
       "path": "server/src/services/native-stage-task-body-source.test.ts",
-      "sha256": "49683505e76446dc54e83a5e54060c507a04ba94ee18100d4ba14e32753f1350",
+      "sha256": "e26a91f8914d1e281a48e15f68c81af163364e15486d17b7d0f6589d89a5de5d",
       "changeIds": [
         "SCR-V10-UNCLASSIFIED-REGISTERED-OWNER"
       ],
@@ -67348,7 +67348,7 @@
       "id": "source:server/src/services/native-stage-task-body-source.ts",
       "kind": "current_source_owner",
       "path": "server/src/services/native-stage-task-body-source.ts",
-      "sha256": "e3538e788529e4400d414f79fdd7c364deab31b10b09eae2966e05f6b084e491",
+      "sha256": "bd0d0f90a3aaba8fe5b275bbab9f9304325d454198bf66dcef24a3a68b9bf6ae",
       "changeIds": [
         "SCR-V10-UNCLASSIFIED-REGISTERED-OWNER"
       ],
@@ -74640,7 +74640,7 @@
       "id": "source:tests/e2e/composer-stop.spec.ts",
       "kind": "current_source_owner",
       "path": "tests/e2e/composer-stop.spec.ts",
-      "sha256": "cec92575344831cc9c536ae3e992adc25bf61ef6ed854233554c5282b11283be",
+      "sha256": "56b7296df0e1fe5da817053c8eb7d3858593053900ee15c313e237069ac27c37",
       "changeIds": [
         "SCR-V10-CUSTOMER-EXPERIENCE"
       ],

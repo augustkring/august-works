@@ -4,7 +4,8 @@ import { PgDialect } from "drizzle-orm/pg-core";
 import type { SQL } from "drizzle-orm";
 import { describe, expect, it } from "vitest";
 import type { NativeRunInputSourceReceipt } from "@paperclipai/shared";
-import { nativeRunInputSourceReceiptPrefix, nativeRunInputSourceReceiptPrefixMatches } from "./native-stage-task-body-source.js";
+import { nativeRunInputSourceReceiptPrefix, nativeRunInputSourceReceiptPrefixMatches, readNativeStageTaskBodyStep } from "./native-stage-task-body-source.js";
+import { openNativeSourceOperationMemo, retireNativeSourceOperationMemo } from "./native-source-operation-memo.js";
 
 const emptyPolicy={issueIds:[],projectIds:[],runIds:[],memoryIds:[],foundationRevisionIds:[]};
 const taskSet=(issueId:string,version:string,contentHash:string)=>({policy:emptyPolicy,
@@ -93,5 +94,66 @@ describe("Native Stage input-receipt prefix",()=>{
     expect(await matches(current,expectedOriginal.digest,2,1)).toBe(false);
     expect(await matches({...current,unexpected:true})).toBe(false);
     expect(await matches(current,expectedOriginal.digest,1.5,1)).toBe(false);
+  });
+
+  // MS1f stop 8. Inside one Native source validation operation the prefix
+  // match is memoized by its exact inputs; every decision equals the uncached
+  // one, including each refusal, and another input never shares an entry.
+  it("memoizes the prefix match per operation with the uncached decision for every case",async()=>{
+    const current=receiptFixture();
+    const expectedOriginal={...current,dispatches:current.dispatches.slice(0,1),additionalInputs:current.additionalInputs.slice(0,1)};
+    expectedOriginal.digest=pgDigest(expectedOriginal);
+    const tx={executions:0,execute:async(query:{queryChunks?:unknown[]})=>{
+      tx.executions+=1;
+      const parameters=(query.queryChunks??[]).filter((part):part is string=>typeof part==="string").map(part=>JSON.parse(part) as Record<string,unknown>);
+      const [currentHashParam,,prefixParam]=parameters;
+      return [{currentDigestValid:pgDigest(currentHashParam!)===currentHashParam!.digest,prefixDigest:pgDigest(prefixParam!)}];
+    }};
+    const pruned={...current,dispatches:current.dispatches.slice(0,1)};pruned.digest=pgDigest(pruned);
+    const changedBootstrap={...current,bootstrap:{...current.bootstrap,executionInputDigest:"3".repeat(64)}};changedBootstrap.digest=pgDigest(changedBootstrap);
+    const reordered={...current,dispatches:[...current.dispatches].reverse()};reordered.digest=pgDigest(reordered);
+    const cases:Array<[unknown,unknown,unknown,unknown,boolean]>=[
+      [current,expectedOriginal.digest,1,1,true],[current,current.digest,2,2,true],[pruned,current.digest,2,2,false],
+      [{...current,digest:"a".repeat(64)},expectedOriginal.digest,1,1,false],[changedBootstrap,expectedOriginal.digest,1,1,false],
+      [reordered,expectedOriginal.digest,1,1,false],[current,expectedOriginal.digest,2,1,false],
+      [{...current,unexpected:true},expectedOriginal.digest,1,1,false],[current,expectedOriginal.digest,1.5,1,false],
+      [current,"not-a-digest",1,1,false],[current,expectedOriginal.digest,1,2,false],[current,current.digest,1,1,false]];
+    const call=([receipt,originalDigest,dispatchCount,additionalInputCount]:typeof cases[number])=>
+      nativeRunInputSourceReceiptPrefixMatches(tx as never,{receipt,originalDigest,dispatchCount,additionalInputCount});
+    const uncached:boolean[]=[];
+    for(const value of cases) uncached.push(await call(value));
+    expect(uncached).toEqual(cases.map(value=>value[4]));
+    const close=openNativeSourceOperationMemo(tx);
+    try{
+      const first:boolean[]=[],repeated:boolean[]=[];
+      for(const value of cases) first.push(await call(value));
+      const executionsAfterFirst=tx.executions;
+      for(const value of cases) repeated.push(await call(value));
+      expect(first).toEqual(uncached);
+      expect(repeated).toEqual(uncached);
+      // Every repeated decision came from the memo; none was read again.
+      expect(tx.executions).toBe(executionsAfterFirst);
+      // An effect boundary retires the memo: the next decision is read again.
+      retireNativeSourceOperationMemo(tx);
+      expect(await call(cases[0]!)).toBe(true);
+      expect(tx.executions).toBe(executionsAfterFirst+1);
+    }finally{close();}
+  });
+
+  it("never retains a refused Stage body step read inside an operation",async()=>{
+    let selects=0;
+    const chain={from:()=>chain,where:()=>chain,limit:()=>chain,for:async()=>[]};
+    const tx={select:()=>{selects+=1;return chain;}};
+    const task={id:randomUUID(),companyId:randomUUID()} as never;
+    const step={kind:"native_stage_policy" as const,transitionId:randomUUID(),runId:randomUUID(),ownerKind:"native_status_decision" as const,
+      decisionId:randomUUID(),receiptHash:"a".repeat(64),previousSnapshotDigest:"b".repeat(64),
+      previousOwnerContentHash:"c".repeat(64),nextOwnerContentHash:"d".repeat(64)};
+    await expect(readNativeStageTaskBodyStep(tx as never,{task,step})).rejects.toThrow("native_stage_body_transition_changed");
+    const close=openNativeSourceOperationMemo(tx);
+    try{
+      await expect(readNativeStageTaskBodyStep(tx as never,{task,step})).rejects.toThrow("native_stage_body_transition_changed");
+      await expect(readNativeStageTaskBodyStep(tx as never,{task,step})).rejects.toThrow("native_stage_body_transition_changed");
+    }finally{close();}
+    expect(selects).toBe(3);
   });
 });

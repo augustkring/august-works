@@ -1,4 +1,5 @@
 import { isDeepStrictEqual } from "node:util";
+import { nativeSourceOperationMemoized, nativeSourceOperationMemoOpen } from "./native-source-operation-memo.js";
 import { createHash, randomUUID } from "node:crypto";
 import { AsyncLocalStorage } from "node:async_hooks";
 import { isSaasDeployment } from "../deployment-profile.js";
@@ -1789,6 +1790,23 @@ export async function canActorReadProjectPrivacy(db: Db | DbTransaction, actor: 
  * This narrows payload visibility; company/action and V8 copy checks still apply. */
 export async function canActorReadHeartbeatRunPrivacy(db: Db | DbTransaction, actor: AuthorizationActor, source: { id: string; companyId: string },
 ): Promise<boolean> {
+  // MS1f stop 8 (the W11 per-call proof reuse pattern). Inside one Native
+  // source validation operation on this transaction, an identical Run privacy
+  // decision is evaluated once. It is keyed by every input the canonical
+  // predicate reads: the exact actor, the Run and company, and the ambient
+  // Memory contexts. A Routine or Workflow read scope (whose predicate also
+  // reads session settings) is never memoized, nor is the final reader pass.
+  const routineScope = nativeRoutineReadScopes.get(db as object), workflowScope = nativeWorkflowReadScopes.get(db as object);
+  if (!routineScope?.active && !workflowScope?.active && nativeSourceOperationMemoOpen(db as object)) {
+    const contexts = activeMemoryTemporalContexts(db, actor, "run", source.id);
+    return nativeSourceOperationMemoized(db as object, "run-privacy",
+      JSON.stringify([routineActorKey(actor), source.companyId, source.id, contexts === undefined ? null : [...contexts]]),
+      () => canActorReadHeartbeatRunPrivacyUncached(db, actor, source));
+  }
+  return canActorReadHeartbeatRunPrivacyUncached(db, actor, source);
+}
+async function canActorReadHeartbeatRunPrivacyUncached(db: Db | DbTransaction, actor: AuthorizationActor,
+  source: { id: string; companyId: string }): Promise<boolean> {
   const readQuery = db.select({ id: heartbeatRuns.id }).from(heartbeatRuns).where(and(
     eq(heartbeatRuns.id, source.id), eq(heartbeatRuns.companyId, source.companyId),
     await heartbeatRunReadSqlConditionInMemoryScope(db, actor, source.id),

@@ -7,6 +7,7 @@ import { nativePayloadSourceSnapshotSchema, nativeRunInputSourceReceiptSchema,
   type NativePayloadSourceSnapshot, type NativeRunInputSourceReceipt } from "@paperclipai/shared";
 import { buildExecutionStageWakeup } from "./issue-execution-stage-wakeup.js";
 import { nativeSha256 } from "./native-runtime/canonical.js";
+import { nativeSourceOperationMemoized, nativeSourceOperationMemoOpen } from "./native-source-operation-memo.js";
 import { applyIssueExecutionPolicyTransition, normalizeIssueExecutionPolicy,
   parseIssueExecutionState } from "./issue-execution-policy.js";
 
@@ -32,6 +33,15 @@ export function nativeRunInputSourceReceiptPrefix(receiptValue:unknown,dispatchC
  * pinned full-receipt prefix. This deliberately hashes JSONB text in Postgres,
  * matching migration 0511 instead of the different JS canonical JSON format. */
 export async function nativeRunInputSourceReceiptPrefixMatches(db:Db|Transaction,input:{receipt:unknown;
+  originalDigest:unknown;dispatchCount:unknown;additionalInputCount:unknown}):Promise<boolean>{
+  // MS1f stop 8: a pure function of these exact inputs (hashed by PostgreSQL),
+  // memoized only inside one Native source validation operation.
+  if(!nativeSourceOperationMemoOpen(db as object)) return nativeRunInputSourceReceiptPrefixMatchesUncached(db,input);
+  return nativeSourceOperationMemoized(db as object,"stage-receipt-prefix",nativeSha256({receipt:input.receipt ?? null,
+    originalDigest:input.originalDigest ?? null,dispatchCount:input.dispatchCount ?? null,additionalInputCount:input.additionalInputCount ?? null}),
+    ()=>nativeRunInputSourceReceiptPrefixMatchesUncached(db,input));
+}
+async function nativeRunInputSourceReceiptPrefixMatchesUncached(db:Db|Transaction,input:{receipt:unknown;
   originalDigest:unknown;dispatchCount:unknown;additionalInputCount:unknown}):Promise<boolean>{
   if(typeof input.originalDigest!=="string" || !/^[a-f0-9]{64}$/.test(input.originalDigest)) return false;
   const prefix=nativeRunInputSourceReceiptPrefix(input.receipt,input.dispatchCount,input.additionalInputCount);
@@ -221,6 +231,19 @@ export async function prepareNativeStageTaskBodySnapshot(tx: Transaction, input:
  * Reads reselect the actual decision/effect/comment; a persisted receipt is
  * never a substitute for those owners or the current reader's source graph. */
 export async function readNativeStageTaskBodyStep(db: Db | Transaction, input: {
+  task: Task; step: NativeStageTaskBodyTransform;
+}): Promise<NativeStageTaskBodyReceipt> {
+  // MS1f stop 8: every row this read selects is share-locked in this
+  // transaction, and it depends only on the Task identity and the exact step.
+  // Inside one Native source validation operation an identical step is read
+  // once; a refusal is never retained, and an effect boundary retires the memo.
+  if (!nativeSourceOperationMemoOpen(db as object)) return readNativeStageTaskBodyStepUncached(db, input);
+  const receipt = await nativeSourceOperationMemoized(db as object, "stage-body-step",
+    nativeSha256({ companyId: input.task.companyId, issueId: input.task.id, step: input.step }),
+    () => readNativeStageTaskBodyStepUncached(db, input));
+  return structuredClone(receipt);
+}
+async function readNativeStageTaskBodyStepUncached(db: Db | Transaction, input: {
   task: Task; step: NativeStageTaskBodyTransform;
 }): Promise<NativeStageTaskBodyReceipt> {
   const {task,step}=input;

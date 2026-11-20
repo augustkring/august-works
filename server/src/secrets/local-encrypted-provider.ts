@@ -1,3 +1,4 @@
+import { AsyncLocalStorage } from "node:async_hooks";
 import { createCipheriv, createDecipheriv, createHash, randomBytes } from "node:crypto";
 import { chmodSync, existsSync, mkdirSync, readFileSync, statSync, writeFileSync } from "node:fs";
 import path from "node:path";
@@ -78,6 +79,24 @@ function loadOrCreateMasterKey(): Buffer {
     // best effort
   }
   return generated;
+}
+
+// MS1f stop 8 (the PERF2b withDecisionSigningKey pattern). Inside one
+// operation the master key is resolved at most once, on first use; the next
+// operation resolves it again, so a rotated or re-permissioned key takes effect
+// at the next operation. Nested scopes reuse the outer one.
+const operationMasterKey = new AsyncLocalStorage<{ key: Buffer | null }>();
+
+export function withLocalEncryptedMasterKey<T>(operation: () => Promise<T>): Promise<T> {
+  if (operationMasterKey.getStore()) return operation();
+  return operationMasterKey.run({ key: null }, operation);
+}
+
+function currentMasterKey(): Buffer {
+  const scope = operationMasterKey.getStore();
+  if (!scope) return loadOrCreateMasterKey();
+  scope.key ??= loadOrCreateMasterKey();
+  return scope.key;
 }
 
 function enforceKeyFilePermissionsBestEffort(keyPath: string) {
@@ -272,7 +291,7 @@ export const localEncryptedProvider: SecretProviderModule = {
     throw badRequest("local_encrypted does not support external reference secrets");
   },
   async resolveVersion(input) {
-    const masterKey = loadOrCreateMasterKey();
+    const masterKey = currentMasterKey();
     return decryptValue(masterKey, asLocalEncryptedMaterial(input.material));
   },
   async deleteOrArchive() {
