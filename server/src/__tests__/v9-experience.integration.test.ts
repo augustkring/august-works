@@ -113,6 +113,17 @@ const support = await getEmbeddedPostgresTestSupport();
               }
               return decision;
             },
+            // Home decides its Tasks' issue:read together (PERF5); the change
+            // still lands right after the first Task read was allowed.
+            decideIssueReads: async (actor, resources) => {
+              const decisions = await native.decideIssueReads(actor, resources);
+              if (!changed && action === "issue:read" && decisions.length > 0) {
+                changed = true;
+                expect(decisions[0]!.allowed).toBe(true);
+                await change();
+              }
+              return decisions;
+            },
           };
         },
       );
