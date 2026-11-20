@@ -1,6 +1,7 @@
 import { createHash, randomUUID } from "node:crypto";
 import { readFile } from "node:fs/promises";
 import { createRequire } from "node:module";
+import path from "node:path";
 import {
   expect,
   test,
@@ -8,6 +9,8 @@ import {
   type APIResponse,
   type Page,
 } from "@playwright/test";
+import { eq } from "../../server/node_modules/drizzle-orm/index.js";
+import { companies, createDb, issueComments, issues, memoryRecords } from "../../packages/db/src/index.ts";
 import { readZipArchive } from "../../packages/shared/src/portability-zip.ts";
 import { registerEnglishAccountLocaleIsolation } from "./account-locale-isolation";
 
@@ -114,6 +117,24 @@ async function expectSeedIntact(api: APIRequestContext, seed: Seed, when: string
   expect(JSON.stringify(comments), `${when}: comment`).toContain(seed.commentBody);
   const memory = await json(await api.get(`/api/companies/${seed.companyId}/memory/records/${seed.memoryRecordId}`));
   expect(JSON.stringify(memory), `${when}: Memory record`).toContain(seed.memoryTitle);
+}
+
+/** Rows of the seed still stored in the disposable server's PostgreSQL. */
+async function storedSeedRows(seed: Seed) {
+  const config = JSON.parse(await readFile(process.env.PAPERCLIP_E2E_SERVER_CONFIG!, "utf8"));
+  const pid = await readFile(path.join(config.database.embeddedPostgresDataDir, "postmaster.pid"), "utf8");
+  const db = createDb(`postgres://paperclip:paperclip@127.0.0.1:${pid.split("\n")[3]}/paperclip`);
+  try {
+    const count = async (rows: Promise<unknown[]>) => (await rows).length;
+    return {
+      company: await count(db.select({ id: companies.id }).from(companies).where(eq(companies.id, seed.companyId))),
+      task: await count(db.select({ id: issues.id }).from(issues).where(eq(issues.id, seed.taskId))),
+      comments: await count(db.select({ id: issueComments.id }).from(issueComments).where(eq(issueComments.issueId, seed.taskId))),
+      memory: await count(db.select({ id: memoryRecords.id }).from(memoryRecords).where(eq(memoryRecords.id, seed.memoryRecordId))),
+    };
+  } finally {
+    await db.$client.end({ timeout: 2 });
+  }
 }
 
 type AxeViolation = { id: string; impact: string | null; help: string; nodes: { target: string[]; failureSummary?: string }[] };
@@ -277,6 +298,7 @@ test.describe("exit journeys on the real backend", () => {
 
   test("confirmed deletion removes the company with its Task, comment and Memory", async ({ page }) => {
     await expectSeedIntact(api, seed, "before deletion");
+    expect(await storedSeedRows(seed)).toEqual({ company: 1, task: 1, comments: 1, memory: 1 });
     await page.goto(`/${seed.prefix}/companies`);
     const card = page.getByRole("article").filter({ has: page.getByRole("heading", { name: seed.companyName, exact: true }) });
     await card.getByRole("button", { name: DELETION_COPY.en.actions(seed.companyName), exact: true }).click();
@@ -286,10 +308,16 @@ test.describe("exit journeys on the real backend", () => {
     await card.getByRole("alertdialog").getByRole("button", { name: DELETION_COPY.en.confirm, exact: true }).click();
     expect((await removal).status()).toBe(200);
     await expect(card).toBeHidden();
-    expect((await api.get(`/api/companies/${seed.companyId}`)).status()).toBe(404);
-    expect((await api.get(`/api/issues/${seed.taskId}`)).status()).toBe(404);
-    expect((await api.get(`/api/companies/${seed.companyId}/memory/records/${seed.memoryRecordId}`)).status()).toBe(404);
     deleted = true;
+    // Gone from the API (403: no membership remains, so existence is not disclosed)...
+    const companiesAfter = await json(await api.get("/api/companies"));
+    expect(companiesAfter.map((company: { id: string }) => company.id)).not.toContain(seed.companyId);
+    for (const path of [`/api/companies/${seed.companyId}`, `/api/issues/${seed.taskId}`,
+      `/api/companies/${seed.companyId}/memory/records/${seed.memoryRecordId}`]) {
+      expect([403, 404], path).toContain((await api.get(path)).status());
+    }
+    // ...and from the database: the rows are erased, not hidden.
+    expect(await storedSeedRows(seed)).toEqual({ company: 0, task: 0, comments: 0, memory: 0 });
   });
 
   test("hosted organization deletion receipt and personal account deletion need the SaaS profile", async () => {
