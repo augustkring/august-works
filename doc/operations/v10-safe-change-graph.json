@@ -12969,7 +12969,7 @@
         },
         {
           "path": "ui/src/pages/Inbox.test.tsx",
-          "sha256": "34b6372f0eec72e90e3708e4e48e2342a39730d6fd62c00b7f7b661b83e60d29"
+          "sha256": "ff60b5cfb9d8cdc5278a764d057772f80d6f001c85dc4df80bbeb12c69fed2bc"
         },
         {
           "path": "ui/src/pages/Inbox.tsx",
@@ -13992,7 +13992,7 @@
         },
         {
           "path": "tests/e2e/aw-v9-workflow-draft-step.spec.ts",
-          "sha256": "0721015ab1fc400ea2b7adf9e7ca57964ae8c5c556e90b5a8ef85a0b9314dd86"
+          "sha256": "f628da4cb6a46db52d6e3ae1d2b85be618dd867af39b1e2a15da0c90ba729388"
         },
         {
           "path": "tests/e2e/aw-v9-workflow-intent.spec.ts",
@@ -32712,7 +32712,7 @@
         },
         {
           "path": "scripts/__tests__/e2e-shard.test.mjs",
-          "sha256": "8e20b7f0d8a48e4357d012233c9f6b4bc824adfb5c923a1a703d519a294e845c"
+          "sha256": "add3f4d8ab5dc1c755ce20780f9a0e99597fcad8c28b52724e49556b363e445e"
         },
         {
           "path": "scripts/__tests__/run-vitest-stable-shard.test.mjs",
@@ -35557,7 +35557,7 @@
         },
         {
           "path": "tests/e2e/planning-mode-visual-verification.spec.ts",
-          "sha256": "8ee468f7a361e59bc3060fdcfb93affa230df5ce34d6adb0cfba97fc8c963a3b"
+          "sha256": "b0f80f548bff991a662cc5b50bdc98d27f910426a48fb6d7150454e92134b1bc"
         },
         {
           "path": "tests/e2e/playwright.config.ts",
@@ -35829,7 +35829,7 @@
         },
         {
           "path": "ui/src/components/task-chat/TaskChatComposer.test.tsx",
-          "sha256": "ba484d88fc3d567a5053ba3320cd0b30a79e1c84a1d8ed075d8caeae72ba25c4"
+          "sha256": "b2e1ad9742667a48b6281a80c9f9e439b0c0d81ed707b4ada775d0890a437481"
         },
         {
           "path": "ui/src/components/task-chat/TaskChatPausedTakeover.tsx",
@@ -36105,11 +36105,11 @@
         },
         {
           "path": "ui/src/pages/apps/Browse.test.tsx",
-          "sha256": "961cb4c3017687d65fa9c2579a96b05d56f66430f7ada6d1bfa3ce80db309d72"
+          "sha256": "d15ff3b9011386f0de53fba696a2a9d86f24b0a5455db9cdc3d75bba6606a881"
         },
         {
           "path": "ui/src/pages/apps/Browse.tsx",
-          "sha256": "07ba99b2da26d294aefab681d568b6db39edc2b892050d585c70024741a8f330"
+          "sha256": "2b41b55d5f3be8cc73df222a4644d7621dc67a0ed778071ca6df5dddc01d67e8"
         },
         {
           "path": "ui/src/pages/apps/Connections.tsx",
@@ -52549,7 +52549,7 @@
       "id": "source:ui/src/pages/Inbox.test.tsx",
       "kind": "current_source_owner",
       "path": "ui/src/pages/Inbox.test.tsx",
-      "sha256": "34b6372f0eec72e90e3708e4e48e2342a39730d6fd62c00b7f7b661b83e60d29",
+      "sha256": "ff60b5cfb9d8cdc5278a764d057772f80d6f001c85dc4df80bbeb12c69fed2bc",
       "changeIds": [
         "SCR-V10-HOTSPOT-24"
       ],
@@ -53241,7 +53241,7 @@
       "id": "source:tests/e2e/aw-v9-workflow-draft-step.spec.ts",
       "kind": "current_source_owner",
       "path": "tests/e2e/aw-v9-workflow-draft-step.spec.ts",
-      "sha256": "0721015ab1fc400ea2b7adf9e7ca57964ae8c5c556e90b5a8ef85a0b9314dd86",
+      "sha256": "f628da4cb6a46db52d6e3ae1d2b85be618dd867af39b1e2a15da0c90ba729388",
       "changeIds": [
         "SCR-V10-WORKFLOWS-DURABLE-OPERATIONS"
       ],
@@ -73200,7 +73200,7 @@
       "id": "source:scripts/__tests__/e2e-shard.test.mjs",
       "kind": "current_source_owner",
       "path": "scripts/__tests__/e2e-shard.test.mjs",
-      "sha256": "8e20b7f0d8a48e4357d012233c9f6b4bc824adfb5c923a1a703d519a294e845c",
+      "sha256": "add3f4d8ab5dc1c755ce20780f9a0e99597fcad8c28b52724e49556b363e445e",
       "changeIds": [
         "SCR-V10-CI-RELEASE-AND-CATALOG-GOVERNANCE"
       ],
@@ -74985,7 +74985,7 @@
       "id": "source:tests/e2e/planning-mode-visual-verification.spec.ts",
       "kind": "current_source_owner",
       "path": "tests/e2e/planning-mode-visual-verification.spec.ts",
-      "sha256": "8ee468f7a361e59bc3060fdcfb93affa230df5ce34d6adb0cfba97fc8c963a3b",
+      "sha256": "b0f80f548bff991a662cc5b50bdc98d27f910426a48fb6d7150454e92134b1bc",
       "changeIds": [
         "SCR-V10-CUSTOMER-EXPERIENCE"
       ],
@@ -76005,7 +76005,7 @@
       "id": "source:ui/src/components/task-chat/TaskChatComposer.test.tsx",
       "kind": "current_source_owner",
       "path": "ui/src/components/task-chat/TaskChatComposer.test.tsx",
-      "sha256": "ba484d88fc3d567a5053ba3320cd0b30a79e1c84a1d8ed075d8caeae72ba25c4",
+      "sha256": "b2e1ad9742667a48b6281a80c9f9e439b0c0d81ed707b4ada775d0890a437481",
       "changeIds": [
         "SCR-V10-CUSTOMER-EXPERIENCE"
       ],
@@ -77010,7 +77010,7 @@
       "id": "source:ui/src/pages/apps/Browse.test.tsx",
       "kind": "current_source_owner",
       "path": "ui/src/pages/apps/Browse.test.tsx",
-      "sha256": "961cb4c3017687d65fa9c2579a96b05d56f66430f7ada6d1bfa3ce80db309d72",
+      "sha256": "d15ff3b9011386f0de53fba696a2a9d86f24b0a5455db9cdc3d75bba6606a881",
       "changeIds": [
         "SCR-V10-CUSTOMER-EXPERIENCE"
       ],
@@ -77025,7 +77025,7 @@
       "id": "source:ui/src/pages/apps/Browse.tsx",
       "kind": "current_source_owner",
       "path": "ui/src/pages/apps/Browse.tsx",
-      "sha256": "07ba99b2da26d294aefab681d568b6db39edc2b892050d585c70024741a8f330",
+      "sha256": "2b41b55d5f3be8cc73df222a4644d7621dc67a0ed778071ca6df5dddc01d67e8",
       "changeIds": [
         "SCR-V10-CUSTOMER-EXPERIENCE"
       ],
