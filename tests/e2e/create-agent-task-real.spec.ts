@@ -111,6 +111,7 @@ test.describe("create an agent and a task through the real UI", () => {
   for (const locale of ["en", "da"] as const) {
     test(`create an agent, assign it a task from Tasks and find it again after reload (${locale})`, async ({ page, request }) => {
       test.setTimeout(180_000);
+      page.setDefaultTimeout(15_000);
       const t = (key: string, values?: Record<string, string>) => copy(locale, key, values);
       const stamp = Date.now();
       const companyName = `Create journey ${locale} ${stamp}`;
@@ -144,7 +145,7 @@ test.describe("create an agent and a task through the real UI", () => {
         await expect(dialog.getByText(t("screens.newAgent.adapterLede", { name: agentName }), { exact: true })).toBeVisible();
         const gemini = dialog.getByRole("radio", { name: "Gemini CLI", exact: true });
         await auditWcag(page, dialog, `New agent adapter (${locale})`);
-        await dialog.locator("label").filter({ has: gemini }).click();
+        await dialog.locator("label").filter({ has: page.getByRole("radio", { name: "Gemini CLI", exact: true }) }).click();
         await expect(gemini).toBeChecked();
         await dialog.getByRole("button", { name: t("screens.newAgent.configure"), exact: true }).click();
 
