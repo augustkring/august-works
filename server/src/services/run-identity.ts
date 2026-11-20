@@ -455,7 +455,8 @@ class SteeredIdentityAcceptanceRequired extends Error {}
  * | Sandbox exec checks (assertTaskExecutionContext: exec   | company A+M shared (relay authorization: exclusive) > |
  * |   initial, claim, relay authorization, output, result)  |   lease > Task FOR SHARE > run FOR SHARE              |
  * | Native finalization reconciler resume claim             | Task FOR UPDATE > run + coordinator FOR UPDATE (D5e)  |
- * | Hidden conformance backend check                        | Task FOR SHARE > run FOR SHARE > (exec check) (D5e)   |
+ * | Hidden conformance backend check                        | company A+M shared > Task FOR SHARE > run FOR SHARE   |
+ * |                                                         |   (D5e, D5f)                                          |
  *
  * D5c. The sandbox exec checks used to lock the run and then the Task. Their
  * company locks are shared, so they overlap steering acceptance (also shared)
@@ -488,8 +489,16 @@ class SteeredIdentityAcceptanceRequired extends Error {}
  * before. The hidden conformance backend check locks the run's Task FOR
  * SHARE before the run FOR SHARE, as the exec checks do. Its locks are
  * shared, so it conflicts only with exclusive Task > run writers such as
- * steering acceptance. It calls assertTaskExecutionContext after these rows,
- * so its company A+M shared locks come after the rows (unchanged by D5e).
+ * steering acceptance.
+ *
+ * D5f. That check used to reach the company A+M shared keys only inside
+ * assertTaskExecutionContext, after its Task, run, plan, manifest and lease
+ * rows, so a Native source transaction (company exclusive > run FOR UPDATE)
+ * could hold the keys and wait on the run while the check held the run and
+ * waited on the keys. It now takes both keys shared, in that order, before
+ * any row. assertTaskExecutionContext's later requests for the same keys are
+ * granted at once: a session that holds an advisory lock always gets it
+ * again, even while other sessions wait for it.
  *
  * The run and Task orders differ between families, so the per-request path
  * takes only the run row and waits only before it holds any lock: it cannot

@@ -31,6 +31,10 @@ import { getEmbeddedPostgresTestSupport, startEmbeddedPostgresTestDatabase } fro
  * backend check race the same way against a Task-first exclusive writer
  * (steering acceptance's Task FOR UPDATE > run FOR UPDATE): the backend
  * check's locks are shared, so only an exclusive writer conflicts with it.
+ *
+ * D5f. The hidden conformance backend check takes the company A+M shared
+ * keys before any row, so a Native source transaction (company exclusive >
+ * run FOR UPDATE) never waits on a row the check holds.
  */
 const support = await getEmbeddedPostgresTestSupport();
 (support.supported ? describe : describe.skip)("run and Task lock order (D5d, D5e)", () => {
@@ -334,7 +338,9 @@ const support = await getEmbeddedPostgresTestSupport();
     expect(task.status).toBe("in_progress");
   });
 
-  it("hidden conformance backend check locks the Task before the run (D5e)", async () => {
+  /** A run that passes the check's pre-transaction target checks; inside its
+   * transaction the check takes its locks, finds no conformance plan and denies. */
+  async function seedConformanceCheck() {
     const input = await seed("in_progress");
     await db.update(heartbeatRuns).set({ runtimeMode: "native", runtimeModeResolvedAt: new Date(), scopeKind: "issue",
       issueId: input.issueId }).where(eq(heartbeatRuns.id, input.runId));
@@ -349,14 +355,60 @@ const support = await getEmbeddedPostgresTestSupport();
       session: { normalizedSessionId: `session-${input.runId}`, driverKind: "opencode_server", protocolVersion: 1,
         lifecyclePolicy: { mode: "warm", idleTimeoutMs: 60_000 } },
     };
-    // The target passes the pre-transaction checks; inside its transaction
-    // the check takes its locks, finds no conformance plan and denies.
-    const result = await raceBehindTaskHolder(input, acceptanceOrder, () => assertNativeOpenCodeConformanceBackendAuthority({
+    const check = () => assertNativeOpenCodeConformanceBackendAuthority({
       db, execution: execution as any, durableEnvironmentLeaseId: leaseId, runnerInstanceId: "lock-order-test",
       runnerExecutionTarget: { kind: "remote", transport: "sandbox", runner: {}, leaseId, remoteCwd: cwd } as any,
       runnerEnvironment: { PAPERCLIP_MANAGED_MODEL_BROKER_ORIGIN: "http://127.0.0.1:1" },
-    }));
+    });
+    return { input, check };
+  }
+
+  it("hidden conformance backend check locks the Task before the run (D5e)", async () => {
+    const { input, check } = await seedConformanceCheck();
+    const result = await raceBehindTaskHolder(input, acceptanceOrder, check);
     expect(result.ok).toBe(false);
     expect(String((result as { error: unknown }).error)).toContain("native_opencode_conformance_backend_source_changed");
+  });
+
+  it("hidden conformance backend check takes the company keys before the Task and run (D5f)", async () => {
+    const { input, check } = await seedConformanceCheck();
+    // A Native source transaction's order: company A+M exclusive > run FOR
+    // UPDATE (then Task). It holds the keys while the check starts. The check
+    // must wait on the keys before it locks any row, so the source
+    // transaction then takes the run and Task without waiting (NOWAIT). A
+    // check that locked the rows first would make it wait on them while the
+    // check waits on the keys: a deadlock once the check reaches its keys.
+    let release!: () => void;
+    let markHeld!: () => void;
+    const held = new Promise<void>(resolve => { markHeld = resolve; });
+    const released = new Promise<void>(resolve => { release = resolve; });
+    const source = settle(db.transaction(async (rawTx) => {
+      const tx = rawTx as unknown as Db;
+      await lockAnalyticalCompany(tx, input.companyId, "write");
+      await lockMemoryPrivacy(tx, input.companyId, "write");
+      markHeld();
+      await released;
+      await tx.execute(sql`select id from heartbeat_runs where id = ${input.runId}::uuid for update nowait`);
+      await tx.execute(sql`select id from issues where id = ${input.issueId}::uuid for share nowait`);
+    }));
+    await held;
+    const checked = settle(check());
+    try {
+      for (let attempt = 0; ; attempt += 1) {
+        const [row] = await db.execute(sql`select count(*)::int as n from pg_locks l join pg_stat_activity a on a.pid = l.pid
+          where a.datname = current_database() and l.locktype = 'advisory' and not l.granted`) as unknown as Array<{ n: number }>;
+        if (Number(row.n) >= 1) break;
+        if (attempt >= 300) throw new Error("the check never waited on the company keys");
+        await new Promise(resolve => setTimeout(resolve, 10));
+      }
+    } finally {
+      release();
+    }
+    const [sourceResult, checkResult] = await Promise.all([source, checked]);
+    expect([sourceResult.ok ? null : sourceResult.code, checkResult.ok ? null : checkResult.code],
+      "neither side may be aborted as a deadlock").not.toContain("40P01");
+    expect(sourceResult, "the source transaction takes the run and Task without waiting").toMatchObject({ ok: true });
+    expect(checkResult.ok).toBe(false);
+    expect(String((checkResult as { error: unknown }).error)).toContain("native_opencode_conformance_backend_source_changed");
   });
 });
