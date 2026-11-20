@@ -2837,10 +2837,10 @@
     {
       "source": "ui/src/pages/Auth.tsx",
       "articleId": "export-and-delete",
-      "sourceSha256": "853158a1dc90fe29f8160d91796c593b3a1ad152ba0a9d6311fbe28fb48d0f49",
+      "sourceSha256": "1011b6d53e9a98a2b32f46aec437da8405a96f40c82af0bcacc94f9decc8adde",
       "articleSha256": "73476587cc7574c56bcbc6f5bc3f692b7e953f9a9b46339d0d08f7577bebcf48",
       "decision": "no_change",
-      "rationale": "Reviewed (AUTH-DA1): the sign-in page now shows the language choice in every deployment profile. The account deletion receipt and export/delete steps are unchanged, so the article stays accurate."
+      "rationale": "Reviewed (AUTH-DA1): the sign-in page now shows the language choice in every deployment profile and reports invalid input with its own localized message instead of browser validation. The account deletion receipt and export/delete steps are unchanged, so the article stays accurate."
     },
     {
       "source": "ui/src/components/PersonalAccountDeletionReceipt.tsx",
@@ -2853,10 +2853,10 @@
     {
       "source": "ui/src/pages/Auth.tsx",
       "articleId": "export-and-delete-da",
-      "sourceSha256": "853158a1dc90fe29f8160d91796c593b3a1ad152ba0a9d6311fbe28fb48d0f49",
+      "sourceSha256": "1011b6d53e9a98a2b32f46aec437da8405a96f40c82af0bcacc94f9decc8adde",
       "articleSha256": "685fbb4f4ebddd5faa1f24036b1bbfee0ce773b0771956a998a7fef70552cb28",
       "decision": "no_change",
-      "rationale": "Reviewed (AUTH-DA1): the sign-in page now shows the language choice in every deployment profile. The account deletion receipt and export/delete steps are unchanged, so the article stays accurate."
+      "rationale": "Reviewed (AUTH-DA1): the sign-in page now shows the language choice in every deployment profile and reports invalid input with its own localized message instead of browser validation. The account deletion receipt and export/delete steps are unchanged, so the article stays accurate."
     },
     {
       "source": "ui/src/components/PersonalAccountDeletionReceipt.tsx",
