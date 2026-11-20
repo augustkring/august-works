@@ -208,10 +208,11 @@ export function Companies() {
                       </h3>
                       <Badge variant="ghost"
                         className={`text-(length:--text-micro) ${
+                          // 700 tones keep the 11px label at >= 4.5:1 on the tint (EXIT-R1).
                           company.status === "active"
-                            ? "bg-green-500/10 text-green-600 dark:text-green-400"
+                            ? "bg-green-500/10 text-green-700 dark:text-green-400"
                             : company.status === "paused"
-                              ? "bg-yellow-500/10 text-yellow-600 dark:text-yellow-400"
+                              ? "bg-yellow-500/10 text-yellow-800 dark:text-yellow-400"
                               : "bg-muted text-muted-foreground"
                         }`}
                       >

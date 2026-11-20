@@ -116,7 +116,7 @@ async function expectSeedIntact(api: APIRequestContext, seed: Seed, when: string
   expect(JSON.stringify(memory), `${when}: Memory record`).toContain(seed.memoryTitle);
 }
 
-type AxeViolation = { id: string; impact: string | null; help: string; nodes: { target: string[] }[] };
+type AxeViolation = { id: string; impact: string | null; help: string; nodes: { target: string[]; failureSummary?: string }[] };
 
 async function auditWcag(page: Page, label: string) {
   await page.addScriptTag({ path: axePath });
@@ -127,7 +127,7 @@ async function auditWcag(page: Page, label: string) {
     return (await axe.run(document, { runOnly: { type: "tag", values: tags } })).violations;
   }, WCAG_21_A_AA);
   const summary = violations.map((violation) =>
-    `[${violation.impact}] ${violation.id}: ${violation.help} -> ${violation.nodes.slice(0, 3).map((node) => node.target.join(" ")).join(" | ")}`);
+    `[${violation.impact}] ${violation.id}: ${violation.help} -> ${violation.nodes.slice(0, 3).map((node) => `${node.target.join(" ")} (${node.failureSummary?.replace(/\s+/g, " ")})`).join(" | ")}`);
   for (const line of summary) test.info().annotations.push({ type: `axe ${label}`, description: line });
   if (summary.length) console.log(`axe ${label}\n  ${summary.join("\n  ")}`);
   // Project policy (as in a11y-real-routes.spec.ts): any WCAG 2.1 A/AA violation fails.

@@ -154,6 +154,9 @@ describe("Companies page", () => {
     expect(document.getElementById(article!.getAttribute("aria-labelledby")!)?.textContent).toBe("Acme Labs");
     expect(container.querySelector("[aria-haspopup='menu']")?.getAttribute("aria-label")).toBe("Actions for Acme Labs");
     expect(container.querySelector("button[aria-label='Rename Acme Labs']")).not.toBeNull();
+    const status = [...article!.querySelectorAll("span")].find((element) => element.textContent === "active");
+    expect(status?.className).toContain("text-green-700");
+    expect(status?.className).not.toContain("text-green-600");
 
     const dialog = await openDeleteConfirmation();
     expect(dialog).not.toBeNull();
