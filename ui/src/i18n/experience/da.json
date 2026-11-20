@@ -5687,6 +5687,43 @@
         "not_creator": "Alle i organisationen undtagen den agent, der oprettede kortet, og dens kørsel. Brug den, når svaret skal komme fra en anden.",
         "human_only": "Kun en person i Board kan svare. Agenter afvises."
       }
+    },
+    "inst": {
+      "settings": "Indstillinger",
+      "general": "Generelt",
+      "configure": "Indstil præferencer for hele instansen",
+      "including": " herunder {{topics}}",
+      "loading": "Indlæser generelle indstillinger…",
+      "deploy": "Drift og login",
+      "localTrusted": "Lokal betroet tilstand er beregnet til en lokal operatør. Browseranmodninger kører som lokal Board-kontekst, og login er ikke påkrævet.",
+      "authPublic": "Offentlig tilstand med login kræver login til Board og er beregnet til offentlige adresser.",
+      "authPrivate": "Privat tilstand med login kræver login og er beregnet til LAN, VPN eller andre private netværk.",
+      "authReady": "Klar til login",
+      "bootStatus": "Status for opstart",
+      "bootInvite": "Invitation til opstart",
+      "censor": "Skjul brugernavn i logs",
+      "censorBody": "Skjul brugernavnet i stier til hjemmemapper og lignende logoutput, som operatører kan se. Brugernavne uden for stier skjules endnu ikke i live-transskriptionen. Slået fra som standard.",
+      "censorToggle": "Slå skjulning af brugernavn i logs til eller fra",
+      "backup": "Opbevaring af sikkerhedskopier",
+      "backupBody": "Indstil, hvor længe automatiske databasesikkerhedskopier opbevares. Der tages en kopi cirka hver time, og de komprimeres med gzip. Inden for den daglige periode gemmes alle kopier. Derefter gemmes én pr. uge og én pr. måned.",
+      "daily": "Dagligt",
+      "weekly": "Ugentligt",
+      "monthly": "Månedligt",
+      "days": "{{count}} dage",
+      "weeks_one": "{{count}} uge",
+      "weeks_other": "{{count}} uger",
+      "months_one": "{{count}} måned",
+      "months_other": "{{count}} måneder",
+      "feedback": "Deling af AI-feedback",
+      "feedbackBody": "Vælg, om tommel op og tommel ned må sende det bedømte AI-output til den feedbacktjeneste, din serveroperatør har valgt. Stemmer gemmes altid lokalt.",
+      "terms": "Læs vores vilkår",
+      "noDefault": "Der er ikke gemt noget standardvalg endnu. Næste gang du vælger tommel op eller ned, spørger vi én gang og gemmer svaret her.",
+      "always": "Tillad altid",
+      "alwaysDesc": "Del bedømt AI-output automatisk.",
+      "never": "Tillad ikke",
+      "neverDesc": "Behold bedømt AI-output kun lokalt.",
+      "signOut": "Log ud",
+      "signOutBody": "Log ud af denne {{product}}-instans. Du sendes videre til loginsiden."
     }
   }
 }

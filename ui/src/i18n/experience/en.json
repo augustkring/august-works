@@ -5687,6 +5687,43 @@
         "not_creator": "Anyone in the organization except the agent that created the card, and its run. Use this when the answer has to come from someone else.",
         "human_only": "Only a person on the board can respond. Agents are turned away."
       }
+    },
+    "inst": {
+      "settings": "Settings",
+      "general": "General",
+      "configure": "Configure instance-wide preferences",
+      "including": " including {{topics}}",
+      "loading": "Loading general settings...",
+      "deploy": "Deployment and auth",
+      "localTrusted": "Local trusted mode is optimized for a local operator. Browser requests run as local board context and no sign-in is required.",
+      "authPublic": "Authenticated public mode requires sign-in for board access and is intended for public URLs.",
+      "authPrivate": "Authenticated private mode requires sign-in and is intended for LAN, VPN, or other private-network deployments.",
+      "authReady": "Auth readiness",
+      "bootStatus": "Bootstrap status",
+      "bootInvite": "Bootstrap invite",
+      "censor": "Censor username in logs",
+      "censorBody": "Hide the username segment in home-directory paths and similar operator-visible log output. Standalone username mentions outside of paths are not yet masked in the live transcript view. This is off by default.",
+      "censorToggle": "Toggle username log censoring",
+      "backup": "Backup retention",
+      "backupBody": "Configure how long automatic database backups are retained. Backups run roughly every hour and are compressed with gzip. Within the daily window all backups are kept; beyond that, one backup per week and one per month are preserved.",
+      "daily": "Daily",
+      "weekly": "Weekly",
+      "monthly": "Monthly",
+      "days": "{{count}} days",
+      "weeks_one": "{{count}} week",
+      "weeks_other": "{{count}} weeks",
+      "months_one": "{{count}} month",
+      "months_other": "{{count}} months",
+      "feedback": "AI feedback sharing",
+      "feedbackBody": "Control whether thumbs up and thumbs down votes can send the voted AI output to the feedback service chosen by your server operator. Votes are always saved locally.",
+      "terms": "Read our terms of service",
+      "noDefault": "No default is saved yet. The next thumbs up or thumbs down choice will ask once and then save the answer here.",
+      "always": "Always allow",
+      "alwaysDesc": "Share voted AI outputs automatically.",
+      "never": "Don't allow",
+      "neverDesc": "Keep voted AI outputs local only.",
+      "signOut": "Sign out",
+      "signOutBody": "Sign out of this {{product}} instance. You will be redirected to the login page."
     }
   }
 }
