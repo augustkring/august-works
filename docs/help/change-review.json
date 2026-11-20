@@ -6,49 +6,49 @@
       "source": "ui/src/pages/ApprovalDetail.tsx",
       "articleId": "approvals-and-stop",
       "sourceSha256": "8336a582a6adb82366aa8c7ff0b42e76440c9196e6b011e5570606234949e1c8",
-      "articleSha256": "601860635ecfdbef65d0703b3966a9af6429ec84d78d857ab85ac9863b77ba60",
+      "articleSha256": "96ddb3495a5a3a0eb3b1421148007384cf1e7247429e611ea5cba53c45fd0b8b",
       "decision": "no_change",
-      "rationale": "Reviewed (I18N-DA2): the screen text moved into the English and Danish catalogues. Behaviour, steps and controls are unchanged, so the article stays accurate."
+      "rationale": "Reviewed (I18N-DA2): the screen text moved into the English and Danish catalogues. Behaviour, steps and controls are unchanged, so the article stays accurate. Article re-reviewed after APR-E2E-1 added the deferred-comment paragraph; this source is unchanged."
     },
     {
       "source": "ui/src/pages/Approvals.tsx",
       "articleId": "approvals-and-stop",
       "sourceSha256": "e869c881d9f8c88f478b5adfba18ef9219ca9ec3f3119f959b7c8f14c8f28b30",
-      "articleSha256": "601860635ecfdbef65d0703b3966a9af6429ec84d78d857ab85ac9863b77ba60",
+      "articleSha256": "96ddb3495a5a3a0eb3b1421148007384cf1e7247429e611ea5cba53c45fd0b8b",
       "decision": "no_change",
-      "rationale": "Reviewed (I18N-DA1): the screen text moved into the English and Danish catalogues. Behaviour, steps and controls are unchanged, so the article stays accurate."
+      "rationale": "Reviewed (I18N-DA1): the screen text moved into the English and Danish catalogues. Behaviour, steps and controls are unchanged, so the article stays accurate. Article re-reviewed after APR-E2E-1 added the deferred-comment paragraph; this source is unchanged."
     },
     {
       "source": "ui/src/pages/IssueDetail.tsx",
       "articleId": "approvals-and-stop",
-      "sourceSha256": "3d24f0b66808e8659b971a4cb1e82bf06f07efe9cf8766411793a2392f72a791",
-      "articleSha256": "601860635ecfdbef65d0703b3966a9af6429ec84d78d857ab85ac9863b77ba60",
-      "decision": "no_change",
-      "rationale": "Reviewed (I18N-DA2): the screen text moved into the English and Danish catalogues. Behaviour, steps and controls are unchanged, so the article stays accurate."
+      "sourceSha256": "c7dc03c6f6f0ca379d45c2c8cb6665bc6eac44bdd9dfdf582769d712bf9ee71f",
+      "articleSha256": "96ddb3495a5a3a0eb3b1421148007384cf1e7247429e611ea5cba53c45fd0b8b",
+      "decision": "updated",
+      "rationale": "Reviewed (APR-E2E-1): while a task waits for the person\u2019s decision on an agent\u2019s app action, the task composer shows a hint and a comment no longer starts the agent; the article now explains that the comment is delivered with the decision. Also reviewed with the PR #105 change: Reviewed (I18N-DA2): the screen text moved into the English and Danish catalogues. Behaviour, steps and controls are unchanged, so the article stays accurate."
     },
     {
       "source": "ui/src/pages/ApprovalDetail.tsx",
       "articleId": "approvals-and-stop-da",
       "sourceSha256": "8336a582a6adb82366aa8c7ff0b42e76440c9196e6b011e5570606234949e1c8",
-      "articleSha256": "b9ef02341c31fea40d5b41c881d1cc60efe7e709a12b3942092001b7b91a91b6",
+      "articleSha256": "7e5449509fac05f2af7c30179e9a623c7a9c8772dfefa49221345f890f510965",
       "decision": "no_change",
-      "rationale": "Reviewed (I18N-DA2): the screen text moved into the English and Danish catalogues. Behaviour, steps and controls are unchanged, so the article stays accurate."
+      "rationale": "Reviewed (I18N-DA2): the screen text moved into the English and Danish catalogues. Behaviour, steps and controls are unchanged, so the article stays accurate. Article re-reviewed after APR-E2E-1 added the deferred-comment paragraph; this source is unchanged."
     },
     {
       "source": "ui/src/pages/Approvals.tsx",
       "articleId": "approvals-and-stop-da",
       "sourceSha256": "e869c881d9f8c88f478b5adfba18ef9219ca9ec3f3119f959b7c8f14c8f28b30",
-      "articleSha256": "b9ef02341c31fea40d5b41c881d1cc60efe7e709a12b3942092001b7b91a91b6",
+      "articleSha256": "7e5449509fac05f2af7c30179e9a623c7a9c8772dfefa49221345f890f510965",
       "decision": "no_change",
-      "rationale": "Reviewed (I18N-DA1): the screen text moved into the English and Danish catalogues. Behaviour, steps and controls are unchanged, so the article stays accurate."
+      "rationale": "Reviewed (I18N-DA1): the screen text moved into the English and Danish catalogues. Behaviour, steps and controls are unchanged, so the article stays accurate. Article re-reviewed after APR-E2E-1 added the deferred-comment paragraph; this source is unchanged."
     },
     {
       "source": "ui/src/pages/IssueDetail.tsx",
       "articleId": "approvals-and-stop-da",
-      "sourceSha256": "3d24f0b66808e8659b971a4cb1e82bf06f07efe9cf8766411793a2392f72a791",
-      "articleSha256": "b9ef02341c31fea40d5b41c881d1cc60efe7e709a12b3942092001b7b91a91b6",
-      "decision": "no_change",
-      "rationale": "Reviewed (I18N-DA2): the screen text moved into the English and Danish catalogues. Behaviour, steps and controls are unchanged, so the article stays accurate."
+      "sourceSha256": "c7dc03c6f6f0ca379d45c2c8cb6665bc6eac44bdd9dfdf582769d712bf9ee71f",
+      "articleSha256": "7e5449509fac05f2af7c30179e9a623c7a9c8772dfefa49221345f890f510965",
+      "decision": "updated",
+      "rationale": "Reviewed (APR-E2E-1): while a task waits for the person\u2019s decision on an agent\u2019s app action, the task composer shows a hint and a comment no longer starts the agent; the Danish article now explains that the comment is delivered with the decision. Also reviewed with the PR #105 change: Reviewed (I18N-DA2): the screen text moved into the English and Danish catalogues. Behaviour, steps and controls are unchanged, so the article stays accurate."
     },
     {
       "source": "packages/shared/src/app-definitions/slack.json",
@@ -85,10 +85,10 @@
     {
       "source": "server/src/services/tool-access.ts",
       "articleId": "apps-and-connections",
-      "sourceSha256": "7b60e5bfab0e0ec2e49c9f31f860b5f4a180f5bfd79845e237490db755a3fb6c",
+      "sourceSha256": "ff44b44b4678e86be55b42759614346dffbed3ee79d80a75bb3e733d33bae24a",
       "articleSha256": "731cc171b5c7b6b7d1563e8d2476c1c51f32f3f6c3fa3f4adb7aa0fc365836f9",
       "decision": "no_change",
-      "rationale": "Project creation revalidates the exact selected repository connection and Grant, current Human membership/audience, and the selected credential-secret version. A changed authorization witness blocks creation. The article already covers account, scope, permissions, and displayed repair action; these checks add no user-facing step."
+      "rationale": "Reviewed (APR-E2E-11): when the review queue cancels an approval request it cannot verify, the paired card is now closed with a reason instead of staying approvable. Connection setup, access review and reconnect steps in this article are unchanged. Also reviewed with the PR #105 change: Project creation revalidates the exact selected repository connection and Grant, current Human membership/audience, and the selected credential-secret version. A changed authorization witness blocks creation. The article already covers account, scope, permissions, and displayed repair action; these checks add no user-facing step."
     },
     {
       "source": "ui/src/components/JevSkillSuggestionSettings.tsx",
@@ -173,10 +173,10 @@
     {
       "source": "server/src/services/tool-access.ts",
       "articleId": "apps-and-connections-da",
-      "sourceSha256": "7b60e5bfab0e0ec2e49c9f31f860b5f4a180f5bfd79845e237490db755a3fb6c",
+      "sourceSha256": "ff44b44b4678e86be55b42759614346dffbed3ee79d80a75bb3e733d33bae24a",
       "articleSha256": "cff4bf06d20200c2b5785c92f7f41b197d730d85b0c3f6f1deca43b744906738",
       "decision": "no_change",
-      "rationale": "Ved projektoprettelse genkontrolleres den pr\u00e6cist valgte repositoryforbindelse og Grant, det aktuelle Human-medlemskab/audience samt versionen af den valgte credential secret. Et \u00e6ndret autorisationsgrundlag blokerer oprettelsen. Artiklen d\u00e6kker allerede konto, omfang, tilladelser og vist reparationshandling; kontrollen tilf\u00f8jer ingen brugerrettet handling."
+      "rationale": "Reviewed (APR-E2E-11): when the review queue cancels an approval request it cannot verify, the paired card is now closed with a reason instead of staying approvable. Connection setup, access review and reconnect steps in this article are unchanged. Also reviewed with the PR #105 change: Ved projektoprettelse genkontrolleres den pr\u00e6cist valgte repositoryforbindelse og Grant, det aktuelle Human-medlemskab/audience samt versionen af den valgte credential secret. Et \u00e6ndret autorisationsgrundlag blokerer oprettelsen. Artiklen d\u00e6kker allerede konto, omfang, tilladelser og vist reparationshandling; kontrollen tilf\u00f8jer ingen brugerrettet handling."
     },
     {
       "source": "ui/src/components/JevSkillSuggestionSettings.tsx",
@@ -589,10 +589,10 @@
     {
       "source": "ui/src/pages/IssueDetail.tsx",
       "articleId": "create-and-track-work",
-      "sourceSha256": "3d24f0b66808e8659b971a4cb1e82bf06f07efe9cf8766411793a2392f72a791",
+      "sourceSha256": "c7dc03c6f6f0ca379d45c2c8cb6665bc6eac44bdd9dfdf582769d712bf9ee71f",
       "articleSha256": "e08d017550dda25a9e6185a4478026f2affd445e16a1d10dff2464761537b328",
       "decision": "no_change",
-      "rationale": "Reviewed (I18N-DA2): the screen text moved into the English and Danish catalogues. Behaviour, steps and controls are unchanged, so the article stays accurate."
+      "rationale": "Reviewed (APR-E2E-1): the task composer gained a hint while an agent\u2019s app action waits for a decision. Steps and controls described in this article are unchanged. Also reviewed with the PR #105 change: Reviewed (I18N-DA2): the screen text moved into the English and Danish catalogues. Behaviour, steps and controls are unchanged, so the article stays accurate."
     },
     {
       "source": "ui/src/pages/ExperienceWork.tsx",
@@ -605,10 +605,10 @@
     {
       "source": "ui/src/pages/IssueDetail.tsx",
       "articleId": "create-and-track-work-da",
-      "sourceSha256": "3d24f0b66808e8659b971a4cb1e82bf06f07efe9cf8766411793a2392f72a791",
+      "sourceSha256": "c7dc03c6f6f0ca379d45c2c8cb6665bc6eac44bdd9dfdf582769d712bf9ee71f",
       "articleSha256": "b36d116837115a674b3751f11ae3dcdd1a7fdcd9f31d26206feeec490f715e29",
       "decision": "no_change",
-      "rationale": "Reviewed (I18N-DA2): the screen text moved into the English and Danish catalogues. Behaviour, steps and controls are unchanged, so the article stays accurate."
+      "rationale": "Reviewed (APR-E2E-1): the task composer gained a hint while an agent\u2019s app action waits for a decision. Steps and controls described in this article are unchanged. Also reviewed with the PR #105 change: Reviewed (I18N-DA2): the screen text moved into the English and Danish catalogues. Behaviour, steps and controls are unchanged, so the article stays accurate."
     },
     {
       "source": "cli/src/index.ts",
@@ -901,10 +901,10 @@
     {
       "source": "server/src/routes/issues.ts",
       "articleId": "help-and-human-support",
-      "sourceSha256": "e842fd22e27faf5fce1941426964fd0de822deb802f8a64c08a6772d536fd2af",
+      "sourceSha256": "7fdfd26cb0e83eb0f282482aff79a7a1c303f92af5edc2642d530e3ee5b8ff3a",
       "articleSha256": "bec6b2b830586252df7700cc8b8f23018da446ede36284d98e53f8db2b049a1b",
       "decision": "no_change",
-      "rationale": "Reviewed (CACHE-STALE1): the Tasks list cache now drops cached and in-flight results after any committed write or company live event, so a list read after a write shows that write. Steps, controls and recovery guidance are unchanged, so the article stays accurate."
+      "rationale": "Reviewed (APR-E2E-1/-8/-13): comment wakes are deferred while an agent\u2019s app action waits for a decision (the note is recorded with the pending card), and Approve/Decline return the gateway refusal status instead of a 500. Nothing this article describes changed. Also reviewed with the PR #105 change: Reviewed (CACHE-STALE1): the Tasks list cache now drops cached and in-flight results after any committed write or company live event, so a list read after a write shows that write. Steps, controls and recovery guidance are unchanged, so the article stays accurate."
     },
     {
       "source": "server/src/routes/saas.ts",
@@ -949,10 +949,10 @@
     {
       "source": "server/src/services/company-search-help.generated.ts",
       "articleId": "help-and-human-support",
-      "sourceSha256": "933fd28347428742046836ab278e108d3427cf2f0ab8c16a221c3bd4264a189c",
+      "sourceSha256": "1a57aca2718f9d5ba04ef6e64d52c97f45cc4f570491bd5507b083d5cd731a5c",
       "articleSha256": "bec6b2b830586252df7700cc8b8f23018da446ede36284d98e53f8db2b049a1b",
       "decision": "no_change",
-      "rationale": "Reviewed (EXIT-R1): the regenerated search entries only pick up the updated Export and deletion article text. Help and human support steps are unchanged, so the article stays accurate."
+      "rationale": "Reviewed (APR-E2E-1): regenerated search index for the updated Approvals article. This article\u2019s content is unchanged. Also reviewed with the PR #105 change: Reviewed (EXIT-R1): the regenerated search entries only pick up the updated Export and deletion article text. Help and human support steps are unchanged, so the article stays accurate."
     },
     {
       "source": "server/src/services/company-search.ts",
@@ -1213,10 +1213,10 @@
     {
       "source": "server/src/routes/issues.ts",
       "articleId": "help-and-human-support-da",
-      "sourceSha256": "e842fd22e27faf5fce1941426964fd0de822deb802f8a64c08a6772d536fd2af",
+      "sourceSha256": "7fdfd26cb0e83eb0f282482aff79a7a1c303f92af5edc2642d530e3ee5b8ff3a",
       "articleSha256": "2c92acfc98fc458e84cf4bf6fc421119816d6f471922dceee726e311804bf6b5",
       "decision": "no_change",
-      "rationale": "Reviewed (CACHE-STALE1): the Tasks list cache now drops cached and in-flight results after any committed write or company live event, so a list read after a write shows that write. Steps, controls and recovery guidance are unchanged, so the article stays accurate."
+      "rationale": "Reviewed (APR-E2E-1/-8/-13): comment wakes are deferred while an agent\u2019s app action waits for a decision (the note is recorded with the pending card), and Approve/Decline return the gateway refusal status instead of a 500. Nothing this article describes changed. Also reviewed with the PR #105 change: Reviewed (CACHE-STALE1): the Tasks list cache now drops cached and in-flight results after any committed write or company live event, so a list read after a write shows that write. Steps, controls and recovery guidance are unchanged, so the article stays accurate."
     },
     {
       "source": "server/src/routes/saas.ts",
@@ -1261,10 +1261,10 @@
     {
       "source": "server/src/services/company-search-help.generated.ts",
       "articleId": "help-and-human-support-da",
-      "sourceSha256": "933fd28347428742046836ab278e108d3427cf2f0ab8c16a221c3bd4264a189c",
+      "sourceSha256": "1a57aca2718f9d5ba04ef6e64d52c97f45cc4f570491bd5507b083d5cd731a5c",
       "articleSha256": "2c92acfc98fc458e84cf4bf6fc421119816d6f471922dceee726e311804bf6b5",
       "decision": "no_change",
-      "rationale": "Reviewed (EXIT-R1): the regenerated search entries only pick up the updated Export and deletion article text. Help and human support steps are unchanged, so the article stays accurate."
+      "rationale": "Reviewed (APR-E2E-1): regenerated search index for the updated Approvals article. This article\u2019s content is unchanged. Also reviewed with the PR #105 change: Reviewed (EXIT-R1): the regenerated search entries only pick up the updated Export and deletion article text. Help and human support steps are unchanged, so the article stays accurate."
     },
     {
       "source": "server/src/services/company-search.ts",
@@ -1541,10 +1541,10 @@
     {
       "source": "server/src/routes/issues.ts",
       "articleId": "recovering-work",
-      "sourceSha256": "e842fd22e27faf5fce1941426964fd0de822deb802f8a64c08a6772d536fd2af",
+      "sourceSha256": "7fdfd26cb0e83eb0f282482aff79a7a1c303f92af5edc2642d530e3ee5b8ff3a",
       "articleSha256": "0296c2c8ae18c613eef9c17ea9679b146e8afbcd3504451a5511a218d6d8b955",
       "decision": "no_change",
-      "rationale": "Reviewed (CACHE-STALE1): the Tasks list cache now drops cached and in-flight results after any committed write or company live event, so a list read after a write shows that write. Steps, controls and recovery guidance are unchanged, so the article stays accurate."
+      "rationale": "Reviewed (APR-E2E-1/-8/-13): comment wakes are deferred while an agent\u2019s app action waits for a decision (the note is recorded with the pending card), and Approve/Decline return the gateway refusal status instead of a 500. Nothing this article describes changed. Also reviewed with the PR #105 change: Reviewed (CACHE-STALE1): the Tasks list cache now drops cached and in-flight results after any committed write or company live event, so a list read after a write shows that write. Steps, controls and recovery guidance are unchanged, so the article stays accurate."
     },
     {
       "source": "server/src/services/execution-workspaces.ts",
@@ -1637,18 +1637,18 @@
     {
       "source": "ui/src/pages/IssueDetail.tsx",
       "articleId": "recovering-work",
-      "sourceSha256": "3d24f0b66808e8659b971a4cb1e82bf06f07efe9cf8766411793a2392f72a791",
+      "sourceSha256": "c7dc03c6f6f0ca379d45c2c8cb6665bc6eac44bdd9dfdf582769d712bf9ee71f",
       "articleSha256": "0296c2c8ae18c613eef9c17ea9679b146e8afbcd3504451a5511a218d6d8b955",
       "decision": "no_change",
-      "rationale": "Reviewed (I18N-DA2): the screen text moved into the English and Danish catalogues. Behaviour, steps and controls are unchanged, so the article stays accurate."
+      "rationale": "Reviewed (APR-E2E-1): the task composer gained a hint while an agent\u2019s app action waits for a decision. Steps and controls described in this article are unchanged. Also reviewed with the PR #105 change: Reviewed (I18N-DA2): the screen text moved into the English and Danish catalogues. Behaviour, steps and controls are unchanged, so the article stays accurate."
     },
     {
       "source": "server/src/routes/issues.ts",
       "articleId": "recovering-work-da",
-      "sourceSha256": "e842fd22e27faf5fce1941426964fd0de822deb802f8a64c08a6772d536fd2af",
+      "sourceSha256": "7fdfd26cb0e83eb0f282482aff79a7a1c303f92af5edc2642d530e3ee5b8ff3a",
       "articleSha256": "ce0a7beaa56a5db23963d81eed8c19687d2efc5405773ec33dfd635a377090bc",
       "decision": "no_change",
-      "rationale": "Reviewed (CACHE-STALE1): the Tasks list cache now drops cached and in-flight results after any committed write or company live event, so a list read after a write shows that write. Steps, controls and recovery guidance are unchanged, so the article stays accurate."
+      "rationale": "Reviewed (APR-E2E-1/-8/-13): comment wakes are deferred while an agent\u2019s app action waits for a decision (the note is recorded with the pending card), and Approve/Decline return the gateway refusal status instead of a 500. Nothing this article describes changed. Also reviewed with the PR #105 change: Reviewed (CACHE-STALE1): the Tasks list cache now drops cached and in-flight results after any committed write or company live event, so a list read after a write shows that write. Steps, controls and recovery guidance are unchanged, so the article stays accurate."
     },
     {
       "source": "server/src/services/execution-workspaces.ts",
@@ -1741,10 +1741,10 @@
     {
       "source": "ui/src/pages/IssueDetail.tsx",
       "articleId": "recovering-work-da",
-      "sourceSha256": "3d24f0b66808e8659b971a4cb1e82bf06f07efe9cf8766411793a2392f72a791",
+      "sourceSha256": "c7dc03c6f6f0ca379d45c2c8cb6665bc6eac44bdd9dfdf582769d712bf9ee71f",
       "articleSha256": "ce0a7beaa56a5db23963d81eed8c19687d2efc5405773ec33dfd635a377090bc",
       "decision": "no_change",
-      "rationale": "Reviewed (I18N-DA2): the screen text moved into the English and Danish catalogues. Behaviour, steps and controls are unchanged, so the article stays accurate."
+      "rationale": "Reviewed (APR-E2E-1): the task composer gained a hint while an agent\u2019s app action waits for a decision. Steps and controls described in this article are unchanged. Also reviewed with the PR #105 change: Reviewed (I18N-DA2): the screen text moved into the English and Danish catalogues. Behaviour, steps and controls are unchanged, so the article stays accurate."
     },
     {
       "source": "server/src/services/saas/activation-first-task.ts",
@@ -2477,10 +2477,10 @@
     {
       "source": "ui/src/pages/IssueDetail.tsx",
       "articleId": "workflows-preview",
-      "sourceSha256": "3d24f0b66808e8659b971a4cb1e82bf06f07efe9cf8766411793a2392f72a791",
+      "sourceSha256": "c7dc03c6f6f0ca379d45c2c8cb6665bc6eac44bdd9dfdf582769d712bf9ee71f",
       "articleSha256": "e1c5c2d77645ce6fd9586ca6d9185c4396adec71f7e850e059748261c062fd89",
       "decision": "no_change",
-      "rationale": "Reviewed (I18N-DA2): the screen text moved into the English and Danish catalogues. Behaviour, steps and controls are unchanged, so the article stays accurate."
+      "rationale": "Reviewed (APR-E2E-1): the task composer gained a hint while an agent\u2019s app action waits for a decision. Steps and controls described in this article are unchanged. Also reviewed with the PR #105 change: Reviewed (I18N-DA2): the screen text moved into the English and Danish catalogues. Behaviour, steps and controls are unchanged, so the article stays accurate."
     },
     {
       "source": "server/src/routes/access.ts",
@@ -2533,10 +2533,10 @@
     {
       "source": "ui/src/pages/IssueDetail.tsx",
       "articleId": "workflows-preview-da",
-      "sourceSha256": "3d24f0b66808e8659b971a4cb1e82bf06f07efe9cf8766411793a2392f72a791",
+      "sourceSha256": "c7dc03c6f6f0ca379d45c2c8cb6665bc6eac44bdd9dfdf582769d712bf9ee71f",
       "articleSha256": "ef133efd581756186bf271221a91b494ea14cfac3c00fb8f3d816f9e741177d0",
       "decision": "no_change",
-      "rationale": "Reviewed (I18N-DA2): the screen text moved into the English and Danish catalogues. Behaviour, steps and controls are unchanged, so the article stays accurate."
+      "rationale": "Reviewed (APR-E2E-1): the task composer gained a hint while an agent\u2019s app action waits for a decision. Steps and controls described in this article are unchanged. Also reviewed with the PR #105 change: Reviewed (I18N-DA2): the screen text moved into the English and Danish catalogues. Behaviour, steps and controls are unchanged, so the article stays accurate."
     },
     {
       "source": "server/src/routes/access.ts",
@@ -2709,18 +2709,18 @@
     {
       "source": "server/src/services/tool-gateway.ts",
       "articleId": "apps-and-connections",
-      "sourceSha256": "2083c9c9624c438bd42ebaedfdb4083e575e7356af7a3d0774b2a76de1da1b4f",
+      "sourceSha256": "7fbb5583d2e6564c5b8d70917629eb2806d22872844ce9ae68aad4b875096ff6",
       "articleSha256": "731cc171b5c7b6b7d1563e8d2476c1c51f32f3f6c3fa3f4adb7aa0fc365836f9",
       "decision": "no_change",
-      "rationale": "2026-11-19 MS1f phase 4 review: a review-step Co-worker under a plan, like a completion Reviewer, is issued no sandbox connection credential; the article does not describe sandbox credential brokering, so no reader-facing text changes. 2026-11-17 GW6-GW7 review: an exact replay of a tool invocation (the same idempotency key, or a repeated call matching an executed action request) now takes no rate-limit token; it is re-checked with the token its original admission stored on the invocation, gets no credit after that window ends, and a full window refuses it with 429 rate_limited and the admission details. The article does not describe rate limits, replays or approval mechanics, so no reader-facing text changes."
+      "rationale": "Reviewed (APR-E2E-10): an approved app action can now run after the requesting run ended when the runtime is commercially current but stopped. Connection setup, access review and reconnect steps in this article are unchanged. Also reviewed with the PR #105 change: 2026-11-19 MS1f phase 4 review: a review-step Co-worker under a plan, like a completion Reviewer, is issued no sandbox connection credential; the article does not describe sandbox credential brokering, so no reader-facing text changes. 2026-11-17 GW6-GW7 review: an exact replay of a tool invocation (the same idempotency key, or a repeated call matching an executed action request) now takes no rate-limit token; it is re-checked with the token its original admission stored on the invocation, gets no credit after that window ends, and a full window refuses it with 429 rate_limited and the admission details. The article does not describe rate limits, replays or approval mechanics, so no reader-facing text changes."
     },
     {
       "source": "server/src/services/tool-gateway.ts",
       "articleId": "apps-and-connections-da",
-      "sourceSha256": "2083c9c9624c438bd42ebaedfdb4083e575e7356af7a3d0774b2a76de1da1b4f",
+      "sourceSha256": "7fbb5583d2e6564c5b8d70917629eb2806d22872844ce9ae68aad4b875096ff6",
       "articleSha256": "cff4bf06d20200c2b5785c92f7f41b197d730d85b0c3f6f1deca43b744906738",
       "decision": "no_change",
-      "rationale": "2026-11-19 MS1f fase 4-gennemgang: en Co-worker, der gennemg\u00e5r et trin under en plan, f\u00e5r som en afslutningsgennemgang ingen forbindelsesn\u00f8gle i sandkassen; artiklen beskriver ikke n\u00f8gleformidling i sandkassen, s\u00e5 ingen tekst for l\u00e6seren \u00e6ndres. 2026-11-17 GW6-GW7-gennemgang: en n\u00f8jagtig gentagelse af et v\u00e6rkt\u00f8jskald (samme idempotensn\u00f8gle eller et gentaget kald, der matcher en udf\u00f8rt handlingsanmodning) bruger nu intet rate-limit-token; den kontrolleres igen med det token, som det oprindelige kald gemte, f\u00e5r ingen kredit efter det vindue, og et fuldt vindue afviser den med 429 rate_limited og de samme detaljer som ved tilladelse. Artiklen beskriver ikke rate-limits, gentagelser eller godkendelser, s\u00e5 ingen tekst for l\u00e6seren \u00e6ndres."
+      "rationale": "Reviewed (APR-E2E-10): an approved app action can now run after the requesting run ended when the runtime is commercially current but stopped. Connection setup, access review and reconnect steps in this article are unchanged. Also reviewed with the PR #105 change: 2026-11-19 MS1f fase 4-gennemgang: en Co-worker, der gennemg\u00e5r et trin under en plan, f\u00e5r som en afslutningsgennemgang ingen forbindelsesn\u00f8gle i sandkassen; artiklen beskriver ikke n\u00f8gleformidling i sandkassen, s\u00e5 ingen tekst for l\u00e6seren \u00e6ndres. 2026-11-17 GW6-GW7-gennemgang: en n\u00f8jagtig gentagelse af et v\u00e6rkt\u00f8jskald (samme idempotensn\u00f8gle eller et gentaget kald, der matcher en udf\u00f8rt handlingsanmodning) bruger nu intet rate-limit-token; den kontrolleres igen med det token, som det oprindelige kald gemte, f\u00e5r ingen kredit efter det vindue, og et fuldt vindue afviser den med 429 rate_limited og de samme detaljer som ved tilladelse. Artiklen beskriver ikke rate-limits, gentagelser eller godkendelser, s\u00e5 ingen tekst for l\u00e6seren \u00e6ndres."
     },
     {
       "source": "server/src/services/workflows/workflow-http-request.ts",
@@ -2821,18 +2821,18 @@
     {
       "source": "ui/src/i18n/experience/en.json",
       "articleId": "create-and-track-work",
-      "sourceSha256": "3e8e42465ffbde5a5faa6079e49c783fb93a892a846a097c1fc3f8005a20b00b",
+      "sourceSha256": "904d13ed33aa214a1289c549885c7d10ddaf02e503b59929b6192578a03c148f",
       "articleSha256": "e08d017550dda25a9e6185a4478026f2affd445e16a1d10dff2464761537b328",
       "decision": "no_change",
-      "rationale": "Reviewed (AUTH-DA1): added the screens.inviteLanding English and Danish invite landing strings. Task creation and tracking steps are unchanged, so the article stays accurate."
+      "rationale": "Reviewed (APR-E2E-1): added the composer hint shown while an agent\u2019s app action waits for a decision. The steps in this article are unchanged. Also reviewed with the PR #105 change: Reviewed (AUTH-DA1): added the screens.inviteLanding English and Danish invite landing strings. Task creation and tracking steps are unchanged, so the article stays accurate."
     },
     {
       "source": "ui/src/i18n/experience/da.json",
       "articleId": "create-and-track-work-da",
-      "sourceSha256": "571364a5dd2a4c964e40bee6a8d461115ee66e6d14234c9f53b5f64d724fb0b3",
+      "sourceSha256": "718e31ec49a5ab6c52239fa7bd2bedef8a6da94bc299973d950b55f9d4ab4e4a",
       "articleSha256": "b36d116837115a674b3751f11ae3dcdd1a7fdcd9f31d26206feeec490f715e29",
       "decision": "no_change",
-      "rationale": "Reviewed (AUTH-DA1): added the screens.inviteLanding English and Danish invite landing strings. Task creation and tracking steps are unchanged, so the article stays accurate."
+      "rationale": "Reviewed (APR-E2E-1): added the Danish composer hint shown while an agent\u2019s app action waits for a decision. The steps in this article are unchanged. Also reviewed with the PR #105 change: Reviewed (AUTH-DA1): added the screens.inviteLanding English and Danish invite landing strings. Task creation and tracking steps are unchanged, so the article stays accurate."
     },
     {
       "source": "ui/src/pages/Auth.tsx",
