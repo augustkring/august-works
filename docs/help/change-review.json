@@ -5,10 +5,10 @@
     {
       "source": "ui/src/pages/ApprovalDetail.tsx",
       "articleId": "approvals-and-stop",
-      "sourceSha256": "cd8bd0f9021c383cd87d5d0caf468ec04d6fe55e647d92332a855bfd43435e1a",
+      "sourceSha256": "8336a582a6adb82366aa8c7ff0b42e76440c9196e6b011e5570606234949e1c8",
       "articleSha256": "601860635ecfdbef65d0703b3966a9af6429ec84d78d857ab85ac9863b77ba60",
-      "decision": "updated",
-      "rationale": "Replaced outdated approval types with current approval decisions and the separate task pause/stop actions."
+      "decision": "no_change",
+      "rationale": "Reviewed (I18N-DA2): the screen text moved into the English and Danish catalogues. Behaviour, steps and controls are unchanged, so the article stays accurate."
     },
     {
       "source": "ui/src/pages/Approvals.tsx",
@@ -21,18 +21,18 @@
     {
       "source": "ui/src/pages/IssueDetail.tsx",
       "articleId": "approvals-and-stop",
-      "sourceSha256": "4c876067a992361473f5d3ec5de1016622d60ed0b669a6ca0c54ef687bbdb93d",
+      "sourceSha256": "3d24f0b66808e8659b971a4cb1e82bf06f07efe9cf8766411793a2392f72a791",
       "articleSha256": "601860635ecfdbef65d0703b3966a9af6429ec84d78d857ab85ac9863b77ba60",
       "decision": "no_change",
-      "rationale": "Reviewed (A11Y-R1): the assignee and originator avatars are exposed as labelled images (role=img). No task, approval, recovery or workflow behaviour described in the article changed."
+      "rationale": "Reviewed (I18N-DA2): the screen text moved into the English and Danish catalogues. Behaviour, steps and controls are unchanged, so the article stays accurate."
     },
     {
       "source": "ui/src/pages/ApprovalDetail.tsx",
       "articleId": "approvals-and-stop-da",
-      "sourceSha256": "cd8bd0f9021c383cd87d5d0caf468ec04d6fe55e647d92332a855bfd43435e1a",
+      "sourceSha256": "8336a582a6adb82366aa8c7ff0b42e76440c9196e6b011e5570606234949e1c8",
       "articleSha256": "b9ef02341c31fea40d5b41c881d1cc60efe7e709a12b3942092001b7b91a91b6",
-      "decision": "updated",
-      "rationale": "Danish translation of approvals-and-stop: customer scope and caveats retained from its English counterpart; English UI labels and technical identifiers stay unchanged."
+      "decision": "no_change",
+      "rationale": "Reviewed (I18N-DA2): the screen text moved into the English and Danish catalogues. Behaviour, steps and controls are unchanged, so the article stays accurate."
     },
     {
       "source": "ui/src/pages/Approvals.tsx",
@@ -45,10 +45,10 @@
     {
       "source": "ui/src/pages/IssueDetail.tsx",
       "articleId": "approvals-and-stop-da",
-      "sourceSha256": "4c876067a992361473f5d3ec5de1016622d60ed0b669a6ca0c54ef687bbdb93d",
+      "sourceSha256": "3d24f0b66808e8659b971a4cb1e82bf06f07efe9cf8766411793a2392f72a791",
       "articleSha256": "b9ef02341c31fea40d5b41c881d1cc60efe7e709a12b3942092001b7b91a91b6",
       "decision": "no_change",
-      "rationale": "Reviewed (A11Y-R1): the assignee and originator avatars are exposed as labelled images (role=img). No task, approval, recovery or workflow behaviour described in the article changed."
+      "rationale": "Reviewed (I18N-DA2): the screen text moved into the English and Danish catalogues. Behaviour, steps and controls are unchanged, so the article stays accurate."
     },
     {
       "source": "packages/shared/src/app-definitions/slack.json",
@@ -589,10 +589,10 @@
     {
       "source": "ui/src/pages/IssueDetail.tsx",
       "articleId": "create-and-track-work",
-      "sourceSha256": "4c876067a992361473f5d3ec5de1016622d60ed0b669a6ca0c54ef687bbdb93d",
+      "sourceSha256": "3d24f0b66808e8659b971a4cb1e82bf06f07efe9cf8766411793a2392f72a791",
       "articleSha256": "e08d017550dda25a9e6185a4478026f2affd445e16a1d10dff2464761537b328",
       "decision": "no_change",
-      "rationale": "Reviewed (A11Y-R1): the assignee and originator avatars are exposed as labelled images (role=img). No task, approval, recovery or workflow behaviour described in the article changed."
+      "rationale": "Reviewed (I18N-DA2): the screen text moved into the English and Danish catalogues. Behaviour, steps and controls are unchanged, so the article stays accurate."
     },
     {
       "source": "ui/src/pages/ExperienceWork.tsx",
@@ -605,10 +605,10 @@
     {
       "source": "ui/src/pages/IssueDetail.tsx",
       "articleId": "create-and-track-work-da",
-      "sourceSha256": "4c876067a992361473f5d3ec5de1016622d60ed0b669a6ca0c54ef687bbdb93d",
+      "sourceSha256": "3d24f0b66808e8659b971a4cb1e82bf06f07efe9cf8766411793a2392f72a791",
       "articleSha256": "b36d116837115a674b3751f11ae3dcdd1a7fdcd9f31d26206feeec490f715e29",
       "decision": "no_change",
-      "rationale": "Reviewed (A11Y-R1): the assignee and originator avatars are exposed as labelled images (role=img). No task, approval, recovery or workflow behaviour described in the article changed."
+      "rationale": "Reviewed (I18N-DA2): the screen text moved into the English and Danish catalogues. Behaviour, steps and controls are unchanged, so the article stays accurate."
     },
     {
       "source": "cli/src/index.ts",
@@ -1637,10 +1637,10 @@
     {
       "source": "ui/src/pages/IssueDetail.tsx",
       "articleId": "recovering-work",
-      "sourceSha256": "4c876067a992361473f5d3ec5de1016622d60ed0b669a6ca0c54ef687bbdb93d",
+      "sourceSha256": "3d24f0b66808e8659b971a4cb1e82bf06f07efe9cf8766411793a2392f72a791",
       "articleSha256": "0296c2c8ae18c613eef9c17ea9679b146e8afbcd3504451a5511a218d6d8b955",
       "decision": "no_change",
-      "rationale": "Reviewed (A11Y-R1): the assignee and originator avatars are exposed as labelled images (role=img). No task, approval, recovery or workflow behaviour described in the article changed."
+      "rationale": "Reviewed (I18N-DA2): the screen text moved into the English and Danish catalogues. Behaviour, steps and controls are unchanged, so the article stays accurate."
     },
     {
       "source": "server/src/routes/issues.ts",
@@ -1741,10 +1741,10 @@
     {
       "source": "ui/src/pages/IssueDetail.tsx",
       "articleId": "recovering-work-da",
-      "sourceSha256": "4c876067a992361473f5d3ec5de1016622d60ed0b669a6ca0c54ef687bbdb93d",
+      "sourceSha256": "3d24f0b66808e8659b971a4cb1e82bf06f07efe9cf8766411793a2392f72a791",
       "articleSha256": "ce0a7beaa56a5db23963d81eed8c19687d2efc5405773ec33dfd635a377090bc",
       "decision": "no_change",
-      "rationale": "Reviewed (A11Y-R1): the assignee and originator avatars are exposed as labelled images (role=img). No task, approval, recovery or workflow behaviour described in the article changed."
+      "rationale": "Reviewed (I18N-DA2): the screen text moved into the English and Danish catalogues. Behaviour, steps and controls are unchanged, so the article stays accurate."
     },
     {
       "source": "server/src/services/saas/activation-first-task.ts",
@@ -1965,10 +1965,10 @@
     {
       "source": "ui/src/pages/ApprovalDetail.tsx",
       "articleId": "working-with-coworkers",
-      "sourceSha256": "cd8bd0f9021c383cd87d5d0caf468ec04d6fe55e647d92332a855bfd43435e1a",
+      "sourceSha256": "8336a582a6adb82366aa8c7ff0b42e76440c9196e6b011e5570606234949e1c8",
       "articleSha256": "f7967586b023dc5f5b8db075f0748a96bf09f03f5e55d854e383be3e26ba0d72",
-      "decision": "updated",
-      "rationale": "Linked for PRIV-R7: the approval page is where a disapproved Co-worker is deleted and shows the server's refusal message; the new Delete a disapproved Co-worker section describes that action and its refusal."
+      "decision": "no_change",
+      "rationale": "Reviewed (I18N-DA2): the screen text moved into the English and Danish catalogues. Behaviour, steps and controls are unchanged, so the article stays accurate."
     },
     {
       "source": "server/src/services/native-runtime/native-run-deletion-erasure.ts",
@@ -1981,10 +1981,10 @@
     {
       "source": "ui/src/pages/AgentDetail.tsx",
       "articleId": "working-with-coworkers",
-      "sourceSha256": "3bcc511b3687adb04671e7c8b5287fffff6d3aec3b6cef33f77c084a2fa6a875",
+      "sourceSha256": "9d1a4e559740061a45ac36a3735b4e6c85996f407fbd4e3bb4fbd3827460a554",
       "articleSha256": "f7967586b023dc5f5b8db075f0748a96bf09f03f5e55d854e383be3e26ba0d72",
-      "decision": "updated",
-      "rationale": "The agent detail page changes Paperclip labels to Blentera; the setup, run, and pause behavior described in the article is unchanged."
+      "decision": "no_change",
+      "rationale": "Reviewed (I18N-DA2): the screen text moved into the English and Danish catalogues. Behaviour, steps and controls are unchanged, so the article stays accurate."
     },
     {
       "source": "ui/src/pages/Agents.tsx",
@@ -2005,10 +2005,10 @@
     {
       "source": "ui/src/pages/ApprovalDetail.tsx",
       "articleId": "working-with-coworkers-da",
-      "sourceSha256": "cd8bd0f9021c383cd87d5d0caf468ec04d6fe55e647d92332a855bfd43435e1a",
+      "sourceSha256": "8336a582a6adb82366aa8c7ff0b42e76440c9196e6b011e5570606234949e1c8",
       "articleSha256": "fc9836e25ab493bfe26f82d6a0b0dbaa7fc0407e1b8d92d640acdd495d0e7e7d",
-      "decision": "updated",
-      "rationale": "Danish guidance checked against the same source behavior. Linked for PRIV-R7: the approval page is where a disapproved Co-worker is deleted and shows the server's refusal message; the new Delete a disapproved Co-worker section describes that action and its refusal."
+      "decision": "no_change",
+      "rationale": "Reviewed (I18N-DA2): the screen text moved into the English and Danish catalogues. Behaviour, steps and controls are unchanged, so the article stays accurate."
     },
     {
       "source": "server/src/services/native-runtime/native-run-deletion-erasure.ts",
@@ -2021,10 +2021,10 @@
     {
       "source": "ui/src/pages/AgentDetail.tsx",
       "articleId": "working-with-coworkers-da",
-      "sourceSha256": "3bcc511b3687adb04671e7c8b5287fffff6d3aec3b6cef33f77c084a2fa6a875",
+      "sourceSha256": "9d1a4e559740061a45ac36a3735b4e6c85996f407fbd4e3bb4fbd3827460a554",
       "articleSha256": "fc9836e25ab493bfe26f82d6a0b0dbaa7fc0407e1b8d92d640acdd495d0e7e7d",
-      "decision": "updated",
-      "rationale": "Danish version checked against the same source delta: the agent detail page changes Paperclip labels to Blentera; the setup, run, and pause behavior described in the article is unchanged."
+      "decision": "no_change",
+      "rationale": "Reviewed (I18N-DA2): the screen text moved into the English and Danish catalogues. Behaviour, steps and controls are unchanged, so the article stays accurate."
     },
     {
       "source": "ui/src/pages/Agents.tsx",
@@ -2477,10 +2477,10 @@
     {
       "source": "ui/src/pages/IssueDetail.tsx",
       "articleId": "workflows-preview",
-      "sourceSha256": "4c876067a992361473f5d3ec5de1016622d60ed0b669a6ca0c54ef687bbdb93d",
+      "sourceSha256": "3d24f0b66808e8659b971a4cb1e82bf06f07efe9cf8766411793a2392f72a791",
       "articleSha256": "e1c5c2d77645ce6fd9586ca6d9185c4396adec71f7e850e059748261c062fd89",
       "decision": "no_change",
-      "rationale": "Reviewed (A11Y-R1): the assignee and originator avatars are exposed as labelled images (role=img). No task, approval, recovery or workflow behaviour described in the article changed."
+      "rationale": "Reviewed (I18N-DA2): the screen text moved into the English and Danish catalogues. Behaviour, steps and controls are unchanged, so the article stays accurate."
     },
     {
       "source": "server/src/routes/access.ts",
@@ -2533,10 +2533,10 @@
     {
       "source": "ui/src/pages/IssueDetail.tsx",
       "articleId": "workflows-preview-da",
-      "sourceSha256": "4c876067a992361473f5d3ec5de1016622d60ed0b669a6ca0c54ef687bbdb93d",
+      "sourceSha256": "3d24f0b66808e8659b971a4cb1e82bf06f07efe9cf8766411793a2392f72a791",
       "articleSha256": "ef133efd581756186bf271221a91b494ea14cfac3c00fb8f3d816f9e741177d0",
       "decision": "no_change",
-      "rationale": "Reviewed (A11Y-R1): the assignee and originator avatars are exposed as labelled images (role=img). No task, approval, recovery or workflow behaviour described in the article changed."
+      "rationale": "Reviewed (I18N-DA2): the screen text moved into the English and Danish catalogues. Behaviour, steps and controls are unchanged, so the article stays accurate."
     },
     {
       "source": "server/src/routes/access.ts",
@@ -2821,18 +2821,18 @@
     {
       "source": "ui/src/i18n/experience/en.json",
       "articleId": "create-and-track-work",
-      "sourceSha256": "20a3cb8a476b72c93fd49b45079c59d04dc0591bc0624e58852241f9991957cd",
+      "sourceSha256": "a3458841e8e727b7f658ee5860ce3c59813284b5a6835461fc9c615981cd7796",
       "articleSha256": "e08d017550dda25a9e6185a4478026f2affd445e16a1d10dff2464761537b328",
       "decision": "no_change",
-      "rationale": "Reviewed (I18N-DA1): the screen text moved into the English and Danish catalogues. Behaviour, steps and controls are unchanged, so the article stays accurate."
+      "rationale": "Reviewed (I18N-DA2): the screen text moved into the English and Danish catalogues. Behaviour, steps and controls are unchanged, so the article stays accurate."
     },
     {
       "source": "ui/src/i18n/experience/da.json",
       "articleId": "create-and-track-work-da",
-      "sourceSha256": "47ad1db3437919bc5894c068e6a02281fb9d08ce5a4e6d39d83521c394477433",
+      "sourceSha256": "3902a0343e6f770e6064c04e6627d4b275c49ba2db9d1389682a9afc9da512de",
       "articleSha256": "b36d116837115a674b3751f11ae3dcdd1a7fdcd9f31d26206feeec490f715e29",
       "decision": "no_change",
-      "rationale": "Reviewed (I18N-DA1): the screen text moved into the English and Danish catalogues. Behaviour, steps and controls are unchanged, so the article stays accurate."
+      "rationale": "Reviewed (I18N-DA2): the screen text moved into the English and Danish catalogues. Behaviour, steps and controls are unchanged, so the article stays accurate."
     },
     {
       "source": "ui/src/pages/Auth.tsx",

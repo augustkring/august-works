@@ -32680,7 +32680,7 @@
         },
         {
           "path": "doc/operations/agent-native-ui-operation-coverage.json",
-          "sha256": "8b43217ec8cf8e4d5df9aaa5898f14a1bdfd2f8106e8bb3e32fa21c47dc670b5"
+          "sha256": "54467a547f097e7d078d4604ea5ceddd9da8aaffe5e5c8deb9464b7ab985f863"
         },
         {
           "path": "doc/operations/production-hotspot-responsibilities.json",
@@ -32692,7 +32692,7 @@
         },
         {
           "path": "doc/operations/v10-capability-projection.json",
-          "sha256": "082daff746a8de2f45edb6b3ebf443801611cbbee3e43cc7f517bb0b1ad8e76b"
+          "sha256": "f8084c89c611fff3967e94f2b826ab01e8e05352ab0b64eab24f2fa916690173"
         },
         {
           "path": "package.json",
@@ -73080,7 +73080,7 @@
       "id": "source:doc/operations/agent-native-ui-operation-coverage.json",
       "kind": "current_source_owner",
       "path": "doc/operations/agent-native-ui-operation-coverage.json",
-      "sha256": "8b43217ec8cf8e4d5df9aaa5898f14a1bdfd2f8106e8bb3e32fa21c47dc670b5",
+      "sha256": "54467a547f097e7d078d4604ea5ceddd9da8aaffe5e5c8deb9464b7ab985f863",
       "changeIds": [
         "SCR-V10-CI-RELEASE-AND-CATALOG-GOVERNANCE"
       ],
@@ -73125,7 +73125,7 @@
       "id": "source:doc/operations/v10-capability-projection.json",
       "kind": "current_source_owner",
       "path": "doc/operations/v10-capability-projection.json",
-      "sha256": "082daff746a8de2f45edb6b3ebf443801611cbbee3e43cc7f517bb0b1ad8e76b",
+      "sha256": "f8084c89c611fff3967e94f2b826ab01e8e05352ab0b64eab24f2fa916690173",
       "changeIds": [
         "SCR-V10-CI-RELEASE-AND-CATALOG-GOVERNANCE"
       ],
