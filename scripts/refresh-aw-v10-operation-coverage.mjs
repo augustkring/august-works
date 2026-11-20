@@ -24,6 +24,21 @@ const reviewedSignatureChanges = [{
   },
   expectedClassification: "HUMAN_ONLY",
   review: "Human-only contact management retains current Human Board owner/admin authority; caller binds the requested company, principal, and session. This signature change has explicit §17.2/§17.7 review.",
+}, {
+  source: "ui/src/pages/Companies.tsx",
+  clientCall: "companiesApi.remove",
+  apiVerb: "write",
+  routeSignatures: ["delete:`/companies/${companyId}`"],
+  from: {
+    pathSignature: "id",
+    argumentsSha256: "a56145270ce6b3bebd1dd012b73948677dd618d496488bc608a3cb43ce3547dd",
+  },
+  to: {
+    pathSignature: "id",
+    argumentsSha256: "fcd6972effdf77c7a051674b5a40c0fb93a4e4c383899064785ac070182796be",
+  },
+  expectedClassification: "HUMAN_ONLY",
+  review: "EXIT-AUTH1 (brief 25.2): company deletion stays Human-only and narrows to the active owner, instance admin or local trusted operator; the caller now also sends the exact typed organization name, and signed-in Humans need a recent sign-in.",
 }];
 
 function canonicalSignature(source, operation) {

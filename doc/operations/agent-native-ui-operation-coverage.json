@@ -30165,7 +30165,7 @@
         "patch:`/companies/${companyId}`"
       ],
       "argumentsSignature": "id, { name: newName }",
-      "line": 66,
+      "line": 68,
       "occurrence": 0,
       "owner": "server/src/services/companies.ts",
       "classification": "DIRECT_AGENT",
@@ -30220,13 +30220,13 @@
       "routeSignatures": [
         "delete:`/companies/${companyId}`"
       ],
-      "argumentsSignature": "id",
-      "line": 74,
+      "argumentsSignature": "id, name",
+      "line": 76,
       "occurrence": 0,
       "owner": "server/src/services/companies.ts",
       "classification": "HUMAN_ONLY",
       "materiality": "launchcritical",
-      "reviewRationale": "Company deletion is explicitly Board-only after same-company access.",
+      "reviewRationale": "Company deletion is Board-only after same-company access, limited to the active owner, an instance admin or the local trusted operator, with the exact typed organization name and a recent sign-in for signed-in Humans (EXIT-AUTH1).",
       "authorityEvidence": {
         "sourceEvidence": [
           {
@@ -30304,7 +30304,7 @@
         "patch:`/companies/${companyId}`"
       ],
       "argumentsSignature": "id, { status: \"active\" }",
-      "line": 88,
+      "line": 91,
       "occurrence": 0,
       "owner": "server/src/services/companies.ts",
       "classification": "HUMAN_ONLY",
@@ -32379,7 +32379,7 @@
         "post:`/companies/${companyId}/exports/preview`"
       ],
       "argumentsSignature": "selectedCompanyId!, {\n        include: { company: true, agents: true, projects: true, issues: withIssues, skills: includeSkills },\n        sidebarOrder,\n      }, { signal }",
-      "line": 755,
+      "line": 756,
       "occurrence": 0,
       "owner": "server/src/services/companies.ts",
       "classification": "DIRECT_AGENT",
@@ -32500,7 +32500,7 @@
         "post:`/companies/${companyId}/exports`"
       ],
       "argumentsSignature": "selectedCompanyId!, {\n        include: { company: true, agents: true, projects: true, issues: includeIssues, skills: categories.skills, supportCases: includeSupportCases },\n        includeV7State,\n        ...((includeV7State || includeSupportCases) ? {expectedUserId:captured.userId} : {}),\n        selectedFiles: [...checkedFiles, ...(includeSupportCases ? [\"blentera-support-cases-v1.json\"] : [])].sort(),\n        sidebarOrder,\n      }",
-      "line": 817,
+      "line": 818,
       "occurrence": 0,
       "owner": "server/src/services/companies.ts",
       "classification": "DIRECT_AGENT",

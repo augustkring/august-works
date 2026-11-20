@@ -161,7 +161,7 @@ export const companiesApi = {
   archive: (companyId: string) => api.post<Company>(`/companies/${companyId}/archive`, {}),
   /** The server compares confirmName with the organization's current name exactly. */
   remove: (companyId: string, confirmName: string) =>
-    api.deleteWithBody<{ ok: true }>(`/companies/${companyId}`, { confirmName }),
+    api.delete<{ ok: true }>(`/companies/${companyId}`, { confirmName }),
   exportBundle: (
     companyId: string,
     data: CompanyPortabilityExportRequest,
