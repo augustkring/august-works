@@ -87,7 +87,7 @@ export function Approvals() {
     <div className="space-y-4">
       <div className="flex items-center justify-between">
         <Tabs value={statusFilter} onValueChange={(v) => navigate(`/approvals/${v}`)}>
-          <PageTabBar items={[
+          <PageTabBar hasPanels={false} items={[
             { value: "pending", label: <>Pending{pendingCount > 0 && (
               <Badge variant="ghost" className={cn(
                 "ml-1.5 px-1.5 text-(length:--text-nano)",

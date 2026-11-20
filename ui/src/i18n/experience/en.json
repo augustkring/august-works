@@ -4275,5 +4275,11 @@
       "reconciliationPending": "The deletion owner is reconciling an unconfirmed result.",
       "exportStorage": "The original export storage needs operator reconciliation."
     }
+  },
+  "controlLabels": {
+    "openAssignedAgent": "Open assigned agent",
+    "openProject": "Open project",
+    "hintAbout": "About {{label}}",
+    "hint": "More information"
   }
 }

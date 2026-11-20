@@ -2405,6 +2405,7 @@ function StreamlinedInbox() {
         context={(
           <Tabs value={tab} onValueChange={(value) => navigate(`/inbox/${value}`)}>
             <PageTabBar
+              hasPanels={false}
               items={[
                 { value: "mine", label: "Mine" },
                 { value: "recent", label: "Recent" },
@@ -3039,7 +3040,7 @@ function StreamlinedInbox() {
                         >
                           <span className="h-px min-w-0 flex-1 bg-border/80" aria-hidden="true" data-date-group-rule="" />
                           <span
-                            className="shrink-0 text-(length:--text-nano) font-medium uppercase tracking-wider text-muted-foreground/70"
+                            className="shrink-0 text-(length:--text-nano) font-medium uppercase tracking-wider text-muted-foreground"
                             data-date-group-label=""
                           >
                             {dateGroupLabel}
@@ -3052,7 +3053,7 @@ function StreamlinedInbox() {
                         <div key={`earlier-divider-${group.key}-${index}`} className="my-2 flex items-center gap-3 px-4">
                           <div className="flex-1 border-t border-border" />
                           <span
-                            className="shrink-0 text-(length:--text-micro) font-medium uppercase tracking-wider text-muted-foreground/70"
+                            className="shrink-0 text-(length:--text-micro) font-medium uppercase tracking-wider text-muted-foreground"
                             data-date-group-label=""
                           >
                             Earlier

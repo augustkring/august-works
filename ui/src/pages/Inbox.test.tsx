@@ -733,7 +733,7 @@ describe("Inbox toolbar", () => {
       separator.querySelectorAll("[data-date-group-rule]").length === 2
     ))).toBe(true);
     expect(separators.every((separator) => (
-      separator.querySelector("[data-date-group-label]")?.classList.contains("text-muted-foreground/70")
+      separator.querySelector("[data-date-group-label]")?.classList.contains("text-muted-foreground")
     ))).toBe(true);
 
     act(() => root.unmount());

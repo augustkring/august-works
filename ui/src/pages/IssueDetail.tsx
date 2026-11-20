@@ -723,7 +723,7 @@ function AttributionAvatar({
   return (
     <Tooltip>
       <TooltipTrigger asChild>
-        <span aria-label={accessibleLabel} data-testid={`issue-${testIdLabel}-avatar`}>
+        <span role="img" aria-label={accessibleLabel} data-testid={`issue-${testIdLabel}-avatar`}>
           {actor.kind === "agent" ? <AgentAvatar agent={actor} size={20} /> : (
             <Avatar size="xs" className="ring-2 ring-background">
               {actor.avatarUrl ? <AvatarImage src={actor.avatarUrl} alt="" /> : null}

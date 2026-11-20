@@ -13,18 +13,18 @@
     {
       "source": "ui/src/pages/Approvals.tsx",
       "articleId": "approvals-and-stop",
-      "sourceSha256": "813b96ee74123a2568c23ce80440bf044e5de98c5aaf0b5bb1d665887b3ca06f",
+      "sourceSha256": "a6dc309ff9123de2da5385ee8a402fbefe09b65997571591e60547db24dddbd3",
       "articleSha256": "601860635ecfdbef65d0703b3966a9af6429ec84d78d857ab85ac9863b77ba60",
-      "decision": "updated",
-      "rationale": "Replaced outdated approval types with current approval decisions and the separate task pause/stop actions."
+      "decision": "no_change",
+      "rationale": "Reviewed (A11Y-R1): the Pending/All tab bar no longer points aria-controls at a missing panel. Approval review, decision and Stop behaviour described in the article are unchanged."
     },
     {
       "source": "ui/src/pages/IssueDetail.tsx",
       "articleId": "approvals-and-stop",
-      "sourceSha256": "2fa0c7388af830553a6d1a259c22824c35ccde9487d4c4a0228cbbba132717ce",
+      "sourceSha256": "4c876067a992361473f5d3ec5de1016622d60ed0b669a6ca0c54ef687bbdb93d",
       "articleSha256": "601860635ecfdbef65d0703b3966a9af6429ec84d78d857ab85ac9863b77ba60",
       "decision": "no_change",
-      "rationale": "2026-11-18 MS1h14 review: the Task activity adds one note under an accepted completion review that awaits its plan\u2019s verification (EN/DA); approval, stop, recovery, retry and workflow controls on the Task page are unchanged, so this article stays accurate. The current Task page still gates pause and resume actions on the current run and session. Descendant resume eligibility changed, but the article directs operators to the current task action and status, so its instructions remain accurate."
+      "rationale": "Reviewed (A11Y-R1): the assignee and originator avatars are exposed as labelled images (role=img). No task, approval, recovery or workflow behaviour described in the article changed."
     },
     {
       "source": "ui/src/pages/ApprovalDetail.tsx",
@@ -37,18 +37,18 @@
     {
       "source": "ui/src/pages/Approvals.tsx",
       "articleId": "approvals-and-stop-da",
-      "sourceSha256": "813b96ee74123a2568c23ce80440bf044e5de98c5aaf0b5bb1d665887b3ca06f",
+      "sourceSha256": "a6dc309ff9123de2da5385ee8a402fbefe09b65997571591e60547db24dddbd3",
       "articleSha256": "b9ef02341c31fea40d5b41c881d1cc60efe7e709a12b3942092001b7b91a91b6",
-      "decision": "updated",
-      "rationale": "Danish translation of approvals-and-stop: customer scope and caveats retained from its English counterpart; English UI labels and technical identifiers stay unchanged."
+      "decision": "no_change",
+      "rationale": "Reviewed (A11Y-R1): the Pending/All tab bar no longer points aria-controls at a missing panel. Approval review, decision and Stop behaviour described in the article are unchanged."
     },
     {
       "source": "ui/src/pages/IssueDetail.tsx",
       "articleId": "approvals-and-stop-da",
-      "sourceSha256": "2fa0c7388af830553a6d1a259c22824c35ccde9487d4c4a0228cbbba132717ce",
+      "sourceSha256": "4c876067a992361473f5d3ec5de1016622d60ed0b669a6ca0c54ef687bbdb93d",
       "articleSha256": "b9ef02341c31fea40d5b41c881d1cc60efe7e709a12b3942092001b7b91a91b6",
       "decision": "no_change",
-      "rationale": "2026-11-18 MS1h14-gennemgang: Opgavens aktivitet viser nu en note under en godkendt gennemgang, der afventer verifikation af planen (EN/DA); godkendelse, stop, genoptagelse, nyt fors\u00f8g og workflow-handlinger p\u00e5 opgavesiden er u\u00e6ndrede, s\u00e5 artiklen er stadig korrekt. Den aktuelle opgaveside kr\u00e6ver fortsat den aktuelle k\u00f8rsel og session for pause- og genoptagelseshandlinger. Kriterierne for genoptagelse af underopgaver er \u00e6ndret, men artiklen henviser til handlingen og status for den aktuelle opgave, s\u00e5 vejledningen er fortsat korrekt."
+      "rationale": "Reviewed (A11Y-R1): the assignee and originator avatars are exposed as labelled images (role=img). No task, approval, recovery or workflow behaviour described in the article changed."
     },
     {
       "source": "packages/shared/src/app-definitions/slack.json",
@@ -429,10 +429,10 @@
     {
       "source": "ui/src/pages/CompanyImport.tsx",
       "articleId": "company-import-export",
-      "sourceSha256": "e30657b4674fbcb62d537d187f877ae9a2582312d0c27956de9ad31badcafe2c",
+      "sourceSha256": "b3063dcdde571f5311e8455a6480eb9be76cf16616d979aa5841ffe933355f84",
       "articleSha256": "60fb27696b7e053d78cfb8579ae3c99b826d0a97c62acbdce88ca3979e58747f",
-      "decision": "updated",
-      "rationale": "Reviewed the original import job and portability owner: the article now describes durable exact source-release evidence, current source ownership/access and target authority checks, manual external open-content review with canonical target provenance, and explicit cancellation request/outcome behavior."
+      "decision": "no_change",
+      "rationale": "Reviewed (A11Y-R1): import inputs gained a visible keyboard focus ring only. Import and export steps, preview and receipts described in the article are unchanged."
     },
     {
       "source": "ui/src/pages/CompanyImportHistory.tsx",
@@ -565,10 +565,10 @@
     {
       "source": "ui/src/pages/CompanyImport.tsx",
       "articleId": "company-import-export-da",
-      "sourceSha256": "e30657b4674fbcb62d537d187f877ae9a2582312d0c27956de9ad31badcafe2c",
+      "sourceSha256": "b3063dcdde571f5311e8455a6480eb9be76cf16616d979aa5841ffe933355f84",
       "articleSha256": "fde0e0a405c5576829b43ec70b1224abd15e44827d20aed3e786322f1dea2f04",
-      "decision": "updated",
-      "rationale": "Reviewed the original import job and portability owner: the article now describes durable exact source-release evidence, current source ownership/access and target authority checks, manual external open-content review with canonical target provenance, and explicit cancellation request/outcome behavior."
+      "decision": "no_change",
+      "rationale": "Reviewed (A11Y-R1): import inputs gained a visible keyboard focus ring only. Import and export steps, preview and receipts described in the article are unchanged."
     },
     {
       "source": "ui/src/pages/CompanyImportHistory.tsx",
@@ -589,10 +589,10 @@
     {
       "source": "ui/src/pages/IssueDetail.tsx",
       "articleId": "create-and-track-work",
-      "sourceSha256": "2fa0c7388af830553a6d1a259c22824c35ccde9487d4c4a0228cbbba132717ce",
+      "sourceSha256": "4c876067a992361473f5d3ec5de1016622d60ed0b669a6ca0c54ef687bbdb93d",
       "articleSha256": "e08d017550dda25a9e6185a4478026f2affd445e16a1d10dff2464761537b328",
-      "decision": "updated",
-      "rationale": "2026-11-18 MS1f phase 3 review: the In review paragraph now also says that a Co-worker that reviews a Task covered by a bounded plan, in a completion review or a review step, works under the same plan: its model use, its review decision and each read of the Task\u2019s required documents count toward the plan\u2019s limits, it can read no other documents, and in a review step it cannot be the Co-worker that did the work. This source is unchanged by MS1f phase 3; the article sentence follows the server change in server/src/services (native-runtime/native-review-participant.ts, orchestration/orchestration-admission.ts, orchestration/native-tool-boundary.ts, orchestration/worker-model-gateway.ts) and migration 0585."
+      "decision": "no_change",
+      "rationale": "Reviewed (A11Y-R1): the assignee and originator avatars are exposed as labelled images (role=img). No task, approval, recovery or workflow behaviour described in the article changed."
     },
     {
       "source": "ui/src/pages/ExperienceWork.tsx",
@@ -605,10 +605,10 @@
     {
       "source": "ui/src/pages/IssueDetail.tsx",
       "articleId": "create-and-track-work-da",
-      "sourceSha256": "2fa0c7388af830553a6d1a259c22824c35ccde9487d4c4a0228cbbba132717ce",
+      "sourceSha256": "4c876067a992361473f5d3ec5de1016622d60ed0b669a6ca0c54ef687bbdb93d",
       "articleSha256": "b36d116837115a674b3751f11ae3dcdd1a7fdcd9f31d26206feeec490f715e29",
-      "decision": "updated",
-      "rationale": "2026-11-18 MS1f phase 3 review: the In review paragraph now also says that a Co-worker that reviews a Task covered by a bounded plan, in a completion review or a review step, works under the same plan: its model use, its review decision and each read of the Task\u2019s required documents count toward the plan\u2019s limits, it can read no other documents, and in a review step it cannot be the Co-worker that did the work. This source is unchanged by MS1f phase 3; the article sentence follows the server change in server/src/services (native-runtime/native-review-participant.ts, orchestration/orchestration-admission.ts, orchestration/native-tool-boundary.ts, orchestration/worker-model-gateway.ts) and migration 0585."
+      "decision": "no_change",
+      "rationale": "Reviewed (A11Y-R1): the assignee and originator avatars are exposed as labelled images (role=img). No task, approval, recovery or workflow behaviour described in the article changed."
     },
     {
       "source": "cli/src/index.ts",
@@ -1637,10 +1637,10 @@
     {
       "source": "ui/src/pages/IssueDetail.tsx",
       "articleId": "recovering-work",
-      "sourceSha256": "2fa0c7388af830553a6d1a259c22824c35ccde9487d4c4a0228cbbba132717ce",
+      "sourceSha256": "4c876067a992361473f5d3ec5de1016622d60ed0b669a6ca0c54ef687bbdb93d",
       "articleSha256": "0296c2c8ae18c613eef9c17ea9679b146e8afbcd3504451a5511a218d6d8b955",
       "decision": "no_change",
-      "rationale": "2026-11-18 MS1h14 review: the Task activity adds one note under an accepted completion review that awaits its plan\u2019s verification (EN/DA); approval, stop, recovery, retry and workflow controls on the Task page are unchanged, so this article stays accurate. The current Task page still gates pause and resume actions on the current run and session. Descendant resume eligibility changed, but the article directs operators to the current task action and status, so its instructions remain accurate."
+      "rationale": "Reviewed (A11Y-R1): the assignee and originator avatars are exposed as labelled images (role=img). No task, approval, recovery or workflow behaviour described in the article changed."
     },
     {
       "source": "server/src/routes/issues.ts",
@@ -1741,10 +1741,10 @@
     {
       "source": "ui/src/pages/IssueDetail.tsx",
       "articleId": "recovering-work-da",
-      "sourceSha256": "2fa0c7388af830553a6d1a259c22824c35ccde9487d4c4a0228cbbba132717ce",
+      "sourceSha256": "4c876067a992361473f5d3ec5de1016622d60ed0b669a6ca0c54ef687bbdb93d",
       "articleSha256": "ce0a7beaa56a5db23963d81eed8c19687d2efc5405773ec33dfd635a377090bc",
       "decision": "no_change",
-      "rationale": "2026-11-18 MS1h14-gennemgang: Opgavens aktivitet viser nu en note under en godkendt gennemgang, der afventer verifikation af planen (EN/DA); godkendelse, stop, genoptagelse, nyt fors\u00f8g og workflow-handlinger p\u00e5 opgavesiden er u\u00e6ndrede, s\u00e5 artiklen er stadig korrekt. Den aktuelle opgaveside kr\u00e6ver fortsat den aktuelle k\u00f8rsel og session for pause- og genoptagelseshandlinger. Kriterierne for genoptagelse af underopgaver er \u00e6ndret, men artiklen henviser til handlingen og status for den aktuelle opgave, s\u00e5 vejledningen er fortsat korrekt."
+      "rationale": "Reviewed (A11Y-R1): the assignee and originator avatars are exposed as labelled images (role=img). No task, approval, recovery or workflow behaviour described in the article changed."
     },
     {
       "source": "server/src/services/saas/activation-first-task.ts",
@@ -2101,10 +2101,10 @@
     {
       "source": "ui/src/pages/CompanySettings.tsx",
       "articleId": "people-and-company-access",
-      "sourceSha256": "fe6e05de7f9e176e9a23650d613b9896a37fc05faeea3d8d41b6cd486dddbdc6",
+      "sourceSha256": "baf71ff2c36a113620e3624483faf784025ff40ae819011909b566d28ac53aa5",
       "articleSha256": "1e804cb7e33fe610120d6f30d6fa556cd27e382028ad43d939378cc88e7ec8af",
-      "decision": "updated",
-      "rationale": "Explains current Human-only contact settings, scope-change reloads and the bounded member responsibility/credential preflight, including that incomplete preflight never blocks security revocation."
+      "decision": "no_change",
+      "rationale": "Reviewed (A11Y-R1): company settings fields are now programmatically labelled, hint icons are named and inputs show keyboard focus. Membership, invitation and access guidance is unchanged."
     },
     {
       "source": "ui/src/components/AccountExperienceLanguageSelect.tsx",
@@ -2149,10 +2149,10 @@
     {
       "source": "ui/src/pages/CompanySettings.tsx",
       "articleId": "people-and-company-access-da",
-      "sourceSha256": "fe6e05de7f9e176e9a23650d613b9896a37fc05faeea3d8d41b6cd486dddbdc6",
+      "sourceSha256": "baf71ff2c36a113620e3624483faf784025ff40ae819011909b566d28ac53aa5",
       "articleSha256": "a5885bddfed301f22a7c86d5e7c45685fd1f9ea602296786e32451b6456e08e8",
-      "decision": "updated",
-      "rationale": "Explains current Human-only contact settings, scope-change reloads and the bounded member responsibility/credential preflight, including that incomplete preflight never blocks security revocation."
+      "decision": "no_change",
+      "rationale": "Reviewed (A11Y-R1): company settings fields are now programmatically labelled, hint icons are named and inputs show keyboard focus. Membership, invitation and access guidance is unchanged."
     },
     {
       "source": "ui/src/components/AccountExperienceLanguageSelect.tsx",
@@ -2477,10 +2477,10 @@
     {
       "source": "ui/src/pages/IssueDetail.tsx",
       "articleId": "workflows-preview",
-      "sourceSha256": "2fa0c7388af830553a6d1a259c22824c35ccde9487d4c4a0228cbbba132717ce",
+      "sourceSha256": "4c876067a992361473f5d3ec5de1016622d60ed0b669a6ca0c54ef687bbdb93d",
       "articleSha256": "e1c5c2d77645ce6fd9586ca6d9185c4396adec71f7e850e059748261c062fd89",
       "decision": "no_change",
-      "rationale": "2026-11-18 MS1h14 review: the Task activity adds one note under an accepted completion review that awaits its plan\u2019s verification (EN/DA); approval, stop, recovery, retry and workflow controls on the Task page are unchanged, so this article stays accurate. The current Task page still gates pause and resume actions on the current run and session. Descendant resume eligibility changed, but the article directs operators to the current task action and status, so its instructions remain accurate."
+      "rationale": "Reviewed (A11Y-R1): the assignee and originator avatars are exposed as labelled images (role=img). No task, approval, recovery or workflow behaviour described in the article changed."
     },
     {
       "source": "server/src/routes/access.ts",
@@ -2533,10 +2533,10 @@
     {
       "source": "ui/src/pages/IssueDetail.tsx",
       "articleId": "workflows-preview-da",
-      "sourceSha256": "2fa0c7388af830553a6d1a259c22824c35ccde9487d4c4a0228cbbba132717ce",
+      "sourceSha256": "4c876067a992361473f5d3ec5de1016622d60ed0b669a6ca0c54ef687bbdb93d",
       "articleSha256": "ef133efd581756186bf271221a91b494ea14cfac3c00fb8f3d816f9e741177d0",
       "decision": "no_change",
-      "rationale": "2026-11-18 MS1h14-gennemgang: Opgavens aktivitet viser nu en note under en godkendt gennemgang, der afventer verifikation af planen (EN/DA); godkendelse, stop, genoptagelse, nyt fors\u00f8g og workflow-handlinger p\u00e5 opgavesiden er u\u00e6ndrede, s\u00e5 artiklen er stadig korrekt. Den aktuelle opgaveside kr\u00e6ver fortsat den aktuelle k\u00f8rsel og session for pause- og genoptagelseshandlinger. Kriterierne for genoptagelse af underopgaver er \u00e6ndret, men artiklen henviser til handlingen og status for den aktuelle opgave, s\u00e5 vejledningen er fortsat korrekt."
+      "rationale": "Reviewed (A11Y-R1): the assignee and originator avatars are exposed as labelled images (role=img). No task, approval, recovery or workflow behaviour described in the article changed."
     },
     {
       "source": "server/src/routes/access.ts",
@@ -2821,18 +2821,18 @@
     {
       "source": "ui/src/i18n/experience/en.json",
       "articleId": "create-and-track-work",
-      "sourceSha256": "34fe43a721fc99bf145665c5f772c6677ff123b19e1b7b78ecc9d1e14b64923b",
+      "sourceSha256": "7de235cf197e41899c14956da74edbb828a4e52a496282ab1493e5605542fe45",
       "articleSha256": "e08d017550dda25a9e6185a4478026f2affd445e16a1d10dff2464761537b328",
-      "decision": "updated",
-      "rationale": "2026-11-18 MS1f phase 3 review: the In review paragraph now also says that a Co-worker that reviews a Task covered by a bounded plan, in a completion review or a review step, works under the same plan: its model use, its review decision and each read of the Task\u2019s required documents count toward the plan\u2019s limits, it can read no other documents, and in a review step it cannot be the Co-worker that did the work. This source is unchanged by MS1f phase 3; the article sentence follows the server change in server/src/services (native-runtime/native-review-participant.ts, orchestration/orchestration-admission.ts, orchestration/native-tool-boundary.ts, orchestration/worker-model-gateway.ts) and migration 0585."
+      "decision": "no_change",
+      "rationale": "Reviewed (A11Y-R1): only new accessible names for icon-only controls (open assigned agent, open project, field hint buttons) were added; task creation and tracking steps in the article are unchanged."
     },
     {
       "source": "ui/src/i18n/experience/da.json",
       "articleId": "create-and-track-work-da",
-      "sourceSha256": "228aa7e60a1b5d40bdd314badc7a17dabaffe3a97e5093453997f8f5515df2b1",
+      "sourceSha256": "a1b5ca5655fbc9990ea70978d9bb846debd2ad4ed689a1537e61a9b8e3a5af29",
       "articleSha256": "b36d116837115a674b3751f11ae3dcdd1a7fdcd9f31d26206feeec490f715e29",
-      "decision": "updated",
-      "rationale": "2026-11-18 MS1f phase 3 review: the In review paragraph now also says that a Co-worker that reviews a Task covered by a bounded plan, in a completion review or a review step, works under the same plan: its model use, its review decision and each read of the Task\u2019s required documents count toward the plan\u2019s limits, it can read no other documents, and in a review step it cannot be the Co-worker that did the work. This source is unchanged by MS1f phase 3; the article sentence follows the server change in server/src/services (native-runtime/native-review-participant.ts, orchestration/orchestration-admission.ts, orchestration/native-tool-boundary.ts, orchestration/worker-model-gateway.ts) and migration 0585."
+      "decision": "no_change",
+      "rationale": "Reviewed (A11Y-R1): only new Danish accessible names for icon-only controls (open assigned agent, open project, field hint buttons) were added; the Danish task creation and tracking steps are unchanged."
     },
     {
       "source": "ui/src/pages/Auth.tsx",

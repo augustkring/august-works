@@ -838,6 +838,7 @@ export function ProjectDetail() {
       {v5FeatureEnabled(experimentalSettingsQuery.data ?? {}, "project_roadmap_v5") && <Link to={`/projects/${project.id}/roadmap`} className="inline-flex items-center gap-2 rounded-md border px-3 py-2 text-sm font-medium hover:bg-accent">Open Roadmap</Link>}
       <Tabs value={activeTab ?? "list"} onValueChange={(value) => handleTabChange(value as ProjectTab)}>
         <PageTabBar
+          hasPanels={false}
           items={[
             { value: "list", label: "Tasks" },
 

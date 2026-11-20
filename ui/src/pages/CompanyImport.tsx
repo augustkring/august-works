@@ -1993,7 +1993,7 @@ export function CompanyImport() {
             hint="Repo tree path or blob URL to COMPANY.md (e.g. github.com/owner/repo/tree/main/company)."
           >
             <input
-              className="w-full rounded-md border border-border bg-transparent px-2.5 py-1.5 text-sm outline-none"
+              className="w-full rounded-md border border-border bg-transparent px-2.5 py-1.5 text-sm outline-none focus-visible:border-ring focus-visible:ring-ring/50 focus-visible:ring-(length:--rad-3)"
               type="text"
               value={importUrl}
               placeholder="https://github.com/owner/repo/tree/main/company"
@@ -2008,7 +2008,7 @@ export function CompanyImport() {
 
         <Field label="Target" hint="Import into this organization or create a new one.">
           <select
-            className="w-full rounded-md border border-border bg-transparent px-2.5 py-1.5 text-sm outline-none"
+            className="w-full rounded-md border border-border bg-transparent px-2.5 py-1.5 text-sm outline-none focus-visible:border-ring focus-visible:ring-ring/50 focus-visible:ring-(length:--rad-3)"
             value={targetMode}
             disabled={importMutation.isPending}
             onChange={(e) => {
@@ -2029,7 +2029,7 @@ export function CompanyImport() {
             hint="Optional override. Leave blank to use the package name."
           >
             <input
-              className="w-full rounded-md border border-border bg-transparent px-2.5 py-1.5 text-sm outline-none"
+              className="w-full rounded-md border border-border bg-transparent px-2.5 py-1.5 text-sm outline-none focus-visible:border-ring focus-visible:ring-ring/50 focus-visible:ring-(length:--rad-3)"
               type="text"
               value={newCompanyName}
               onChange={(e) => {
@@ -2046,7 +2046,7 @@ export function CompanyImport() {
           hint="Board imports can rename, skip, or replace matching organization content."
         >
           <select
-            className="w-full rounded-md border border-border bg-transparent px-2.5 py-1.5 text-sm outline-none"
+            className="w-full rounded-md border border-border bg-transparent px-2.5 py-1.5 text-sm outline-none focus-visible:border-ring focus-visible:ring-ring/50 focus-visible:ring-(length:--rad-3)"
             value={collisionStrategy}
             disabled={importMutation.isPending}
             onChange={(e) => {

@@ -10929,7 +10929,7 @@
         },
         {
           "path": "ui/src/pages/IssueDetail.tsx",
-          "sha256": "2fa0c7388af830553a6d1a259c22824c35ccde9487d4c4a0228cbbba132717ce"
+          "sha256": "4c876067a992361473f5d3ec5de1016622d60ed0b669a6ca0c54ef687bbdb93d"
         }
       ],
       "kind": "safe_change_record",
@@ -12341,7 +12341,7 @@
         },
         {
           "path": "ui/src/pages/IssueDetail.tsx",
-          "sha256": "2fa0c7388af830553a6d1a259c22824c35ccde9487d4c4a0228cbbba132717ce"
+          "sha256": "4c876067a992361473f5d3ec5de1016622d60ed0b669a6ca0c54ef687bbdb93d"
         },
         {
           "path": "ui/src/pages/Pipelines.tsx",
@@ -12751,7 +12751,7 @@
         },
         {
           "path": "ui/src/pages/CompanyImport.tsx",
-          "sha256": "e30657b4674fbcb62d537d187f877ae9a2582312d0c27956de9ad31badcafe2c"
+          "sha256": "b3063dcdde571f5311e8455a6480eb9be76cf16616d979aa5841ffe933355f84"
         }
       ],
       "kind": "safe_change_record",
@@ -12969,11 +12969,11 @@
         },
         {
           "path": "ui/src/pages/Inbox.test.tsx",
-          "sha256": "f1d3f441b55250b3238c33a7f0fe5f951e4fe633dd16eda7ecbfad4e98d3c69b"
+          "sha256": "34b6372f0eec72e90e3708e4e48e2342a39730d6fd62c00b7f7b661b83e60d29"
         },
         {
           "path": "ui/src/pages/Inbox.tsx",
-          "sha256": "c31668b58f7f34564d52e703018e7cad45cd68e05cf8be2ca811d2ba44f13548"
+          "sha256": "5fd36a58c0f0aea24f3da94bc6889f05736d872abdb8b26532bf7dd36b0cc27a"
         }
       ],
       "kind": "safe_change_record",
@@ -32185,11 +32185,11 @@
         },
         {
           "path": "ui/src/i18n/experience/da.json",
-          "sha256": "228aa7e60a1b5d40bdd314badc7a17dabaffe3a97e5093453997f8f5515df2b1"
+          "sha256": "a1b5ca5655fbc9990ea70978d9bb846debd2ad4ed689a1537e61a9b8e3a5af29"
         },
         {
           "path": "ui/src/i18n/experience/en.json",
-          "sha256": "34fe43a721fc99bf145665c5f772c6677ff123b19e1b7b78ecc9d1e14b64923b"
+          "sha256": "7de235cf197e41899c14956da74edbb828a4e52a496282ab1493e5605542fe45"
         },
         {
           "path": "ui/src/i18n/index.ts",
@@ -32680,7 +32680,7 @@
         },
         {
           "path": "doc/operations/agent-native-ui-operation-coverage.json",
-          "sha256": "dedea9c6beb6585f85abf16e08cfb81ca719330410eeacc4b60465056cb0e34a"
+          "sha256": "a5d07d724df2752aa1a107e3735286445488244f591b79c907e1eaf01fef435e"
         },
         {
           "path": "doc/operations/production-hotspot-responsibilities.json",
@@ -32692,7 +32692,7 @@
         },
         {
           "path": "doc/operations/v10-capability-projection.json",
-          "sha256": "0b350163b35d6e4df855877b311e9738a14b70968298ba54ac4cc0fb06d833e8"
+          "sha256": "1540985fe56843eb8af8b094b4a04de134c2fc915bb32823e70dadab85d703df"
         },
         {
           "path": "package.json",
@@ -35817,7 +35817,7 @@
         },
         {
           "path": "ui/src/components/agent-config-primitives.tsx",
-          "sha256": "236a1dd1acb6bc1850fdfee4a188995b8e16d07f2dcfad72f681f5156104802e"
+          "sha256": "e6b2cf12254e576a5ac0f6933850fbe26a25819b0d4787b83f9f71219654ea70"
         },
         {
           "path": "ui/src/components/chat/ExternallyConnectedTaskBanner.tsx",
@@ -35869,7 +35869,7 @@
         },
         {
           "path": "ui/src/index.css",
-          "sha256": "d430d4cc591d090332b1b691a797c1d74bd913b9b75a6580ee69798fe153e969"
+          "sha256": "08e448537a7f6aa486a6ed7ad395c8a013c39f7bdea72da943892c55a243b956"
         },
         {
           "path": "ui/src/lib/import-job-watch.ts",
@@ -35953,7 +35953,7 @@
         },
         {
           "path": "ui/src/pages/CompanyEnvironments.tsx",
-          "sha256": "ac600a77666230472fbeb7f2b798c4f506d8c5d6180231226166c98a08b761a3"
+          "sha256": "108e3c1122c7483d2ee2a802e3f558c9b06b682366c6e42bf07491a8444fde43"
         },
         {
           "path": "ui/src/pages/CompanyExport.test.tsx",
@@ -35977,7 +35977,7 @@
         },
         {
           "path": "ui/src/pages/CompanySettings.tsx",
-          "sha256": "fe6e05de7f9e176e9a23650d613b9896a37fc05faeea3d8d41b6cd486dddbdc6"
+          "sha256": "baf71ff2c36a113620e3624483faf784025ff40ae819011909b566d28ac53aa5"
         },
         {
           "path": "ui/src/pages/CompanySettingsArchive.test.tsx",
@@ -51822,7 +51822,7 @@
       "id": "source:ui/src/pages/IssueDetail.tsx",
       "kind": "current_source_owner",
       "path": "ui/src/pages/IssueDetail.tsx",
-      "sha256": "2fa0c7388af830553a6d1a259c22824c35ccde9487d4c4a0228cbbba132717ce",
+      "sha256": "4c876067a992361473f5d3ec5de1016622d60ed0b669a6ca0c54ef687bbdb93d",
       "changeIds": [
         "SCR-V10-HOTSPOT-10",
         "SCR-V10-HOTSPOT-16"
@@ -52489,7 +52489,7 @@
       "id": "source:ui/src/pages/CompanyImport.tsx",
       "kind": "current_source_owner",
       "path": "ui/src/pages/CompanyImport.tsx",
-      "sha256": "e30657b4674fbcb62d537d187f877ae9a2582312d0c27956de9ad31badcafe2c",
+      "sha256": "b3063dcdde571f5311e8455a6480eb9be76cf16616d979aa5841ffe933355f84",
       "changeIds": [
         "SCR-V10-HOTSPOT-21"
       ],
@@ -52549,7 +52549,7 @@
       "id": "source:ui/src/pages/Inbox.test.tsx",
       "kind": "current_source_owner",
       "path": "ui/src/pages/Inbox.test.tsx",
-      "sha256": "f1d3f441b55250b3238c33a7f0fe5f951e4fe633dd16eda7ecbfad4e98d3c69b",
+      "sha256": "34b6372f0eec72e90e3708e4e48e2342a39730d6fd62c00b7f7b661b83e60d29",
       "changeIds": [
         "SCR-V10-HOTSPOT-24"
       ],
@@ -52564,7 +52564,7 @@
       "id": "source:ui/src/pages/Inbox.tsx",
       "kind": "current_source_owner",
       "path": "ui/src/pages/Inbox.tsx",
-      "sha256": "c31668b58f7f34564d52e703018e7cad45cd68e05cf8be2ca811d2ba44f13548",
+      "sha256": "5fd36a58c0f0aea24f3da94bc6889f05736d872abdb8b26532bf7dd36b0cc27a",
       "changeIds": [
         "SCR-V10-HOTSPOT-24"
       ],
@@ -72810,7 +72810,7 @@
       "id": "source:ui/src/i18n/experience/da.json",
       "kind": "current_source_owner",
       "path": "ui/src/i18n/experience/da.json",
-      "sha256": "228aa7e60a1b5d40bdd314badc7a17dabaffe3a97e5093453997f8f5515df2b1",
+      "sha256": "a1b5ca5655fbc9990ea70978d9bb846debd2ad4ed689a1537e61a9b8e3a5af29",
       "changeIds": [
         "SCR-V10-PRODUCT-IDENTITY-HELP-LANGUAGE"
       ],
@@ -72825,7 +72825,7 @@
       "id": "source:ui/src/i18n/experience/en.json",
       "kind": "current_source_owner",
       "path": "ui/src/i18n/experience/en.json",
-      "sha256": "34fe43a721fc99bf145665c5f772c6677ff123b19e1b7b78ecc9d1e14b64923b",
+      "sha256": "7de235cf197e41899c14956da74edbb828a4e52a496282ab1493e5605542fe45",
       "changeIds": [
         "SCR-V10-PRODUCT-IDENTITY-HELP-LANGUAGE"
       ],
@@ -73080,7 +73080,7 @@
       "id": "source:doc/operations/agent-native-ui-operation-coverage.json",
       "kind": "current_source_owner",
       "path": "doc/operations/agent-native-ui-operation-coverage.json",
-      "sha256": "dedea9c6beb6585f85abf16e08cfb81ca719330410eeacc4b60465056cb0e34a",
+      "sha256": "a5d07d724df2752aa1a107e3735286445488244f591b79c907e1eaf01fef435e",
       "changeIds": [
         "SCR-V10-CI-RELEASE-AND-CATALOG-GOVERNANCE"
       ],
@@ -73125,7 +73125,7 @@
       "id": "source:doc/operations/v10-capability-projection.json",
       "kind": "current_source_owner",
       "path": "doc/operations/v10-capability-projection.json",
-      "sha256": "0b350163b35d6e4df855877b311e9738a14b70968298ba54ac4cc0fb06d833e8",
+      "sha256": "1540985fe56843eb8af8b094b4a04de134c2fc915bb32823e70dadab85d703df",
       "changeIds": [
         "SCR-V10-CI-RELEASE-AND-CATALOG-GOVERNANCE"
       ],
@@ -75960,7 +75960,7 @@
       "id": "source:ui/src/components/agent-config-primitives.tsx",
       "kind": "current_source_owner",
       "path": "ui/src/components/agent-config-primitives.tsx",
-      "sha256": "236a1dd1acb6bc1850fdfee4a188995b8e16d07f2dcfad72f681f5156104802e",
+      "sha256": "e6b2cf12254e576a5ac0f6933850fbe26a25819b0d4787b83f9f71219654ea70",
       "changeIds": [
         "SCR-V10-CUSTOMER-EXPERIENCE"
       ],
@@ -76155,7 +76155,7 @@
       "id": "source:ui/src/index.css",
       "kind": "current_source_owner",
       "path": "ui/src/index.css",
-      "sha256": "d430d4cc591d090332b1b691a797c1d74bd913b9b75a6580ee69798fe153e969",
+      "sha256": "08e448537a7f6aa486a6ed7ad395c8a013c39f7bdea72da943892c55a243b956",
       "changeIds": [
         "SCR-V10-CUSTOMER-EXPERIENCE"
       ],
@@ -76470,7 +76470,7 @@
       "id": "source:ui/src/pages/CompanyEnvironments.tsx",
       "kind": "current_source_owner",
       "path": "ui/src/pages/CompanyEnvironments.tsx",
-      "sha256": "ac600a77666230472fbeb7f2b798c4f506d8c5d6180231226166c98a08b761a3",
+      "sha256": "108e3c1122c7483d2ee2a802e3f558c9b06b682366c6e42bf07491a8444fde43",
       "changeIds": [
         "SCR-V10-CUSTOMER-EXPERIENCE"
       ],
@@ -76560,7 +76560,7 @@
       "id": "source:ui/src/pages/CompanySettings.tsx",
       "kind": "current_source_owner",
       "path": "ui/src/pages/CompanySettings.tsx",
-      "sha256": "fe6e05de7f9e176e9a23650d613b9896a37fc05faeea3d8d41b6cd486dddbdc6",
+      "sha256": "baf71ff2c36a113620e3624483faf784025ff40ae819011909b566d28ac53aa5",
       "changeIds": [
         "SCR-V10-CUSTOMER-EXPERIENCE"
       ],

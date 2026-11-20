@@ -13,9 +13,15 @@ interface PageTabBarProps {
   value?: string;
   onValueChange?: (value: string) => void;
   align?: "center" | "start";
+  /**
+   * Set to false when the tabs only switch a route or filter and no
+   * `TabsContent` panels are rendered. Radix otherwise points each trigger's
+   * `aria-controls` at a panel id that does not exist (WCAG 4.1.2).
+   */
+  hasPanels?: boolean;
 }
 
-export function PageTabBar({ items, value, onValueChange, align = "center" }: PageTabBarProps) {
+export function PageTabBar({ items, value, onValueChange, align = "center", hasPanels = true }: PageTabBarProps) {
   const { isMobile } = useSidebar();
 
   if (isMobile && value !== undefined && onValueChange) {
@@ -41,7 +47,7 @@ export function PageTabBar({ items, value, onValueChange, align = "center" }: Pa
   return (
     <TabsList variant="line" className={align === "start" ? "justify-start" : undefined}>
       {items.map((item) => (
-        <TabsTrigger key={item.value} value={item.value}>
+        <TabsTrigger key={item.value} value={item.value} {...(hasPanels ? {} : { "aria-controls": undefined })}>
           {item.label}
         </TabsTrigger>
       ))}

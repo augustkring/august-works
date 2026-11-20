@@ -4275,5 +4275,11 @@
       "reconciliationPending": "Den sletteansvarlige afklarer et ubekræftet resultat.",
       "exportStorage": "Det oprindelige eksportlager kræver operatørens afklaring."
     }
+  },
+  "controlLabels": {
+    "openAssignedAgent": "Åbn den tildelte agent",
+    "openProject": "Åbn projektet",
+    "hintAbout": "Om {{label}}",
+    "hint": "Mere information"
   }
 }

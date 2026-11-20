@@ -527,8 +527,11 @@ describe("IssueProperties", () => {
     expect(surface?.classList).toContain("pl-4");
     expect(surface?.querySelectorAll('[data-property-section="true"]').length).toBeGreaterThan(1);
     expect(surface?.querySelector('[data-property-value="true"]')).not.toBeNull();
+    // Section headings use full-strength muted text: /70 failed WCAG 1.4.3 (2.71:1).
     expect(surface?.querySelector('[data-property-section="true"] > div')?.classList)
-      .toContain("text-muted-foreground/70");
+      .toContain("text-muted-foreground");
+    expect(surface?.querySelector('[data-property-section="true"] > div')?.classList)
+      .not.toContain("text-muted-foreground/70");
     const projectLabel = surface?.querySelector('[data-property-label="Project"]');
     const labelsLabel = surface?.querySelector('[data-property-label="Labels"]');
     if (!projectLabel || !labelsLabel) throw new Error("Expected Project and Labels rows");

@@ -360,7 +360,7 @@ export function CompanySettings() {
         <div className="space-y-3">
           <Field label="Organization name" hint="The display name for your organization.">
             <input
-              className="w-full rounded-md border border-border bg-transparent px-2.5 py-1.5 text-sm outline-none"
+              className="w-full rounded-md border border-border bg-transparent px-2.5 py-1.5 text-sm outline-none focus-visible:border-ring focus-visible:ring-ring/50 focus-visible:ring-(length:--rad-3)"
               type="text"
               value={companyName}
               onChange={(e) => setCompanyName(e.target.value)}
@@ -377,7 +377,7 @@ export function CompanySettings() {
             hint="Optional description shown in the organization profile."
           >
             <input
-              className="w-full rounded-md border border-border bg-transparent px-2.5 py-1.5 text-sm outline-none"
+              className="w-full rounded-md border border-border bg-transparent px-2.5 py-1.5 text-sm outline-none focus-visible:border-ring focus-visible:ring-ring/50 focus-visible:ring-(length:--rad-3)"
               type="text"
               value={description}
               placeholder="Optional organization description"
@@ -389,7 +389,7 @@ export function CompanySettings() {
             hint={t("company.generalDefaults.languageHint")}
           >
             <select
-              className="w-full rounded-md border border-border bg-transparent px-2.5 py-1.5 text-sm outline-none"
+              className="w-full rounded-md border border-border bg-transparent px-2.5 py-1.5 text-sm outline-none focus-visible:border-ring focus-visible:ring-ring/50 focus-visible:ring-(length:--rad-3)"
               value={locale}
               onChange={(event) => setLocale(event.target.value === "da" ? "da" : "en")}
             >
@@ -402,7 +402,7 @@ export function CompanySettings() {
             hint={t("company.generalDefaults.timezoneHint")}
           >
             <input
-              className="w-full rounded-md border border-border bg-transparent px-2.5 py-1.5 text-sm outline-none"
+              className="w-full rounded-md border border-border bg-transparent px-2.5 py-1.5 text-sm outline-none focus-visible:border-ring focus-visible:ring-ring/50 focus-visible:ring-(length:--rad-3)"
               type="text"
               list="company-timezone-suggestions"
               value={timezone}
@@ -439,13 +439,15 @@ export function CompanySettings() {
               <Field
                 label="Logo"
                 hint="Upload a PNG, JPEG, WEBP, GIF, or SVG logo image."
+                htmlFor="company-logo-file"
               >
                 <div className="space-y-2">
                   <input
+                    id="company-logo-file"
                     type="file"
                     accept="image/png,image/jpeg,image/webp,image/gif,image/svg+xml"
                     onChange={handleLogoFileChange}
-                    className="w-full rounded-md border border-border bg-transparent px-2.5 py-1.5 text-sm outline-none file:mr-4 file:rounded-md file:border-0 file:bg-muted file:px-2.5 file:py-1 file:text-xs"
+                    className="w-full rounded-md border border-border bg-transparent px-2.5 py-1.5 text-sm outline-none focus-visible:border-ring focus-visible:ring-ring/50 focus-visible:ring-(length:--rad-3) file:mr-4 file:rounded-md file:border-0 file:bg-muted file:px-2.5 file:py-1 file:text-xs"
                   />
                   {logoUrl && (
                     <div className="flex items-center gap-2">

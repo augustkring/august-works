@@ -16853,7 +16853,7 @@
         "post:`/companies/${companyId}/labels`"
       ],
       "argumentsSignature": "companyId!, data",
-      "line": 475,
+      "line": 477,
       "occurrence": 0,
       "owner": "server/src/routes/issues.ts",
       "classification": "DIRECT_AGENT",
@@ -16899,7 +16899,7 @@
         "delete:`/issues/${id}/inbox-archive`"
       ],
       "argumentsSignature": "issue.id",
-      "line": 492,
+      "line": 494,
       "occurrence": 0,
       "owner": "server/src/routes/issues.ts",
       "classification": "DIRECT_AGENT",
@@ -16945,7 +16945,7 @@
         "post:`/execution-workspaces/${id}/runtime-commands/${action}`"
       ],
       "argumentsSignature": "workspaceId, request.action, request",
-      "line": 623,
+      "line": 625,
       "occurrence": 0,
       "owner": "server/src/services/execution-workspaces.ts",
       "classification": "DIRECT_AGENT",
@@ -17056,7 +17056,7 @@
         "put:`/issues/${id}/watchdog`"
       ],
       "argumentsSignature": "issue.id, data",
-      "line": 1099,
+      "line": 1101,
       "occurrence": 0,
       "owner": "server/src/routes/issues.ts",
       "classification": "DIRECT_AGENT",
@@ -17112,7 +17112,7 @@
         "delete:`/issues/${id}/watchdog`"
       ],
       "argumentsSignature": "issue.id",
-      "line": 1109,
+      "line": 1111,
       "occurrence": 0,
       "owner": "server/src/routes/issues.ts",
       "classification": "DIRECT_AGENT",

@@ -1,4 +1,5 @@
-import { useState, useRef, useEffect, useCallback } from "react";
+import { Children, cloneElement, isValidElement, useState, useRef, useEffect, useCallback, useId, type ReactElement } from "react";
+import { useTranslation } from "react-i18next";
 import {
   Tooltip,
   TooltipTrigger,
@@ -73,12 +74,15 @@ export const roleLabels = AGENT_ROLE_LABELS as Record<string, string>;
 
 /* ---- Primitive components ---- */
 
-export function HintIcon({ text }: { text: string }) {
+export function HintIcon({ text, label }: { text: string; label?: string }) {
+  const { t } = useTranslation("experience");
+  // Icon-only trigger: name it after the field it explains (WCAG 4.1.2).
+  const name = label ? t("controlLabels.hintAbout", { label }) : t("controlLabels.hint");
   return (
     <Tooltip>
       <TooltipTrigger asChild>
-        <button type="button" className="inline-flex text-muted-foreground/50 hover:text-muted-foreground transition-colors">
-          <HelpCircle className="h-3 w-3" />
+        <button type="button" aria-label={name} className="inline-flex text-muted-foreground/50 hover:text-muted-foreground transition-colors">
+          <HelpCircle className="h-3 w-3" aria-hidden="true" />
         </button>
       </TooltipTrigger>
       <TooltipContent side="top" className="max-w-xs">
@@ -88,14 +92,37 @@ export function HintIcon({ text }: { text: string }) {
   );
 }
 
-export function Field({ label, hint, children }: { label: string; hint?: string; children: React.ReactNode; configSection?: import("../adapters/types").AdapterConfigSection }) {
+const NATIVE_FIELD_CONTROLS = new Set(["input", "select", "textarea"]);
+function isNativeFieldControl(child: React.ReactNode): child is ReactElement<{ id?: string }> {
+  return isValidElement(child) && typeof child.type === "string" && NATIVE_FIELD_CONTROLS.has(child.type);
+}
+
+/**
+ * Programmatically label the field's control (WCAG 1.3.1 / 4.1.2). Pass
+ * `htmlFor` when the control is nested; otherwise the single direct native
+ * input, select or textarea child receives the generated id.
+ */
+export function Field({ label, hint, htmlFor, children }: { label: string; hint?: string; htmlFor?: string; children: React.ReactNode; configSection?: import("../adapters/types").AdapterConfigSection }) {
+  const generatedId = useId();
+  let nativeControlCount = 0;
+  Children.forEach(children, (child) => { if (isNativeFieldControl(child)) nativeControlCount += 1; });
+  const labelDirectControl = !htmlFor && nativeControlCount === 1;
+  let existingControlId: string | undefined;
+  const content = labelDirectControl
+    ? Children.map(children, (child) => {
+      if (!isNativeFieldControl(child)) return child;
+      existingControlId = child.props.id;
+      return existingControlId ? child : cloneElement(child, { id: generatedId });
+    })
+    : children;
+  const controlId = htmlFor ?? (labelDirectControl ? existingControlId ?? generatedId : undefined);
   return (
     <div>
       <div className="flex items-center gap-1.5 mb-1">
-        <label className="text-xs text-muted-foreground">{label}</label>
-        {hint && <HintIcon text={hint} />}
+        <label className="text-xs text-muted-foreground" htmlFor={controlId}>{label}</label>
+        {hint && <HintIcon text={hint} label={label} />}
       </div>
-      {children}
+      {content}
     </div>
   );
 }
@@ -113,17 +140,19 @@ export function ToggleField({
   onChange: (v: boolean) => void;
   toggleTestId?: string;
 }) {
+  const labelId = useId();
   return (
     <div className="flex items-center justify-between">
       <div className="flex items-center gap-1.5">
-        <span className="text-xs text-muted-foreground">{label}</span>
-        {hint && <HintIcon text={hint} />}
+        <span id={labelId} className="text-xs text-muted-foreground">{label}</span>
+        {hint && <HintIcon text={hint} label={label} />}
       </div>
       {/* Gallery feedback r3: was a hand-rolled h-5 w-9 pill with a bg-green-600
           track — the app's second switch implementation. Converged on the one
           canonical ToggleSwitch (status-green on-state), DESIGN.md principle 1. */}
       <ToggleSwitch
         data-testid={toggleTestId}
+        aria-labelledby={labelId}
         checked={checked}
         onCheckedChange={onChange}
       />
@@ -154,14 +183,16 @@ export function ToggleWithNumber({
   numberPrefix?: string;
   showNumber: boolean;
 }) {
+  const labelId = useId();
   return (
     <div className="space-y-2">
       <div className="flex items-center justify-between gap-3">
         <div className="flex items-center gap-1.5">
-          <span className="text-xs text-muted-foreground">{label}</span>
-          {hint && <HintIcon text={hint} />}
+          <span id={labelId} className="text-xs text-muted-foreground">{label}</span>
+          {hint && <HintIcon text={hint} label={label} />}
         </div>
         <ToggleSwitch
+          aria-labelledby={labelId}
           checked={checked}
           onCheckedChange={onCheckedChange}
         />
@@ -176,7 +207,7 @@ export function ToggleWithNumber({
             onChange={(e) => onNumberChange(Number(e.target.value))}
           />
           <span>{numberLabel}</span>
-          {numberHint && <HintIcon text={numberHint} />}
+          {numberHint && <HintIcon text={numberHint} label={numberLabel} />}
         </div>
       )}
     </div>
@@ -454,7 +485,7 @@ export function InlineField({ label, hint, children }: { label: string; hint?: s
     <div className="flex items-center gap-3">
       <div className="flex items-center gap-1.5 shrink-0">
         <label className="text-xs text-muted-foreground">{label}</label>
-        {hint && <HintIcon text={hint} />}
+        {hint && <HintIcon text={hint} label={label} />}
       </div>
       <div className="w-24 ml-auto">{children}</div>
     </div>
