@@ -96,7 +96,11 @@ for (const adapterType of ["process", "paperclip_runner"] as const) {
       }
       expect((await json(await request.get(`/api/issues/${completed.id}`))).status).toBe("done");
       expect((await json(await request.get(`/api/issues/${other.id}`))).status).toBe("blocked");
-      await expect(page.getByRole("button", { name: "Dismiss notification" })).toHaveCount(0);
+      // Name any toast still on screen, so a failure says which notice it was.
+      const toasts = page.getByRole("button", { name: "Dismiss notification" });
+      await expect(toasts, `unexpected toast: ${
+        (await page.locator("[data-slot=toast], [role=status], [role=alert]").allInnerTexts()).join(" | ")
+      }`).toHaveCount(0);
       await expect(readFile(path.join(root, "started"), "utf8")).rejects.toMatchObject({ code: "ENOENT" });
     } finally {
       await request.patch(`/api/companies/${company.id}`, { data: { status: "archived" } });
