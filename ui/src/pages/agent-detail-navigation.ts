@@ -1,5 +1,7 @@
 import { auditSectionHref, type AuditSection } from "./audit/audit-navigation";
 
+import { screenText } from "../i18n/value-labels";
+
 export type AgentDetailView =
   | "overview"
   | "instructions"
@@ -16,32 +18,32 @@ export type AgentDetailView =
 export type AgentLocalDetailView = Exclude<AgentDetailView, "run-detail">;
 
 export const AGENT_DETAIL_NAVIGATION: ReadonlyArray<{
-  label: string;
-  items: ReadonlyArray<{ value: AgentLocalDetailView; label: string }>;
+  readonly label: string;
+  items: ReadonlyArray<{ value: AgentLocalDetailView; readonly label: string }>;
 }> = [
   {
-    label: "Agent",
+    get label() { return screenText("agent.nav.Agent"); },
     items: [
-      { value: "overview", label: "Overview" },
-      { value: "instructions", label: "Instructions" },
-      { value: "skills", label: "Skills" },
+      { value: "overview", get label() { return screenText("agent.nav.overview"); } },
+      { value: "instructions", get label() { return screenText("agent.nav.instructions"); } },
+      { value: "skills", get label() { return screenText("agent.nav.skills"); } },
     ],
   },
   {
-    label: "Runtime",
+    get label() { return screenText("agent.nav.Runtime"); },
     items: [
-      { value: "runtime", label: "Harness / Runtime" },
-      { value: "secrets", label: "Secrets" },
-      { value: "tools", label: "Tools" },
-      { value: "channels", label: "Channels" },
+      { value: "runtime", get label() { return screenText("agent.nav.runtime"); } },
+      { value: "secrets", get label() { return screenText("agent.nav.secrets"); } },
+      { value: "tools", get label() { return screenText("agent.nav.tools"); } },
+      { value: "channels", get label() { return screenText("agent.nav.channels"); } },
     ],
   },
   {
-    label: "Governance",
+    get label() { return screenText("agent.nav.Governance"); },
     items: [
-      { value: "permissions", label: "Permissions / Trust" },
-      { value: "api-keys", label: "API Keys" },
-      { value: "revisions", label: "Revisions" },
+      { value: "permissions", get label() { return screenText("agent.nav.permissions"); } },
+      { value: "api-keys", get label() { return screenText("agent.nav.api-keys"); } },
+      { value: "revisions", get label() { return screenText("agent.nav.revisions"); } },
     ],
   },
 ] as const;
