@@ -9,6 +9,7 @@ import { workflowService } from "../../server/src/services/workflows/workflow-se
 import { grantsForHumanRole } from "../../server/src/services/company-member-roles.ts";
 import { errorHandler } from "../../server/src/middleware/error-handler.ts";
 import { registerEnglishAccountLocaleIsolation } from "./account-locale-isolation";
+import { deleteCompany } from "./company-cleanup";
 
 registerEnglishAccountLocaleIsolation(test);
 const require = createRequire(import.meta.url), axePath = require.resolve("axe-core/axe.min.js");
@@ -108,7 +109,7 @@ test("saved workflow hands an exact reviewed request to the real Native composer
   } finally {
     await new Promise<void>((resolve, reject) => bridge.close(error => error ? reject(error) : resolve()));
     await request.patch("/api/instance/settings/experimental", { data: flags }).catch(() => {});
-    await request.delete(`/api/companies/${company.id}`).catch(() => {});
+    await deleteCompany(request, company.id).catch(() => {});
     await db.delete(authUsers).where(eq(authUsers.id, userId)); await closeRegisteredClients(databaseUrl);
   }
 });

@@ -2,7 +2,7 @@ import express from "express";
 import { createHash, randomUUID } from "node:crypto";
 import request from "supertest";
 import { afterAll, beforeAll, beforeEach, describe, expect, it } from "vitest";
-import { eq } from "drizzle-orm";
+import { eq, sql } from "drizzle-orm";
 import { activityLog, agents, announcementDismissals, announcementPublications, authSessions, authUsers, companies, companyMemberships, createDb, startEmbeddedPostgresTestDatabase, type EmbeddedPostgresTestDatabase } from "@paperclipai/db";
 import { announcementRoutes } from "../routes/announcements.js";
 import { announcementService } from "../services/announcements.js";
@@ -103,6 +103,43 @@ describe("announcement routes and durable dismissals", () => {
       .get(`/api/companies/${companyId}/notices/action-required`).query({ expectedUserId: "alice" });
     expect(reversedResponse.body.modelNotices).toHaveLength(1);
     expect(reversedResponse.body.modelNotices[0]).toMatchObject({ id: notices[0].id, effectiveAt: notices[0].effectiveAt });
+  });
+  it("projects required notices without deadlocking a concurrent authenticator rotation (NOTICE-500)", async () => {
+    // Native 2FA/passkey rotation locks the user row FOR UPDATE, then replaces
+    // the session row. A page-load projection that share-locks session then
+    // user forms a lock cycle; Postgres aborts it (40P01) and the page saw 500.
+    const actor = { type: "board", userId: "alice", source: "session", sessionId, companyIds: [companyId],
+      memberships: [{ companyId, membershipRole: "owner", status: "active" }] };
+    let release!: () => void;
+    let signalLocked!: () => void;
+    const released = new Promise<void>(resolve => { release = resolve; });
+    const locked = new Promise<void>(resolve => { signalLocked = resolve; });
+    const rotation = db.transaction(async tx => {
+      await tx.select({ id: authUsers.id }).from(authUsers).where(eq(authUsers.id, "alice")).for("update");
+      signalLocked();
+      await released;
+      await tx.update(authSessions).set({ updatedAt: new Date() }).where(eq(authSessions.id, sessionId));
+    });
+    await locked;
+    let settled = false;
+    const pending = request(app("alice", actor)).get(`/api/companies/${companyId}/notices/action-required`)
+      .query({ expectedUserId: "alice" }).then(response => { settled = true; return response; });
+    try {
+      const deadline = Date.now() + 10_000;
+      let waiting = 0;
+      while (!settled && waiting === 0 && Date.now() < deadline) {
+        const [row] = await db.execute<{ count: number }>(sql`select count(*)::int as count from pg_stat_activity
+          where datname=current_database() and pid<>pg_backend_pid() and wait_event_type='Lock'`);
+        waiting = row?.count ?? 0;
+        if (!waiting) await new Promise(resolve => setTimeout(resolve, 25));
+      }
+    } finally {
+      release();
+    }
+    const [projection, rotated] = await Promise.allSettled([pending, rotation]);
+    expect(rotated.status).toBe("fulfilled");
+    expect(projection.status === "fulfilled" ? projection.value.status : projection.reason).toBe(200);
+    expect(projection.status === "fulfilled" ? projection.value.body : null).toMatchObject({ notices: [] });
   });
   it("serves animation documents with a sandbox and network-denying CSP", async () => {
     const html = "<div>Team</div>";

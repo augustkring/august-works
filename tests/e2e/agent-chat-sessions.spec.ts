@@ -1,5 +1,7 @@
 import {randomUUID} from "node:crypto";
 import {readFile} from "node:fs/promises";
+import {readFileSync} from "node:fs";
+import {createRequire} from "node:module";
 import path from "node:path";
 import {eq,sql} from "../../server/node_modules/drizzle-orm/index.js";
 import {createDb,memoryRecords,analyticalContextRoots,analyticalContextDependencies,contextManifestMemoryRoots,contextManifests,heartbeatRuns,heartbeatRunEvents,issues,nativeRunFinalizations,nativeRunResults,workspaceOperations,businessMetricObservations,businessMetricVersions} from "../../packages/db/src/index.ts";
@@ -753,6 +755,75 @@ test("Stop then queued /new resets unpause the conversation without losing histo
         .every((run) => !run.sessionIdAfter),
     ).toBe(true);
   } finally {
+    await f.restore();
+  }
+});
+
+// STOP-DA1 (Phase 5 gap 4): the same real running-run Stop as above, in
+// Danish. The control is found by its name in the Danish catalogue; the run's
+// cancellation and the absence of any continuation are read from the API.
+const danishComposer = (JSON.parse(readFileSync(path.resolve("ui/src/i18n/experience/da.json"), "utf8")) as {
+  screens: { composer: { stop: string; stopResponse: string } };
+}).screens.composer;
+const axePath = createRequire(import.meta.url).resolve("axe-core/axe.min.js");
+
+test("Danish Stop cancels the running reply and starts no continuation", async ({
+  page,
+  request,
+}) => {
+  const f = await setup(request, page);
+  request = f.request;
+  const session = await json(await request.get("/api/auth/get-session"));
+  const expectedUserId: string = session.user.id;
+  const preferences = await json(await request.get(`/api/auth/preferences?expectedUserId=${encodeURIComponent(expectedUserId)}`));
+  try {
+    await json(await request.patch("/api/auth/preferences", { data: { expectedUserId, locale: "da" } }));
+    await page.addInitScript(() => window.localStorage.setItem("aw.v9.display-locale", "da"));
+    await page.goto(f.route);
+    await expect(page.locator("html")).toHaveAttribute("lang", "da");
+    await send(page, { action: "hold" });
+    let issue: any;
+    await expect
+      .poll(async () => {
+        issue = await json(await request.get(f.chatPath));
+        return Boolean(issue) && (
+          await json(await request.get(`/api/issues/${issue.id}/comments`))
+        ).some((c: any) => c.body === "Provider is streaming and ready to stop.");
+      })
+      .toBe(true);
+    const [active] = await json(await request.get(`/api/issues/${issue.id}/live-runs`));
+    expect(active, "a run is in flight before Stop").toBeTruthy();
+    const stop = page.getByRole("button", { name: danishComposer.stop, exact: true });
+    await expect(stop).toHaveAttribute("title", danishComposer.stopResponse);
+    await page.addScriptTag({ path: axePath });
+    const violations = await page.evaluate(async () => (await (window as unknown as {
+      axe: { run(scope: string, options: unknown): Promise<{ violations: { id: string }[] }> };
+    }).axe.run("main", { runOnly: { type: "tag", values: ["wcag2a", "wcag2aa", "wcag21a", "wcag21aa"] } })).violations.map((v) => v.id));
+    expect(violations, "WCAG 2.1 A/AA violations on the Danish chat with Stop").toEqual([]);
+    await stop.click();
+    await expect
+      .poll(async () => (await json(await request.get(`/api/heartbeat-runs/${active.id}`))).status)
+      .toBe("cancelled");
+    await expect.poll(async () => json(await request.get(`/api/issues/${issue.id}/live-runs`))).toEqual([]);
+    // No continuation: over the next scheduler intervals no new run starts for
+    // this agent and no reply is added after the streaming one.
+    const runIds = async () => (await json(await request.get(`/api/companies/${f.company.id}/heartbeat-runs`)))
+      .filter((run: any) => run.agentId === f.agent.id).map((run: any) => run.id).sort();
+    const before = await runIds();
+    expect(before).toContain(active.id);
+    const comments = async () => (await json(await request.get(`/api/issues/${issue.id}/comments`)))
+      .filter((comment: any) => comment.authorAgentId === f.agent.id).length;
+    const commentCount = await comments();
+    for (const deadline = Date.now() + 12_000; Date.now() < deadline;) {
+      await new Promise((resolve) => setTimeout(resolve, 1_000));
+      expect(await runIds(), "no continuation run starts after Danish Stop").toEqual(before);
+      expect(await json(await request.get(`/api/issues/${issue.id}/live-runs`))).toEqual([]);
+    }
+    expect(await comments(), "the agent adds no reply after Danish Stop").toBe(commentCount);
+    expect((await json(await request.get(`/api/heartbeat-runs/${active.id}`))).status).toBe("cancelled");
+    await expect(page.getByRole("button", { name: danishComposer.stop, exact: true })).toHaveCount(0);
+  } finally {
+    await request.patch("/api/auth/preferences", { data: { expectedUserId, locale: preferences.locale ?? null } });
     await f.restore();
   }
 });

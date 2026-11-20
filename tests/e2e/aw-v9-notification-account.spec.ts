@@ -1,6 +1,7 @@
 import { createRequire } from "node:module";
 import { expect, test, type APIResponse } from "@playwright/test";
 import { registerEnglishAccountLocaleIsolation } from "./account-locale-isolation";
+import { deleteCompany } from "./company-cleanup";
 registerEnglishAccountLocaleIsolation(test);
 const axePath = createRequire(import.meta.url).resolve("axe-core/axe.min.js");
 async function json(response: APIResponse) {
@@ -71,5 +72,5 @@ test("private notification updates wait for the current account and a fresh orig
     const runs = await json(await request.get(`${base}/heartbeat-runs`));
     expect(Array.isArray(runs) ? runs : runs.items).toEqual([]);
     await page.screenshot({ path: info.outputPath("v9-notification-account-mobile.png"), fullPage: true });
-  } finally { await json(await request.delete(`/api/companies/${company.id}`)); }
+  } finally { await json(await deleteCompany(request, company.id)); }
 });

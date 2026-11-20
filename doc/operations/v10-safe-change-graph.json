@@ -4461,7 +4461,7 @@
         },
         {
           "path": "server/src/app.ts",
-          "sha256": "055d5edd13a88bc5a5207ba5879f5604ea95045f2843dab163e8335febc4e9d7"
+          "sha256": "5fef59a8b7fc1d14b2065953ee3d7459156d725016d6757d76288799f0d1f00a"
         },
         {
           "path": "server/src/routes/agents.ts",
@@ -4473,7 +4473,7 @@
         },
         {
           "path": "server/src/routes/issues.ts",
-          "sha256": "a1a9919d5ae3c714e751d18d20b202d5162ee7abc325f21bb15a3f021cd08718"
+          "sha256": "e842fd22e27faf5fce1941426964fd0de822deb802f8a64c08a6772d536fd2af"
         },
         {
           "path": "server/src/services/agent-runtime-fabric.ts",
@@ -5799,7 +5799,7 @@
         },
         {
           "path": "server/src/app.ts",
-          "sha256": "055d5edd13a88bc5a5207ba5879f5604ea95045f2843dab163e8335febc4e9d7"
+          "sha256": "5fef59a8b7fc1d14b2065953ee3d7459156d725016d6757d76288799f0d1f00a"
         },
         {
           "path": "server/src/routes/access.ts",
@@ -6331,7 +6331,7 @@
         },
         {
           "path": "server/src/app.ts",
-          "sha256": "055d5edd13a88bc5a5207ba5879f5604ea95045f2843dab163e8335febc4e9d7"
+          "sha256": "5fef59a8b7fc1d14b2065953ee3d7459156d725016d6757d76288799f0d1f00a"
         },
         {
           "path": "server/src/routes/access.ts",
@@ -7247,11 +7247,11 @@
         },
         {
           "path": "server/src/app.ts",
-          "sha256": "055d5edd13a88bc5a5207ba5879f5604ea95045f2843dab163e8335febc4e9d7"
+          "sha256": "5fef59a8b7fc1d14b2065953ee3d7459156d725016d6757d76288799f0d1f00a"
         },
         {
           "path": "server/src/routes/issues.ts",
-          "sha256": "a1a9919d5ae3c714e751d18d20b202d5162ee7abc325f21bb15a3f021cd08718"
+          "sha256": "e842fd22e27faf5fce1941426964fd0de822deb802f8a64c08a6772d536fd2af"
         },
         {
           "path": "server/src/services/company-search.ts",
@@ -7642,7 +7642,7 @@
         },
         {
           "path": "server/src/routes/issues.ts",
-          "sha256": "a1a9919d5ae3c714e751d18d20b202d5162ee7abc325f21bb15a3f021cd08718"
+          "sha256": "e842fd22e27faf5fce1941426964fd0de822deb802f8a64c08a6772d536fd2af"
         },
         {
           "path": "server/src/services/chat-channels.ts",
@@ -9216,7 +9216,7 @@
         },
         {
           "path": "server/src/routes/issues.ts",
-          "sha256": "a1a9919d5ae3c714e751d18d20b202d5162ee7abc325f21bb15a3f021cd08718"
+          "sha256": "e842fd22e27faf5fce1941426964fd0de822deb802f8a64c08a6772d536fd2af"
         },
         {
           "path": "server/src/routes/pipelines.ts",
@@ -10265,7 +10265,7 @@
         },
         {
           "path": "server/src/app.ts",
-          "sha256": "055d5edd13a88bc5a5207ba5879f5604ea95045f2843dab163e8335febc4e9d7"
+          "sha256": "5fef59a8b7fc1d14b2065953ee3d7459156d725016d6757d76288799f0d1f00a"
         },
         {
           "path": "server/src/routes/plugins.ts",
@@ -10824,7 +10824,7 @@
         },
         {
           "path": "server/src/app.ts",
-          "sha256": "055d5edd13a88bc5a5207ba5879f5604ea95045f2843dab163e8335febc4e9d7"
+          "sha256": "5fef59a8b7fc1d14b2065953ee3d7459156d725016d6757d76288799f0d1f00a"
         },
         {
           "path": "server/src/middleware/auth.ts",
@@ -12062,7 +12062,7 @@
         },
         {
           "path": "server/src/routes/companies.ts",
-          "sha256": "76cfb993edac7ce27bcae130404f682e371f59324fd365812a8f8b29b1417ec6"
+          "sha256": "35997cc99f6ae43fe896c217d0145879803bfd637cb670dfc929f247c1e7c814"
         },
         {
           "path": "server/src/services/company-import-jobs.ts",
@@ -12572,7 +12572,7 @@
         },
         {
           "path": "ui/src/pages/AgentDetail.tsx",
-          "sha256": "9d1a4e559740061a45ac36a3735b4e6c85996f407fbd4e3bb4fbd3827460a554"
+          "sha256": "44a2377bd341bc0e52344dfa46705e2a6f677b1022347c402967066a1c7c2d6b"
         }
       ],
       "kind": "safe_change_record",
@@ -12731,7 +12731,7 @@
       "sources": [
         {
           "path": "ui/src/components/AgentConfigForm.tsx",
-          "sha256": "f8294a0f02e39b5115f4797184968a104c09e56a04f59f58aaa783c2083c47f1"
+          "sha256": "c82f9de218be70eba84c68f6efed34567d7631ae39b55c5216935eeb82eea852"
         },
         {
           "path": "ui/src/components/OnboardingWizard.tsx",
@@ -12739,7 +12739,7 @@
         },
         {
           "path": "ui/src/components/new-agent/NewAgentSetup.tsx",
-          "sha256": "824483c42ed16c30adb246991d0472978d94c81761d3c202c084a8f90b14c57b"
+          "sha256": "4e30dc3f473fb15ec69f8617c41b892fe55994320a51a23bc3db51f2397b22ca"
         },
         {
           "path": "ui/src/pages/AgentDetail.production.tsx",
@@ -12747,7 +12747,7 @@
         },
         {
           "path": "ui/src/pages/AgentDetail.tsx",
-          "sha256": "9d1a4e559740061a45ac36a3735b4e6c85996f407fbd4e3bb4fbd3827460a554"
+          "sha256": "44a2377bd341bc0e52344dfa46705e2a6f677b1022347c402967066a1c7c2d6b"
         },
         {
           "path": "ui/src/pages/CompanyImport.tsx",
@@ -13992,11 +13992,11 @@
         },
         {
           "path": "tests/e2e/aw-v9-workflow-draft-step.spec.ts",
-          "sha256": "f628da4cb6a46db52d6e3ae1d2b85be618dd867af39b1e2a15da0c90ba729388"
+          "sha256": "22379b73549713e4bc5784d752f46ddbfce6f88ee1cba34fdd7549bf9dca20cc"
         },
         {
           "path": "tests/e2e/aw-v9-workflow-intent.spec.ts",
-          "sha256": "dd3372276d80383cb164a0c83a13cd7819b0074c03724b2bfc8c217db888b4d6"
+          "sha256": "a808093ad2b1846f3a07f55a785f55527edf21b5824a43ebbb498aaf309bd4fc"
         },
         {
           "path": "tests/e2e/aw-v9-workflow-publication.spec.ts",
@@ -14008,11 +14008,11 @@
         },
         {
           "path": "tests/e2e/aw-v9-workflow-request-recovery.spec.ts",
-          "sha256": "a4f4e00968d6aff6a9b71df0fff7eabec913d34f2974fe866425476650a48b3e"
+          "sha256": "da4c2ac6e0ca499d96e1ede8fef6128408729a303ebf9d310251543dee322b1a"
         },
         {
           "path": "tests/e2e/aw-v9-workflow-retained-stop.spec.ts",
-          "sha256": "fc707f299c6b23a53f7e452a212e9b916d4a2c88fc312346d0d14b309c3505d1"
+          "sha256": "646bc420dc854e2af052a8b74c1ac73ddf9cad51572404f9542f7d6c26f1cafa"
         },
         {
           "path": "tests/e2e/aw-v9-workflow-stop.spec.ts",
@@ -14024,7 +14024,7 @@
         },
         {
           "path": "tests/e2e/aw-v9-workflow-tool-decision.spec.ts",
-          "sha256": "9dbee9b7981aec9b233741c8388c773bf72cdd12f457e2f8d420cf0548572481"
+          "sha256": "1558cc84727f836dcf3c243d7f4c23d10741bcbcaf794999c6c33ab57bf8c09f"
         },
         {
           "path": "ui/src/components/RoutineHistoryTab.tsx",
@@ -14827,7 +14827,7 @@
         },
         {
           "path": "server/src/__tests__/announcements-routes.test.ts",
-          "sha256": "27579bcc513b33ede06da7e0b3b4e5a1b50f92fcd90c3dd331f896040de563c5"
+          "sha256": "71deb489f45c4f64afe38851da1087d710eccef2ce97a73aed8635611c97b931"
         },
         {
           "path": "server/src/__tests__/service-health-routes.test.ts",
@@ -14859,7 +14859,7 @@
         },
         {
           "path": "server/src/routes/announcements.ts",
-          "sha256": "9ccbaaed32ae26f22e2e730353db10c18e7b615060f0ece723814e626246fc92"
+          "sha256": "759d0a7346cb6f8e30ff37d12ab7419e132d42252006d0c49a20fb9f0fec0a84"
         },
         {
           "path": "server/src/routes/customer-support.ts",
@@ -14947,7 +14947,7 @@
         },
         {
           "path": "server/src/services/trust-documents.ts",
-          "sha256": "76f0cec023ae7781f45b7938871a8c24f5d2c35f944b1ce1a46dc203cc5d0257"
+          "sha256": "666bab7645d45f3d4c9c2e6189d933547a7080fe4885f85cfd62d86edb8db972"
         },
         {
           "path": "skills-releases/blentera-platform/v1/references/support-and-service-status.md",
@@ -16158,7 +16158,7 @@
         },
         {
           "path": "server/src/__tests__/companies-route-cross-company-authz.test.ts",
-          "sha256": "101c80c692d3589375e99150ab909529dcaefc3d11e92cca0484ae110dc849d9"
+          "sha256": "105cd85f70cffbd9b9e907b9af6318c39aea6d6833554f73dba33e1d6c00265c"
         },
         {
           "path": "server/src/__tests__/company-offboarding-revoke-lease.integration.test.ts",
@@ -16366,7 +16366,7 @@
         },
         {
           "path": "tests/e2e/aw-v10-native-auth.spec.ts",
-          "sha256": "6483e96b8f24a9403dab9e0de87a82657ad0799fb03e55c3501b52511e58a79b"
+          "sha256": "ebafa9e4568bf92a66898132bce30eac9c521dba80267de259f72f705aa2cd2d"
         },
         {
           "path": "tests/e2e/aw-v5-authenticated.config.ts",
@@ -16382,7 +16382,7 @@
         },
         {
           "path": "tests/e2e/aw-v9-conversation-authoring.spec.ts",
-          "sha256": "25cce07c6223062091cdb6e35aded3859989532bf09854f8594b293afbfa0e89"
+          "sha256": "eabce969950c2e038a66947288e41cded925baa028e758f12a79dd037a3b262d"
         },
         {
           "path": "tests/e2e/aw-v9-password-reset.spec.ts",
@@ -16434,11 +16434,11 @@
         },
         {
           "path": "ui/src/pages/Auth.test.tsx",
-          "sha256": "a133e672562820a1ea94f2a2705ac4385d2d03eff45e831b18a0684f067e5c19"
+          "sha256": "fca479ff2b94fb03e7c72291278a038b668e03634dc94a0b3141e3e323448db6"
         },
         {
           "path": "ui/src/pages/Auth.tsx",
-          "sha256": "50a391c98431cf735bc349a531a8e566760993077a1c2e112eba2d0cc6f1f721"
+          "sha256": "1011b6d53e9a98a2b32f46aec437da8405a96f40c82af0bcacc94f9decc8adde"
         },
         {
           "path": "ui/src/pages/CliAuth.tsx",
@@ -16446,11 +16446,11 @@
         },
         {
           "path": "ui/src/pages/InviteLanding.test.tsx",
-          "sha256": "1f5a4e81b77a21e841e4ccd4ef6a03b88a246a51c35ce732985eee359cca10d5"
+          "sha256": "9ad2c91a5519f75f463617f900b06d5018933116538c0d9cd450a80e02ac4af0"
         },
         {
           "path": "ui/src/pages/InviteLanding.tsx",
-          "sha256": "4499156a46a83c1263758a38286002f934113e8f6f5159ed9f484abb6d8520fb"
+          "sha256": "05bac73cfb78fae9da26a3c0af430e29c7e221f6c3915bfe060a077540ccf2c8"
         },
         {
           "path": "ui/src/pages/InviteUxLab.tsx",
@@ -17169,7 +17169,7 @@
         },
         {
           "path": "tests/e2e/aw-v9-account-security.spec.ts",
-          "sha256": "6510d1ae66760a16b3aa0221d20b2c87ab95fc6fdeb8f5793e28806b5c58f82a"
+          "sha256": "467b8cbe91371f41ef91e69507363e02e6f6d24d6a198c96902033c9b0673ed4"
         },
         {
           "path": "ui/src/pages/audit/AuditFeed.production.tsx",
@@ -21460,7 +21460,7 @@
         },
         {
           "path": "tests/e2e/aw-v9-feedback-retention-erasure.spec.ts",
-          "sha256": "47fa051db1732c311df0f9339755d9d010ba9fd6dce14a6cf529a902cd4e8db3"
+          "sha256": "8498eaefe289659e9304fc4a9ce5590e713e890a0eba79623d9ecf147062a58a"
         },
         {
           "path": "tests/e2e/aw-v9-memory-maintenance-attention.spec.ts",
@@ -25334,7 +25334,7 @@
         },
         {
           "path": "tests/e2e/aw-v9-runtime-candidates.spec.ts",
-          "sha256": "f2efcd79b67da955df43a5c9aacce1c9947e9b9be4a81f39b2836d20810de8f0"
+          "sha256": "4e791b45dbbc06acbf41cf206fff350047f3131687be277d2c60dcacc4c4e628"
         },
         {
           "path": "tests/e2e/aw-v9-runtime-recovery.spec.ts",
@@ -25342,7 +25342,7 @@
         },
         {
           "path": "tests/e2e/fixtures/assert-unqualified-runtime.ts",
-          "sha256": "a0b31b1fe125d886e2f1ae37d554c80a5a118293409f05a7e26253dea460f71e"
+          "sha256": "a4342e082df0fc0e318694a1087c2a492b0a5aad1d440b5d79aa559c63e1b3df"
         },
         {
           "path": "third_party/openshell/rt01/metadata.json",
@@ -28633,7 +28633,7 @@
         },
         {
           "path": "tests/e2e/aw-v9-agent-publication.spec.ts",
-          "sha256": "968d283f4b62bb86e768baee3fe65136223c453cd4f801aab07e9c2982710cdb"
+          "sha256": "8f434065b36df6fa401ed31c57aa920b9eeab1c44ad5a1857bee51f782975fcf"
         },
         {
           "path": "ui/src/components/AgentDraftPublication.test.tsx",
@@ -29135,7 +29135,7 @@
         },
         {
           "path": "packages/shared/src/index.ts",
-          "sha256": "8ab6cf911d4a99e463331f31359cba08e174f18a96a80336863aa78255773038"
+          "sha256": "e1edda0f596e49d03db7af8c6a086041be4752462f30f8d1c8107038503d52ef"
         },
         {
           "path": "packages/shared/src/orchestration.ts",
@@ -29235,11 +29235,11 @@
         },
         {
           "path": "packages/shared/src/validators/company.ts",
-          "sha256": "41775e77c7235c5cbf734b030578eaf4dd39fb507b5215436126f8985ae67967"
+          "sha256": "808342866fbcbbbff04daee28ce77f432c90a66329799a55a84ad235ee5f8c24"
         },
         {
           "path": "packages/shared/src/validators/index.ts",
-          "sha256": "8e1f50a414224b6cc4ee1194e61d9769eda376c8de439af666199811f223b9b5"
+          "sha256": "e63c52c1bad2592256de04e3d864bb71a00093acf04ec0a71edc6fd925e6dd37"
         },
         {
           "path": "packages/shared/src/validators/instance.ts",
@@ -29696,7 +29696,7 @@
         },
         {
           "path": "tests/e2e/aw-v9-feedback-images.spec.ts",
-          "sha256": "67c09e643841e50783e7f26410c05e178b7a43141ae7deda7974c0be80a74d8c"
+          "sha256": "2965c30614c66865507b1bbcddabacb7e09211e05a7260da07758ca62dfa3f2e"
         },
         {
           "path": "ui/src/components/CustomerFeedbackDialog.test.tsx",
@@ -31713,7 +31713,7 @@
         },
         {
           "path": "cli/src/client/http.ts",
-          "sha256": "0902b2511c5a36578d210d97c2130aea6195fe2c4048b0dcadca73a775df7c13"
+          "sha256": "438ac286eef2ecaae8a813bb87fcd94ac524f5fd76a0a556470f485f5042d74d"
         },
         {
           "path": "cli/src/commands/channels.ts",
@@ -31729,7 +31729,7 @@
         },
         {
           "path": "cli/src/commands/client/company.ts",
-          "sha256": "8553c79050f68ebaf0a8bf6433776105abf8aa74f40c31fe6bf0efec547eb0c4"
+          "sha256": "883cd0393e4896af9825771b4a346976fea653c3195583b5e4d5543ad17ac8c7"
         },
         {
           "path": "cli/src/commands/client/connect.ts",
@@ -31785,7 +31785,7 @@
         },
         {
           "path": "cli/src/commands/test-drive.ts",
-          "sha256": "96ec8b7216283e3f46cd8b5b5244dc353fb5c020ee9b8b4677a7f9ebc0e40405"
+          "sha256": "c464ccbb2ffee6653a6f6e3f9ca8203f8450e2b28ad8b8f86b48c2c4912292d8"
         },
         {
           "path": "cli/src/commands/uninstall.ts",
@@ -31849,7 +31849,7 @@
         },
         {
           "path": "docs/api/companies.md",
-          "sha256": "4428c610ec1f12d52896724aa0a69fea08450062f9ffabda1d30076dbbf03137"
+          "sha256": "aa78ac90ac01bfb75e5d57dbc2e0b577fc79d80859480aa5ab707262aab9b5f4"
         },
         {
           "path": "docs/api/issues.md",
@@ -32121,7 +32121,7 @@
         },
         {
           "path": "server/src/services/company-search-help.generated.ts",
-          "sha256": "fcec4f2eba7a1ff795825af6d07f195f40f52b9ef012844260f7f3e87123ddda"
+          "sha256": "933fd28347428742046836ab278e108d3427cf2f0ab8c16a221c3bd4264a189c"
         },
         {
           "path": "server/src/services/task-search.ts",
@@ -32133,7 +32133,7 @@
         },
         {
           "path": "tests/e2e/aw-v9-language.spec.ts",
-          "sha256": "7ddbf4a0985a59af6e86552cd3ec39a5ed7e7f50c753fb618de5efe5fe3b291b"
+          "sha256": "eed0fbffadc33c35a7e6296f73e11a4d27a218b95fe856668bb2b46ce754aec3"
         },
         {
           "path": "ui/public/announcement-preview.svg",
@@ -32153,7 +32153,7 @@
         },
         {
           "path": "ui/src/components/ExperienceLanguageSelect.tsx",
-          "sha256": "ad5793e8a1fb04b11504a502e40eacec5da06c15ceb7bc3613d187c9e1087261"
+          "sha256": "94af8861d76cc6ccbf81435d6ac20a6ac6e66a1dc0bb096d750b9611179bb2c7"
         },
         {
           "path": "ui/src/components/SearchableSelect.test.tsx",
@@ -32185,11 +32185,11 @@
         },
         {
           "path": "ui/src/i18n/experience/da.json",
-          "sha256": "3902a0343e6f770e6064c04e6627d4b275c49ba2db9d1389682a9afc9da512de"
+          "sha256": "571364a5dd2a4c964e40bee6a8d461115ee66e6d14234c9f53b5f64d724fb0b3"
         },
         {
           "path": "ui/src/i18n/experience/en.json",
-          "sha256": "a3458841e8e727b7f658ee5860ce3c59813284b5a6835461fc9c615981cd7796"
+          "sha256": "3e8e42465ffbde5a5faa6079e49c783fb93a892a846a097c1fc3f8005a20b00b"
         },
         {
           "path": "ui/src/i18n/index.ts",
@@ -32680,7 +32680,7 @@
         },
         {
           "path": "doc/operations/agent-native-ui-operation-coverage.json",
-          "sha256": "54467a547f097e7d078d4604ea5ceddd9da8aaffe5e5c8deb9464b7ab985f863"
+          "sha256": "9580af0d66cef09cb3094b79d78e0df26ec3c7e9419bc68a920c904ce3312194"
         },
         {
           "path": "doc/operations/production-hotspot-responsibilities.json",
@@ -32692,7 +32692,7 @@
         },
         {
           "path": "doc/operations/v10-capability-projection.json",
-          "sha256": "f8084c89c611fff3967e94f2b826ab01e8e05352ab0b64eab24f2fa916690173"
+          "sha256": "5b509bbf421b18b42ae19025e97a23d560545ba977ffd23c8f0c83afb1c7914a"
         },
         {
           "path": "package.json",
@@ -32808,7 +32808,7 @@
         },
         {
           "path": "scripts/refresh-aw-v10-operation-coverage.mjs",
-          "sha256": "f0c777e631f78d967b41efd09b63ba6021ee638aeea33f4216c6d5f1299b2a17"
+          "sha256": "386a4bb6a21899dd314ae16df58adf3ddd9893b5abb9841c1a00c4faf8d0af27"
         },
         {
           "path": "scripts/refresh-aw-v10-operation-coverage.test.mjs",
@@ -33037,11 +33037,11 @@
         },
         {
           "path": "tests/e2e/aw-v9-first-value.spec.ts",
-          "sha256": "960677dc82ca6b1955195c77aa87228be34e8300ce2f15c0a30885ec48c3cfd3"
+          "sha256": "b2a9f3b9b2e329fa91b439ae1e4e7d3745022c969c2ae78e77e1deae33708878"
         },
         {
           "path": "tests/e2e/aw-v9-onboarding-permission-consent.spec.ts",
-          "sha256": "7ef267775bbe2f9df11f93bbcd3511b5756baffaf3fd3fbad4f9c39d98feed88"
+          "sha256": "4256728d86d3688b5f6151fec28c74a9ea5c4d48692a198f9be95f37eeeed06c"
         },
         {
           "path": "ui/src/features/connections/activation-permission-statements.test.ts",
@@ -33407,7 +33407,7 @@
         },
         {
           "path": "ui/src/api/companies.ts",
-          "sha256": "229ba77be6dcd363c0b0e3cbc2564f1041851c55be5e35309c19c4ab7e28ab31"
+          "sha256": "95c7d11e0043a0e34e3b5d5fcf059d69e5bdfdf4797916e0cf46593ef1ebd310"
         },
         {
           "path": "ui/src/api/customer-feedback.ts",
@@ -35365,7 +35365,7 @@
         },
         {
           "path": "tests/e2e/agent-chat-sessions.spec.ts",
-          "sha256": "40288634b218ab56b7f914474b19d70dcebed820e66021a6f319878b2151e384"
+          "sha256": "b3b249986058484ca1b8399839c4dc4c7c0d22e59ced6fb479a5cac0e0fe429f"
         },
         {
           "path": "tests/e2e/agent-chat.shared.ts",
@@ -35393,7 +35393,7 @@
         },
         {
           "path": "tests/e2e/aw-v9-current-account.spec.ts",
-          "sha256": "268956205f113e20ed46bfe01547da5eea49b5eed8c13cade01b4444e55acee7"
+          "sha256": "11218975eb4d0e08bd72b2aaefa3e878d408e0c1d552719dbd051578e9000f13"
         },
         {
           "path": "tests/e2e/aw-v9-experience-focus.spec.ts",
@@ -35401,11 +35401,11 @@
         },
         {
           "path": "tests/e2e/aw-v9-experience.spec.ts",
-          "sha256": "fbdec1b8e106405394126db59ef5686c6ea5be54ea04ca028af5f77e31d05d53"
+          "sha256": "a0ed5e145ad6c70b77649fb41bb870c5e67f2867fde4531478609997826df2e8"
         },
         {
           "path": "tests/e2e/aw-v9-first-task.spec.ts",
-          "sha256": "b5afe22aeb2d87b382c15c6fb0ef6cea2dcf08d75b9a0569907ab513a9ac7bb0"
+          "sha256": "6d309e12d633356fa8fc57e71b586ce7a6e089b3cac3617307a153d8af68e22e"
         },
         {
           "path": "tests/e2e/aw-v9-insight-management-reviews.spec.ts",
@@ -35433,7 +35433,7 @@
         },
         {
           "path": "tests/e2e/aw-v9-notification-account.spec.ts",
-          "sha256": "e3242cd96836f9e033c27583ba37ac9e611cdf0a59639909adafa5299d10116f"
+          "sha256": "366b41875a77579391c0b188e7ae5d7bcaad077360ec10bc4197edeca6f82735"
         },
         {
           "path": "tests/e2e/aw-v9-notification-channels.spec.ts",
@@ -35441,7 +35441,7 @@
         },
         {
           "path": "tests/e2e/aw-v9-orchestration-control.spec.ts",
-          "sha256": "57f100b529051257df85b21bb912cc483b429efdbdeaa50a5027eddd766e65eb"
+          "sha256": "08b97f4926fd10d931572c166c526a7c9be1dd2ef49a023cb47a597985d9d33d"
         },
         {
           "path": "tests/e2e/aw-v9-package-current-account.spec.ts",
@@ -35449,7 +35449,7 @@
         },
         {
           "path": "tests/e2e/aw-v9-private-history.spec.ts",
-          "sha256": "77c9d141b50d9134c412b20ec84384aa36bfcd194325f27486292fbb1179b317"
+          "sha256": "9a1a55bd0c31e74dd0093c0456bc1abf382342b47f0e8a08c20aa24bb3e80e44"
         },
         {
           "path": "tests/e2e/aw-v9-task-draft.spec.ts",
@@ -35465,7 +35465,7 @@
         },
         {
           "path": "tests/e2e/composer-stop.spec.ts",
-          "sha256": "56b7296df0e1fe5da817053c8eb7d3858593053900ee15c313e237069ac27c37"
+          "sha256": "d4bd06453b54968042501a3f9cee545ea6c720b884d6129ea0d25de6fafa5083"
         },
         {
           "path": "tests/e2e/conference-room-typing-intro.spec.ts",
@@ -35565,11 +35565,11 @@
         },
         {
           "path": "tests/e2e/sidebar-takeover.spec.ts",
-          "sha256": "ad087d2afc9bbf2211c3bef910c9f88aa214bcec1c24241d88f0354b068da508"
+          "sha256": "98f54731b6fcef1e1ccab83f0557950f5f3287d3f7a712a57cc1c9d72ac82e8c"
         },
         {
           "path": "tests/e2e/signoff-policy.spec.ts",
-          "sha256": "e5d309c7b916fdd04906629d19ca321ffe57c183b60e34ec549384afa0dbc81c"
+          "sha256": "6fc08f9b62d1c5d113f4716a104ba0ef54424d54d1bbe56783ff1ae623805bac"
         },
         {
           "path": "tests/e2e/smoke-lab.catalog.ts",
@@ -35613,7 +35613,7 @@
         },
         {
           "path": "ui/src/components/AgentChatPicker.test.tsx",
-          "sha256": "d320a3b790aad5bf8312eae3cf8d2ebea3158bfc51ed03997beb1b28275bccf1"
+          "sha256": "063e97c43b4061e65c1397a5067a69befd8bfa75d1c35735b184add126931870"
         },
         {
           "path": "ui/src/components/AgentChatPicker.tsx",
@@ -35957,11 +35957,11 @@
         },
         {
           "path": "ui/src/pages/CompanyExport.test.tsx",
-          "sha256": "8e941e8eb39407b6014a8d7eaa66384b48148d664ab4f23689b6d375cd443f54"
+          "sha256": "59d70a4ef62dc7f9cabecb6b3970195737e396fbaa2f39b1275b677f9c66ff06"
         },
         {
           "path": "ui/src/pages/CompanyExport.tsx",
-          "sha256": "9b297a2235267531f717947eb1ae2a10b24ae0e0aa4ebe99bc786af2a1c2c0db"
+          "sha256": "6d60a09975190a8df0e5abd3c091e3e11ea47f915fdf5feae5affc7d39042da8"
         },
         {
           "path": "ui/src/pages/CompanyImport.test.tsx",
@@ -36073,11 +36073,11 @@
         },
         {
           "path": "ui/src/pages/SaasDeletion.test.tsx",
-          "sha256": "5a17972995e6f741b4cca0f29e3bb9370a4ae94e77d50861627f6b63be50c196"
+          "sha256": "681e2517caa15708bb81f3f6e5a970a6d48199ecdcc0a112953baef71be656ce"
         },
         {
           "path": "ui/src/pages/SaasDeletion.tsx",
-          "sha256": "0e11d7f56ff3cfe7db5745fe85adce6385fef1374c21b03dc9ea2f99d83eccc3"
+          "sha256": "bc5cfa5c7591c7585c1502130a6dab734ad41b340f1522f68f371d4f2e52ab38"
         },
         {
           "path": "ui/src/pages/SaasOperations.test.tsx",
@@ -46900,7 +46900,7 @@
       "id": "source:server/src/app.ts",
       "kind": "current_source_owner",
       "path": "server/src/app.ts",
-      "sha256": "055d5edd13a88bc5a5207ba5879f5604ea95045f2843dab163e8335febc4e9d7",
+      "sha256": "5fef59a8b7fc1d14b2065953ee3d7459156d725016d6757d76288799f0d1f00a",
       "changeIds": [
         "SCR-V10-HOTSPOT-01",
         "SCR-V10-HOTSPOT-02",
@@ -46953,7 +46953,7 @@
       "id": "source:server/src/routes/issues.ts",
       "kind": "current_source_owner",
       "path": "server/src/routes/issues.ts",
-      "sha256": "a1a9919d5ae3c714e751d18d20b202d5162ee7abc325f21bb15a3f021cd08718",
+      "sha256": "e842fd22e27faf5fce1941426964fd0de822deb802f8a64c08a6772d536fd2af",
       "changeIds": [
         "SCR-V10-HOTSPOT-01",
         "SCR-V10-HOTSPOT-04",
@@ -52199,7 +52199,7 @@
       "id": "source:server/src/routes/companies.ts",
       "kind": "current_source_owner",
       "path": "server/src/routes/companies.ts",
-      "sha256": "76cfb993edac7ce27bcae130404f682e371f59324fd365812a8f8b29b1417ec6",
+      "sha256": "35997cc99f6ae43fe896c217d0145879803bfd637cb670dfc929f247c1e7c814",
       "changeIds": [
         "SCR-V10-HOTSPOT-13"
       ],
@@ -52411,7 +52411,7 @@
       "id": "source:ui/src/pages/AgentDetail.tsx",
       "kind": "current_source_owner",
       "path": "ui/src/pages/AgentDetail.tsx",
-      "sha256": "9d1a4e559740061a45ac36a3735b4e6c85996f407fbd4e3bb4fbd3827460a554",
+      "sha256": "44a2377bd341bc0e52344dfa46705e2a6f677b1022347c402967066a1c7c2d6b",
       "changeIds": [
         "SCR-V10-HOTSPOT-19",
         "SCR-V10-HOTSPOT-21"
@@ -52443,7 +52443,7 @@
       "id": "source:ui/src/components/AgentConfigForm.tsx",
       "kind": "current_source_owner",
       "path": "ui/src/components/AgentConfigForm.tsx",
-      "sha256": "f8294a0f02e39b5115f4797184968a104c09e56a04f59f58aaa783c2083c47f1",
+      "sha256": "c82f9de218be70eba84c68f6efed34567d7631ae39b55c5216935eeb82eea852",
       "changeIds": [
         "SCR-V10-HOTSPOT-21"
       ],
@@ -52474,7 +52474,7 @@
       "id": "source:ui/src/components/new-agent/NewAgentSetup.tsx",
       "kind": "current_source_owner",
       "path": "ui/src/components/new-agent/NewAgentSetup.tsx",
-      "sha256": "824483c42ed16c30adb246991d0472978d94c81761d3c202c084a8f90b14c57b",
+      "sha256": "4e30dc3f473fb15ec69f8617c41b892fe55994320a51a23bc3db51f2397b22ca",
       "changeIds": [
         "SCR-V10-HOTSPOT-21"
       ],
@@ -53241,7 +53241,7 @@
       "id": "source:tests/e2e/aw-v9-workflow-draft-step.spec.ts",
       "kind": "current_source_owner",
       "path": "tests/e2e/aw-v9-workflow-draft-step.spec.ts",
-      "sha256": "f628da4cb6a46db52d6e3ae1d2b85be618dd867af39b1e2a15da0c90ba729388",
+      "sha256": "22379b73549713e4bc5784d752f46ddbfce6f88ee1cba34fdd7549bf9dca20cc",
       "changeIds": [
         "SCR-V10-WORKFLOWS-DURABLE-OPERATIONS"
       ],
@@ -53256,7 +53256,7 @@
       "id": "source:tests/e2e/aw-v9-workflow-intent.spec.ts",
       "kind": "current_source_owner",
       "path": "tests/e2e/aw-v9-workflow-intent.spec.ts",
-      "sha256": "dd3372276d80383cb164a0c83a13cd7819b0074c03724b2bfc8c217db888b4d6",
+      "sha256": "a808093ad2b1846f3a07f55a785f55527edf21b5824a43ebbb498aaf309bd4fc",
       "changeIds": [
         "SCR-V10-WORKFLOWS-DURABLE-OPERATIONS"
       ],
@@ -53301,7 +53301,7 @@
       "id": "source:tests/e2e/aw-v9-workflow-request-recovery.spec.ts",
       "kind": "current_source_owner",
       "path": "tests/e2e/aw-v9-workflow-request-recovery.spec.ts",
-      "sha256": "a4f4e00968d6aff6a9b71df0fff7eabec913d34f2974fe866425476650a48b3e",
+      "sha256": "da4c2ac6e0ca499d96e1ede8fef6128408729a303ebf9d310251543dee322b1a",
       "changeIds": [
         "SCR-V10-WORKFLOWS-DURABLE-OPERATIONS"
       ],
@@ -53316,7 +53316,7 @@
       "id": "source:tests/e2e/aw-v9-workflow-retained-stop.spec.ts",
       "kind": "current_source_owner",
       "path": "tests/e2e/aw-v9-workflow-retained-stop.spec.ts",
-      "sha256": "fc707f299c6b23a53f7e452a212e9b916d4a2c88fc312346d0d14b309c3505d1",
+      "sha256": "646bc420dc854e2af052a8b74c1ac73ddf9cad51572404f9542f7d6c26f1cafa",
       "changeIds": [
         "SCR-V10-WORKFLOWS-DURABLE-OPERATIONS"
       ],
@@ -53361,7 +53361,7 @@
       "id": "source:tests/e2e/aw-v9-workflow-tool-decision.spec.ts",
       "kind": "current_source_owner",
       "path": "tests/e2e/aw-v9-workflow-tool-decision.spec.ts",
-      "sha256": "9dbee9b7981aec9b233741c8388c773bf72cdd12f457e2f8d420cf0548572481",
+      "sha256": "1558cc84727f836dcf3c243d7f4c23d10741bcbcaf794999c6c33ab57bf8c09f",
       "changeIds": [
         "SCR-V10-WORKFLOWS-DURABLE-OPERATIONS"
       ],
@@ -53826,7 +53826,7 @@
       "id": "source:server/src/__tests__/announcements-routes.test.ts",
       "kind": "current_source_owner",
       "path": "server/src/__tests__/announcements-routes.test.ts",
-      "sha256": "27579bcc513b33ede06da7e0b3b4e5a1b50f92fcd90c3dd331f896040de563c5",
+      "sha256": "71deb489f45c4f64afe38851da1087d710eccef2ce97a73aed8635611c97b931",
       "changeIds": [
         "SCR-V10-SUPPORT-STATUS-TRUST-NOTICES"
       ],
@@ -53946,7 +53946,7 @@
       "id": "source:server/src/routes/announcements.ts",
       "kind": "current_source_owner",
       "path": "server/src/routes/announcements.ts",
-      "sha256": "9ccbaaed32ae26f22e2e730353db10c18e7b615060f0ece723814e626246fc92",
+      "sha256": "759d0a7346cb6f8e30ff37d12ab7419e132d42252006d0c49a20fb9f0fec0a84",
       "changeIds": [
         "SCR-V10-SUPPORT-STATUS-TRUST-NOTICES"
       ],
@@ -54276,7 +54276,7 @@
       "id": "source:server/src/services/trust-documents.ts",
       "kind": "current_source_owner",
       "path": "server/src/services/trust-documents.ts",
-      "sha256": "76f0cec023ae7781f45b7938871a8c24f5d2c35f944b1ce1a46dc203cc5d0257",
+      "sha256": "666bab7645d45f3d4c9c2e6189d933547a7080fe4885f85cfd62d86edb8db972",
       "changeIds": [
         "SCR-V10-SUPPORT-STATUS-TRUST-NOTICES"
       ],
@@ -55146,7 +55146,7 @@
       "id": "source:server/src/__tests__/companies-route-cross-company-authz.test.ts",
       "kind": "current_source_owner",
       "path": "server/src/__tests__/companies-route-cross-company-authz.test.ts",
-      "sha256": "101c80c692d3589375e99150ab909529dcaefc3d11e92cca0484ae110dc849d9",
+      "sha256": "105cd85f70cffbd9b9e907b9af6318c39aea6d6833554f73dba33e1d6c00265c",
       "changeIds": [
         "SCR-V10-AUTH-IDENTITY"
       ],
@@ -55911,7 +55911,7 @@
       "id": "source:tests/e2e/aw-v10-native-auth.spec.ts",
       "kind": "current_source_owner",
       "path": "tests/e2e/aw-v10-native-auth.spec.ts",
-      "sha256": "6483e96b8f24a9403dab9e0de87a82657ad0799fb03e55c3501b52511e58a79b",
+      "sha256": "ebafa9e4568bf92a66898132bce30eac9c521dba80267de259f72f705aa2cd2d",
       "changeIds": [
         "SCR-V10-AUTH-IDENTITY"
       ],
@@ -55971,7 +55971,7 @@
       "id": "source:tests/e2e/aw-v9-conversation-authoring.spec.ts",
       "kind": "current_source_owner",
       "path": "tests/e2e/aw-v9-conversation-authoring.spec.ts",
-      "sha256": "25cce07c6223062091cdb6e35aded3859989532bf09854f8594b293afbfa0e89",
+      "sha256": "eabce969950c2e038a66947288e41cded925baa028e758f12a79dd037a3b262d",
       "changeIds": [
         "SCR-V10-AUTH-IDENTITY"
       ],
@@ -56166,7 +56166,7 @@
       "id": "source:ui/src/pages/Auth.test.tsx",
       "kind": "current_source_owner",
       "path": "ui/src/pages/Auth.test.tsx",
-      "sha256": "a133e672562820a1ea94f2a2705ac4385d2d03eff45e831b18a0684f067e5c19",
+      "sha256": "fca479ff2b94fb03e7c72291278a038b668e03634dc94a0b3141e3e323448db6",
       "changeIds": [
         "SCR-V10-AUTH-IDENTITY"
       ],
@@ -56181,7 +56181,7 @@
       "id": "source:ui/src/pages/Auth.tsx",
       "kind": "current_source_owner",
       "path": "ui/src/pages/Auth.tsx",
-      "sha256": "50a391c98431cf735bc349a531a8e566760993077a1c2e112eba2d0cc6f1f721",
+      "sha256": "1011b6d53e9a98a2b32f46aec437da8405a96f40c82af0bcacc94f9decc8adde",
       "changeIds": [
         "SCR-V10-AUTH-IDENTITY"
       ],
@@ -56211,7 +56211,7 @@
       "id": "source:ui/src/pages/InviteLanding.test.tsx",
       "kind": "current_source_owner",
       "path": "ui/src/pages/InviteLanding.test.tsx",
-      "sha256": "1f5a4e81b77a21e841e4ccd4ef6a03b88a246a51c35ce732985eee359cca10d5",
+      "sha256": "9ad2c91a5519f75f463617f900b06d5018933116538c0d9cd450a80e02ac4af0",
       "changeIds": [
         "SCR-V10-AUTH-IDENTITY"
       ],
@@ -56226,7 +56226,7 @@
       "id": "source:ui/src/pages/InviteLanding.tsx",
       "kind": "current_source_owner",
       "path": "ui/src/pages/InviteLanding.tsx",
-      "sha256": "4499156a46a83c1263758a38286002f934113e8f6f5159ed9f484abb6d8520fb",
+      "sha256": "05bac73cfb78fae9da26a3c0af430e29c7e221f6c3915bfe060a077540ccf2c8",
       "changeIds": [
         "SCR-V10-AUTH-IDENTITY"
       ],
@@ -57010,7 +57010,7 @@
       "id": "source:tests/e2e/aw-v9-account-security.spec.ts",
       "kind": "current_source_owner",
       "path": "tests/e2e/aw-v9-account-security.spec.ts",
-      "sha256": "6510d1ae66760a16b3aa0221d20b2c87ab95fc6fdeb8f5793e28806b5c58f82a",
+      "sha256": "467b8cbe91371f41ef91e69507363e02e6f6d24d6a198c96902033c9b0673ed4",
       "changeIds": [
         "SCR-V10-TELEMETRY-AUDIT-SECURITY"
       ],
@@ -60610,7 +60610,7 @@
       "id": "source:tests/e2e/aw-v9-feedback-retention-erasure.spec.ts",
       "kind": "current_source_owner",
       "path": "tests/e2e/aw-v9-feedback-retention-erasure.spec.ts",
-      "sha256": "47fa051db1732c311df0f9339755d9d010ba9fd6dce14a6cf529a902cd4e8db3",
+      "sha256": "8498eaefe289659e9304fc4a9ce5590e713e890a0eba79623d9ecf147062a58a",
       "changeIds": [
         "SCR-V10-PRIVATE-DATA-ERASURE"
       ],
@@ -64948,7 +64948,7 @@
       "id": "source:tests/e2e/aw-v9-runtime-candidates.spec.ts",
       "kind": "current_source_owner",
       "path": "tests/e2e/aw-v9-runtime-candidates.spec.ts",
-      "sha256": "f2efcd79b67da955df43a5c9aacce1c9947e9b9be4a81f39b2836d20810de8f0",
+      "sha256": "4e791b45dbbc06acbf41cf206fff350047f3131687be277d2c60dcacc4c4e628",
       "changeIds": [
         "SCR-V10-NATIVE-RUNTIME-AND-AUTHORITY"
       ],
@@ -64978,7 +64978,7 @@
       "id": "source:tests/e2e/fixtures/assert-unqualified-runtime.ts",
       "kind": "current_source_owner",
       "path": "tests/e2e/fixtures/assert-unqualified-runtime.ts",
-      "sha256": "a0b31b1fe125d886e2f1ae37d554c80a5a118293409f05a7e26253dea460f71e",
+      "sha256": "a4342e082df0fc0e318694a1087c2a492b0a5aad1d440b5d79aa559c63e1b3df",
       "changeIds": [
         "SCR-V10-NATIVE-RUNTIME-AND-AUTHORITY"
       ],
@@ -68878,7 +68878,7 @@
       "id": "source:tests/e2e/aw-v9-agent-publication.spec.ts",
       "kind": "current_source_owner",
       "path": "tests/e2e/aw-v9-agent-publication.spec.ts",
-      "sha256": "968d283f4b62bb86e768baee3fe65136223c453cd4f801aab07e9c2982710cdb",
+      "sha256": "8f434065b36df6fa401ed31c57aa920b9eeab1c44ad5a1857bee51f782975fcf",
       "changeIds": [
         "SCR-V10-SKILLS-AND-PUBLICATION"
       ],
@@ -69163,7 +69163,7 @@
       "id": "source:packages/shared/src/index.ts",
       "kind": "current_source_owner",
       "path": "packages/shared/src/index.ts",
-      "sha256": "8ab6cf911d4a99e463331f31359cba08e174f18a96a80336863aa78255773038",
+      "sha256": "e1edda0f596e49d03db7af8c6a086041be4752462f30f8d1c8107038503d52ef",
       "changeIds": [
         "SCR-V10-SHARED-CONTRACTS"
       ],
@@ -69538,7 +69538,7 @@
       "id": "source:packages/shared/src/validators/company.ts",
       "kind": "current_source_owner",
       "path": "packages/shared/src/validators/company.ts",
-      "sha256": "41775e77c7235c5cbf734b030578eaf4dd39fb507b5215436126f8985ae67967",
+      "sha256": "808342866fbcbbbff04daee28ce77f432c90a66329799a55a84ad235ee5f8c24",
       "changeIds": [
         "SCR-V10-SHARED-CONTRACTS"
       ],
@@ -69553,7 +69553,7 @@
       "id": "source:packages/shared/src/validators/index.ts",
       "kind": "current_source_owner",
       "path": "packages/shared/src/validators/index.ts",
-      "sha256": "8e1f50a414224b6cc4ee1194e61d9769eda376c8de439af666199811f223b9b5",
+      "sha256": "e63c52c1bad2592256de04e3d864bb71a00093acf04ec0a71edc6fd925e6dd37",
       "changeIds": [
         "SCR-V10-SHARED-CONTRACTS"
       ],
@@ -70003,7 +70003,7 @@
       "id": "source:tests/e2e/aw-v9-feedback-images.spec.ts",
       "kind": "current_source_owner",
       "path": "tests/e2e/aw-v9-feedback-images.spec.ts",
-      "sha256": "67c09e643841e50783e7f26410c05e178b7a43141ae7deda7974c0be80a74d8c",
+      "sha256": "2965c30614c66865507b1bbcddabacb7e09211e05a7260da07758ca62dfa3f2e",
       "changeIds": [
         "SCR-V10-CUSTOMER-FEEDBACK-AND-SHARING"
       ],
@@ -71100,7 +71100,7 @@
       "id": "source:cli/src/client/http.ts",
       "kind": "current_source_owner",
       "path": "cli/src/client/http.ts",
-      "sha256": "0902b2511c5a36578d210d97c2130aea6195fe2c4048b0dcadca73a775df7c13",
+      "sha256": "438ac286eef2ecaae8a813bb87fcd94ac524f5fd76a0a556470f485f5042d74d",
       "changeIds": [
         "SCR-V10-PRODUCT-IDENTITY-HELP-LANGUAGE"
       ],
@@ -71160,7 +71160,7 @@
       "id": "source:cli/src/commands/client/company.ts",
       "kind": "current_source_owner",
       "path": "cli/src/commands/client/company.ts",
-      "sha256": "8553c79050f68ebaf0a8bf6433776105abf8aa74f40c31fe6bf0efec547eb0c4",
+      "sha256": "883cd0393e4896af9825771b4a346976fea653c3195583b5e4d5543ad17ac8c7",
       "changeIds": [
         "SCR-V10-PRODUCT-IDENTITY-HELP-LANGUAGE"
       ],
@@ -71340,7 +71340,7 @@
       "id": "source:cli/src/commands/test-drive.ts",
       "kind": "current_source_owner",
       "path": "cli/src/commands/test-drive.ts",
-      "sha256": "96ec8b7216283e3f46cd8b5b5244dc353fb5c020ee9b8b4677a7f9ebc0e40405",
+      "sha256": "c464ccbb2ffee6653a6f6e3f9ca8203f8450e2b28ad8b8f86b48c2c4912292d8",
       "changeIds": [
         "SCR-V10-PRODUCT-IDENTITY-HELP-LANGUAGE"
       ],
@@ -71565,7 +71565,7 @@
       "id": "source:docs/api/companies.md",
       "kind": "current_source_owner",
       "path": "docs/api/companies.md",
-      "sha256": "4428c610ec1f12d52896724aa0a69fea08450062f9ffabda1d30076dbbf03137",
+      "sha256": "aa78ac90ac01bfb75e5d57dbc2e0b577fc79d80859480aa5ab707262aab9b5f4",
       "changeIds": [
         "SCR-V10-PRODUCT-IDENTITY-HELP-LANGUAGE"
       ],
@@ -72570,7 +72570,7 @@
       "id": "source:server/src/services/company-search-help.generated.ts",
       "kind": "current_source_owner",
       "path": "server/src/services/company-search-help.generated.ts",
-      "sha256": "fcec4f2eba7a1ff795825af6d07f195f40f52b9ef012844260f7f3e87123ddda",
+      "sha256": "933fd28347428742046836ab278e108d3427cf2f0ab8c16a221c3bd4264a189c",
       "changeIds": [
         "SCR-V10-PRODUCT-IDENTITY-HELP-LANGUAGE"
       ],
@@ -72615,7 +72615,7 @@
       "id": "source:tests/e2e/aw-v9-language.spec.ts",
       "kind": "current_source_owner",
       "path": "tests/e2e/aw-v9-language.spec.ts",
-      "sha256": "7ddbf4a0985a59af6e86552cd3ec39a5ed7e7f50c753fb618de5efe5fe3b291b",
+      "sha256": "eed0fbffadc33c35a7e6296f73e11a4d27a218b95fe856668bb2b46ce754aec3",
       "changeIds": [
         "SCR-V10-PRODUCT-IDENTITY-HELP-LANGUAGE"
       ],
@@ -72690,7 +72690,7 @@
       "id": "source:ui/src/components/ExperienceLanguageSelect.tsx",
       "kind": "current_source_owner",
       "path": "ui/src/components/ExperienceLanguageSelect.tsx",
-      "sha256": "ad5793e8a1fb04b11504a502e40eacec5da06c15ceb7bc3613d187c9e1087261",
+      "sha256": "94af8861d76cc6ccbf81435d6ac20a6ac6e66a1dc0bb096d750b9611179bb2c7",
       "changeIds": [
         "SCR-V10-PRODUCT-IDENTITY-HELP-LANGUAGE"
       ],
@@ -72810,7 +72810,7 @@
       "id": "source:ui/src/i18n/experience/da.json",
       "kind": "current_source_owner",
       "path": "ui/src/i18n/experience/da.json",
-      "sha256": "3902a0343e6f770e6064c04e6627d4b275c49ba2db9d1389682a9afc9da512de",
+      "sha256": "571364a5dd2a4c964e40bee6a8d461115ee66e6d14234c9f53b5f64d724fb0b3",
       "changeIds": [
         "SCR-V10-PRODUCT-IDENTITY-HELP-LANGUAGE"
       ],
@@ -72825,7 +72825,7 @@
       "id": "source:ui/src/i18n/experience/en.json",
       "kind": "current_source_owner",
       "path": "ui/src/i18n/experience/en.json",
-      "sha256": "a3458841e8e727b7f658ee5860ce3c59813284b5a6835461fc9c615981cd7796",
+      "sha256": "3e8e42465ffbde5a5faa6079e49c783fb93a892a846a097c1fc3f8005a20b00b",
       "changeIds": [
         "SCR-V10-PRODUCT-IDENTITY-HELP-LANGUAGE"
       ],
@@ -73080,7 +73080,7 @@
       "id": "source:doc/operations/agent-native-ui-operation-coverage.json",
       "kind": "current_source_owner",
       "path": "doc/operations/agent-native-ui-operation-coverage.json",
-      "sha256": "54467a547f097e7d078d4604ea5ceddd9da8aaffe5e5c8deb9464b7ab985f863",
+      "sha256": "9580af0d66cef09cb3094b79d78e0df26ec3c7e9419bc68a920c904ce3312194",
       "changeIds": [
         "SCR-V10-CI-RELEASE-AND-CATALOG-GOVERNANCE"
       ],
@@ -73125,7 +73125,7 @@
       "id": "source:doc/operations/v10-capability-projection.json",
       "kind": "current_source_owner",
       "path": "doc/operations/v10-capability-projection.json",
-      "sha256": "f8084c89c611fff3967e94f2b826ab01e8e05352ab0b64eab24f2fa916690173",
+      "sha256": "5b509bbf421b18b42ae19025e97a23d560545ba977ffd23c8f0c83afb1c7914a",
       "changeIds": [
         "SCR-V10-CI-RELEASE-AND-CATALOG-GOVERNANCE"
       ],
@@ -73560,7 +73560,7 @@
       "id": "source:scripts/refresh-aw-v10-operation-coverage.mjs",
       "kind": "current_source_owner",
       "path": "scripts/refresh-aw-v10-operation-coverage.mjs",
-      "sha256": "f0c777e631f78d967b41efd09b63ba6021ee638aeea33f4216c6d5f1299b2a17",
+      "sha256": "386a4bb6a21899dd314ae16df58adf3ddd9893b5abb9841c1a00c4faf8d0af27",
       "changeIds": [
         "SCR-V10-CI-RELEASE-AND-CATALOG-GOVERNANCE"
       ],
@@ -73770,7 +73770,7 @@
       "id": "source:tests/e2e/aw-v9-first-value.spec.ts",
       "kind": "current_source_owner",
       "path": "tests/e2e/aw-v9-first-value.spec.ts",
-      "sha256": "960677dc82ca6b1955195c77aa87228be34e8300ce2f15c0a30885ec48c3cfd3",
+      "sha256": "b2a9f3b9b2e329fa91b439ae1e4e7d3745022c969c2ae78e77e1deae33708878",
       "changeIds": [
         "SCR-V10-ONBOARDING-FIRST-VALUE"
       ],
@@ -73785,7 +73785,7 @@
       "id": "source:tests/e2e/aw-v9-onboarding-permission-consent.spec.ts",
       "kind": "current_source_owner",
       "path": "tests/e2e/aw-v9-onboarding-permission-consent.spec.ts",
-      "sha256": "7ef267775bbe2f9df11f93bbcd3511b5756baffaf3fd3fbad4f9c39d98feed88",
+      "sha256": "4256728d86d3688b5f6151fec28c74a9ea5c4d48692a198f9be95f37eeeed06c",
       "changeIds": [
         "SCR-V10-ONBOARDING-FIRST-VALUE"
       ],
@@ -74115,7 +74115,7 @@
       "id": "source:ui/src/api/companies.ts",
       "kind": "current_source_owner",
       "path": "ui/src/api/companies.ts",
-      "sha256": "229ba77be6dcd363c0b0e3cbc2564f1041851c55be5e35309c19c4ab7e28ab31",
+      "sha256": "95c7d11e0043a0e34e3b5d5fcf059d69e5bdfdf4797916e0cf46593ef1ebd310",
       "changeIds": [
         "SCR-V10-API-CONTRACTS"
       ],
@@ -74265,7 +74265,7 @@
       "id": "source:tests/e2e/agent-chat-sessions.spec.ts",
       "kind": "current_source_owner",
       "path": "tests/e2e/agent-chat-sessions.spec.ts",
-      "sha256": "40288634b218ab56b7f914474b19d70dcebed820e66021a6f319878b2151e384",
+      "sha256": "b3b249986058484ca1b8399839c4dc4c7c0d22e59ced6fb479a5cac0e0fe429f",
       "changeIds": [
         "SCR-V10-CUSTOMER-EXPERIENCE"
       ],
@@ -74370,7 +74370,7 @@
       "id": "source:tests/e2e/aw-v9-current-account.spec.ts",
       "kind": "current_source_owner",
       "path": "tests/e2e/aw-v9-current-account.spec.ts",
-      "sha256": "268956205f113e20ed46bfe01547da5eea49b5eed8c13cade01b4444e55acee7",
+      "sha256": "11218975eb4d0e08bd72b2aaefa3e878d408e0c1d552719dbd051578e9000f13",
       "changeIds": [
         "SCR-V10-CUSTOMER-EXPERIENCE"
       ],
@@ -74400,7 +74400,7 @@
       "id": "source:tests/e2e/aw-v9-experience.spec.ts",
       "kind": "current_source_owner",
       "path": "tests/e2e/aw-v9-experience.spec.ts",
-      "sha256": "fbdec1b8e106405394126db59ef5686c6ea5be54ea04ca028af5f77e31d05d53",
+      "sha256": "a0ed5e145ad6c70b77649fb41bb870c5e67f2867fde4531478609997826df2e8",
       "changeIds": [
         "SCR-V10-CUSTOMER-EXPERIENCE"
       ],
@@ -74415,7 +74415,7 @@
       "id": "source:tests/e2e/aw-v9-first-task.spec.ts",
       "kind": "current_source_owner",
       "path": "tests/e2e/aw-v9-first-task.spec.ts",
-      "sha256": "b5afe22aeb2d87b382c15c6fb0ef6cea2dcf08d75b9a0569907ab513a9ac7bb0",
+      "sha256": "6d309e12d633356fa8fc57e71b586ce7a6e089b3cac3617307a153d8af68e22e",
       "changeIds": [
         "SCR-V10-CUSTOMER-EXPERIENCE"
       ],
@@ -74520,7 +74520,7 @@
       "id": "source:tests/e2e/aw-v9-notification-account.spec.ts",
       "kind": "current_source_owner",
       "path": "tests/e2e/aw-v9-notification-account.spec.ts",
-      "sha256": "e3242cd96836f9e033c27583ba37ac9e611cdf0a59639909adafa5299d10116f",
+      "sha256": "366b41875a77579391c0b188e7ae5d7bcaad077360ec10bc4197edeca6f82735",
       "changeIds": [
         "SCR-V10-CUSTOMER-EXPERIENCE"
       ],
@@ -74550,7 +74550,7 @@
       "id": "source:tests/e2e/aw-v9-orchestration-control.spec.ts",
       "kind": "current_source_owner",
       "path": "tests/e2e/aw-v9-orchestration-control.spec.ts",
-      "sha256": "57f100b529051257df85b21bb912cc483b429efdbdeaa50a5027eddd766e65eb",
+      "sha256": "08b97f4926fd10d931572c166c526a7c9be1dd2ef49a023cb47a597985d9d33d",
       "changeIds": [
         "SCR-V10-CUSTOMER-EXPERIENCE"
       ],
@@ -74580,7 +74580,7 @@
       "id": "source:tests/e2e/aw-v9-private-history.spec.ts",
       "kind": "current_source_owner",
       "path": "tests/e2e/aw-v9-private-history.spec.ts",
-      "sha256": "77c9d141b50d9134c412b20ec84384aa36bfcd194325f27486292fbb1179b317",
+      "sha256": "9a1a55bd0c31e74dd0093c0456bc1abf382342b47f0e8a08c20aa24bb3e80e44",
       "changeIds": [
         "SCR-V10-CUSTOMER-EXPERIENCE"
       ],
@@ -74640,7 +74640,7 @@
       "id": "source:tests/e2e/composer-stop.spec.ts",
       "kind": "current_source_owner",
       "path": "tests/e2e/composer-stop.spec.ts",
-      "sha256": "56b7296df0e1fe5da817053c8eb7d3858593053900ee15c313e237069ac27c37",
+      "sha256": "d4bd06453b54968042501a3f9cee545ea6c720b884d6129ea0d25de6fafa5083",
       "changeIds": [
         "SCR-V10-CUSTOMER-EXPERIENCE"
       ],
@@ -75015,7 +75015,7 @@
       "id": "source:tests/e2e/sidebar-takeover.spec.ts",
       "kind": "current_source_owner",
       "path": "tests/e2e/sidebar-takeover.spec.ts",
-      "sha256": "ad087d2afc9bbf2211c3bef910c9f88aa214bcec1c24241d88f0354b068da508",
+      "sha256": "98f54731b6fcef1e1ccab83f0557950f5f3287d3f7a712a57cc1c9d72ac82e8c",
       "changeIds": [
         "SCR-V10-CUSTOMER-EXPERIENCE"
       ],
@@ -75030,7 +75030,7 @@
       "id": "source:tests/e2e/signoff-policy.spec.ts",
       "kind": "current_source_owner",
       "path": "tests/e2e/signoff-policy.spec.ts",
-      "sha256": "e5d309c7b916fdd04906629d19ca321ffe57c183b60e34ec549384afa0dbc81c",
+      "sha256": "6fc08f9b62d1c5d113f4716a104ba0ef54424d54d1bbe56783ff1ae623805bac",
       "changeIds": [
         "SCR-V10-CUSTOMER-EXPERIENCE"
       ],
@@ -75195,7 +75195,7 @@
       "id": "source:ui/src/components/AgentChatPicker.test.tsx",
       "kind": "current_source_owner",
       "path": "ui/src/components/AgentChatPicker.test.tsx",
-      "sha256": "d320a3b790aad5bf8312eae3cf8d2ebea3158bfc51ed03997beb1b28275bccf1",
+      "sha256": "063e97c43b4061e65c1397a5067a69befd8bfa75d1c35735b184add126931870",
       "changeIds": [
         "SCR-V10-CUSTOMER-EXPERIENCE"
       ],
@@ -76485,7 +76485,7 @@
       "id": "source:ui/src/pages/CompanyExport.test.tsx",
       "kind": "current_source_owner",
       "path": "ui/src/pages/CompanyExport.test.tsx",
-      "sha256": "8e941e8eb39407b6014a8d7eaa66384b48148d664ab4f23689b6d375cd443f54",
+      "sha256": "59d70a4ef62dc7f9cabecb6b3970195737e396fbaa2f39b1275b677f9c66ff06",
       "changeIds": [
         "SCR-V10-CUSTOMER-EXPERIENCE"
       ],
@@ -76500,7 +76500,7 @@
       "id": "source:ui/src/pages/CompanyExport.tsx",
       "kind": "current_source_owner",
       "path": "ui/src/pages/CompanyExport.tsx",
-      "sha256": "9b297a2235267531f717947eb1ae2a10b24ae0e0aa4ebe99bc786af2a1c2c0db",
+      "sha256": "6d60a09975190a8df0e5abd3c091e3e11ea47f915fdf5feae5affc7d39042da8",
       "changeIds": [
         "SCR-V10-CUSTOMER-EXPERIENCE"
       ],
@@ -76890,7 +76890,7 @@
       "id": "source:ui/src/pages/SaasDeletion.test.tsx",
       "kind": "current_source_owner",
       "path": "ui/src/pages/SaasDeletion.test.tsx",
-      "sha256": "5a17972995e6f741b4cca0f29e3bb9370a4ae94e77d50861627f6b63be50c196",
+      "sha256": "681e2517caa15708bb81f3f6e5a970a6d48199ecdcc0a112953baef71be656ce",
       "changeIds": [
         "SCR-V10-CUSTOMER-EXPERIENCE"
       ],
@@ -76905,7 +76905,7 @@
       "id": "source:ui/src/pages/SaasDeletion.tsx",
       "kind": "current_source_owner",
       "path": "ui/src/pages/SaasDeletion.tsx",
-      "sha256": "0e11d7f56ff3cfe7db5745fe85adce6385fef1374c21b03dc9ea2f99d83eccc3",
+      "sha256": "bc5cfa5c7591c7585c1502130a6dab734ad41b340f1522f68f371d4f2e52ab38",
       "changeIds": [
         "SCR-V10-CUSTOMER-EXPERIENCE"
       ],

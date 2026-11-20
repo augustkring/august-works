@@ -2,6 +2,7 @@ import { registerEnglishAccountLocaleIsolation } from "./account-locale-isolatio
 registerEnglishAccountLocaleIsolation(test);
 import { createRequire } from "node:module";
 import { expect, test, type APIResponse, type APIRequestContext, type Page, type Locator } from "@playwright/test";
+import { deleteCompany } from "./company-cleanup";
 const axePath = createRequire(import.meta.url).resolve("axe-core/axe.min.js");
 async function json(response: APIResponse) {
   expect(response.ok(), `${response.status()}: ${await response.text()}`).toBe(true);
@@ -97,7 +98,7 @@ test("account security hides private drafts during a session check and waits for
     expect(await page.evaluate(() => document.documentElement.scrollWidth <= innerWidth)).toBe(true);
     await noNativeWork(request, company.id);
     await page.screenshot({ path: info.outputPath("v9-account-security-mobile.png"), fullPage: true });
-  } finally { await json(await request.delete(`/api/companies/${company.id}`)); }
+  } finally { await json(await deleteCompany(request, company.id)); }
 });
 
 test("unknown account deletion retains one original request across the actual organization switcher", async ({ page, request }, info) => {
@@ -139,7 +140,7 @@ test("unknown account deletion retains one original request across the actual or
     await noNativeWork(request, first.id); await noNativeWork(request, second!.id);
   } finally {
     for (const company of [second, first]) if (company) {
-      try { await json(await request.delete(`/api/companies/${company.id}`)); }
+      try { await json(await deleteCompany(request, company.id)); }
       catch (error) {
         // A timed-out fixture may already have closed its API context. Keep
         // the original browser assertion instead of replacing it with cleanup.

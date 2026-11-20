@@ -1,4 +1,5 @@
 import { test, expect, request as pwRequest, type APIRequestContext } from "@playwright/test";
+import { deleteCompany } from "./company-cleanup";
 
 /**
  * E2E: contextual sidebar companion model.
@@ -53,7 +54,7 @@ test.describe("Contextual sidebar companion", () => {
   });
 
   test.afterAll(async () => {
-    await board.delete(`${BASE_URL}/api/companies/${companyId}`).catch(() => {});
+    await deleteCompany(board, companyId, BASE_URL).catch(() => {});
     await board.dispose();
   });
 

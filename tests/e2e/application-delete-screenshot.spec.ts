@@ -1,4 +1,5 @@
 import { expect, test } from "@playwright/test";
+import { deleteCompany } from "./company-cleanup";
 
 // One-off visual capture for PAP-10817. Connection removal now lives on the
 // Connections page, rather than behind a per-connection setup surface.
@@ -29,5 +30,5 @@ test("captures the current app removal confirmations", async ({ page }) => {
   await expect(page.getByRole("button", { name: "Remove connection" })).toBeVisible();
   await page.screenshot({ path: "test-results/pap-10817-delete-dialog-guarded.png", fullPage: true });
 
-  await page.request.delete(`/api/companies/${companyId}`).catch(() => undefined);
+  await deleteCompany(page.request, companyId).catch(() => undefined);
 });

@@ -13,13 +13,15 @@ import { healthApi } from "../api/health";
 import { getAdapterLabel } from "../adapters/adapter-display-registry";
 import { clearPendingInviteToken, rememberPendingInviteToken } from "../lib/invite-memory";
 import { queryKeys } from "../lib/queryKeys";
-import { formatDate } from "../lib/utils";
 import { PRODUCT_IDENTITY } from "@paperclipai/shared/product-identity";
 import { hasValidNewLocalPasswordLength, LOCAL_PASSWORD_MAX_LENGTH, LOCAL_PASSWORD_MAX_UTF16_LENGTH, LOCAL_PASSWORD_MIN_LENGTH } from "@paperclipai/shared/local-password-policy";
 import { useTranslation } from "@/i18n";
+import { ExperienceLanguageSelect } from "../components/ExperienceLanguageSelect";
 
 type AuthMode = "sign_in" | "sign_up";
 type AuthFeedback = { tone: "error" | "info"; message: string };
+type Translate = ReturnType<typeof useTranslation>["t"];
+const INVITE_TEXT = "screens.inviteLanding.";
 
 // Agent-invite onboarding remains a legacy-adapter flow. Native runner setup
 // belongs in authenticated agent configuration after an administrator enables
@@ -52,9 +54,19 @@ const panelClassName = "border border-zinc-800 bg-zinc-950/95 p-6";
 const modeButtonBaseClassName =
   "flex-1 border px-3 py-2 text-sm transition-colors";
 
-function formatHumanRole(role: string | null | undefined) {
+const HUMAN_ROLES = new Set(["owner", "admin", "operator", "viewer"]);
+
+function formatHumanRole(role: string | null | undefined, t: Translate) {
   if (!role) return null;
-  return role.charAt(0).toUpperCase() + role.slice(1);
+  return HUMAN_ROLES.has(role) ? t(`${INVITE_TEXT}roles.${role}`) : role.charAt(0).toUpperCase() + role.slice(1);
+}
+
+function formatInviteDate(value: Date | string, language: string | undefined) {
+  return new Date(value).toLocaleDateString(language === "da" ? "da-DK" : "en-US", {
+    month: "short",
+    day: "numeric",
+    year: "numeric",
+  });
 }
 
 function getAuthErrorCode(error: unknown) {
@@ -73,45 +85,35 @@ function mapInviteAuthFeedback(
   error: unknown,
   authMode: AuthMode,
   email: string,
+  t: Translate,
 ): AuthFeedback {
   const code = getAuthErrorCode(error);
   const message = getAuthErrorMessage(error);
-  const emailLabel = email.trim().length > 0 ? email.trim() : "that email";
+  const emailLabel = email.trim().length > 0 ? email.trim() : t(`${INVITE_TEXT}thatEmail`);
+  const productName = PRODUCT_IDENTITY.productName;
 
   if (code === "USER_ALREADY_EXISTS_USE_ANOTHER_EMAIL") {
-    return {
-      tone: "info",
-      message: `An account already exists for ${emailLabel}. Sign in below to continue with this invite.`,
-    };
+    return { tone: "info", message: t(`${INVITE_TEXT}accountExists`, { email: emailLabel }) };
   }
 
-  if (code === "INVALID_EMAIL_OR_PASSWORD") {
-    return {
-      tone: "error",
-      message:
-        `That email and password did not match an existing ${PRODUCT_IDENTITY.productName} account. Check both fields, or create an account first if you are new here.`,
-    };
-  }
-
-  if (authMode === "sign_in" && message === "Request failed: 401") {
-    return {
-      tone: "error",
-      message:
-        `That email and password did not match an existing ${PRODUCT_IDENTITY.productName} account. Check both fields, or create an account first if you are new here.`,
-    };
+  if (code === "INVALID_EMAIL_OR_PASSWORD" || (authMode === "sign_in" && message === "Request failed: 401")) {
+    return { tone: "error", message: t(`${INVITE_TEXT}credentialsMismatch`, { productName }) };
   }
 
   if (authMode === "sign_up" && message === "Request failed: 422") {
-    return {
-      tone: "info",
-      message: `An account may already exist for ${emailLabel}. Try signing in instead.`,
-    };
+    return { tone: "info", message: t(`${INVITE_TEXT}accountMayExist`, { email: emailLabel }) };
   }
 
-  return {
-    tone: "error",
-    message: message ?? "Authentication failed",
-  };
+  // Raw provider/server messages are English and may carry internal details;
+  // the person gets a localized, actionable message instead.
+  return { tone: "error", message: t(`${INVITE_TEXT}authFailed`) };
+}
+
+type InviteAcceptBlockedReason = "acceptFailed" | "checkingBeforeAccept" | "alreadyMemberError";
+class InviteAcceptBlocked extends Error {
+  constructor(readonly reason: InviteAcceptBlockedReason) {
+    super(reason);
+  }
 }
 
 function isBootstrapAcceptancePayload(payload: unknown) {
@@ -164,7 +166,9 @@ function AwaitingJoinApprovalPanel({
   claimApiKeyPath = null,
   onboardingTextUrl = null,
 }: AwaitingJoinApprovalPanelProps) {
-  const approverLabel = invitedByUserName ?? "An organization admin";
+  const { t } = useTranslation("experience");
+  const approverLabel = invitedByUserName ?? t(`${INVITE_TEXT}pendingApproverFallback`);
+  const approvalPath = t(`${INVITE_TEXT}approvalPath`);
 
   return (
     <div className="min-h-screen bg-zinc-950 px-6 py-12 text-zinc-100">
@@ -175,33 +179,33 @@ function AwaitingJoinApprovalPanel({
             companyLogoUrl={companyLogoUrl}
             className="h-12 w-12 border border-zinc-800 rounded-none"
           />
-          <h1 className="text-lg font-semibold">Request to join {companyDisplayName}</h1>
+          <h1 className="text-lg font-semibold">{t(`${INVITE_TEXT}pendingTitle`, { company: companyDisplayName })}</h1>
         </div>
         <div className="mt-4 space-y-3">
           <p className="text-sm text-zinc-400">
-            Your request is still awaiting approval. {approverLabel} must approve your request to join.
+            {t(`${INVITE_TEXT}pendingBody`, { approver: approverLabel })}
           </p>
           <div className="border border-zinc-800 p-3">
-            <p className="text-xs text-zinc-500 mb-1">Approval page</p>
-            <p className="text-sm text-zinc-200">Settings → Members</p>
+            <p className="text-xs text-zinc-400 mb-1">{t(`${INVITE_TEXT}approvalPage`)}</p>
+            <p className="text-sm text-zinc-200">{approvalPath}</p>
           </div>
           <p className="text-sm text-zinc-400">
-            Ask them to visit <span className="text-zinc-200">Settings → Members</span> to approve your request.
+            {t(`${INVITE_TEXT}askApprover`, { path: approvalPath })}
           </p>
-          <p className="text-xs text-zinc-500">
-            Refresh this page after you've been approved — you'll be redirected automatically.
+          <p className="text-xs text-zinc-400">
+            {t(`${INVITE_TEXT}refreshAfterApproval`)}
           </p>
         </div>
         {claimSecret && claimApiKeyPath ? (
           <div className="mt-4 space-y-1 border border-zinc-800 p-3 text-xs text-zinc-400">
-            <div className="text-zinc-200">Claim secret</div>
+            <div className="text-zinc-200">{t(`${INVITE_TEXT}claimSecret`)}</div>
             <div className="font-mono break-all">{claimSecret}</div>
             <div className="font-mono break-all">POST {claimApiKeyPath}</div>
           </div>
         ) : null}
         {onboardingTextUrl ? (
           <div className="mt-4 text-xs text-zinc-400">
-            Onboarding: <span className="font-mono break-all">{onboardingTextUrl}</span>
+            {t(`${INVITE_TEXT}onboarding`)} <span className="font-mono break-all">{onboardingTextUrl}</span>
           </div>
         ) : null}
       </div>
@@ -210,7 +214,7 @@ function AwaitingJoinApprovalPanel({
 }
 
 export function InviteLandingPage() {
-  const { t } = useTranslation("experience");
+  const { t, i18n } = useTranslation("experience");
   const queryClient = useQueryClient();
   const navigate = useNavigate();
   const { setSelectedCompanyId } = useCompany();
@@ -298,11 +302,11 @@ export function InviteLandingPage() {
     Boolean(invite?.companyId) &&
     companyList.some((company) => company.id === invite?.companyId);
   const companyName = invite?.companyName?.trim() || null;
-  const companyDisplayName = companyName || `this ${PRODUCT_IDENTITY.productName} company`;
+  const companyDisplayName = companyName || t(`${INVITE_TEXT}companyFallback`, { productName: PRODUCT_IDENTITY.productName });
   const companyLogoUrl = invite?.companyLogoUrl?.trim() || null;
   const invitedByUserName = invite?.invitedByUserName?.trim() || null;
   const inviteMessage = invite?.inviteMessage?.trim() || null;
-  const requestedHumanRole = formatHumanRole(invite?.humanRole);
+  const requestedHumanRole = formatHumanRole(invite?.humanRole, t);
   const inviteJoinRequestStatus = invite?.joinRequestStatus ?? null;
   const inviteJoinRequestType = invite?.joinRequestType ?? null;
   const canCompleteAcceptedHumanInvite =
@@ -325,7 +329,7 @@ export function InviteLandingPage() {
   const sessionLabel =
     sessionQuery.data?.user.name?.trim() ||
     sessionQuery.data?.user.email?.trim() ||
-    "this account";
+    t(`${INVITE_TEXT}sessionFallback`);
 
   const authCanSubmit =
     email.trim().length > 0 &&
@@ -335,12 +339,12 @@ export function InviteLandingPage() {
 
   const acceptMutation = useMutation({
     mutationFn: async () => {
-      if (!invite) throw new Error("Invite not found");
+      if (!invite) throw new InviteAcceptBlocked("acceptFailed");
       if (isCheckingExistingMembership) {
-        throw new Error("Checking your organization access. Try again in a moment.");
+        throw new InviteAcceptBlocked("checkingBeforeAccept");
       }
       if (isCurrentMember) {
-        throw new Error("This account already belongs to the organization.");
+        throw new InviteAcceptBlocked("alreadyMemberError");
       }
       if (invite.inviteType === "bootstrap_ceo" || invite.allowedJoinTypes !== "agent") {
         return accessApi.acceptInvite(token, { requestType: "human" });
@@ -366,7 +370,9 @@ export function InviteLandingPage() {
       }
     },
     onError: (err) => {
-      setError(err instanceof Error ? err.message : "Failed to accept invite");
+      // Server refusals are English and can name internal state; show the
+      // person a localized next step rather than the raw message.
+      setError(t(`${INVITE_TEXT}${err instanceof InviteAcceptBlocked ? err.reason : "acceptFailed"}`));
     },
   });
 
@@ -434,7 +440,7 @@ export function InviteLandingPage() {
       const passwordError = authMode === "sign_up" && (code === "PASSWORD_TOO_COMMON" || code === "PASSWORD_TOO_SHORT" || code === "PASSWORD_TOO_LONG");
       const nextFeedback = passwordError
         ? { tone: "error" as const, message: t(`authFlow.${code === "PASSWORD_TOO_COMMON" ? "passwordTooCommon" : code === "PASSWORD_TOO_LONG" ? "passwordTooLong" : "passwordTooShort"}`) }
-        : mapInviteAuthFeedback(err, authMode, email);
+        : mapInviteAuthFeedback(err, authMode, email, t);
       if (getAuthErrorCode(err) === "USER_ALREADY_EXISTS_USE_ANOTHER_EMAIL") {
         setAuthMode("sign_in");
         setPassword("");
@@ -444,32 +450,32 @@ export function InviteLandingPage() {
   });
 
   const joinButtonLabel = useMemo(() => {
-    if (!invite) return "Continue";
-    if (isCurrentMember) return "Open organization";
-    if (invite.inviteType === "bootstrap_ceo") return "Accept invite";
-    if (showsAgentForm) return "Submit request";
-    return sessionQuery.data ? "Accept invite" : "Continue";
-  }, [invite, isCurrentMember, sessionQuery.data, showsAgentForm]);
+    if (!invite) return t(`${INVITE_TEXT}continue`);
+    if (isCurrentMember) return t(`${INVITE_TEXT}openCompany`);
+    if (invite.inviteType === "bootstrap_ceo") return t(`${INVITE_TEXT}acceptInvite`);
+    if (showsAgentForm) return t(`${INVITE_TEXT}submitRequest`);
+    return sessionQuery.data ? t(`${INVITE_TEXT}acceptInvite`) : t(`${INVITE_TEXT}continue`);
+  }, [invite, isCurrentMember, sessionQuery.data, showsAgentForm, t]);
 
   if (!token) {
-    return <div className="mx-auto max-w-xl py-10 text-sm text-destructive">Invalid invite token.</div>;
+    return <div className="mx-auto max-w-xl py-10 text-sm text-destructive">{t(`${INVITE_TEXT}invalidToken`)}</div>;
   }
 
   if (inviteQuery.isLoading || healthQuery.isLoading || sessionQuery.isLoading) {
-    return <div className="mx-auto max-w-xl py-10 text-sm text-muted-foreground">Loading invite...</div>;
+    return <div className="mx-auto max-w-xl py-10 text-sm text-muted-foreground">{t(`${INVITE_TEXT}loading`)}</div>;
   }
 
   if (isCheckingExistingMembership) {
-    return <div className="mx-auto max-w-xl py-10 text-sm text-muted-foreground">Checking your access...</div>;
+    return <div className="mx-auto max-w-xl py-10 text-sm text-muted-foreground">{t(`${INVITE_TEXT}checkingAccess`)}</div>;
   }
 
   if (inviteQuery.error || !invite) {
     return (
       <div className="mx-auto max-w-xl py-10">
         <div className="border border-border bg-card p-6" data-testid="invite-error">
-          <h1 className="text-lg font-semibold">Invite not available</h1>
+          <h1 className="text-lg font-semibold">{t(`${INVITE_TEXT}unavailableTitle`)}</h1>
           <p className="mt-2 text-sm text-muted-foreground">
-            This invite may be expired, revoked, or already used.
+            {t(`${INVITE_TEXT}unavailableBody`)}
           </p>
         </div>
       </div>
@@ -481,7 +487,7 @@ export function InviteLandingPage() {
     inviteJoinRequestType === "human" &&
     isCurrentMember
   ) {
-    return <div className="mx-auto max-w-xl py-10 text-sm text-muted-foreground">Opening organization...</div>;
+    return <div className="mx-auto max-w-xl py-10 text-sm text-muted-foreground">{t(`${INVITE_TEXT}openingCompany`)}</div>;
   }
 
   if (inviteJoinRequestStatus === "pending_approval" && !canCompleteAcceptedHumanInvite) {
@@ -498,11 +504,11 @@ export function InviteLandingPage() {
     return (
       <div className="mx-auto max-w-xl py-10">
         <div className="border border-border bg-card p-6" data-testid="invite-error">
-          <h1 className="text-lg font-semibold">Invite not available</h1>
+          <h1 className="text-lg font-semibold">{t(`${INVITE_TEXT}unavailableTitle`)}</h1>
           <p className="mt-2 text-sm text-muted-foreground">
             {inviteJoinRequestStatus === "rejected"
-              ? "This join request was not approved."
-              : "This invite has already been used."}
+              ? t(`${INVITE_TEXT}joinRejected`)
+              : t(`${INVITE_TEXT}alreadyUsed`)}
           </p>
         </div>
       </div>
@@ -513,10 +519,10 @@ export function InviteLandingPage() {
     return (
       <div className="min-h-screen bg-zinc-950 px-6 py-12 text-zinc-100">
         <div className="mx-auto max-w-md border border-zinc-800 bg-zinc-950 p-6">
-          <h1 className="text-lg font-semibold">Bootstrap complete</h1>
+          <h1 className="text-lg font-semibold">{t(`${INVITE_TEXT}bootstrapComplete`)}</h1>
           <div className="mt-4">
             <Button asChild className="rounded-none">
-              <Link to="/">Open board</Link>
+              <Link to="/">{t(`${INVITE_TEXT}openBoard`)}</Link>
             </Button>
           </div>
         </div>
@@ -545,11 +551,11 @@ export function InviteLandingPage() {
                 companyLogoUrl={companyLogoUrl}
                 className="h-12 w-12 border border-zinc-800 rounded-none"
               />
-              <h1 className="text-lg font-semibold">You joined the organization</h1>
+              <h1 className="text-lg font-semibold">{t(`${INVITE_TEXT}joined`)}</h1>
             </div>
             <div className="mt-4">
               <Button asChild className="w-full rounded-none">
-                <Link to="/">Open board</Link>
+                <Link to="/">{t(`${INVITE_TEXT}openBoard`)}</Link>
               </Button>
             </div>
           </div>
@@ -570,6 +576,11 @@ export function InviteLandingPage() {
   return (
     <div className="min-h-screen bg-zinc-950 px-6 py-12 text-zinc-100">
       <div className="mx-auto max-w-5xl">
+        {requiresHumanAccount ? (
+          // The invitee has no account preference yet: the browser language
+          // chose the first view, and this explicit choice overrides it.
+          <div className="mb-4 flex justify-end"><ExperienceLanguageSelect /></div>
+        ) : null}
         <div className="grid gap-6 lg:grid-cols-(--gtc-36)">
           <section className={`${panelClassName} space-y-6`}>
             <div className="flex items-start gap-4">
@@ -579,57 +590,57 @@ export function InviteLandingPage() {
                 className="h-16 w-16 rounded-none border border-zinc-800"
               />
               <div className="min-w-0">
-                <p className="text-xs uppercase tracking-(--tracking-caps) text-zinc-500">
-                  You&apos;ve been invited to join {PRODUCT_IDENTITY.productName}
+                <p className="text-xs uppercase tracking-(--tracking-caps) text-zinc-400">
+                  {t(`${INVITE_TEXT}invitedTo`, { productName: PRODUCT_IDENTITY.productName })}
                 </p>
                 <h1 className="mt-2 text-2xl font-semibold">
                   {invite.inviteType === "bootstrap_ceo"
-                    ? `Set up ${PRODUCT_IDENTITY.productName}`
-                    : `Join ${companyDisplayName}`}
+                    ? t(`${INVITE_TEXT}setUpTitle`, { productName: PRODUCT_IDENTITY.productName })
+                    : t(`${INVITE_TEXT}joinTitle`, { company: companyDisplayName })}
                 </h1>
                 <p className="mt-2 max-w-2xl text-sm leading-6 text-zinc-300">
                   {showsAgentForm
-                    ? "Review the invite details, then submit the agent information below to start the join request."
+                    ? t(`${INVITE_TEXT}introAgent`)
                     : requiresHumanAccount
-                      ? `Create your ${PRODUCT_IDENTITY.productName} account first. If you already have one, switch to sign in and continue the invite with the same email.`
-                      : "Your account is ready. Review the invite details, then accept it to continue."}
+                      ? t(`${INVITE_TEXT}introCreateAccount`, { productName: PRODUCT_IDENTITY.productName })
+                      : t(`${INVITE_TEXT}introReady`)}
                 </p>
               </div>
             </div>
 
             <div className="grid gap-3 sm:grid-cols-2">
               <div className="border border-zinc-800 p-3">
-                <div className="text-xs uppercase tracking-(--tracking-caps) text-zinc-500">Organization</div>
+                <div className="text-xs uppercase tracking-(--tracking-caps) text-zinc-400">{t(`${INVITE_TEXT}organization`)}</div>
                 <div className="mt-1 text-sm text-zinc-100">{companyDisplayName}</div>
               </div>
               <div className="border border-zinc-800 p-3">
-                <div className="text-xs uppercase tracking-(--tracking-caps) text-zinc-500">Invited by</div>
+                <div className="text-xs uppercase tracking-(--tracking-caps) text-zinc-400">{t(`${INVITE_TEXT}invitedBy`)}</div>
                 <div className="mt-1 text-sm text-zinc-100">
-                  {invitedByUserName ?? `${PRODUCT_IDENTITY.productName} board`}
+                  {invitedByUserName ?? t(`${INVITE_TEXT}invitedByFallback`, { productName: PRODUCT_IDENTITY.productName })}
                 </div>
               </div>
               <div className="border border-zinc-800 p-3">
-                <div className="text-xs uppercase tracking-(--tracking-caps) text-zinc-500">Requested access</div>
+                <div className="text-xs uppercase tracking-(--tracking-caps) text-zinc-400">{t(`${INVITE_TEXT}requestedAccess`)}</div>
                 <div className="mt-1 text-sm text-zinc-100">
-                  {showsAgentForm ? "Agent join request" : requestedHumanRole ?? "Organization access"}
+                  {showsAgentForm ? t(`${INVITE_TEXT}agentJoinRequest`) : requestedHumanRole ?? t(`${INVITE_TEXT}companyAccess`)}
                 </div>
               </div>
               <div className="border border-zinc-800 p-3">
-                <div className="text-xs uppercase tracking-(--tracking-caps) text-zinc-500">Invite expires</div>
-                <div className="mt-1 text-sm text-zinc-100">{formatDate(invite.expiresAt)}</div>
+                <div className="text-xs uppercase tracking-(--tracking-caps) text-zinc-400">{t(`${INVITE_TEXT}expires`)}</div>
+                <div className="mt-1 text-sm text-zinc-100">{formatInviteDate(invite.expiresAt, i18n.resolvedLanguage)}</div>
               </div>
             </div>
 
             {inviteMessage ? (
               <div className="border border-amber-500/40 bg-amber-500/10 p-4">
-                <div className="text-xs uppercase tracking-(--tracking-caps) text-amber-200/80">Message from inviter</div>
+                <div className="text-xs uppercase tracking-(--tracking-caps) text-amber-200/80">{t(`${INVITE_TEXT}messageFromInviter`)}</div>
                 <p className="mt-2 text-sm leading-6 text-amber-50">{inviteMessage}</p>
               </div>
             ) : null}
 
             {sessionQuery.data ? (
               <div className="border border-emerald-500/40 bg-emerald-500/10 p-4 text-sm text-emerald-50">
-                Signed in as <span className="font-medium">{sessionLabel}</span>.
+                {t(`${INVITE_TEXT}signedInAs`, { name: sessionLabel })}
               </div>
             ) : null}
           </section>
@@ -638,13 +649,13 @@ export function InviteLandingPage() {
             {showsAgentForm ? (
               <div className="space-y-4">
                 <div>
-                  <h2 className="text-lg font-semibold">Submit agent details</h2>
+                  <h2 className="text-lg font-semibold">{t(`${INVITE_TEXT}agentTitle`)}</h2>
                   <p className="mt-1 text-sm text-zinc-400">
-                    This invite will create an approval request for a new agent in {companyDisplayName}.
+                    {t(`${INVITE_TEXT}agentBody`, { company: companyDisplayName })}
                   </p>
                 </div>
                 <label className="block text-sm">
-                  <span className="mb-1 block text-zinc-400">Agent name</span>
+                  <span className="mb-1 block text-zinc-400">{t(`${INVITE_TEXT}agentName`)}</span>
                   <input
                     className={fieldClassName}
                     value={agentName}
@@ -652,7 +663,7 @@ export function InviteLandingPage() {
                   />
                 </label>
                 <label className="block text-sm">
-                  <span className="mb-1 block text-zinc-400">Adapter type</span>
+                  <span className="mb-1 block text-zinc-400">{t(`${INVITE_TEXT}adapterType`)}</span>
                   <select
                     className={fieldClassName}
                     value={adapterType}
@@ -660,13 +671,13 @@ export function InviteLandingPage() {
                   >
                     {joinAdapterOptions.map((type) => (
                       <option key={type} value={type} disabled={!ENABLED_INVITE_ADAPTERS.has(type)}>
-                        {getAdapterLabel(type)}{!ENABLED_INVITE_ADAPTERS.has(type) ? " (Coming soon)" : ""}
+                        {ENABLED_INVITE_ADAPTERS.has(type) ? getAdapterLabel(type) : t(`${INVITE_TEXT}comingSoon`, { adapter: getAdapterLabel(type) })}
                       </option>
                     ))}
                   </select>
                 </label>
                 <label className="block text-sm">
-                  <span className="mb-1 block text-zinc-400">Capabilities</span>
+                  <span className="mb-1 block text-zinc-400">{t(`${INVITE_TEXT}capabilities`)}</span>
                   <textarea
                     className={fieldClassName}
                     rows={4}
@@ -674,31 +685,32 @@ export function InviteLandingPage() {
                     onChange={(event) => setCapabilities(event.target.value)}
                   />
                 </label>
-                {error ? <p className="text-xs text-red-400">{error}</p> : null}
+                {error ? <p role="alert" className="text-xs text-red-400">{error}</p> : null}
                 <Button
                   className="w-full rounded-none"
                   disabled={acceptMutation.isPending || agentName.trim().length === 0}
                   onClick={() => acceptMutation.mutate()}
                 >
-                  {acceptMutation.isPending ? "Working..." : joinButtonLabel}
+                  {acceptMutation.isPending ? t(`${INVITE_TEXT}working`) : joinButtonLabel}
                 </Button>
               </div>
             ) : requiresHumanAccount ? (
               <div className="space-y-5">
                 <div>
                   <h2 className="text-lg font-semibold">
-                    {authMode === "sign_up" ? "Create your account" : "Sign in to continue"}
+                    {authMode === "sign_up" ? t(`${INVITE_TEXT}createAccountTitle`) : t(`${INVITE_TEXT}signInTitle`)}
                   </h2>
                   <p className="mt-1 text-sm text-zinc-400">
                     {authMode === "sign_up"
-                      ? `Start with a ${PRODUCT_IDENTITY.productName} account. After that, you'll come right back here to accept the invite for ${companyDisplayName}.`
-                      : `Use the ${PRODUCT_IDENTITY.productName} account that already matches this invite. If you do not have one yet, switch back to create account.`}
+                      ? t(`${INVITE_TEXT}createAccountBody`, { productName: PRODUCT_IDENTITY.productName, company: companyDisplayName })
+                      : t(`${INVITE_TEXT}signInBody`, { productName: PRODUCT_IDENTITY.productName })}
                   </p>
                 </div>
 
-                <div className="flex gap-2">
+                <div className="flex gap-2" role="group" aria-label={t(`${INVITE_TEXT}authMode`)}>
                   <button
                     type="button"
+                    aria-pressed={authMode === "sign_up"}
                     className={`${modeButtonBaseClassName} ${
                       authMode === "sign_up"
                         ? "border-zinc-100 bg-zinc-100 text-zinc-950"
@@ -709,10 +721,11 @@ export function InviteLandingPage() {
                       setAuthMode("sign_up");
                     }}
                   >
-                    Create account
+                    {t(`${INVITE_TEXT}createAccountMode`)}
                   </button>
                   <button
                     type="button"
+                    aria-pressed={authMode === "sign_in"}
                     className={`${modeButtonBaseClassName} ${
                       authMode === "sign_in"
                         ? "border-zinc-100 bg-zinc-100 text-zinc-950"
@@ -723,13 +736,16 @@ export function InviteLandingPage() {
                       setAuthMode("sign_in");
                     }}
                   >
-                    I already have an account
+                    {t(`${INVITE_TEXT}signInMode`)}
                   </button>
                 </div>
 
                 <form
                   className="space-y-4"
                   method="post"
+                  // The localized alert below reports invalid input; native
+                  // validation would preempt it in the browser's language.
+                  noValidate
                   action={authMode === "sign_up" ? "/api/auth/sign-up/email" : "/api/auth/sign-in/email"}
                   onSubmit={(event) => {
                     event.preventDefault();
@@ -738,7 +754,7 @@ export function InviteLandingPage() {
                       const passwordHasError = authMode === "sign_up" && name.trim() && email.trim() && password.length > 0;
                       setAuthFeedback({ tone: "error", message: passwordHasError
                         ? t((password.length > LOCAL_PASSWORD_MAX_UTF16_LENGTH || [...password].length > LOCAL_PASSWORD_MAX_LENGTH) ? "authFlow.passwordTooLong" : "authFlow.passwordTooShort")
-                        : "Please fill in all required fields." });
+                        : t(`${INVITE_TEXT}requiredFields`) });
                       return;
                     }
                     authMutation.mutate();
@@ -747,7 +763,7 @@ export function InviteLandingPage() {
                 >
                   {authMode === "sign_up" ? (
                     <label className="block text-sm" htmlFor="invite-name">
-                      <span className="mb-1 block text-zinc-400">Name</span>
+                      <span className="mb-1 block text-zinc-400">{t(`${INVITE_TEXT}name`)}</span>
                       <input
                         id="invite-name"
                         name="name"
@@ -767,7 +783,7 @@ export function InviteLandingPage() {
                     </label>
                   ) : null}
                   <label className="block text-sm" htmlFor="invite-email">
-                    <span className="mb-1 block text-zinc-400">Email</span>
+                    <span className="mb-1 block text-zinc-400">{t(`${INVITE_TEXT}email`)}</span>
                     <input
                       id="invite-email"
                       name="email"
@@ -787,7 +803,7 @@ export function InviteLandingPage() {
                     />
                   </label>
                   <label className="block text-sm" htmlFor="invite-password">
-                    <span className="mb-1 block text-zinc-400">Password</span>
+                    <span className="mb-1 block text-zinc-400">{t(`${INVITE_TEXT}password`)}</span>
                     <input
                       id="invite-password"
                       name="password"
@@ -807,7 +823,7 @@ export function InviteLandingPage() {
                       aria-describedby={authFeedback ? authErrorId : undefined}
                     />
                   </label>
-                  {authMode === "sign_up" && <p className="text-xs text-muted-foreground">{t("authFlow.passwordMinimum")}</p>}
+                  {authMode === "sign_up" && <p className="text-xs text-zinc-400">{t("authFlow.passwordMinimum")}</p>}
                   {authFeedback ? (
                     <p
                       id={authErrorId}
@@ -826,17 +842,17 @@ export function InviteLandingPage() {
                     aria-disabled={!authCanSubmit || authMutation.isPending}
                   >
                     {authMutation.isPending
-                      ? "Working..."
+                      ? t(`${INVITE_TEXT}working`)
                       : authMode === "sign_in"
-                        ? "Sign in and continue"
-                        : "Create account and continue"}
+                        ? t(`${INVITE_TEXT}signInSubmit`)
+                        : t(`${INVITE_TEXT}createAccountSubmit`)}
                   </Button>
                 </form>
 
-                <p className="text-xs leading-5 text-zinc-500">
+                <p className="text-xs leading-5 text-zinc-400">
                   {authMode === "sign_up"
-                    ? `Already signed up before? Use the existing-account option instead so the invite lands on the right ${PRODUCT_IDENTITY.productName} user.`
-                    : "No account yet? Switch back to create account so you can accept the invite with a new login."}
+                    ? t(`${INVITE_TEXT}createAccountHint`, { productName: PRODUCT_IDENTITY.productName })
+                    : t(`${INVITE_TEXT}signInHint`)}
                 </p>
               </div>
             ) : (
@@ -844,29 +860,27 @@ export function InviteLandingPage() {
                 <div>
                   <h2 className="text-lg font-semibold">
                     {isCurrentMember
-                      ? "Already in this organization"
+                      ? t(`${INVITE_TEXT}alreadyMemberTitle`)
                       : shouldAutoAcceptHumanInvite
-                      ? "Completing organization access"
+                      ? t(`${INVITE_TEXT}completingTitle`)
                       : invite.inviteType === "bootstrap_ceo"
-                        ? "Accept bootstrap invite"
-                        : "Accept organization invite"}
+                        ? t(`${INVITE_TEXT}acceptBootstrapTitle`)
+                        : t(`${INVITE_TEXT}acceptTitle`)}
                   </h2>
                   <p className="mt-1 text-sm text-zinc-400">
                     {shouldAutoAcceptHumanInvite
-                      ? `Granting your access to ${companyDisplayName}.`
+                      ? t(`${INVITE_TEXT}grantingBody`, { company: companyDisplayName })
                       : isCurrentMember
-                      ? `This account already belongs to ${companyDisplayName}.`
-                      : `This will ${
-                          invite.inviteType === "bootstrap_ceo"
-                            ? `finish setting up ${PRODUCT_IDENTITY.productName}`
-                            : `grant or complete your access to ${companyDisplayName}`
-                        }.`}
+                      ? t(`${INVITE_TEXT}alreadyMemberBody`, { company: companyDisplayName })
+                      : invite.inviteType === "bootstrap_ceo"
+                        ? t(`${INVITE_TEXT}acceptBootstrapBody`, { productName: PRODUCT_IDENTITY.productName })
+                        : t(`${INVITE_TEXT}acceptBody`, { company: companyDisplayName })}
                   </p>
                 </div>
-                {error ? <p className="text-xs text-red-400">{error}</p> : null}
+                {error ? <p role="alert" className="text-xs text-red-400">{error}</p> : null}
                 {shouldAutoAcceptHumanInvite ? (
-                  <div className="text-sm text-zinc-400">
-                    {acceptMutation.isPending ? "Submitting request..." : "Finishing sign-in..."}
+                  <div role="status" className="text-sm text-zinc-400">
+                    {acceptMutation.isPending ? t(`${INVITE_TEXT}submitting`) : t(`${INVITE_TEXT}finishingSignIn`)}
                   </div>
                 ) : (
                   <Button
@@ -882,7 +896,7 @@ export function InviteLandingPage() {
                       acceptMutation.mutate();
                     }}
                   >
-                    {acceptMutation.isPending ? "Working..." : joinButtonLabel}
+                    {acceptMutation.isPending ? t(`${INVITE_TEXT}working`) : joinButtonLabel}
                   </Button>
                 )}
               </div>

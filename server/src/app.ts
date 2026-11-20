@@ -87,6 +87,7 @@ import { companyPortabilityService } from "./services/company-portability.js";
 import { healthRoutes } from "./routes/health.js";
 import { cloudRuntimeIdentityMiddleware } from "./middleware/cloud-runtime-identity.js";
 import { cloudControlMiddleware } from "./middleware/cloud-control.js";
+import { safeGetCacheWriteInvalidation } from "./services/safe-get-cache-generation.js";
 import { cloudRoutes } from "./routes/cloud.js";
 import { companyRoutes } from "./routes/companies.js";
 import { companySkillRoutes } from "./routes/company-skills.js";
@@ -611,6 +612,9 @@ export async function createApp(
   // Default is unset → Express trusts nothing, which is the only safe choice
   // when the server may be reachable without a known reverse proxy in front.
   applyTrustProxy(app, parseTrustProxyEnv(process.env.TRUST_PROXY));
+  // First, so every write (API, MCP gateway, webhooks) invalidates cached
+  // safe-GET results before its response reaches the client.
+  app.use(safeGetCacheWriteInvalidation());
   if (opts.publicAppOrigins) {
     app.locals.publicAppOrigins = opts.publicAppOrigins;
     app.use(publicOriginGuard(opts.publicAppOrigins));

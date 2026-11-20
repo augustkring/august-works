@@ -8,7 +8,7 @@ import type { AgentMonitor as View } from "@paperclipai/shared";
 import { agentMonitorApi } from "../api/agent-monitor";
 import { agentPauseApi } from "../api/agent-pause";
 import { AgentMonitor } from "./AgentMonitor";
-import "../i18n";
+import { i18n } from "../i18n";
 import { queryKeys } from "../lib/queryKeys";
 import { v9SessionFixture } from "../hooks/v9-session.test-support";
 let live: (event: {
@@ -239,4 +239,19 @@ it.each([
   await vi.waitFor(() => expect(container.textContent).toContain(message));
   expect(container.textContent).toContain("Choose whether admitted work may finish or cancellation is requested.");
   expect(container.textContent).toContain("does not confirm that a remote process stopped");
+});
+it("formats observed and run times in the chosen UI language (CREATE-R1)", async () => {
+  // The real Danish journey showed US dates (11/20/2026, 12:21:29 PM) on the Danish monitor.
+  vi.spyOn(agentMonitorApi, "get").mockResolvedValue({ ...data, lastHeartbeatAt: "2026-10-10T00:00:00Z" });
+  await act(async () => { await i18n.changeLanguage("da"); });
+  try {
+    await mount();
+    await vi.waitFor(() => expect(container.querySelectorAll("time").length).toBe(3));
+    const danish = new Date("2026-10-10T00:00:00Z").toLocaleString("da");
+    const english = new Date("2026-10-10T00:00:00Z").toLocaleString("en");
+    expect(danish).not.toBe(english);
+    for (const time of container.querySelectorAll("time")) expect(time.textContent).toBe(danish);
+  } finally {
+    await act(async () => { await i18n.changeLanguage("en"); });
+  }
 });

@@ -7,6 +7,7 @@ import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import { queryKeys } from "../lib/queryKeys";
 import { NewIssueDialog } from "./NewIssueDialog";
+import { i18n } from "../i18n";
 
 const dialogState = vi.hoisted(() => ({
   newIssueOpen: true,
@@ -222,6 +223,7 @@ vi.mock("@/components/ui/dialog", () => ({
     dialogContentState.onPointerDownOutside = onPointerDownOutside as typeof dialogContentState.onPointerDownOutside;
     return <div {...props}>{children}</div>;
   },
+  DialogTitle: ({ children, ...props }: ComponentProps<"h2">) => <h2 {...props}>{children}</h2>,
 }));
 
 vi.mock("@/components/ui/button", () => ({
@@ -414,6 +416,47 @@ describe("NewIssueDialog", () => {
     expect(container.textContent).not.toContain("Sub-task of");
 
     act(() => rerendered.root.unmount());
+  });
+
+  it("names the dialog and its icon controls, in English and Danish (CREATE-R1)", async () => {
+    // Real-backend journey found an unnamed dialog, two unlabeled icon buttons
+    // and English copy on the Danish screen.
+    const read = () => ({
+      title: container.querySelector("h2")?.textContent,
+      taskTitle: container.querySelector("textarea")?.getAttribute("aria-label"),
+      labels: Array.from(container.querySelectorAll("button"))
+        .filter((button) => !button.textContent?.replace("×", "").trim())
+        .map((button) => button.getAttribute("aria-label")),
+      text: container.textContent ?? "",
+    });
+    let rendered = renderDialog(container);
+    await flush();
+    let view = read();
+    expect(view.title).toBe("New task");
+    expect(view.taskTitle).toBe("Task title");
+    expect(view.labels.length).toBeGreaterThan(0);
+    expect(view.labels.every(Boolean), JSON.stringify(view.labels)).toBe(true);
+    expect(view.labels).toEqual(expect.arrayContaining(["Expand", "Close", "Add reviewer, approver, or watchdog", "More options"]));
+    act(() => rendered.root.unmount());
+
+    await act(async () => { await i18n.changeLanguage("da"); });
+    try {
+      rendered = renderDialog(container);
+      await flush();
+      view = read();
+      expect(view.title).toBe("Ny opgave");
+      expect(view.taskTitle).toBe("Opgavens titel");
+      expect(view.labels).toEqual(expect.arrayContaining(["Udvid", "Luk", "Flere valgmuligheder"]));
+      for (const danish of ["Til", "Ansvarlig", "Projekt", "Skal udføres", "Kassér udkast", "Opret opgave"]) {
+        expect(view.text).toContain(danish);
+      }
+      for (const english of ["New task", "Assignee", "Discard Draft", "Create Task", "Todo"]) {
+        expect(view.text).not.toContain(english);
+      }
+      act(() => rendered.root.unmount());
+    } finally {
+      await act(async () => { await i18n.changeLanguage("en"); });
+    }
   });
 
   it("uses the compact composer control proportions for mobile task fields", async () => {

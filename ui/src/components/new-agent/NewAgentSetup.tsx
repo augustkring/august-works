@@ -14,6 +14,7 @@ import { useSaasCapabilities } from "@/hooks/useSaasCapabilities";
 import { useCloudInstance } from "@/hooks/useCloudInstance";
 import { isNewAgentAdapterAllowed } from "@/lib/new-agent-adapters";
 import { useEffect, useRef, useState } from "react";
+import { useTranslation } from "@/i18n";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { AnimatePresence, motion, MotionConfig } from "motion/react";
 import { ArrowLeft, ArrowRight, Check, Settings2 } from "lucide-react";
@@ -73,12 +74,13 @@ const blocking = (result: AdapterEnvironmentTestResult) =>
   result.checks.some((check) => check.code === ADAPTER_AUTH_MISSING_CHECK_CODE);
 
 export function NewAgentSetup() {
+  const { t } = useTranslation("experience");
   const { selectedCompanyId } = useCompany();
   const [params] = useSearchParams();
   if (!selectedCompanyId)
     return (
       <p className="text-sm text-muted-foreground">
-        Select an organization to create an agent.
+        {t("screens.newAgent.selectOrganization")}
       </p>
     );
   return (
@@ -106,6 +108,7 @@ function Setup({
   runnerProvider: string;
   createdAgentId: string | null;
 }) {
+  const { t } = useTranslation("experience");
   const navigate = useNavigate();
   const cache = useQueryClient();
   const { openNewIssue } = useDialogActions();
@@ -257,7 +260,7 @@ function Setup({
     environmentError =
       cause instanceof Error
         ? cause.message
-        : "Could not resolve the environment.";
+        : t("screens.newAgent.environmentFailed");
   }
   const environment = envs.data?.find((env) => env.id === environmentId);
   const sandboxProvider =
@@ -385,12 +388,12 @@ function Setup({
   }
   function preparedConfig(nextConnection = connection) {
     if (multiProvider && (!model.trim() || !model.includes("/")))
-      throw new Error("Choose or enter a model in provider/model format.");
+      throw new Error(t("screens.newAgent.chooseModelFormat"));
     if (
       adapterType === "cursor_cloud" &&
       !/^https:\/\/github\.com\/[^/]+\/[^/]+/.test(repository.trim())
     )
-      throw new Error("Enter a GitHub repository URL.");
+      throw new Error(t("screens.newAgent.enterRepository"));
     if (
       ["cursor_cloud", "hermes_gateway"].includes(adapterType) &&
       !apiKey.trim() &&
@@ -398,19 +401,19 @@ function Setup({
     )
       throw new Error(
         adapterType === "cursor_cloud"
-          ? "Enter a Cursor API key."
-          : `Enter ${envKey} or select an organization secret.`,
+          ? t("screens.newAgent.enterCursorKey")
+          : t("screens.newAgent.enterKey", { key: envKey }),
       );
     if (adapterType === "hermes_gateway") {
       try {
         const url = new URL(gatewayUrl.trim());
         if (!["https:", "http:"].includes(url.protocol)) throw new Error();
       } catch {
-        throw new Error("Enter the Hermes API base URL.");
+        throw new Error(t("screens.newAgent.enterHermesUrl"));
       }
     }
     if (usingKimiApi && !kimiModel.trim())
-      throw new Error("Enter the Kimi API model name.");
+      throw new Error(t("screens.newAgent.enterKimiModel"));
     return buildConfig(nextConnection);
   }
   function pendingCredentials(nextConnection = connection) {
@@ -453,7 +456,7 @@ function Setup({
     } catch (cause) {
       if (run === generation.current) {
         setError(
-          cause instanceof Error ? cause.message : "Could not test the agent.",
+          cause instanceof Error ? cause.message : t("screens.newAgent.testFailed"),
         );
         setTestState("fail");
       }
@@ -541,7 +544,7 @@ function Setup({
       ]);
     } catch (cause) {
       setError(
-        cause instanceof Error ? cause.message : "Could not create the agent.",
+        cause instanceof Error ? cause.message : t("screens.newAgent.createFailed"),
       );
     } finally {
       if (!hired) {
@@ -550,7 +553,7 @@ function Setup({
         } catch {
           setError(
             (original) =>
-              `${original ? `${original} ` : ""}Could not remove an unused setup credential. Remove it from Secrets before retrying.`,
+              `${original ? `${original} ` : ""}${t("screens.newAgent.credentialCleanupFailed")}`,
           );
         }
       }
@@ -571,8 +574,8 @@ function Setup({
         className="text-sm text-muted-foreground"
       >
         {savedAgent.error
-          ? "Could not load the created agent. Return to Agents to view it."
-          : "Loading your agent…"}
+          ? t("screens.newAgent.loadAgentFailed")
+          : t("screens.newAgent.loadingAgent")}
       </p>
     );
   if (!name || !adapterType)
@@ -594,9 +597,9 @@ function Setup({
     "saved" as const,
   ];
   const labels = {
-    connect: "Connect",
-    runtime: "Configure",
-    saved: "Confirmation",
+    connect: t("screens.newAgent.stepConnect"),
+    runtime: t("screens.newAgent.stepConfigure"),
+    saved: t("screens.newAgent.stepConfirmation"),
   };
   const confirmationEnvironment = created?.defaultEnvironmentId
     ? envs.data?.find((env) => env.id === created.defaultEnvironmentId)
@@ -618,7 +621,7 @@ function Setup({
         ? "Hermes Gateway"
         : confirmationEnvironment
           ? environmentDisplayLabel(confirmationEnvironment)
-          : "Local machine";
+          : t("screens.newAgent.localMachine");
   const setupError =
     adapters.error ??
     envs.error ??
@@ -643,7 +646,7 @@ function Setup({
                 <span>
                   ·{" "}
                   {runnerProvider === "codex"
-                    ? "Native app server runner"
+                    ? t("screens.newAgent.nativeRunner")
                     : getAdapterDisplay("paperclip_runner").label}
                 </span>
               )}
@@ -662,19 +665,18 @@ function Setup({
         )}
         {adapters.data && !available && (
           <p role="alert" className="text-sm text-destructive">
-            This adapter is unavailable. Choose an enabled adapter.
+            {t("screens.newAgent.adapterUnavailable")}
           </p>
         )}
         {(managedOnly || forced.forced) &&
           !envs.isPending &&
           !environmentId && (
             <p role="alert" className="text-sm text-destructive">
-              No managed environment is available. Configure an environment
-              before continuing.
+              {t("screens.newAgent.noManagedEnvironment")}
             </p>
           )}
         <div className="flex flex-col gap-8 md:flex-row">
-          <nav aria-label="Agent setup steps" className="shrink-0 md:w-44">
+          <nav aria-label={t("screens.newAgent.stepsNav")} className="shrink-0 md:w-44">
             <ol className="flex flex-wrap gap-2 md:flex-col">
               {steps.map((step, index) => (
                 <li key={step}>
@@ -715,8 +717,8 @@ function Setup({
                   <OnboardingCard className="mx-auto">
                     <div className="mb-8">
                       <OnboardingHeading
-                        title="Connect a model"
-                        lede={`Connect ${name} to ${connectionAdapter === "claude_local" ? "Claude" : connectionAdapter === "grok_local" ? "Grok" : "OpenAI"}.`}
+                        title={t("screens.newAgent.connectTitle")}
+                        lede={t("screens.newAgent.connectLede", { name, provider: connectionAdapter === "claude_local" ? "Claude" : connectionAdapter === "grok_local" ? "Grok" : "OpenAI" })}
                         center
                       />
                     </div>
@@ -753,29 +755,29 @@ function Setup({
                   <div className="space-y-6">
                     <div className="space-y-6 rounded-lg border border-border p-6">
                       <h2 className="flex items-center gap-3 text-lg font-semibold">
-                        <Check className="size-5" />
+                        <Check className="size-5" aria-hidden="true" />
                         {created.status === "pending_approval"
-                          ? "Agent submitted for approval"
-                          : "Your agent is ready"}
+                          ? t("screens.newAgent.submitted")
+                          : t("screens.newAgent.ready")}
                       </h2>
                       <dl className="grid grid-cols-2 gap-4 text-sm">
-                        <dt className="text-muted-foreground">Adapter</dt>
+                        <dt className="text-muted-foreground">{t("screens.newAgent.adapter")}</dt>
                         <dd>{getAdapterDisplay(adapterType).label}</dd>
                         {showModel && (
                           <>
-                            <dt className="text-muted-foreground">Model</dt>
+                            <dt className="text-muted-foreground">{t("screens.newAgent.model")}</dt>
                             <dd className="break-all">
                               {String(confirmationModel)}
                             </dd>
                           </>
                         )}
-                        <dt className="text-muted-foreground">Environment</dt>
+                        <dt className="text-muted-foreground">{t("screens.newAgent.environment")}</dt>
                         <dd>{environmentLabel}</dd>
                       </dl>
                       <p className="text-sm text-muted-foreground">
                         {created.status === "pending_approval"
-                          ? "An organization administrator must approve this agent before it can work."
-                          : "Assign a task when you’re ready for this agent to work."}
+                          ? t("screens.newAgent.approvalNeeded")
+                          : t("screens.newAgent.assignWhenReady")}
                       </p>
                     </div>
                     <div className="flex flex-wrap justify-between gap-3">
@@ -783,8 +785,8 @@ function Setup({
                         variant="outline"
                         onClick={() => navigate(`${agentUrl(created)}/runtime`)}
                       >
-                        <Settings2 className="size-4" />
-                        Edit configuration
+                        <Settings2 className="size-4" aria-hidden="true" />
+                        {t("screens.newAgent.editConfiguration")}
                       </Button>
                       <Button
                         disabled={created.status === "pending_approval"}
@@ -795,8 +797,8 @@ function Setup({
                           })
                         }
                       >
-                        Assign {created.name} a Task
-                        <ArrowRight className="size-4" />
+                        {t("screens.newAgent.assignTask", { name: created.name })}
+                        <ArrowRight className="size-4" aria-hidden="true" />
                       </Button>
                     </div>
                   </div>
@@ -809,19 +811,19 @@ function Setup({
                     }}
                   >
                     <h2 className="text-xl font-semibold">
-                      Configure your agent
+                      {t("screens.newAgent.configureTitle")}
                     </h2>
                     <fieldset disabled={busy} className="space-y-8">
                       <section className="space-y-5">
-                        <h3 className="text-sm font-semibold">Runtime</h3>
+                        <h3 className="text-sm font-semibold">{t("screens.newAgent.runtime")}</h3>
                         {aiProviderForAdapter(brandType) && (
                           connection && !aiBinding ? (
                             <div className="space-y-3">
                               <p className="text-sm text-muted-foreground">
-                                Using the connection selected in the Connect step.
+                                {t("screens.newAgent.usingConnection")}
                               </p>
                               <Button type="button" variant="outline" onClick={() => setScreen("connect")}>
-                                Change connection
+                                {t("screens.newAgent.changeConnection")}
                               </Button>
                             </div>
                           ) : (
@@ -829,7 +831,7 @@ function Setup({
                               onChange={binding => { setRuntimeAiBinding(binding); resetTest(); }} />
                           )
                         )}
-                        {models.error && <p role="alert" className="text-sm text-destructive">Could not load models. Retry or enter a model ID manually.</p>}
+                        {models.error && <p role="alert" className="text-sm text-destructive">{t("screens.newAgent.modelsFailed")}</p>}
                         {((showModel && !usingKimiApi) ||
                           efforts.length > 0) && (
                           <div className="grid items-start gap-5 sm:grid-cols-2">
@@ -867,9 +869,9 @@ function Setup({
                               />
                             )}
                             {efforts.length > 0 && (
-                              <Field label="Thinking effort">
+                              <Field label={t("screens.newAgent.thinkingEffort")}>
                                 <select
-                                  aria-label="Thinking effort"
+                                  aria-label={t("screens.newAgent.thinkingEffort")}
                                   className={controlClass}
                                   value={effort}
                                   onChange={(event) => {
@@ -877,7 +879,7 @@ function Setup({
                                     resetTest();
                                   }}
                                 >
-                                  <option value="">Auto</option>
+                                  <option value="">{t("screens.newAgent.auto")}</option>
                                   {efforts.map((value) => (
                                     <option key={value} value={value}>
                                       {value}
@@ -890,21 +892,20 @@ function Setup({
                         )}
                         {SETUP_LOGIN_HINTS[adapterType] && (
                           <p className="text-sm text-muted-foreground">
-                            {SETUP_LOGIN_HINTS[adapterType]}
+                            {t(`screens.newAgent.loginHint.${adapterType}`, { defaultValue: SETUP_LOGIN_HINTS[adapterType] })}
                           </p>
                         )}
                         {showModel && models.error && (
                           <p className="text-xs text-muted-foreground">
-                            Couldn’t load models. You can enter a model ID
-                            manually.
+                            {t("screens.newAgent.modelsManual")}
                           </p>
                         )}
                         {hasCredentialField && !aiBinding && (
                           <div className="grid gap-5 sm:grid-cols-2">
                             {chooseProvider && (
-                              <Field label="API key provider">
+                              <Field label={t("screens.newAgent.keyProvider")}>
                                 <select
-                                  aria-label="API key provider"
+                                  aria-label={t("screens.newAgent.keyProvider")}
                                   className={controlClass}
                                   value={provider}
                                   onChange={(event) => {
@@ -955,13 +956,13 @@ function Setup({
                                     }}
                                     placeholder={
                                       selectedBinding
-                                        ? "Using saved key"
+                                        ? t("screens.newAgent.usingSavedKey")
                                         : [
                                               "cursor_cloud",
                                               "hermes_gateway",
                                             ].includes(adapterType)
-                                          ? "Required"
-                                          : "Optional if already configured"
+                                          ? t("screens.newAgent.required")
+                                          : t("screens.newAgent.optionalKey")
                                     }
                                   />
                                   {adapterType === "cursor_cloud" && (
@@ -971,7 +972,7 @@ function Setup({
                                       rel="noopener noreferrer"
                                       className="shrink-0 text-xs text-muted-foreground underline underline-offset-4 hover:text-foreground"
                                     >
-                                      get api key
+                                      {t("screens.newAgent.getApiKey")}
                                     </a>
                                   )}
                                 </div>
@@ -983,7 +984,7 @@ function Setup({
                                   chooseProvider ? "sm:col-span-2" : undefined
                                 }
                               >
-                                <Field label="Or use an organization secret">
+                                <Field label={t("screens.newAgent.organizationSecret")}>
                                   <SecretPicker
                                     secretId={
                                       selectedBinding &&
@@ -1008,16 +1009,15 @@ function Setup({
                               </div>
                             )}
                             <p className="text-xs text-muted-foreground sm:col-span-2">
-                              New keys are saved as organization secrets when
-                              you finish setup.
-                              {multiProvider && ` Use a ${provider}/model ID.`}
+                              {t("screens.newAgent.keysSaved")}
+                              {multiProvider && t("screens.newAgent.providerModel", { provider })}
                             </p>
                           </div>
                         )}
                         {adapterType === "hermes_gateway" && (
-                          <Field label="Hermes API base URL">
+                          <Field label={t("screens.newAgent.hermesUrl")}>
                             <Input
-                              aria-label="Hermes API base URL"
+                              aria-label={t("screens.newAgent.hermesUrl")}
                               value={gatewayUrl}
                               onChange={(event) => {
                                 setGatewayUrl(event.target.value);
@@ -1029,9 +1029,9 @@ function Setup({
                         )}
                         {usingKimiApi && (
                           <div className="grid gap-5 sm:grid-cols-2">
-                            <Field label="Kimi API model name">
+                            <Field label={t("screens.newAgent.kimiModel")}>
                               <Input
-                                aria-label="Kimi API model name"
+                                aria-label={t("screens.newAgent.kimiModel")}
                                 value={kimiModel}
                                 onChange={(event) => {
                                   setKimiModel(event.target.value);
@@ -1040,9 +1040,9 @@ function Setup({
                                 placeholder="kimi-for-coding"
                               />
                             </Field>
-                            <Field label="Kimi API protocol">
+                            <Field label={t("screens.newAgent.kimiProtocol")}>
                               <select
-                                aria-label="Kimi API protocol"
+                                aria-label={t("screens.newAgent.kimiProtocol")}
                                 className={controlClass}
                                 value={kimiProtocol}
                                 onChange={(event) => {
@@ -1058,26 +1058,26 @@ function Setup({
                               </select>
                             </Field>
                             <Field
-                              label="Kimi API base URL"
-                              hint="Optional override for your provider endpoint."
+                              label={t("screens.newAgent.kimiBaseUrl")}
+                              hint={t("screens.newAgent.kimiBaseUrlHint")}
                             >
                               <Input
-                                aria-label="Kimi API base URL"
+                                aria-label={t("screens.newAgent.kimiBaseUrl")}
                                 value={kimiBaseUrl}
                                 onChange={(event) => {
                                   setKimiBaseUrl(event.target.value);
                                   resetTest();
                                 }}
-                                placeholder="Provider default"
+                                placeholder={t("screens.newAgent.providerDefault")}
                               />
                             </Field>
                           </div>
                         )}
                         {adapterType === "cursor_cloud" && (
                           <div className="grid gap-5 sm:grid-cols-2">
-                            <Field label="GitHub repository">
+                            <Field label={t("screens.newAgent.repository")}>
                               <Input
-                                aria-label="GitHub repository"
+                                aria-label={t("screens.newAgent.repository")}
                                 value={repository}
                                 onChange={(event) => {
                                   setRepository(event.target.value);
@@ -1086,10 +1086,10 @@ function Setup({
                                 placeholder="https://github.com/your-org/repo"
                               />
                             </Field>
-                            <Field label="Branch">
+                            <Field label={t("screens.newAgent.branch")}>
                               <Input
-                                aria-label="Branch"
-                                placeholder="Repository default"
+                                aria-label={t("screens.newAgent.branch")}
+                                placeholder={t("screens.newAgent.repositoryDefault")}
                                 value={branch}
                                 onChange={(event) => {
                                   setBranch(event.target.value);
@@ -1104,9 +1104,9 @@ function Setup({
                         adapterType,
                       ) && (
                         <section className="space-y-5">
-                          <h3 className="text-sm font-semibold">Environment</h3>
+                          <h3 className="text-sm font-semibold">{t("screens.newAgent.environment")}</h3>
                           <select
-                            aria-label="Environment"
+                            aria-label={t("screens.newAgent.environment")}
                             className={controlClass}
                             value={environmentOverride}
                             disabled={forced.forced || managedOnly}
@@ -1118,7 +1118,7 @@ function Setup({
                             }}
                           >
                             <option value="">
-                              Default: {environmentLabel}
+                              {t("screens.newAgent.environmentDefault", { label: environmentLabel })}
                             </option>
                             {(envs.data ?? [])
                               .filter((env) => env.status === "active")
@@ -1151,8 +1151,8 @@ function Setup({
                           disabled={busy}
                           onClick={() => setScreen("connect")}
                         >
-                          <ArrowLeft className="size-4" />
-                          Connection
+                          <ArrowLeft className="size-4" aria-hidden="true" />
+                          {t("screens.newAgent.connection")}
                         </Button>
                       ) : (
                         <span />
@@ -1166,8 +1166,8 @@ function Setup({
                           Boolean(connectionAdapter && !connection)
                         }
                       >
-                        {saving ? "Creating…" : "Finish setup"}
-                        <Check className="size-4" />
+                        {saving ? t("screens.newAgent.creating") : t("screens.newAgent.finish")}
+                        <Check className="size-4" aria-hidden="true" />
                       </Button>
                     </div>
                   </form>

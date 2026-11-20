@@ -46,7 +46,7 @@ describe("AgentChatPicker", () => {
     expect(options()).toHaveLength(2);
     await search("designer");
     expect(options()).toHaveLength(1);
-    expect(options()[0].textContent).toContain("generalist.status.paused");
+    expect(options()[0].textContent).toContain("Paused");
     await act(async () => {
       document.querySelector("[role=combobox]")!.dispatchEvent(new KeyboardEvent("keydown", { key: "Enter", bubbles: true }));
     });
@@ -58,8 +58,8 @@ describe("AgentChatPicker", () => {
     await render();
     await search("accountant");
     expect(options()).toHaveLength(0);
-    expect(document.body.textContent).toContain("generalist.noMatch");
-    const clear = [...document.querySelectorAll("button")].find((b) => b.textContent?.includes("generalist.clearSearch"))!;
+    expect(document.body.textContent).toContain("No Co-workers match");
+    const clear = [...document.querySelectorAll("button")].find((b) => b.textContent?.includes("Clear search"))!;
     await act(async () => clear.click());
     expect(options()).toHaveLength(2);
     await search("designer");
@@ -80,6 +80,6 @@ describe("AgentChatPicker", () => {
     await act(async () => [...document.querySelectorAll("button")].find((b) => b.textContent === "Retry")!.click());
     expect(retry).toHaveBeenCalledOnce();
     await render({ error: null, agents: [] });
-    expect(document.body.textContent).toContain("generalist.noCoworkers");
+    expect(document.body.textContent).toContain("No Co-workers are available yet.");
   });
 });

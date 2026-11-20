@@ -2,6 +2,7 @@ import { createRequire } from "node:module";
 import { expect, test, type APIResponse } from "@playwright/test";
 import { registerEnglishAccountLocaleIsolation } from "./account-locale-isolation";
 import { V5_FEATURE_KEYS, agentAuthoringContentSchema, agentAuthoringDraftViewSchema } from "../../packages/shared/src/index.ts";
+import { deleteCompany } from "./company-cleanup";
 registerEnglishAccountLocaleIsolation(test);
 const axePath = createRequire(import.meta.url).resolve("axe-core/axe.min.js");
 const id = (n: number) => `10000000-0000-4000-8000-${String(n).padStart(12, "0")}`;
@@ -105,5 +106,5 @@ test("saved runtime selection survives reload and an unknown qualification uses 
     expect(await page.evaluate(() => document.documentElement.scrollWidth <= innerWidth)).toBe(true);
     expect(qualifications).toBe(1);
     expect(await json(await request.get(`/api/companies/${company.id}/agents`))).toEqual([]);
-  } finally { await json(await request.delete(`/api/companies/${company.id}`)); }
+  } finally { await json(await deleteCompany(request, company.id)); }
 });

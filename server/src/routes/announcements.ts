@@ -52,7 +52,10 @@ export function announcementRoutes(db: Db, options: AnnouncementFeedOptions, fee
     res.setHeader("Cache-Control", "private, no-store");
     const result = await db.transaction(async raw => {
       const tx = raw as unknown as Db;
-      const resolved = await resolveCurrentTrustMaterialChangeRequirements(tx, req.actor, companyId, query.expectedUserId);
+      // A page-load projection: read without row locks so it cannot deadlock
+      // with (or fail the NOWAIT locks of) a concurrent sign-in or security
+      // change. Each completion route rechecks the same facts under locks.
+      const resolved = await resolveCurrentTrustMaterialChangeRequirements(tx, req.actor, companyId, query.expectedUserId, "read");
       const requirements = resolved.documents;
       const modelNotices: NonNullable<ReturnType<typeof projectCurrentModelRetirementNotice>>[] = [];
       const rows = modelProfiles.length || dependencyProfiles.readOnly.length ? await tx.select({ id: agents.id, adapterConfig: agents.adapterConfig,

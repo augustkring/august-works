@@ -7,6 +7,7 @@ import { expect, test, type APIResponse } from "@playwright/test";
 import { createDb, closeRegisteredClients, agents, heartbeatRuns } from "../../packages/db/src/index.ts";
 import { V5_FEATURE_KEYS } from "../../packages/shared/src/index.ts";
 import { registerEnglishAccountLocaleIsolation } from "./account-locale-isolation";
+import { deleteCompany } from "./company-cleanup";
 
 registerEnglishAccountLocaleIsolation(test);
 
@@ -81,7 +82,7 @@ test("Human reviews one separate Native backlog proposal before creating it", as
   } finally {
     await page.goto("about:blank");
     await request.patch("/api/instance/settings/experimental", { data: flags });
-    await request.delete(`/api/companies/${company.id}`);
+    await deleteCompany(request, company.id);
     await closeRegisteredClients(databaseUrl);
   }
 });

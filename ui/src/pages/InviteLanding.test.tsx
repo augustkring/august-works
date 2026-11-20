@@ -7,6 +7,7 @@ import { MemoryRouter, Route, Routes, useLocation } from "react-router-dom";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import { InviteLandingPage } from "./InviteLanding";
 import { queryKeys } from "../lib/queryKeys";
+import { i18n } from "@/i18n";
 
 const getInviteMock = vi.hoisted(() => vi.fn());
 const acceptInviteMock = vi.hoisted(() => vi.fn());
@@ -1276,6 +1277,104 @@ describe("InviteLandingPage", () => {
 
     await act(async () => {
       root.unmount();
+    });
+  });
+
+  describe("in Danish (AUTH-DA1)", () => {
+    async function renderDanish(queryClient = new QueryClient({ defaultOptions: { queries: { retry: false } } })) {
+      await act(async () => { await i18n.changeLanguage("da"); });
+      const root = createRoot(container);
+      await act(async () => {
+        root.render(
+          <MemoryRouter initialEntries={["/invite/pcp_invite_test"]}>
+            <QueryClientProvider client={queryClient}>
+              <Routes>
+                <Route path="/invite/:token" element={<InviteLandingPage />} />
+              </Routes>
+            </QueryClientProvider>
+          </MemoryRouter>,
+        );
+      });
+      await flushReact();
+      await flushReact();
+      return root;
+    }
+
+    afterEach(async () => {
+      await i18n.changeLanguage("en");
+    });
+
+    it("renders the signed-out invite landing without English text and offers the language choice", async () => {
+      const root = await renderDanish();
+      const text = container.textContent ?? "";
+      expect(text).toContain("Du er inviteret til Blentera");
+      expect(container.querySelector("h1")?.textContent).toBe("Bliv medlem af Acme Robotics");
+      expect(text).toContain("Operatør");
+      expect(text).toContain("Besked fra afsenderen");
+      expect(text).toContain(new Date("2027-03-07T00:10:00.000Z").toLocaleDateString("da-DK", { month: "short", day: "numeric", year: "numeric" }));
+      for (const english of ["You've been invited", "Join Acme", "Create account", "I already have an account", "Organization", "Invited by",
+        "Requested access", "Invite expires", "Message from inviter", "Operator", "Already signed up before"]) {
+        expect(text).not.toContain(english);
+      }
+      const labels = Array.from(container.querySelectorAll("label")).map((label) => label.textContent?.trim());
+      expect(labels).toEqual(["SprogEnglishDansk", "Navn", "E-mail", "Adgangskode"]);
+      expect((container.querySelector("label select") as HTMLSelectElement).value).toBe("da");
+      // The page is a fixed dark surface: theme-relative muted text fails contrast there.
+      expect(container.querySelector("form .text-muted-foreground")).toBeNull();
+      const modes = Array.from(container.querySelectorAll('[role="group"] button'));
+      expect(modes.map((button) => [button.textContent, button.getAttribute("aria-pressed")])).toEqual([
+        ["Opret konto", "true"], ["Jeg har allerede en konto", "false"],
+      ]);
+      expect((container.querySelector('button[type="submit"]') as HTMLButtonElement).textContent).toBe("Opret konto og fortsæt");
+      const form = container.querySelector('[data-testid="invite-inline-auth"]') as HTMLFormElement;
+      expect(form.noValidate).toBe(true);
+      expect((form.querySelector('input[name="password"]') as HTMLInputElement).required).toBe(true);
+      await act(async () => { root.unmount(); });
+    });
+
+    it("announces a localized invite error instead of the raw server message", async () => {
+      signInEmailMock.mockRejectedValue(Object.assign(new Error("Internal provider failure: pool exhausted"), { status: 500 }));
+      const root = await renderDanish();
+      const signIn = Array.from(container.querySelectorAll("button")).find((button) => button.textContent === "Jeg har allerede en konto");
+      await act(async () => { signIn?.dispatchEvent(new MouseEvent("click", { bubbles: true })); });
+      await flushReact();
+      const setValue = Object.getOwnPropertyDescriptor(HTMLInputElement.prototype, "value")!.set!;
+      const email = container.querySelector('input[name="email"]') as HTMLInputElement;
+      const password = container.querySelector('input[name="password"]') as HTMLInputElement;
+      await act(async () => {
+        setValue.call(email, "jane@example.com");
+        email.dispatchEvent(new Event("input", { bubbles: true }));
+        setValue.call(password, "a password that is long");
+        password.dispatchEvent(new Event("input", { bubbles: true }));
+      });
+      await act(async () => {
+        container.querySelector('[data-testid="invite-inline-auth"]')!.dispatchEvent(new Event("submit", { bubbles: true, cancelable: true }));
+      });
+      await flushReact();
+      await flushReact();
+      const alert = container.querySelector('[role="alert"]');
+      expect(alert?.textContent).toBe("Login mislykkedes. Kontrollér dine oplysninger, og prøv igen.");
+      expect(container.textContent).not.toContain("pool exhausted");
+      expect(password.getAttribute("aria-describedby")).toBe(alert?.id);
+      await act(async () => { root.unmount(); });
+    });
+
+    it("announces a localized acceptance failure for a signed-in invitee", async () => {
+      getSessionMock.mockResolvedValue({
+        session: { id: "session-1", userId: "user-1" },
+        user: { id: "user-1", name: "Jane Example", email: "jane@example.com", image: null },
+      });
+      acceptInviteMock.mockRejectedValue(new Error("duplicate key value violates unique constraint"));
+      const root = await renderDanish();
+      await flushReact();
+      await flushReact();
+      expect(acceptInviteMock).toHaveBeenCalledWith("pcp_invite_test", { requestType: "human" });
+      const alert = container.querySelector('[role="alert"]');
+      expect(alert?.textContent).toBe("Invitationen kunne ikke accepteres. Genindlæs siden, og prøv igen.");
+      expect(container.textContent).toContain("Logget ind som Jane Example.");
+      expect(container.textContent).not.toContain("duplicate key");
+      expect(container.querySelector("select")).toBeNull();
+      await act(async () => { root.unmount(); });
     });
   });
 });

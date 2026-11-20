@@ -172,7 +172,9 @@ export function AuthPage() {
   return (
     <main className="fixed inset-0 flex bg-background">
       <div className="absolute top-4 right-4 z-10 flex flex-wrap items-center justify-end gap-3">
-        {saas.data && <ExperienceLanguageSelect />}
+        {/* Account entry comes before any saved account preference, so every
+            deployment profile offers the explicit language choice here. */}
+        <ExperienceLanguageSelect />
         <ThemeToggle />
       </div>
       {/* Left half — form */}
@@ -193,9 +195,13 @@ export function AuthPage() {
           {verificationSent && <p role="status" className="saas-muted">{t("authFlow.verificationSent")}</p>}
           <PersonalAccountDeletionReceipt requested={searchParams.get("accountDeletion") === "requested"} />
 
+          {/* noValidate: the browser's own validation would block submit with a
+              tooltip in the browser's language; the app's localized, focused
+              error summary below handles invalid input instead. */}
           <form
             className="mt-6 space-y-4"
             method="post"
+            noValidate
             action={challenge ? undefined : mode === "sign_up" ? "/api/auth/sign-up/email" : "/api/auth/sign-in/email"}
             onSubmit={(event) => {
               event.preventDefault();

@@ -1,6 +1,7 @@
 import { createRequire } from "node:module";
 import { randomUUID } from "node:crypto";
 import { expect, test, type APIResponse } from "@playwright/test";
+import { deleteCompany } from "./company-cleanup";
 const axePath = createRequire(import.meta.url).resolve("axe-core/axe.min.js");
 // This software fixture needs its first failure trace: the suite has no retries.
 test.use({ trace: "retain-on-failure" });
@@ -115,7 +116,7 @@ test("erasure uses separate keyboard C3, reads an unknown reply, survives accoun
     holdSession = false; releaseSession?.();
     try {
       await json(await request.patch("/api/instance/settings/experimental", { data: flags }));
-      await json(await request.delete(`/api/companies/${company.id}`));
+      await json(await deleteCompany(request, company.id));
     } catch (error) {
       // Playwright closes this request context after a test deadline. Keep
       // the original action/assertion failure instead of replacing it with

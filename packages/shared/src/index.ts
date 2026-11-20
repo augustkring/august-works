@@ -1875,6 +1875,8 @@ export {
 
 export {
   createCompanySchema,
+  deleteCompanyConfirmationSchema,
+  type DeleteCompanyConfirmation,
   companyLocaleSchema,
   companyTimeZoneSchema,
   interactionResolverGovernanceSchema,

@@ -668,9 +668,10 @@ export function CompanyExport() {
   const [expandedDirs, setExpandedDirs] = useState<Set<string>>(new Set());
   const [categories, setCategories] = useState<ExportCategorySelection>(() => ({
     ...buildDefaultExportCategorySelection(),
-    // Task history is the expensive part of a large-company export. Keep it
-    // opt-in so opening this settings page uses the lightweight preview path.
-    tasks: false,
+    // A whole-company export carries Task history by default (brief 25.3,
+    // EXIT-R1); the person can untick it. Routine history and attachments are
+    // the heavy optional parts and stay opt-in.
+    tasks: true,
     routines: false,
     attachments: false,
   }));
@@ -1112,7 +1113,7 @@ export function CompanyExport() {
               {selectedCount > 0 && ` (~${formatBytes(estimatedZipBytes)})`}
             </span>
             {warnings.length > 0 && (
-              <span className="text-amber-500">
+              <span className="text-amber-700 dark:text-amber-300">
                 {warnings.length} warning{warnings.length === 1 ? "" : "s"}
               </span>
             )}
@@ -1140,7 +1141,7 @@ export function CompanyExport() {
       {warnings.length > 0 && (
         <div className="mx-5 mt-3 rounded-md border border-amber-500/30 bg-amber-500/5 px-4 py-3">
           {warnings.map((w) => (
-            <div key={w} className="text-xs text-amber-500">{w}</div>
+            <div key={w} className="text-xs text-amber-700 dark:text-amber-300">{w}</div>
           ))}
         </div>
       )}
@@ -1154,7 +1155,7 @@ export function CompanyExport() {
               key={warning.code}
               className={cn(
                 "text-xs",
-                warning.severity === "blocker" ? "font-medium text-destructive" : "text-amber-500",
+                warning.severity === "blocker" ? "font-medium text-destructive" : "text-amber-700 dark:text-amber-300",
               )}
             >
               {warning.message}
@@ -1217,7 +1218,7 @@ export function CompanyExport() {
               })}
             </div>
             <p className="mt-2 text-xs text-muted-foreground">
-              Task and routine history is opt-in because it can be large.
+              Tasks are included by default. Routine history and attachments are opt-in because they can be large.
             </p>
           </div>
           <div className="border-b border-border px-3 py-2 shrink-0">

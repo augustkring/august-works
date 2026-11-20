@@ -1,6 +1,7 @@
 import { createRequire } from "node:module";
 import { expect, test, type APIResponse } from "@playwright/test";
 import { registerEnglishAccountLocaleIsolation } from "./account-locale-isolation";
+import { deleteCompany } from "./company-cleanup";
 const axePath = createRequire(import.meta.url).resolve("axe-core/axe.min.js");
 registerEnglishAccountLocaleIsolation(test);
 async function json(response: APIResponse) { expect(response.ok(), `${response.status()}: ${await response.text()}`).toBe(true); return response.json(); }
@@ -56,6 +57,6 @@ test("a lost workflow Test response recovers the exact Native request after relo
     await page.screenshot({ path: info.outputPath("native-workflow-request-recovery-da-mobile.png"), fullPage: true });
   } finally {
     await request.patch("/api/instance/settings/experimental", { data: flags }).catch(() => {});
-    await request.delete(`/api/companies/${company.id}`).catch(() => {});
+    await deleteCompany(request, company.id).catch(() => {});
   }
 });

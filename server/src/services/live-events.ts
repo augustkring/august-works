@@ -1,5 +1,6 @@
 import { EventEmitter } from "node:events";
 import type { LiveEvent, LiveEventType } from "@paperclipai/shared";
+import { bumpSafeGetCacheGenerationForCompany } from "./safe-get-cache-generation.js";
 
 type LiveEventPayload = Record<string, unknown>;
 type LiveEventListener = (event: LiveEvent) => void;
@@ -31,6 +32,9 @@ export function publishLiveEvent(input: {
   payload?: LiveEventPayload;
 }) {
   const event = toLiveEvent(input);
+  // Listeners refetch on these events, so cached GET results for the company
+  // must not be reused once the event is out.
+  bumpSafeGetCacheGenerationForCompany(input.companyId);
   emitter.emit(input.companyId, event);
   emitter.emit(allCompanyEvents, event);
   return event;

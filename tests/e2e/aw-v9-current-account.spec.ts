@@ -1,5 +1,6 @@
 import { expect, test, type APIResponse } from "@playwright/test";
 import { registerEnglishAccountLocaleIsolation } from "./account-locale-isolation";
+import { deleteCompany } from "./company-cleanup";
 registerEnglishAccountLocaleIsolation(test);
 async function json(response: APIResponse) {
   expect(response.ok(), `${response.status()}: ${await response.text()}`).toBe(
@@ -237,7 +238,7 @@ test("Feedback hides a draft during revalidation and reconciles a late Native re
     expect(await json(await request.get(`${base}/customer-feedback?expectedUserId=${encodeURIComponent(session.user.id)}`))).toHaveLength(1);
   } finally {
     holdSession = false;releaseSession?.();releaseAck?.();
-    await json(await request.delete(`/api/companies/${company.id}`));
+    await json(await deleteCompany(request, company.id));
     await request.patch("/api/instance/settings/experimental", { data: flags });
   }
 });

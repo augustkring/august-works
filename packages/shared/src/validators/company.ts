@@ -43,6 +43,14 @@ export const createCompanySchema = z.object({
 
 export type CreateCompany = z.infer<typeof createCompanySchema>;
 
+/** DELETE /api/companies/:companyId body: the organization's current name,
+ * typed by the person deleting it. The server compares it exactly. */
+export const deleteCompanyConfirmationSchema = z.object({
+  confirmName: z.string().max(200),
+});
+
+export type DeleteCompanyConfirmation = z.infer<typeof deleteCompanyConfirmationSchema>;
+
 export const updateCompanySchema = objectWithoutDefaults(
   createCompanySchema
     .partial()

@@ -2,6 +2,7 @@ import { createRequire } from "node:module";
 import { expect, test, type APIResponse } from "@playwright/test";
 import { activationViewSchema, initialActivationState } from "../../packages/shared/src/activation.ts";
 import { registerEnglishAccountLocaleIsolation } from "./account-locale-isolation";
+import { deleteCompany } from "./company-cleanup";
 
 registerEnglishAccountLocaleIsolation(test);
 
@@ -70,5 +71,5 @@ test("explicit paused agent preparation survives a lost answer without replaceme
     expect(await json(await request.get(`${base}/agents`))).toEqual([]);
     expect(await json(await request.get(`${base}/issues`))).toEqual([]);
     const runs = await json(await request.get(`${base}/heartbeat-runs`)); expect(Array.isArray(runs) ? runs : runs.items).toEqual([]);
-  } finally { await json(await request.delete(`/api/companies/${company.id}`)); }
+  } finally { await json(await deleteCompany(request, company.id)); }
 });

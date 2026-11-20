@@ -2,6 +2,7 @@ import { createRequire } from "node:module";
 import { expect, test, type APIResponse } from "@playwright/test";
 import { V5_FEATURE_KEYS, agentAuthoringContentSchema, agentAuthoringDraftViewSchema } from "../../packages/shared/src/index.ts";
 import { registerEnglishAccountLocaleIsolation } from "./account-locale-isolation";
+import { deleteCompany } from "./company-cleanup";
 
 registerEnglishAccountLocaleIsolation(test);
 const axePath = createRequire(import.meta.url).resolve("axe-core/axe.min.js");
@@ -73,5 +74,5 @@ test("Hire recovers an unknown managed provisioning request and reloads its Orig
     expect(await page.evaluate(async () => (await (window as unknown as { axe: { run(scope: string): Promise<{ violations: unknown[] }> } }).axe.run("main")).violations)).toEqual([]);
     expect(await page.evaluate(() => document.documentElement.scrollWidth <= innerWidth)).toBe(true);
     expect(requests).toBe(1); expect(await json(await request.get(`/api/companies/${company.id}/agents`))).toEqual([]);
-  } finally { await json(await request.delete(`/api/companies/${company.id}`)); }
+  } finally { await json(await deleteCompany(request, company.id)); }
 });

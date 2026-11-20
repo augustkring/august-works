@@ -32,7 +32,7 @@ export interface TestDriveOptions {
   browser?: boolean;
 }
 
-export type TestDriveApi = Pick<PaperclipApiClient, "get" | "post" | "patch" | "delete">;
+export type TestDriveApi = Pick<PaperclipApiClient, "get" | "post" | "patch" | "delete" | "deleteWithBody">;
 
 type HarnessDefinition = {
   adapterType: "claude_local" | "codex_local" | "opencode_local";
@@ -383,7 +383,7 @@ export async function bootstrapTestDrive(input: {
   } catch (error) {
     if (company) {
       try {
-        await input.api.delete(`/api/companies/${company.id}`);
+        await input.api.deleteWithBody(`/api/companies/${company.id}`, { confirmName: company.name });
       } catch (cleanupError) {
         throw new Error(
           `${errorMessage(error)} Cleanup also failed for newly-created company ${company.id}: ${errorMessage(cleanupError)}`,

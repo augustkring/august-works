@@ -96,7 +96,17 @@ for (const adapterType of ["process", "paperclip_runner"] as const) {
       }
       expect((await json(await request.get(`/api/issues/${completed.id}`))).status).toBe("done");
       expect((await json(await request.get(`/api/issues/${other.id}`))).status).toBe("blocked");
-      await expect(page.getByRole("button", { name: "Dismiss notification" })).toHaveCount(0);
+      // The Stop flow and the visible subtree raise no toast. One notice is a
+      // real, unrelated outcome: the unrelated Task's Run failed too, and Run
+      // status delivery is at-least-once (rebroadcast on a 15 s sweep). A newly
+      // loaded page announces the first copy it sees, so after the reload above
+      // that rebroadcast can show "<agent> run failed" here, after the Stop
+      // flow. Any other toast fails this check; the poll reports the titles.
+      const unrelatedRunOutcome = `${otherOwner.name} run failed`;
+      const toasts = page.locator("li", { has: page.getByRole("button", { name: "Dismiss notification", exact: true }) });
+      await expect.poll(async () => (await toasts.allInnerTexts())
+        .map(text => text.split("\n")[0]!.trim())
+        .filter(title => title !== unrelatedRunOutcome), { timeout: 5_000 }).toEqual([]);
       await expect(readFile(path.join(root, "started"), "utf8")).rejects.toMatchObject({ code: "ENOENT" });
     } finally {
       await request.patch(`/api/companies/${company.id}`, { data: { status: "archived" } });

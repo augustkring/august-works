@@ -1,4 +1,5 @@
 import { expect, test, type APIResponse } from "@playwright/test";
+import { deleteCompany } from "./company-cleanup";
 async function json(response: APIResponse) {
   expect(response.ok(), `${response.status()}: ${await response.text()}`).toBe(true);
   return response.json();
@@ -62,5 +63,5 @@ for (const locale of ["en", "da"] as const) test(`optional local observations: e
     expect(await page.evaluate(() => document.documentElement.scrollWidth <= innerWidth)).toBe(true);
     expect(await json(await request.get(`/api/companies/${company.id}/issues`))).toEqual([]);
     expect(await json(await request.get(`/api/companies/${company.id}/agents`))).toEqual([]);
-  } finally { await json(await request.delete(`/api/companies/${company.id}`)); }
+  } finally { await json(await deleteCompany(request, company.id)); }
 });

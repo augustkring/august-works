@@ -1,4 +1,5 @@
 import { prepareNativeStagePolicyTransition, recordNativeStagePolicyTransition } from "../services/native-stage-wake-source.js";
+import { currentSafeGetCacheGeneration, safeGetCacheWriteInvalidation } from "../services/safe-get-cache-generation.js";
 import { publicNativePayloadRow } from "../services/native-payload-public.js";
 import { experienceTaskReceiptSchema, nativePayloadSourceSnapshotSchema, v9FeatureEnabled } from "@paperclipai/shared";
 import { queuedInteractionId, readQueuedInteractionResponse, hasQueuedInteractionResponse } from "../services/queued-interaction-response.js";
@@ -2945,6 +2946,9 @@ function requestMatchesEtag(
 }
 
 const ISSUE_LIST_SERVER_CACHE_TTL_MS = 2_000;
+// Cached and in-flight results are reusable only within the safe-GET cache
+// generation they were computed in; any committed write or company live
+// event advances it (see services/safe-get-cache-generation.ts).
 const ISSUE_LIST_SERVER_CACHE_STALE_MS = 5_000;
 export const ISSUE_LIST_SERVER_CACHE_MAX_ENTRIES = 256;
 const ISSUE_LIST_STORM_WINDOW_MS = 500;
@@ -2990,12 +2994,14 @@ type IssueListDiagnostics = {
 
 type IssueListCacheEntry = {
   response: IssueListPreparedResponse;
+  generation: string;
   expiresAt: number;
   staleUntil: number;
 };
 
 type IssueListInflightEntry = {
   promise: Promise<IssueListPreparedResponse>;
+  generation: string;
   startedAt: number;
   waiterCount: number;
   stormLogged: boolean;
@@ -3191,6 +3197,8 @@ async function coordinateIssueListGet(input: {
   req: Request;
   companyId: string;
   requestKey: ReturnType<typeof issueListRequestKey>;
+  /** Captured before the request opened its read transaction. */
+  generation: string;
   allowTtlCache: boolean;
   bypassSharedResult?: boolean;
   diagnostics?: IssueListDiagnostics;
@@ -3204,9 +3212,13 @@ async function coordinateIssueListGet(input: {
   const now = Date.now();
   pruneIssueListResponseCache(now);
 
-  const cached = input.allowTtlCache && !input.bypassSharedResult
+  const cachedEntry = input.allowTtlCache && !input.bypassSharedResult
     ? issueListResponseCache.get(input.requestKey.key)
     : undefined;
+  // A result computed before a later write must never answer a request that
+  // started after that write returned.
+  const cached = cachedEntry?.generation === input.generation ? cachedEntry : undefined;
+  if (cachedEntry && !cached) issueListResponseCache.delete(input.requestKey.key);
   if (cached && cached.expiresAt > now) {
     touchIssueListResponseCacheEntry(input.requestKey.key, cached);
     return {
@@ -3216,9 +3228,10 @@ async function coordinateIssueListGet(input: {
     };
   }
 
-  const existing = input.bypassSharedResult
+  const inflight = input.bypassSharedResult
     ? undefined
     : issueListInflight.get(input.requestKey.key);
+  const existing = inflight?.generation === input.generation ? inflight : undefined;
   if (existing) {
     existing.waiterCount += 1;
     const identicalInFlightCount = existing.waiterCount + 1;
@@ -3279,6 +3292,7 @@ async function coordinateIssueListGet(input: {
   })();
   const inflightEntry: IssueListInflightEntry = {
     promise,
+    generation: input.generation,
     startedAt: now,
     waiterCount: 0,
     stormLogged: false,
@@ -3292,6 +3306,7 @@ async function coordinateIssueListGet(input: {
     if (input.allowTtlCache && !input.bypassSharedResult) {
       setIssueListResponseCacheEntry(input.requestKey.key, {
         response,
+        generation: input.generation,
         expiresAt: Date.now() + ISSUE_LIST_SERVER_CACHE_TTL_MS,
         staleUntil: Date.now() + ISSUE_LIST_SERVER_CACHE_STALE_MS,
       });
@@ -3410,6 +3425,9 @@ export function issueRoutes(
   } = {},
 ) {
   const router = Router();
+  // Idempotent with the app-wide installation; keeps Task writes invalidating
+  // the list cache when this router is mounted on its own.
+  router.use(safeGetCacheWriteInvalidation());
   const svc = issueService(db);
   // Temporary admission closure while every private derivative and delivery
   // owner is qualified. This is removed by the complete privacy release, not
@@ -8049,6 +8067,9 @@ export function issueRoutes(
     const startedAt = Date.now();
     const companyId = req.params.companyId as string;
     assertCompanyAccess(req, companyId);
+    // Read before any database snapshot for this request exists, so a reused
+    // result can never predate a write that finished before this request.
+    const cacheGeneration = currentSafeGetCacheGeneration(companyId);
     if (isTaskBridgeKeyActor(req)) {
       res.status(403).json({
         error: "Task bridge keys cannot use company-wide issue list APIs",
@@ -8300,6 +8321,7 @@ export function issueRoutes(
           req,
           companyId,
           requestKey,
+          generation: cacheGeneration,
           allowTtlCache: compactView && !hasTaskSourceReferences,
           bypassSharedResult: hasTaskSourceReferences,
           diagnostics: opts.issueListDiagnostics,

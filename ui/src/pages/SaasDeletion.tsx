@@ -43,7 +43,18 @@ function SaasDeletionForm() {
   });
   if (capabilities.isPending) return <p role="status">{t("organizationDeletion.loading")}</p>;
   if (capabilities.error) return <p role="alert">{t("organizationDeletion.unavailable")}</p>;
-  if (capabilities.data?.profile !== "saas") return <p>{t("organizationDeletion.disabled")}</p>;
+  // Outside the hosted service there is no deletion request owner; an owner
+  // deletes an organization from the Organizations list instead. Say where.
+  if (capabilities.data?.profile !== "saas")
+    return (
+      <main className="saas-page">
+        <h1 className="saas-title">{t("organizationDeletion.heading")}</h1>
+        <p>{t("organizationDeletion.selfHosted")}</p>
+        <Link className="saas-link" to="/companies">
+          {t("organizationDeletion.openOrganizations")}
+        </Link>
+      </main>
+    );
   const statusLabels: Record<string, string> = {
     requested: "requested", processing: "processing", waiting_retention: "waitingRetention",
     failed: "failed", completed: "completed", cancelled: "cancelled",
@@ -117,6 +128,11 @@ function SaasDeletionForm() {
           <p>
             {t("organizationDeletion.consequences")}
           </p>
+          {/* Cancel (stop paying, keep data) and delete (erase data) are different actions. */}
+          <p>{t("organizationDeletion.billing")}</p>
+          <Link className="saas-link" to="/company/settings/billing">
+            {t("organizationDeletion.openBilling")}
+          </Link>
           <Link className="saas-link" to="/company/export">
             {t("organizationDeletion.export")}
           </Link>

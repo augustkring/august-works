@@ -24,7 +24,10 @@ const mockAgentService = vi.hoisted(() => ({
 const mockAccessService = vi.hoisted(() => ({
   ensureMembership: vi.fn(),
   ensureRoleDefaultGrants: vi.fn(),
+  getMembership: vi.fn(),
 }));
+
+const mockAssertHumanAuthentication = vi.hoisted(() => vi.fn());
 
 const mockBudgetService = vi.hoisted(() => ({
   upsertPolicy: vi.fn(),
@@ -48,6 +51,9 @@ const mockFeedbackService = vi.hoisted(() => ({
 const mockLogActivity = vi.hoisted(() => vi.fn());
 
 function registerCompanyRouteMocks() {
+  vi.doMock("../auth/authenticator-assurance.js", () => ({
+    assertHumanAuthentication: mockAssertHumanAuthentication,
+  }));
   vi.doMock("../services/index.js", () => ({
     accessService: () => mockAccessService,
     agentService: () => mockAgentService,
@@ -179,6 +185,12 @@ function resetMockDefaults() {
     status: "archived",
   }));
   mockCompanyService.remove.mockImplementation(async (id: string) => createCompany(id));
+  // Fresh membership read used by the company deletion guard.
+  mockAccessService.getMembership.mockImplementation(async (companyId: string, _type: string, userId: string) => {
+    const role = ({ owner: "owner", member: "member", viewer: "viewer", admin: "admin" } as Record<string, string>)[userId];
+    return role && companyId === companyBId ? { companyId, principalId: userId, membershipRole: role, status: "active" } : null;
+  });
+  mockAssertHumanAuthentication.mockResolvedValue({ method: "password" });
   mockAgentService.getById.mockImplementation(async (id: string) => {
     if (id === ceoAgentId) return { id, companyId: companyAId, role: "ceo" };
     return null;
@@ -475,7 +487,10 @@ describe.sequential("company route cross-company authorization", () => {
     await request(memberApp).patch(`/api/companies/${companyBId}`).send({ description: "Updated" }).expect(200);
     await request(memberApp).patch(`/api/companies/${companyBId}/branding`).send({ description: "Branding" }).expect(200);
     await request(memberApp).post(`/api/companies/${companyBId}/archive`).send({}).expect(200);
-    await request(memberApp).delete(`/api/companies/${companyBId}`).expect(200);
+    const memberDelete = await request(memberApp).delete(`/api/companies/${companyBId}`).send({ confirmName: "Company B" });
+    expect(memberDelete.status).toBe(403);
+    expect(memberDelete.body.error).toContain("Only a company owner");
+    expect(mockCompanyService.remove).not.toHaveBeenCalled();
     await request(memberApp).post(`/api/companies/${companyBId}/export`).send(exportRequest).expect(200);
     await request(memberApp).post(`/api/companies/${companyBId}/exports/preview`).send(exportRequest).expect(200);
     await request(memberApp).post(`/api/companies/${companyBId}/imports/preview`).send(importRequest()).expect(200);
@@ -504,5 +519,76 @@ describe.sequential("company route cross-company authorization", () => {
     expect(adminWrite.status).toBe(403);
     expect(adminWrite.body.error).toContain("access to this company");
     assertNoTargetMutationSideEffects();
+  });
+  describe("company deletion authority and confirmation (EXIT-AUTH1)", () => {
+    const owner = () => boardActor({
+      userId: "owner",
+      companyIds: [companyBId],
+      memberships: [{ companyId: companyBId, membershipRole: "owner", status: "active" }],
+    });
+
+    it.each([
+      ["member", "member"],
+      ["admin", "admin"],
+    ])("refuses an active %s who is not an owner", async (userId, membershipRole) => {
+      const app = await createApp(boardActor({
+        userId, companyIds: [companyBId], memberships: [{ companyId: companyBId, membershipRole, status: "active" }],
+      }));
+      const res = await request(app).delete(`/api/companies/${companyBId}`).send({ confirmName: "Company B" });
+      expect(res.status).toBe(403);
+      expect(res.body.details?.code).toBe("COMPANY_OWNER_REQUIRED");
+      expect(mockCompanyService.remove).not.toHaveBeenCalled();
+      expect(mockLogActivity).not.toHaveBeenCalled();
+    });
+
+    it("refuses an owner whose membership is no longer active in the database", async () => {
+      mockAccessService.getMembership.mockResolvedValue({ membershipRole: "owner", status: "suspended" });
+      const res = await request(await createApp(owner())).delete(`/api/companies/${companyBId}`).send({ confirmName: "Company B" });
+      expect(res.status).toBe(403);
+      expect(mockCompanyService.remove).not.toHaveBeenCalled();
+    });
+
+    it.each([
+      ["a wrong name", { confirmName: "Company A" }],
+      ["a differently cased name", { confirmName: "company b" }],
+      ["no name", {}],
+    ])("rejects an owner with %s (422) and deletes nothing", async (_label, body) => {
+      const res = await request(await createApp(owner())).delete(`/api/companies/${companyBId}`).send(body);
+      expect(res.status).toBe(422);
+      expect(res.body.details?.code).toBe("COMPANY_DELETE_CONFIRMATION_MISMATCH");
+      expect(mockCompanyService.remove).not.toHaveBeenCalled();
+      expect(mockLogActivity).not.toHaveBeenCalled();
+    });
+
+    it("requires a recent sign-in from the owner before anything is deleted", async () => {
+      mockAssertHumanAuthentication.mockRejectedValue(Object.assign(new Error("Authenticate again to continue"), {
+        status: 403, details: { code: "recent_authentication_required" },
+      }));
+      const res = await request(await createApp(owner())).delete(`/api/companies/${companyBId}`).send({ confirmName: "Company B" });
+      expect(res.status).not.toBe(200);
+      expect(mockCompanyService.remove).not.toHaveBeenCalled();
+      expect(mockLogActivity).not.toHaveBeenCalled();
+    });
+
+    it("deletes for the sole owner with the exact name, recording activity before the purge", async () => {
+      const order: string[] = [];
+      mockLogActivity.mockImplementation(async () => { order.push("activity"); });
+      mockCompanyService.remove.mockImplementation(async (id: string) => { order.push("remove"); return createCompany(id); });
+      const res = await request(await createApp(owner())).delete(`/api/companies/${companyBId}`).send({ confirmName: "Company B" });
+      expect(res.status, JSON.stringify(res.body)).toBe(200);
+      expect(mockAssertHumanAuthentication).toHaveBeenCalledWith(expect.anything(), expect.objectContaining({ userId: "owner" }),
+        { requireRecent: true, phishingResistant: false });
+      expect(mockLogActivity).toHaveBeenCalledWith(expect.anything(), expect.objectContaining({
+        companyId: companyBId, action: "company.deletion_requested", entityType: "company", entityId: companyBId,
+      }));
+      expect(order).toEqual(["activity", "remove"]);
+    });
+
+    it("lets the local trusted operator delete with the exact name, without a session step-up", async () => {
+      const app = await createApp(boardActor({ userId: "local-board", source: "local_implicit", isInstanceAdmin: true }));
+      await request(app).delete(`/api/companies/${companyBId}`).send({ confirmName: "Wrong" }).expect(422);
+      await request(app).delete(`/api/companies/${companyBId}`).send({ confirmName: "Company B" }).expect(200);
+      expect(mockAssertHumanAuthentication).not.toHaveBeenCalled();
+    });
   });
 });

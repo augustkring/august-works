@@ -3,6 +3,7 @@ import { expect, test, type APIResponse } from "@playwright/test";
 import { V5_FEATURE_KEYS } from "../../packages/shared/src/index.ts";
 import { registerEnglishAccountLocaleIsolation } from "./account-locale-isolation";
 import { setup as setupAgentChat } from "./agent-chat.shared";
+import { deleteCompany } from "./company-cleanup";
 const axePath = createRequire(import.meta.url).resolve("axe-core/axe.min.js");
 registerEnglishAccountLocaleIsolation(test);
 const id = (n: number) => `10000000-0000-4000-8000-${String(n).padStart(12, "0")}`;
@@ -109,6 +110,6 @@ test("conversation previews a saved workflow version without publishing or calli
     expect(await json(await request.get(`/api/issues/${conversation.id}`))).toMatchObject({ id: conversation.id, conversationAgentId: agent.id });
   } finally {
     await fixture.restore({ collectState: false });
-    await json(await instanceControlRequest.delete(`/api/companies/${company.id}`));
+    await json(await deleteCompany(instanceControlRequest, company.id));
   }
 });

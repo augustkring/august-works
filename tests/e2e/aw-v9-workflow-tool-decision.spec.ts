@@ -3,6 +3,7 @@ import { randomUUID } from "node:crypto";
 import { expect, test } from "@playwright/test";
 import { V5_FEATURE_KEYS, workflowRunExperienceSchema } from "../../packages/shared/src/index.ts";
 import { json } from "./agent-chat.shared";
+import { deleteCompany } from "./company-cleanup";
 const axePath = createRequire(import.meta.url).resolve("axe-core/axe.min.js");
 test.use({ trace: "retain-on-failure" });
 // Built customer shell with a deliberately scoped Native-response fixture.
@@ -90,7 +91,7 @@ for (const locale of ["en", "da"] as const) test(`a customer reviews a pending w
     expect(await page.evaluate(() => document.documentElement.scrollWidth <= innerWidth)).toBe(true);
   } catch (error) { failed = true; throw error; }
   finally {
-    try { await json(await request.patch("/api/instance/settings/experimental", { data: original })); await json(await request.delete(`/api/companies/${company.id}`)); }
+    try { await json(await request.patch("/api/instance/settings/experimental", { data: original })); await json(await deleteCompany(request, company.id)); }
     catch (error) { if (!failed) throw error; }
   }
 });

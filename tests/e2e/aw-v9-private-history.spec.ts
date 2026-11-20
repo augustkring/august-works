@@ -2,6 +2,7 @@ import { createRequire } from "node:module";
 import { expect, test, type APIResponse } from "@playwright/test";
 import { customerFeedbackSchema } from "../../packages/shared/src/index.ts";
 import { registerEnglishAccountLocaleIsolation } from "./account-locale-isolation";
+import { deleteCompany } from "./company-cleanup";
 
 const axePath = createRequire(import.meta.url).resolve("axe-core/axe.min.js");
 registerEnglishAccountLocaleIsolation(test);
@@ -99,6 +100,6 @@ test("private feedback preserves the original unknown reply through session and 
   } finally {
     holdSession = false; holdDetail = false;
     for (const release of [...sessions.splice(0), ...details.splice(0)]) release();
-    await json(await request.delete(`/api/companies/${company.id}`));
+    await json(await deleteCompany(request, company.id));
   }
 });

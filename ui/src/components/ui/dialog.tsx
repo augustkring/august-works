@@ -3,6 +3,7 @@ import { XIcon } from "lucide-react"
 import { Dialog as DialogPrimitive } from "radix-ui"
 
 import { cn } from "@/lib/utils"
+import { useTranslation } from "@/i18n"
 import { Button } from "@/components/ui/button"
 
 function Dialog({
@@ -50,13 +51,14 @@ function DialogContent({
   children,
   showCloseButton = true,
   closeButtonClassName,
-  closeButtonLabel = "Close",
+  closeButtonLabel,
   ...props
 }: React.ComponentProps<typeof DialogPrimitive.Content> & {
   showCloseButton?: boolean
   closeButtonClassName?: string
   closeButtonLabel?: string
 }) {
+  const { t } = useTranslation("experience")
   return (
     <DialogPortal data-slot="dialog-portal">
       <DialogOverlay />
@@ -75,7 +77,7 @@ function DialogContent({
             className={cn("ring-offset-background focus:ring-ring data-[state=open]:bg-accent data-[state=open]:text-muted-foreground absolute top-4 right-4 rounded-xs opacity-70 transition-opacity hover:opacity-100 focus:ring-2 focus:ring-offset-2 focus:outline-hidden disabled:pointer-events-none [&_svg]:pointer-events-none [&_svg]:shrink-0 [&_svg:not([class*='size-'])]:size-4",closeButtonClassName)}
           >
             <XIcon />
-            <span className="sr-only">{closeButtonLabel}</span>
+            <span className="sr-only">{closeButtonLabel ?? t("screens.dialog.close")}</span>
           </DialogPrimitive.Close>
         )}
       </DialogPrimitive.Content>

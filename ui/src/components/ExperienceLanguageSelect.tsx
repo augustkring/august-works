@@ -28,7 +28,7 @@ export function ExperienceLanguageSelect({ onSaveLocale }: { onSaveLocale?: (loc
         <span>{t("language.label")}</span>
         <select
           ref={select}
-          className="min-h-11 rounded-md border border-input bg-background px-3 text-sm focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
+          className="min-h-11 rounded-md border border-input bg-background px-3 text-sm text-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
           value={current}
           disabled={pending}
           onChange={async (event) => {

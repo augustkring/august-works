@@ -9,6 +9,27 @@ type UnavailableNotice = { id: string; companyId: string; issueId: string; autho
   metadata: { sourceRunId?: string | null } | null;
   presentation: { title?: string | null } | null };
 
+async function describeNoticeState(input: { request: APIRequestContext; companyId: string }, run: UnavailableRun) {
+  const read = async (url: string): Promise<unknown> => {
+    const response = await input.request.get(url).catch(() => null);
+    return response?.ok() ? response.json() : `unavailable (${response?.status() ?? "no response"})`;
+  };
+  const issue = await read(`/api/issues/${run.issueId}`) as { status?: string } | string;
+  const comments = await read(`/api/issues/${run.issueId}/comments`);
+  const runs = await read(`/api/companies/${input.companyId}/heartbeat-runs`);
+  return JSON.stringify({
+    issueStatus: typeof issue === "string" ? issue : issue.status ?? null,
+    systemNotices: Array.isArray(comments)
+      ? (comments as UnavailableNotice[]).filter(comment => comment.authorType === "system")
+        .map(comment => ({ sourceRunId: comment.metadata?.sourceRunId ?? null, title: comment.presentation?.title ?? null }))
+      : comments,
+    taskRuns: Array.isArray(runs)
+      ? (runs as UnavailableRun[]).filter(item => item.issueId === run.issueId || item.id === run.id)
+        .map(item => ({ id: item.id, agentId: item.agentId, status: item.status, errorCode: item.errorCode }))
+      : runs,
+  });
+}
+
 /** Real server admission and built UI; no provider/authority response mocks. */
 export async function assertUnqualifiedRuntime(input: { request: APIRequestContext; page: Page;
   companyId: string; agentId: string; excludedRunIds?: string[] }) {
@@ -48,7 +69,12 @@ export async function assertUnqualifiedRuntime(input: { request: APIRequestConte
       comment.presentation?.title === "Configuration incomplete");
     noticeCommentId = matching.length === 1 ? matching[0]!.id : null;
     return matching.length;
-  }, { timeout: remainingNoticeMs() }).toBe(1);
+  }, { timeout: remainingNoticeMs() }).toBe(1).catch(async (error: unknown) => {
+    // Say whether the Run's release blocked the Task and which Runs and
+    // notices exist, so a missing notice can be traced to its release path.
+    if (error instanceof Error) error.message += `\nTask state: ${await describeNoticeState(input, run)}`;
+    throw error;
+  });
   if (!noticeCommentId) throw new Error("Expected the exact unavailable Run's retained notice");
   const notice = input.page.locator(`[id="comment-${noticeCommentId}"]`).getByTestId("task-chat-system-notice")
     .filter({ hasText: "Task paused — runtime unavailable" });
