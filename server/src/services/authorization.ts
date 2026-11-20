@@ -688,6 +688,24 @@ function exactIssueReaderQuery(db: Db | DbTransaction, companyId: string, ids: r
     sql`${issues.id} = any(${`{${ids.join(",")}}`}::uuid[])`, condition));
 }
 
+/** PERF6: the ids among `ids` whose Task rows satisfy `condition`, a Task
+ * reader predicate the caller built with `issueReadSqlCondition` for its actor
+ * and executor. Callers use it instead of embedding the ~220 KB predicate in
+ * their own statements: postgres-js sends those unnamed, so PostgreSQL planned
+ * the predicate again for every one of them. This is the shared exact-id
+ * reader statement (prepared, one generic plan per connection); the
+ * predicate is evaluated per row, on current rows, in the caller's executor. */
+export async function issueIdsMatchingReadCondition(db: Db | DbTransaction, companyId: string,
+  ids: readonly string[], condition: SQL): Promise<Set<string>> {
+  const unique = [...new Set(ids)];
+  const matching = new Set<string>();
+  for (let offset = 0; offset < unique.length; offset += 256) {
+    const rows = await executePrivacyIdSelect(db, exactIssueReaderQuery(db, companyId, unique.slice(offset, offset + 256), condition));
+    for (const row of rows) matching.add(row.id);
+  }
+  return matching;
+}
+
 /** Evaluate the current Task reader predicate for an exact bounded set in one
  * query per frozen Memory Context scope. Callers must hold the source locks and
  * owner-row locks for this set; the result is transaction-local and must be
