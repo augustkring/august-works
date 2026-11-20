@@ -5412,7 +5412,8 @@
       "noRespFound": "Ingen ansvarlig fundet.",
       "stopResponse": "Stop svar",
       "legacyRecovery": "Ældre genopretningsopgave",
-      "copyMessageItem": "Kopiér besked"
+      "copyMessageItem": "Kopiér besked",
+      "decisionPendingHint": "Agenten ser dette, når du har truffet din beslutning."
     },
     "agent": {
       "nav": {

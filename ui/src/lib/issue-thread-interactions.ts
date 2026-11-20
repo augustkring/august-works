@@ -76,6 +76,26 @@ export function interactionReplacesComposerSkip(
     || interaction.kind === "suggest_tasks";
 }
 
+/**
+ * APR-E2E-1. True while the Task waits only for its assignee's governed tool
+ * decision: in review, exactly one pending interaction, and that one is a
+ * tool-action card created by the assignee. The server defers a Human note
+ * made now to the Run after the decision; the composer says so. Display
+ * only: the server owns the exact rule.
+ */
+export function awaitsAssigneeToolDecision(
+  issue: { status: string; assigneeAgentId?: string | null; assigneeUserId?: string | null } | null | undefined,
+  interactions: readonly IssueThreadInteraction[],
+): boolean {
+  if (!issue || issue.status !== "in_review" || !issue.assigneeAgentId || issue.assigneeUserId) return false;
+  const pending = interactions.filter((interaction) => interaction.status === "pending");
+  if (pending.length !== 1) return false;
+  const card = pending[0]!;
+  return card.kind === "request_confirmation"
+    && Boolean(card.payload.toolAction)
+    && card.createdByAgentId === issue.assigneeAgentId;
+}
+
 export function isIssueThreadInteraction(
   value: unknown,
 ): value is IssueThreadInteraction {

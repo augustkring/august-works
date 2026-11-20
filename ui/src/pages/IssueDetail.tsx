@@ -303,6 +303,7 @@ import { copyTextToClipboard } from "../lib/clipboard";
 import { buildIssuePropertiesPanelKey } from "../lib/issue-properties-panel-key";
 import { openSkillPanelState, shouldSuppressTaskPanelUntilPlan } from "../lib/task-side-panel-state";
 import {
+  awaitsAssigneeToolDecision,
   buildAnsweredQuestionsDeliveryText,
   buildIssueThreadInteractionSummary,
 } from "../lib/issue-thread-interactions";
@@ -7005,7 +7006,12 @@ export function TaskDetailSurface({ conversation, tasksTab }: { tasksTab?: TaskS
   const reopenComposerHint = closedIsolatedWorkspaceReopenPending
     ? "This issue's isolated workspace was archived. Your next comment or resume reopens it and rebuilds the worktree."
     : null;
-  const composerHint = activePauseHold ? null : reopenComposerHint;
+  // APR-E2E-1. A note made while the assignee's tool-action card waits is
+  // delivered to the Run after the decision, not now.
+  const toolDecisionComposerHint = awaitsAssigneeToolDecision(issue, interactions)
+    ? screenText("chat.decisionPendingHint")
+    : null;
+  const composerHint = activePauseHold ? null : toolDecisionComposerHint ?? reopenComposerHint;
   const queuedCommentReason: "hold" | "active_run" | "other" = activePauseHold
     ? "hold"
     : "active_run";

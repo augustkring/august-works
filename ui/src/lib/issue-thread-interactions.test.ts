@@ -1,5 +1,6 @@
 import { describe, expect, it } from "vitest";
 import {
+  awaitsAssigneeToolDecision,
   buildAnsweredQuestionsDeliveryText,
   buildIssueThreadInteractionSummary,
   buildSuggestedTaskTree,
@@ -57,6 +58,28 @@ describe("buildSuggestedTaskTree", () => {
     expect(roots[0]?.children[0]?.task.clientKey).toBe("child");
     expect(countSuggestedTaskNodes(roots[0]!)).toBe(3);
     expect(collectSuggestedTaskClientKeys(roots[0]!)).toEqual(["root", "child", "grandchild"]);
+  });
+});
+
+describe("awaitsAssigneeToolDecision (APR-E2E-1)", () => {
+  const card = {
+    id: "card-1", companyId: "company-1", issueId: "issue-1", status: "pending",
+    continuationPolicy: "wake_assignee", ...resolverPolicyFields,
+    createdAt: "2026-11-20T12:00:00.000Z", updatedAt: "2026-11-20T12:00:00.000Z", result: null,
+    kind: "request_confirmation", createdByAgentId: "agent-1",
+    payload: { version: 1, prompt: "Approve list projects?", toolAction: { version: 1, actionRequestId: "request-1" } },
+  } as unknown as IssueThreadInteraction;
+  const issue = { status: "in_review", assigneeAgentId: "agent-1", assigneeUserId: null };
+
+  it("is true only for one pending tool-action card created by the assignee on a Task in review", () => {
+    expect(awaitsAssigneeToolDecision(issue, [card])).toBe(true);
+    expect(awaitsAssigneeToolDecision({ ...issue, status: "in_progress" }, [card])).toBe(false);
+    expect(awaitsAssigneeToolDecision({ ...issue, assigneeUserId: "user-1" }, [card])).toBe(false);
+    expect(awaitsAssigneeToolDecision(issue, [{ ...card, createdByAgentId: "agent-2" } as IssueThreadInteraction])).toBe(false);
+    expect(awaitsAssigneeToolDecision(issue, [{ ...card, payload: { version: 1, prompt: "Plan?" } } as IssueThreadInteraction])).toBe(false);
+    expect(awaitsAssigneeToolDecision(issue, [card, { ...card, id: "card-2" } as IssueThreadInteraction])).toBe(false);
+    expect(awaitsAssigneeToolDecision(issue, [{ ...card, status: "accepted" } as IssueThreadInteraction])).toBe(false);
+    expect(awaitsAssigneeToolDecision(null, [card])).toBe(false);
   });
 });
 
