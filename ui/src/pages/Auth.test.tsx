@@ -215,6 +215,11 @@ describe("AuthPage", () => {
     expect((container.querySelector('button[type="submit"]') as HTMLButtonElement).textContent).toBe("Opret konto");
     expect(localStorage.getItem("aw.v9.display-locale")).toBe("da");
     expect(signUpEmailMock).not.toHaveBeenCalled();
+    // Native constraint validation would block submit with a browser-language
+    // tooltip before the localized, focused error summary could appear.
+    const form = container.querySelector("form") as HTMLFormElement;
+    expect(form.noValidate).toBe(true);
+    expect((container.querySelector('input[name="password"]') as HTMLInputElement).minLength).toBe(15);
     localStorage.removeItem("aw.v9.display-locale");
     await act(async () => { root.unmount(); });
   });

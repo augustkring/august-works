@@ -195,9 +195,13 @@ export function AuthPage() {
           {verificationSent && <p role="status" className="saas-muted">{t("authFlow.verificationSent")}</p>}
           <PersonalAccountDeletionReceipt requested={searchParams.get("accountDeletion") === "requested"} />
 
+          {/* noValidate: the browser's own validation would block submit with a
+              tooltip in the browser's language; the app's localized, focused
+              error summary below handles invalid input instead. */}
           <form
             className="mt-6 space-y-4"
             method="post"
+            noValidate
             action={challenge ? undefined : mode === "sign_up" ? "/api/auth/sign-up/email" : "/api/auth/sign-in/email"}
             onSubmit={(event) => {
               event.preventDefault();

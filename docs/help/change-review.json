@@ -2821,26 +2821,26 @@
     {
       "source": "ui/src/i18n/experience/en.json",
       "articleId": "create-and-track-work",
-      "sourceSha256": "bb3c2c484e3afe0c69374e3e15158cdad63a734bca9429cb878e88ef2c9ca249",
+      "sourceSha256": "3e8e42465ffbde5a5faa6079e49c783fb93a892a846a097c1fc3f8005a20b00b",
       "articleSha256": "e08d017550dda25a9e6185a4478026f2affd445e16a1d10dff2464761537b328",
       "decision": "no_change",
-      "rationale": "Reviewed (CREATE-R1): added EN/DA strings for the New Agent wizard, the New Task dialog, the runtime test card, the model and secret pickers and the shared dialog Close label. Task creation and tracking steps are unchanged, so the article stays accurate."
+      "rationale": "Reviewed (AUTH-DA1): added the screens.inviteLanding English and Danish invite landing strings. Task creation and tracking steps are unchanged, so the article stays accurate."
     },
     {
       "source": "ui/src/i18n/experience/da.json",
       "articleId": "create-and-track-work-da",
-      "sourceSha256": "8f6375de9264feeaf67bb4ba4697127338b06d454a02c87dd0005bd62c91c847",
+      "sourceSha256": "571364a5dd2a4c964e40bee6a8d461115ee66e6d14234c9f53b5f64d724fb0b3",
       "articleSha256": "b36d116837115a674b3751f11ae3dcdd1a7fdcd9f31d26206feeec490f715e29",
       "decision": "no_change",
-      "rationale": "Reviewed (CREATE-R1): added EN/DA strings for the New Agent wizard, the New Task dialog, the runtime test card, the model and secret pickers and the shared dialog Close label. Task creation and tracking steps are unchanged, so the article stays accurate."
+      "rationale": "Reviewed (AUTH-DA1): added the screens.inviteLanding English and Danish invite landing strings. Task creation and tracking steps are unchanged, so the article stays accurate."
     },
     {
       "source": "ui/src/pages/Auth.tsx",
       "articleId": "export-and-delete",
-      "sourceSha256": "50a391c98431cf735bc349a531a8e566760993077a1c2e112eba2d0cc6f1f721",
+      "sourceSha256": "853158a1dc90fe29f8160d91796c593b3a1ad152ba0a9d6311fbe28fb48d0f49",
       "articleSha256": "73476587cc7574c56bcbc6f5bc3f692b7e953f9a9b46339d0d08f7577bebcf48",
-      "decision": "updated",
-      "rationale": "Reviewed EN/DA organization-deletion repair guidance for an original export storage namespace mismatch: retain the original request and involve Human/operator repair. Internal durable export routes do not change existing customer export controls. Personal account receipts, live provider confirmation and legal retention remain separately scoped."
+      "decision": "no_change",
+      "rationale": "Reviewed (AUTH-DA1): the sign-in page now shows the language choice in every deployment profile. The account deletion receipt and export/delete steps are unchanged, so the article stays accurate."
     },
     {
       "source": "ui/src/components/PersonalAccountDeletionReceipt.tsx",
@@ -2853,10 +2853,10 @@
     {
       "source": "ui/src/pages/Auth.tsx",
       "articleId": "export-and-delete-da",
-      "sourceSha256": "50a391c98431cf735bc349a531a8e566760993077a1c2e112eba2d0cc6f1f721",
+      "sourceSha256": "853158a1dc90fe29f8160d91796c593b3a1ad152ba0a9d6311fbe28fb48d0f49",
       "articleSha256": "685fbb4f4ebddd5faa1f24036b1bbfee0ce773b0771956a998a7fef70552cb28",
-      "decision": "updated",
-      "rationale": "Reviewed EN/DA organization-deletion repair guidance for an original export storage namespace mismatch: retain the original request and involve Human/operator repair. Internal durable export routes do not change existing customer export controls. Personal account receipts, live provider confirmation and legal retention remain separately scoped."
+      "decision": "no_change",
+      "rationale": "Reviewed (AUTH-DA1): the sign-in page now shows the language choice in every deployment profile. The account deletion receipt and export/delete steps are unchanged, so the article stays accurate."
     },
     {
       "source": "ui/src/components/PersonalAccountDeletionReceipt.tsx",

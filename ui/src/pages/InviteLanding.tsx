@@ -743,6 +743,9 @@ export function InviteLandingPage() {
                 <form
                   className="space-y-4"
                   method="post"
+                  // The localized alert below reports invalid input; native
+                  // validation would preempt it in the browser's language.
+                  noValidate
                   action={authMode === "sign_up" ? "/api/auth/sign-up/email" : "/api/auth/sign-in/email"}
                   onSubmit={(event) => {
                     event.preventDefault();

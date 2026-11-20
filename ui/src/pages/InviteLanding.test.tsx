@@ -1326,6 +1326,9 @@ describe("InviteLandingPage", () => {
         ["Opret konto", "true"], ["Jeg har allerede en konto", "false"],
       ]);
       expect((container.querySelector('button[type="submit"]') as HTMLButtonElement).textContent).toBe("Opret konto og fortsæt");
+      const form = container.querySelector('[data-testid="invite-inline-auth"]') as HTMLFormElement;
+      expect(form.noValidate).toBe(true);
+      expect((form.querySelector('input[name="password"]') as HTMLInputElement).required).toBe(true);
       await act(async () => { root.unmount(); });
     });
 
