@@ -59,6 +59,7 @@ import type {
   InitializeParams,
 } from "@paperclipai/plugin-sdk";
 import { getActiveStepContext } from "@paperclipai/adapter-utils/acpx-engine/startup-timing";
+import { guardChildStdin } from "@paperclipai/adapter-utils/child-stdin";
 import {
   isLoginCommandKey,
   validateLoginSessionHome,
@@ -2902,9 +2903,12 @@ export function createPluginWorkerHandle(
     }
 
     // The `error` listener stops an unhandled EPIPE from a child that closed its
-    // stdin.
+    // stdin; the exit handler decides what that means. Other stdin errors are
+    // logged, never thrown.
     if (child.stdin) {
-      child.stdin.on("error", () => {});
+      guardChildStdin(child, {
+        onError: (err) => log.warn({ err }, "worker stdin error"),
+      });
       child.stdin.on("close", () => {});
     }
 

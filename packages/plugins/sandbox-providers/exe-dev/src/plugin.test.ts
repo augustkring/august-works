@@ -17,20 +17,22 @@ vi.mock("node:child_process", async () => {
 import plugin, { validateSshPrivateKey } from "./plugin.js";
 import manifest from "./manifest.js";
 
+class MockStdin extends EventEmitter {
+  written = "";
+  ended = false;
+  write(chunk: string) {
+    this.written += chunk;
+    return true;
+  }
+  end() {
+    this.ended = true;
+  }
+}
+
 class MockChildProcess extends EventEmitter {
   stdout = new EventEmitter();
   stderr = new EventEmitter();
-  stdin = {
-    written: "" as string,
-    ended: false,
-    write: (chunk: string) => {
-      this.stdin.written += chunk;
-      return true;
-    },
-    end: () => {
-      this.stdin.ended = true;
-    },
-  };
+  stdin = new MockStdin();
   kill = vi.fn();
 
   constructor(input: { code?: number; signal?: string | null; stdout?: string; stderr?: string }) {
@@ -588,6 +590,12 @@ describe("exe.dev sandbox provider plugin", () => {
     const child = spawnMock.mock.results[0]?.value as MockChildProcess;
     expect(child.stdin.written).toBe("input-body");
     expect(child.stdin.ended).toBe(true);
+    // An ssh process that exits before reading stdin raises EPIPE on the pipe.
+    // The stdin error listener keeps it from becoming an uncaught exception.
+    expect(child.stdin.listenerCount("error")).toBe(1);
+    expect(() =>
+      child.stdin.emit("error", Object.assign(new Error("write EPIPE"), { code: "EPIPE" })),
+    ).not.toThrow();
     expect(result).toMatchObject({
       exitCode: 0,
       timedOut: false,

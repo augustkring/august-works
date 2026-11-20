@@ -9,6 +9,7 @@ import { ISSUE_STATUSES, businessMetricDefinitionSchema } from "@paperclipai/sha
 import { businessExperimentService } from "../services/business-experiments/service.js";
 import { businessExperimentRecordingService } from "../services/business-experiments/recording.js";
 import { businessExperimentAnalysisService } from "../services/business-experiments/analysis.js";
+import { experimentOperationBudgetMs } from "../services/business-experiments/receipts.js";
 import { businessExperimentRoutes } from "../routes/business-experiments.js";
 import { errorHandler } from "../middleware/index.js";
 import { businessMetricService } from "../services/business-metrics/service.js";
@@ -229,13 +230,14 @@ suite("Native experiment assignment and human attestation on migrated PostgreSQL
     await recording().control(companyId, actor, d.experiment.id, { expectedRevision: 4, versionId: d.version.id, state: "completed", rationale, completion: { reason: "fixed_horizon", concurrentChangeReview: { assessment: "none_identified", rationale } } });
     const started = performance.now();
     const result = await businessExperimentAnalysisService(db).analyze(companyId, actor, d.experiment.id, { expectedRevision: 5, versionId: d.version.id });
-    expect(performance.now() - started).toBeLessThan(30000);
+    // PERF-01: the product's own derived budget for 4,000 units x 2 metrics.
+    expect(performance.now() - started).toBeLessThan(experimentOperationBudgetMs(8000));
     expect(result.analysis.qualityGates.finalOutcomeCapture).toBe("complete");
     expect(result.analysis.qualityGates.exposureReports).toBe(true);
     expect(result.analysis.result.diagnostics.assigned).toBe(4000);
     expect(result.analysis.result.diagnostics.exposed).toBe(0);
     const readAt = performance.now(), replay = await recording().receipts(companyId, actor, d.experiment.id, d.version.id);
-    expect(performance.now() - readAt).toBeLessThan(30000);
+    expect(performance.now() - readAt).toBeLessThan(experimentOperationBudgetMs(8000));
     expect(replay.assignments).toHaveLength(4000); expect(replay.exposures).toHaveLength(4000);
     expect(replay.analysis!.receiptHash).toBe(result.analysis.receiptHash);
     expect(replay.analysis!.result).toEqual(result.analysis.result);
@@ -248,19 +250,29 @@ suite("Native experiment assignment and human attestation on migrated PostgreSQL
     await recording().control(companyId, actor, d.experiment.id, { expectedRevision: 4, versionId: d.version.id, state: "completed", rationale, completion: { reason: "fixed_horizon", concurrentChangeReview: { assessment: "none_identified", rationale } } });
     const started = performance.now();
     const result = await businessExperimentAnalysisService(db).analyze(companyId, actor, d.experiment.id, { expectedRevision: 5, versionId: d.version.id });
-    expect(performance.now() - started).toBeLessThan(30000);
+    const analyzeMs = performance.now() - started;
     expect(result.analysis.qualityGates.finalOutcomeCapture).toBe("complete");
     expect(result.analysis.qualityGates.exposureReports).toBe(true);
     expect(result.analysis.result.diagnostics.assigned).toBe(4000);
     const [stored]=await db.select({total:count()}).from(businessExperimentOutcomes).where(eq(businessExperimentOutcomes.analysisId,result.analysis.id));
     expect(stored.total).toBe(68000);
+    // PERF-01: final analysis and replay at the declared maxima are held to
+    // the product's derived budget for this outcome count, not a fixed 30 s.
+    expect(analyzeMs).toBeLessThan(experimentOperationBudgetMs(stored.total));
     expect(result.analysis.result.diagnostics.exposed).toBe(0);
     const readAt = performance.now(), replay = await recording().receipts(companyId, actor, d.experiment.id, d.version.id);
-    expect(performance.now() - readAt).toBeLessThan(30000);
+    expect(performance.now() - readAt).toBeLessThan(experimentOperationBudgetMs(stored.total));
     expect(replay.assignments).toHaveLength(4000); expect(replay.exposures).toHaveLength(4000);
     expect(replay.analysis!.receiptHash).toBe(result.analysis.receiptHash);
     expect(replay.analysis!.result).toEqual(result.analysis.result);
     process.stdout.write(`Maximum native outcome capture/replay ${JSON.stringify({units:4000,metrics:17,outcomes:stored.total,captureAndReadMs:Math.round(performance.now()-started),readMs:Math.round(performance.now()-readAt),fixture:"explicit_bulk_software_prerequisites"})}\n`);
+    // PERF-01: the human interpretation replays all 68,000 outcome receipts
+    // and is held to the same derived replay budget.
+    const interpretAt = performance.now();
+    const interpreted = await businessExperimentAnalysisService(db).interpret(companyId, actor, d.experiment.id, { expectedRevision: result.experiment.revision, versionId: d.version.id, analysisId: result.analysis.id,
+      conclusion: result.analysis.result.status === "invalid" ? "abstain" : "iterate", rationale, limitationsAcknowledged: true, executionAuthority: "advisory_only" });
+    expect(performance.now() - interpretAt).toBeLessThan(experimentOperationBudgetMs(stored.total));
+    expect(interpreted.interpretation.analysisId).toBe(result.analysis.id);
     const last=units[units.length-1];await db.update(issues).set({hiddenAt:new Date()}).where(eq(issues.id,last.id));
     await expect(recording().receipts(companyId,actor,d.experiment.id,d.version.id)).rejects.toMatchObject({status:404});
     await db.update(issues).set({hiddenAt:null}).where(eq(issues.id,last.id));
