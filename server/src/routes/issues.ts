@@ -363,11 +363,9 @@ import {
 } from "../services/issue-thread-interaction-resolution.js";
 import { resolveSelectedSuggestedTasks } from "../services/issue-thread-interactions.js";
 import {
-  deferredGovernedNoteCommentIds,
   findGovernedToolDecisionWait,
   recordDeferredGovernedNote,
 } from "../services/governed-tool-decision-wait.js";
-import { WAKE_COMMENT_IDS_KEY } from "../modules/run-dispatch/domain/wake-context.js";
 import {
   crossIssueInfluenceLimitError,
   crossIssueInfluenceRunContextError,
@@ -2744,22 +2742,6 @@ async function queueResolvedInteractionContinuationWakeup(input: {
       publication.idempotencyKey ===
       `interaction:${input.interaction.id}:${publication.endpointId}`,
   );
-  // APR-E2E-1. Human notes deferred while this governed tool decision was
-  // pending reach the resolution Run once, through the wake's comment batch.
-  const deferredNoteCommentIds = toolAction
-    ? await deferredGovernedNoteCommentIds(input.db, {
-        companyId: input.issue.companyId,
-        issueId: input.issue.id,
-        interactionId: input.interaction.id,
-        assigneeAgentId: input.issue.assigneeAgentId,
-      }).catch((err) => {
-        logger.warn(
-          { err, issueId: input.issue.id, interactionId: input.interaction.id },
-          "failed to read deferred notes for a governed tool decision",
-        );
-        return [] as string[];
-      })
-    : [];
   await input.heartbeat
     .wakeup(input.issue.assigneeAgentId, {
       source: "automation",
@@ -2808,9 +2790,6 @@ async function queueResolvedInteractionContinuationWakeup(input: {
           ? { paperclipAgentMessage: rejectionAgentMessage }
           : {}),
         ...(reviewPathContext ?? {}),
-        ...(deferredNoteCommentIds.length > 0
-          ? { [WAKE_COMMENT_IDS_KEY]: deferredNoteCommentIds }
-          : {}),
         wakeReason: "issue_commented",
         source: input.source,
         ...(forceFreshSession ? { forceFreshSession: true } : {}),
