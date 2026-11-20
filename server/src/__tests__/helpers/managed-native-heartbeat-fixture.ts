@@ -516,9 +516,13 @@ export async function withManagedNativeHeartbeatFixture<T>(input: Omit<FrameInpu
         const messagePrefix = Buffer.from(message, "utf8").subarray(0, 4096);
         const name = error instanceof Error && ["AssertionError", "Error", "TypeError", "RangeError", "AbortError"].includes(error.name)
           ? error.name as ProviderHookFailure["name"] : "UnknownError";
-        providerReplyFailure ??= { callIndex, name, messageLength: Buffer.byteLength(message),
+        const failure = { callIndex, name, messageLength: Buffer.byteLength(message),
           messageSha256Prefix: createHash("sha256").update(messagePrefix).digest("hex"),
           sourceFrames: managedModelRepositorySourceFrames(error) };
+        // APR-E2E-5: print the content-free projection when the reply fails,
+        // not only when the case envelope runs out.
+        if (!providerReplyFailure) console.info("managed_scheduler_provider_reply_failure_now", JSON.stringify(failure));
+        providerReplyFailure ??= failure;
         throw error;
       }
       const resolvedReply = reply ?? {
@@ -577,6 +581,7 @@ export async function withManagedNativeHeartbeatFixture<T>(input: Omit<FrameInpu
           const name = error instanceof Error && ["AssertionError", "Error", "TypeError", "RangeError", "AbortError"].includes(error.name)
             ? error.name as "AssertionError" | "Error" | "TypeError" | "RangeError" | "AbortError" : "UnknownError";
           providerHookFailure = { name, sourceFrames: managedModelRepositorySourceFrames(error) };
+          console.info("managed_scheduler_provider_hook_failure_now", JSON.stringify(providerHookFailure));
           throw error;
         }
       }
