@@ -345,9 +345,11 @@ test("the real shard partition is duration-balanced", () => {
   const chat = "server/src/__tests__/chat-channels.integration.test.ts";
   const nativeRunner =
     "server/src/services/native-runtime/native-codex-runner.integration.test.ts";
+  const warmTransition =
+    "server/src/services/native-runtime/native-warm-transition-restart.integration.test.ts";
   const heaviest = Math.max(
     ...Object.entries(durations)
-      .filter(([file]) => file !== chat && file !== nativeRunner)
+      .filter(([file]) => file !== chat && file !== nativeRunner && file !== warmTransition)
       .map(([, ms]) => ms),
   );
   assert.ok(
@@ -360,6 +362,8 @@ test("the real shard partition is duration-balanced", () => {
 const chatSuitePath = "server/src/__tests__/chat-channels.integration.test.ts";
 const nativeRunnerSuitePath =
   "server/src/services/native-runtime/native-codex-runner.integration.test.ts";
+const warmTransitionSuitePath =
+  "server/src/services/native-runtime/native-warm-transition-restart.integration.test.ts";
 
 const managedNativeSuitePaths = [
   "server/src/__tests__/durable-chat-wakeup.test.ts",
@@ -413,6 +417,7 @@ test("PR server, managed Native, chat and Rust lanes form a complete non-overlap
   const files = shards.flatMap((shard) => shard.selectedGeneralServerSuites);
   assert.ok(!files.includes(chatSuitePath));
   assert.ok(!files.includes(nativeRunnerSuitePath));
+  assert.ok(!files.includes(warmTransitionSuitePath));
   const managed = Array.from({ length: MANAGED_NATIVE_SHARD_COUNT }, (_, index) => dryRunJson([
     "--mode", "general", "--group", "general-server-managed-native",
     "--shard-index", String(index), "--shard-count", String(MANAGED_NATIVE_SHARD_COUNT),
@@ -422,7 +427,8 @@ test("PR server, managed Native, chat and Rust lanes form a complete non-overlap
   assert.ok(managed.every(shard => shard.selectedGeneralServerSuites.length === 1),
     "every managed Native job must select exactly one whole file");
   assert.ok(managedFiles.every(file => !files.includes(file)), "managed files must not run in plain PR server shards");
-  assert.deepEqual([...files, ...managedFiles, chatSuitePath, nativeRunnerSuitePath].sort(), full.selectedGeneralServerSuites.sort());
+  assert.deepEqual([...files, ...managedFiles, chatSuitePath, nativeRunnerSuitePath, warmTransitionSuitePath].sort(),
+    full.selectedGeneralServerSuites.sort());
   assert.equal(new Set([...files, ...managedFiles]).size, files.length + managedFiles.length);
   assert.equal(new Set(files).size, files.length);
   const defaultRun = dryRunJson([], prEnv);
@@ -442,6 +448,7 @@ for (const [caller, envOverrides] of [["Release", { GITHUB_WORKFLOW: "Release" }
     const files = shards.flatMap((shard) => shard.selectedGeneralServerSuites);
     assert.ok(!files.includes(chatSuitePath));
     assert.ok(files.includes(nativeRunnerSuitePath));
+    assert.ok(files.includes(warmTransitionSuitePath));
     assert.ok(managedNativeSuitePaths.every(file => files.includes(file)), "non-PR callers retain all managed Native files");
     assert.deepEqual([...files, chatSuitePath].sort(), full.selectedGeneralServerSuites.sort());
     assert.equal(new Set(files).size, files.length);
@@ -453,6 +460,13 @@ test("the native-runner lane runs exactly the cargo-dependent vertical-slice sui
   assert.deepEqual(lane.selectedGeneralServerSuites, [
     "server/src/services/native-runtime/native-codex-runner.integration.test.ts",
   ]);
+});
+
+test("the warm-transition lane runs exactly the fixture-dependent restart suite", () => {
+  const lane = dryRunJson(["--mode", "general", "--group", "general-server-warm-transition"]);
+  assert.deepEqual(lane.selectedGeneralServerSuites, [warmTransitionSuitePath]);
+  const result = dryRun(["--mode", "general", "--group", "general-server-warm-transition", "--shard-index", "0", "--shard-count", "2"]);
+  assert.notEqual(result.status, 0, "the warm-transition lane is a single suite and must not accept shard flags");
 });
 
 test("shard flags are rejected for the native-runner group", () => {
@@ -520,6 +534,11 @@ test("the PR vitest lane wrapper runs the native-runner group exactly on the fin
     assert.equal(
       commands.some((command) => command.includes("--group general-server-native-runner")),
       expected,
+    );
+    assert.equal(
+      commands.some((command) => command.includes("--group general-server-warm-transition")),
+      expected,
+      "the warm-transition group runs on the same final PR shard",
     );
   }
 

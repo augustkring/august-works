@@ -63,6 +63,9 @@ function fakeDb(tables: Map<unknown, Row[]>) {
       for (const row of tables.get(table) ?? []) Object.assign(row, structuredClone(values));
       return [];
     }) }),
+    // The conformance check's company advisory keys (D5f). This stand-in has
+    // no locks; run-task-lock-order.test.ts covers their order on Postgres.
+    execute: async () => [],
     transaction: async (work: (tx: unknown) => Promise<unknown>) => work(db),
   };
   return db;

@@ -454,8 +454,9 @@ class SteeredIdentityAcceptanceRequired extends Error {}
  * | Tool authority mutation context                         | company A+M exclusive > plan > Task > run             |
  * | Sandbox exec checks (assertTaskExecutionContext: exec   | company A+M shared (relay authorization: exclusive) > |
  * |   initial, claim, relay authorization, output, result)  |   lease > Task FOR SHARE > run FOR SHARE              |
- * | Native finalization reconciler resume claim (ambiguous  | run + coordinator FOR UPDATE > Task (issue update)    |
- * |   state), hidden conformance backend check              |   / run FOR SHARE > Task FOR SHARE                    |
+ * | Native finalization reconciler resume claim             | Task FOR UPDATE > run + coordinator FOR UPDATE (D5e)  |
+ * | Hidden conformance backend check                        | company A+M shared > Task FOR SHARE > run FOR SHARE   |
+ * |                                                         |   (D5e, D5f)                                          |
  *
  * D5c. The sandbox exec checks used to lock the run and then the Task. Their
  * company locks are shared, so they overlap steering acceptance (also shared)
@@ -476,10 +477,28 @@ class SteeredIdentityAcceptanceRequired extends Error {}
  * coordinator). Claim release learns the Task from the run's context: it
  * reads it unlocked, locks that Task, updates the run and checks the run still
  * names it; otherwise it rolls back and retries once, and a second change
- * proceeds as before. Still run first (not moved, open): the finalization
- * reconciler's resume claim, which reaches the Task only for a run that no
- * runner owns and that has no process, and the hidden conformance backend
- * check, whose shared locks never conflict with the exec checks' shared ones.
+ * proceeds as before.
+ *
+ * D5e. The last two run-first transactions now take the Task first too. The
+ * finalization reconciler's resume claim writes the coordinator's Task only
+ * in its ambiguous-state branch (issueService.update, FOR UPDATE by id). It
+ * reads the coordinator's Task id unlocked, locks that Task with that mode
+ * and predicate, then locks the run and coordinator (the finalizer's Task >
+ * run > coordinator) and checks the coordinator still names that Task;
+ * otherwise it rolls back and retries once, and a second change proceeds as
+ * before. The hidden conformance backend check locks the run's Task FOR
+ * SHARE before the run FOR SHARE, as the exec checks do. Its locks are
+ * shared, so it conflicts only with exclusive Task > run writers such as
+ * steering acceptance.
+ *
+ * D5f. That check used to reach the company A+M shared keys only inside
+ * assertTaskExecutionContext, after its Task, run, plan, manifest and lease
+ * rows, so a Native source transaction (company exclusive > run FOR UPDATE)
+ * could hold the keys and wait on the run while the check held the run and
+ * waited on the keys. It now takes both keys shared, in that order, before
+ * any row. assertTaskExecutionContext's later requests for the same keys are
+ * granted at once: a session that holds an advisory lock always gets it
+ * again, even while other sessions wait for it.
  *
  * The run and Task orders differ between families, so the per-request path
  * takes only the run row and waits only before it holds any lock: it cannot

@@ -1,6 +1,6 @@
 #!/usr/bin/env node
 import { spawnSync } from "node:child_process";
-import { mkdirSync, mkdtempSync, readdirSync, readFileSync, realpathSync, renameSync, statSync, writeFileSync } from "node:fs";
+import { existsSync, mkdirSync, mkdtempSync, readdirSync, readFileSync, realpathSync, renameSync, rmSync, statSync, writeFileSync } from "node:fs";
 import os from "node:os";
 import path from "node:path";
 import { fileURLToPath } from "node:url";
@@ -83,6 +83,7 @@ const generalServerWithoutChatGroupName = "general-server-without-chat";
 const generalChatGroupName = "general-chat";
 const generalServerNativeRunnerGroupName = "general-server-native-runner";
 const generalServerManagedNativeGroupName = "general-server-managed-native";
+const generalServerWarmTransitionGroupName = "general-server-warm-transition";
 const chatSuite = "server/src/__tests__/chat-channels.integration.test.ts";
 const scheduledWorkServerRestartSuite =
   "server/src/__tests__/scheduled-work-server-restart.integration.test.ts";
@@ -92,6 +93,23 @@ const scheduledWorkServerRestartSuite =
 // (277s of a 291s shard vitest step, actions run 35246999382, 2026-09-17).
 const nativeRunnerSuite =
   "server/src/services/native-runtime/native-codex-runner.integration.test.ts";
+// TG2. This suite qualifies server admission against runner state captured
+// from a real runnerd by the Runner package's warm-attachment restart test
+// (PAPERCLIP_ATTACH_TRANSITION_FIXTURE_DIRECTORY). Without that fixture it
+// skips, so the PR workflow runs it in the warm-transition group, which first
+// generates the fixture with the runnerd the Rust-cached Runner lane builds
+// (the same final Verify Paperclip Runner vitest shard as the native-runner
+// group) and then requires every test to pass, none skipped.
+const warmTransitionRestartSuite =
+  "server/src/services/native-runtime/native-warm-transition-restart.integration.test.ts";
+const warmTransitionRunnerTest = "src/live/runnerd-codex-transport.test.ts";
+const warmTransitionFixtures = [
+  "before-result-routed",
+  "after-result-routed",
+  "after-activation-routed",
+  "before-confirmation-routed",
+  "after-confirmation-routed",
+];
 // In the PR workflow (pr.yml, the caller of pr-trusted.yml — reusable
 // workflows inherit the caller's GITHUB_WORKFLOW), the last Verify Paperclip
 // Runner vitest shard runs the native-runner group instead, because those
@@ -143,7 +161,7 @@ const managedNativeSuites = [
 const prWorkflowName = "PR";
 const nativeRunnerSuiteRunsInRustCachedLane = process.env.GITHUB_WORKFLOW === prWorkflowName;
 const withoutChatExcludedSuites = nativeRunnerSuiteRunsInRustCachedLane
-  ? [chatSuite, nativeRunnerSuite, ...managedNativeSuites]
+  ? [chatSuite, nativeRunnerSuite, warmTransitionRestartSuite, ...managedNativeSuites]
   : [chatSuite];
 const generalWorkspacesAGroupName = "general-workspaces-a";
 const generalWorkspacesBGroupName = "general-workspaces-b";
@@ -155,6 +173,7 @@ const allowedGeneralGroupNames = [
   generalServerWithoutChatGroupName,
   generalChatGroupName,
   generalServerNativeRunnerGroupName,
+  generalServerWarmTransitionGroupName,
   generalServerManagedNativeGroupName,
 ];
 const serializedServerVitestArgs = [
@@ -485,10 +504,64 @@ function runProjectGroup(projects, groupName, shardIndex = null, shardCount = nu
   }
 }
 
+function runWarmTransitionRestartGroup() {
+  const tempRootParent = process.env.PAPERCLIP_TEST_TMPDIR || (process.platform === "win32" ? os.tmpdir() : "/tmp");
+  const root = realpathSync(mkdtempSync(path.join(tempRootParent, "pwt-")));
+  const runnerPackage = path.join(repoRoot, "packages/paperclip-runner");
+  const transient = path.join(root, "transient");
+  const managed = path.join(root, "managed");
+  // The routed loss points without a fault each export one fixture; the
+  // follow-up and fault cases share those names, so select exactly these.
+  for (const [directory, filter, scope, expected] of [
+    [transient, "routed=true, fault='none', followup=undefined", "transient", warmTransitionFixtures],
+    [managed, "'before-result', routed=true, fault='none', followup=undefined", null, ["before-result-routed"]],
+  ]) {
+    mkdirSync(directory);
+    console.log(`\n[test:run] warm transition fixture (${scope ?? "managed"} workspace) from the Runner package's restart test`);
+    const env = { ...process.env, PAPERCLIP_ATTACH_TRANSITION_FIXTURE_DIRECTORY: directory };
+    delete env.PAPERCLIP_ATTACH_TRANSITION_FIXTURE_SCOPE;
+    if (scope) env.PAPERCLIP_ATTACH_TRANSITION_FIXTURE_SCOPE = scope;
+    const result = spawnSync("pnpm", ["exec", "vitest", "run", warmTransitionRunnerTest, "-t", filter], {
+      cwd: runnerPackage,
+      env,
+      stdio: "inherit",
+    });
+    if (result.error || result.status !== 0) fail(`Warm transition fixture generation failed: ${result.error?.message ?? result.status}`);
+    // Vitest exits 0 when the filter matches nothing; require every fixture.
+    for (const name of expected) {
+      if (!existsSync(path.join(directory, name, "transition-fixture-metadata.json"))) {
+        fail(`Warm transition fixture ${name} was not generated in ${directory}`);
+      }
+    }
+  }
+  const report = path.join(root, "warm-transition-results.json");
+  process.env.PAPERCLIP_WARM_TRANSITION_FIXTURE_DIRECTORY = transient;
+  process.env.PAPERCLIP_WARM_TRANSITION_MANAGED_FIXTURE_DIRECTORY = managed;
+  runVitest(
+    ["--project", "@paperclipai/server", ...serializedServerVitestArgs, warmTransitionRestartSuite,
+      ...(process.env.PAPERCLIP_VITEST_REPORT_DIR ? [] : ["--reporter=default"]),
+      "--reporter=json", `--outputFile.json=${report}`],
+    "warm transition restart suite",
+    null,
+    [warmTransitionRestartSuite],
+  );
+  // A run whose tests all skipped (no database, no fixture) verified nothing.
+  const results = JSON.parse(readFileSync(report, "utf8"));
+  if (!(results.numTotalTests > 0) || results.numPassedTests !== results.numTotalTests) {
+    fail(`Warm transition restart suite passed ${results.numPassedTests} of ${results.numTotalTests} tests; every test must run and pass`);
+  }
+  console.log(`[test:run] warm transition restart suite: ${results.numPassedTests}/${results.numTotalTests} passed`);
+  rmSync(root, { recursive: true, force: true });
+}
+
 function runGeneralGroup(routeTests, groupName, shardIndex = null, shardCount = null) {
   if (groupName === generalChatGroupName) {
     runVitest(["--project", "@paperclipai/server", ...serializedServerVitestArgs, chatSuite],
       "chat integration test shard", { index: shardIndex ?? 0, count: shardCount ?? 1 }, [chatSuite]);
+    return;
+  }
+  if (groupName === generalServerWarmTransitionGroupName) {
+    runWarmTransitionRestartGroup();
     return;
   }
   if (groupName === generalServerNativeRunnerGroupName) {
@@ -641,7 +714,9 @@ if (options.dryRun) {
         selectedGeneralServerSuites:
           options.mode === generalModeName && options.group === generalServerNativeRunnerGroupName
             ? [nativeRunnerSuite]
-            : options.mode === generalModeName &&
+            : options.mode === generalModeName && options.group === generalServerWarmTransitionGroupName
+              ? [warmTransitionRestartSuite]
+              : options.mode === generalModeName &&
                 [generalServerGroupName, generalServerWithoutChatGroupName, generalServerManagedNativeGroupName].includes(options.group) &&
                 (options.shardCount !== null || options.group === generalServerManagedNativeGroupName)
               ? selectGeneralServerShard(

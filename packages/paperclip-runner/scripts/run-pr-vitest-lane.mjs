@@ -21,6 +21,10 @@
 //   workflow degrades to the slower covered path instead of losing coverage.
 // - The suite runs on the lane whose --shard=N/M has N === M (or an unsharded
 //   invocation), so exactly one PR lane carries it.
+// - TG2. The same lane then runs the general-server-warm-transition group: it
+//   generates the warm-transition restart fixture with the runnerd built
+//   above and runs the server suite that reads it, which every other caller
+//   skips for want of that fixture.
 import { spawnSync } from "node:child_process";
 import { dirname, resolve } from "node:path";
 import { fileURLToPath } from "node:url";
@@ -48,6 +52,10 @@ const plannedCommands = [
     ? [{
         command: "pnpm",
         args: ["test:run:general", "--", "--group", "general-server-native-runner"],
+        cwd: workspaceRoot,
+      }, {
+        command: "pnpm",
+        args: ["test:run:general", "--", "--group", "general-server-warm-transition"],
         cwd: workspaceRoot,
       }]
     : []),

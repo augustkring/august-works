@@ -15,12 +15,17 @@ import {
   agents,
   companies,
   createDb,
+  heartbeatRunEvents,
   heartbeatRuns,
   issues,
   nativeRunFinalizations,
 } from "@paperclipai/db";
 import type { NativeExecutionInputV1 } from "@paperclipai/paperclip-runner";
-import { describe, expect, it, vi } from "vitest";
+import { afterAll, beforeAll, describe, expect, it, vi } from "vitest";
+import {
+  getEmbeddedPostgresTestSupport,
+  startEmbeddedPostgresTestDatabase,
+} from "../../__tests__/helpers/embedded-postgres.js";
 import { nativeSha256 } from "./canonical.js";
 import {
   nativeToolContractFingerprintForTarget,
@@ -35,16 +40,25 @@ import {
 // These are captured from the actual private runner in the package's fresh
 // controller/runner loss-window test, not hand-authored protocol receipts.
 // Generate with PAPERCLIP_ATTACH_TRANSITION_FIXTURE_DIRECTORY, then explicitly
-// supply that directory and a fresh migrated PAPERCLIP_TEST_DATABASE_URL here.
+// supply that directory here (the general-server-warm-transition group in
+// scripts/run-vitest-stable.mjs does both). The database is a fresh migrated PAPERCLIP_TEST_DATABASE_URL
+// when one is supplied, else a fresh embedded Postgres started for this file.
 // The post-admission backend is mocked: this qualifies classifier→server route
 // admission, not a second provider execution or end-to-end restart.
 const fixtureDirectory =
   process.env.PAPERCLIP_WARM_TRANSITION_FIXTURE_DIRECTORY;
 const managedFixtureDirectory =
   process.env.PAPERCLIP_WARM_TRANSITION_MANAGED_FIXTURE_DIRECTORY;
-const databaseUrl = process.env.PAPERCLIP_TEST_DATABASE_URL;
+const externalDatabaseUrl = process.env.PAPERCLIP_TEST_DATABASE_URL;
+const databaseSupport =
+  fixtureDirectory && !externalDatabaseUrl
+    ? await getEmbeddedPostgresTestSupport()
+    : { supported: true };
 const generated =
-  fixtureDirectory && databaseUrl ? describe.sequential : describe.skip;
+  fixtureDirectory && databaseSupport.supported
+    ? describe.sequential
+    : describe.skip;
+let databaseUrl = externalDatabaseUrl;
 
 type Identity = {
   runnerInstanceId: string;
@@ -248,6 +262,19 @@ const cases = [
 generated(
   "generated warm transition → real restart classifier → guarded server admission",
   () => {
+    let embedded: Awaited<
+      ReturnType<typeof startEmbeddedPostgresTestDatabase>
+    > | null = null;
+    beforeAll(async () => {
+      if (externalDatabaseUrl) return;
+      embedded = await startEmbeddedPostgresTestDatabase(
+        "paperclip-warm-transition-restart-",
+      );
+      databaseUrl = embedded.connectionString;
+    }, 120_000);
+    afterAll(async () => {
+      await embedded?.cleanup();
+    }, 60_000);
     it.each(cases)("%s / %s", async (fixtureName, fault) => {
       const fixtureRoot =
         fixtureName === "managed-before-result-routed"
@@ -823,6 +850,10 @@ generated(
             await db
               .delete(nativeRunFinalizations)
               .where(eq(nativeRunFinalizations.companyId, companyId));
+            // Admission appends run-log events for the current run.
+            await db
+              .delete(heartbeatRunEvents)
+              .where(eq(heartbeatRunEvents.companyId, companyId));
             await db
               .delete(heartbeatRuns)
               .where(eq(heartbeatRuns.companyId, companyId));
