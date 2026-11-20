@@ -1635,7 +1635,7 @@
         "post:`/companies/${companyId}/secrets`"
       ],
       "argumentsSignature": "selectedCompanyId, input",
-      "line": 455,
+      "line": 456,
       "occurrence": 0,
       "owner": "server/src/services/secrets.ts",
       "classification": "HUMAN_ONLY",
@@ -1676,7 +1676,7 @@
         "postForm:`/companies/${companyId}/assets/images`"
       ],
       "argumentsSignature": "selectedCompanyId, file, namespace",
-      "line": 466,
+      "line": 467,
       "occurrence": 0,
       "owner": "server/src/routes/assets.ts",
       "classification": "DIRECT_AGENT",
@@ -1732,7 +1732,7 @@
         "post:`/companies/${companyId}/adapters/${type}/test-environment`"
       ],
       "argumentsSignature": "selectedCompanyId, adapterType, { adapterConfig, agentId, aiConnection, environmentId }",
-      "line": 1076,
+      "line": 1077,
       "occurrence": 0,
       "owner": "server/src/services/agents.ts",
       "classification": "DIRECT_AGENT",
@@ -1863,7 +1863,7 @@
         "post:`/companies/${encodeURIComponent(companyId)}/adapters/${encodeURIComponent(type)}/login-sessions`"
       ],
       "argumentsSignature": "companyId, adapterType, { environmentId, aiConnection }",
-      "line": 2377,
+      "line": 2378,
       "occurrence": 0,
       "owner": "server/src/services/agents.ts",
       "classification": "HUMAN_ONLY",
@@ -1961,7 +1961,7 @@
         "post:`/companies/${encodeURIComponent(companyId)}/adapters/${encodeURIComponent(type)}/login-sessions/${encodeURIComponent(sessionId)}/cancel`"
       ],
       "argumentsSignature": "companyId, adapterType, sessionId!",
-      "line": 2402,
+      "line": 2403,
       "occurrence": 0,
       "owner": "server/src/services/agents.ts",
       "classification": "HUMAN_ONLY",
@@ -2059,7 +2059,7 @@
         "post:`/companies/${encodeURIComponent(companyId)}/adapters/${encodeURIComponent(type)}/login-sessions/${encodeURIComponent(sessionId)}/cancel`"
       ],
       "argumentsSignature": "companyId, adapterType, id",
-      "line": 2507,
+      "line": 2508,
       "occurrence": 0,
       "owner": "server/src/services/agents.ts",
       "classification": "HUMAN_ONLY",
@@ -2157,7 +2157,7 @@
         "post:`/companies/${encodeURIComponent(companyId)}/setup-token-login-sessions`"
       ],
       "argumentsSignature": "companyId, {\n        environmentId,\n        aiConnection,\n        // When the owner already has a stored token, the login rotates it under\n        // the captured version, so a replacement login never conflicts with an\n        // existing value. Without a stored token the login is a first write.\n        ...(storedToken && !aiConnection\n          ? {\n              overwrite: {\n                expectedSecretId: storedToken.secretId,\n                expectedLatestVersion: storedToken.latestVersion,\n              },\n            }\n          : {}),\n      }",
-      "line": 2920,
+      "line": 2921,
       "occurrence": 0,
       "owner": "server/src/services/agents.ts",
       "classification": "HUMAN_ONLY",
@@ -2265,7 +2265,7 @@
         "post:`/companies/${encodeURIComponent(companyId)}/setup-token-login-sessions/${encodeURIComponent(sessionId)}/cancel`"
       ],
       "argumentsSignature": "companyId, sessionId!",
-      "line": 2954,
+      "line": 2955,
       "occurrence": 0,
       "owner": "server/src/services/agents.ts",
       "classification": "HUMAN_ONLY",
@@ -2363,7 +2363,7 @@
         "post:`/companies/${encodeURIComponent(companyId)}/setup-token-login-sessions/${encodeURIComponent(sessionId)}/cancel`"
       ],
       "argumentsSignature": "companyId, id",
-      "line": 2985,
+      "line": 2986,
       "occurrence": 0,
       "owner": "server/src/services/agents.ts",
       "classification": "HUMAN_ONLY",
@@ -2461,7 +2461,7 @@
         "post:`/companies/${encodeURIComponent(companyId)}/setup-token-login-sessions/${encodeURIComponent(sessionId)}/cancel`"
       ],
       "argumentsSignature": "companyId, id",
-      "line": 3071,
+      "line": 3072,
       "occurrence": 0,
       "owner": "server/src/services/agents.ts",
       "classification": "HUMAN_ONLY",
@@ -2559,7 +2559,7 @@
         "post:`/companies/${encodeURIComponent(companyId)}/setup-token-login-sessions/${encodeURIComponent(sessionId)}/code`"
       ],
       "argumentsSignature": "companyId, sessionId!, code",
-      "line": 3130,
+      "line": 3131,
       "occurrence": 0,
       "owner": "server/src/services/agents.ts",
       "classification": "HUMAN_ONLY",
@@ -2657,7 +2657,7 @@
         "post:`/companies/${encodeURIComponent(companyId)}/setup-token-login-sessions/${encodeURIComponent(sessionId)}/completion`"
       ],
       "argumentsSignature": "companyId, sessionId!",
-      "line": 3137,
+      "line": 3138,
       "occurrence": 0,
       "owner": "server/src/services/agents.ts",
       "classification": "HUMAN_ONLY",
@@ -10970,7 +10970,7 @@
         "post:`/companies/${companyId}/issues`"
       ],
       "argumentsSignature": "companyId, data",
-      "line": 661,
+      "line": 666,
       "occurrence": 0,
       "owner": "server/src/routes/issues.ts",
       "classification": "DIRECT_AGENT",
@@ -11026,7 +11026,7 @@
         "put:`/issues/${id}/documents/${encodeURIComponent(key)}`"
       ],
       "argumentsSignature": "issue.id, stagedFile.documentKey ?? \"document\", {\n              title: stagedFile.documentKey === \"plan\" ? null : stagedFile.title ?? null,\n              format: \"markdown\",\n              body,\n              baseRevisionId: null,\n            }",
-      "line": 668,
+      "line": 673,
       "occurrence": 0,
       "owner": "server/src/services/documents.ts",
       "classification": "DIRECT_AGENT",
@@ -11082,7 +11082,7 @@
         "postForm:`/companies/${companyId}/issues/${issueId}/attachments`"
       ],
       "argumentsSignature": "companyId, issue.id, stagedFile.file",
-      "line": 675,
+      "line": 680,
       "occurrence": 0,
       "owner": "server/src/routes/issues.ts",
       "classification": "DIRECT_AGENT",
@@ -11128,7 +11128,7 @@
         "postForm:`/companies/${companyId}/assets/images`"
       ],
       "argumentsSignature": "effectiveCompanyId, file, \"issues/drafts\"",
-      "line": 713,
+      "line": 718,
       "occurrence": 0,
       "owner": "server/src/routes/assets.ts",
       "classification": "DIRECT_AGENT",
@@ -17541,7 +17541,7 @@
         "post:`/companies/${companyId}/agent-hires`"
       ],
       "argumentsSignature": "companyId, {\n        name: name.trim(),\n        appearance: appearanceDraft.appearance,\n        role: existing.length ? \"general\" : \"ceo\",\n        ...(leader ? { reportsTo: leader.id } : {}),\n        adapterType,\n        adapterConfig: config,\n        defaultEnvironmentId:\n          environmentOverride ||\n          (forced.forced || managedOnly ? environmentId : null),\n        runtimeConfig: { ...buildNewAgentRuntimeConfig({ heartbeatEnabled: false }), ...(aiBinding ? { aiConnection: aiBinding } : {}) },\n        budgetMonthlyCents: 0,\n        ...(connection?.storedSessionId\n          ? { storedSessionId: connection.storedSessionId }\n          : {}),\n        ...(connection?.applyStoredClaudeLogin\n          ? { applyStoredClaudeLogin: true }\n          : {}),\n      }",
-      "line": 503,
+      "line": 506,
       "occurrence": 0,
       "owner": "server/src/services/agents.ts",
       "classification": "DIRECT_AGENT",
@@ -22641,7 +22641,7 @@
         "post:agentPath(id, companyId, `/config-revisions/${revisionId}/rollback`)"
       ],
       "argumentsSignature": "agent.id, revisionId, companyId",
-      "line": 1903,
+      "line": 1904,
       "occurrence": 0,
       "owner": "server/src/services/agents.ts",
       "classification": "DIRECT_AGENT",
@@ -22752,7 +22752,7 @@
         "patch:agentPath(id, companyId)"
       ],
       "argumentsSignature": "agent.id, data, companyId",
-      "line": 2014,
+      "line": 2015,
       "occurrence": 0,
       "owner": "server/src/services/agents.ts",
       "classification": "DIRECT_AGENT",
@@ -22838,7 +22838,7 @@
         "patch:agentPath(id, companyId, \"/instructions-bundle\")"
       ],
       "argumentsSignature": "agent.id, data, companyId",
-      "line": 2317,
+      "line": 2318,
       "occurrence": 0,
       "owner": "server/src/services/agents.ts",
       "classification": "DIRECT_AGENT",
@@ -22959,7 +22959,7 @@
         "put:agentPath(id, companyId, \"/instructions-bundle/file\")"
       ],
       "argumentsSignature": "agent.id, data, companyId",
-      "line": 2332,
+      "line": 2333,
       "occurrence": 0,
       "owner": "server/src/services/agents.ts",
       "classification": "DIRECT_AGENT",
@@ -23070,7 +23070,7 @@
         "delete:agentPath(id, companyId, `/instructions-bundle/file?path=${encodeURIComponent(relativePath)}`)"
       ],
       "argumentsSignature": "agent.id, relativePath, companyId",
-      "line": 2348,
+      "line": 2349,
       "occurrence": 0,
       "owner": "server/src/services/agents.ts",
       "classification": "DIRECT_AGENT",
@@ -23181,7 +23181,7 @@
         "postForm:`/companies/${companyId}/assets/images`"
       ],
       "argumentsSignature": "selectedCompanyId, file, namespace",
-      "line": 2365,
+      "line": 2366,
       "occurrence": 0,
       "owner": "server/src/routes/assets.ts",
       "classification": "DIRECT_AGENT",
@@ -23237,7 +23237,7 @@
         "post:`/heartbeat-runs/${runId}/cancel`"
       ],
       "argumentsSignature": "run.id",
-      "line": 3281,
+      "line": 3282,
       "occurrence": 0,
       "owner": "server/src/services/heartbeat.ts",
       "classification": "HUMAN_ONLY",
@@ -23270,7 +23270,7 @@
         "post:agentPath(id, companyId, \"/wakeup\")"
       ],
       "argumentsSignature": "run.agentId, {\n        source: \"on_demand\",\n        triggerDetail: \"manual\",\n        reason: \"resume_process_lost_run\",\n        payload: resumePayload,\n      }, run.companyId",
-      "line": 3305,
+      "line": 3306,
       "occurrence": 0,
       "owner": "server/src/services/agents.ts",
       "classification": "DIRECT_AGENT",
@@ -23366,7 +23366,7 @@
         "post:agentPath(id, companyId, \"/wakeup\")"
       ],
       "argumentsSignature": "run.agentId, run.id, run.companyId",
-      "line": 3338,
+      "line": 3339,
       "occurrence": 0,
       "owner": "server/src/services/agents.ts",
       "classification": "HUMAN_ONLY",
@@ -23474,7 +23474,7 @@
         "post:agentPath(id, companyId, \"/wakeup\")"
       ],
       "argumentsSignature": "run.agentId, {\n        source: \"on_demand\",\n        triggerDetail: \"manual\",\n        reason: \"rerun_with_provider_trace\",\n        payload: retryPayload,\n        debug: { providerTrace: \"raw\" },\n      }, run.companyId",
-      "line": 3350,
+      "line": 3351,
       "occurrence": 0,
       "owner": "server/src/services/agents.ts",
       "classification": "DIRECT_AGENT",
@@ -23570,7 +23570,7 @@
         "post:agentPath(id, companyId, \"/runtime-state/reset-session\")"
       ],
       "argumentsSignature": "run.agentId, issueId, run.companyId",
-      "line": 3381,
+      "line": 3382,
       "occurrence": 0,
       "owner": "server/src/services/agents.ts",
       "classification": "HUMAN_ONLY",
@@ -23698,7 +23698,7 @@
         "post:agentPath(id, companyId, \"/claude-login\")"
       ],
       "argumentsSignature": "run.agentId, run.companyId",
-      "line": 3392,
+      "line": 3393,
       "occurrence": 0,
       "owner": "server/src/services/agents.ts",
       "classification": "HUMAN_ONLY",
@@ -23826,7 +23826,7 @@
         "post:agentPath(id, companyId, \"/keys\")"
       ],
       "argumentsSignature": "agentId, newKeyName.trim() || \"Default\", companyId",
-      "line": 4495,
+      "line": 4496,
       "occurrence": 0,
       "owner": "server/src/services/agents.ts",
       "classification": "HUMAN_ONLY",
@@ -23929,7 +23929,7 @@
         "delete:agentPath(agentId, companyId, `/keys/${encodeURIComponent(keyId)}`)"
       ],
       "argumentsSignature": "agentId, keyId, companyId",
-      "line": 4505,
+      "line": 4506,
       "occurrence": 0,
       "owner": "server/src/services/agents.ts",
       "classification": "HUMAN_ONLY",
