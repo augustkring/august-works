@@ -53,9 +53,16 @@ for (const prepare of [true, false]) {
       `);
       if (prepare) {
         expect(plans).toHaveLength(2);
-        expect(plans.every(plan => plan.generic > 0 && plan.custom >= 5)).toBe(true);
+        // PERF5/PERF6: each reader is planned once (generic) from its first
+        // execution, instead of custom-planning ~220 KB of SQL five times per
+        // pooled connection.
+        expect(plans.every(plan => plan.generic > 0 && plan.custom === 0)).toBe(true);
       }
       else expect(plans).toHaveLength(0);
+      // The forced plan mode is scoped to each reader statement; the caller's
+      // transaction keeps its own mode afterwards.
+      const [mode] = await tx.execute<{ mode: string }>(sql`select current_setting('plan_cache_mode') as mode`);
+      expect(mode?.mode).toBe("auto");
       await expectRunParity(tx);
       expect((await canActorReadIssuePrivacyBatch(tx, alice, companyId, [task!.id])).get(task!.id)).toBe(true);
       expect((await canActorReadIssuePrivacyBatch(tx, bob, companyId, [task!.id])).get(task!.id)).toBe(false);

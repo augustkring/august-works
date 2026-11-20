@@ -268,7 +268,21 @@ export function createDb(url: string, options?: DatabaseClientOptions) {
 
 /** Reuse only the server plan for privacy readers' id projections. The existing
  * session keeps its connection/transaction; postgres-js's pool-level prepare
- * opt-out still wins over this per-statement request. No read result is cached. */
+ * opt-out still wins over this per-statement request. No read result is cached.
+ *
+ * PERF5/PERF6: the Task reader predicate is about 220 KB of SQL and PostgreSQL
+ * spends about 100 ms planning it. With the default `plan_cache_mode=auto`
+ * every pooled connection custom-plans the statement for its first five
+ * executions before it switches to the generic plan, and the pool rotates
+ * requests across its connections. A cold server therefore re-planned the
+ * predicate on almost every check. This statement alone runs with
+ * `force_generic_plan`: one plan per connection, reused from the second call.
+ * The plan mode changes only how PostgreSQL plans the statement, never which
+ * rows it returns; the predicate still runs against current rows each time.
+ * Outside a transaction the setting is transaction-local to a one-statement
+ * read transaction. Inside the caller's transaction it is set locally and the
+ * previous mode is restored after the read. A failed read aborts the
+ * caller's transaction or savepoint, whose rollback restores the mode. */
 export async function executePrivacyIdSelect(db: Pick<Db, "_">,
   query: PromiseLike<{ id: string }[]> & { toSQL(): { sql: string; params: unknown[] } },
 ): Promise<{ id: string }[]> {
@@ -276,9 +290,24 @@ export async function executePrivacyIdSelect(db: Pick<Db, "_">,
   if (!is(session, PostgresJsSession)) return query;
   const compiled = query.toSQL();
   session.logger.logQuery(compiled.sql, compiled.params);
-  return session.client.unsafe<{ id: string }[]>(compiled.sql,
-    compiled.params as Parameters<typeof session.client.unsafe>[1], { prepare: true });
-
+  const client = session.client as postgres.Sql | postgres.TransactionSql;
+  const params = compiled.params as Parameters<typeof client.unsafe>[1];
+  const read = (executor: postgres.Sql | postgres.TransactionSql) =>
+    executor.unsafe<{ id: string }[]>(compiled.sql, params, { prepare: true });
+  if ("begin" in client && typeof client.begin === "function") {
+    // Without server-side preparation there is no plan to reuse.
+    if ((client.options as { prepare?: boolean } | undefined)?.prepare === false) return read(client);
+    return client.begin(async (tx) => {
+      await tx.unsafe("set local plan_cache_mode = force_generic_plan");
+      return read(tx);
+    }) as Promise<{ id: string }[]>;
+  }
+  const [mode] = await client.unsafe<{ previous: string }[]>(
+    "select current_setting('plan_cache_mode') as previous, set_config('plan_cache_mode', 'force_generic_plan', true)");
+  const rows = await read(client);
+  if (mode && mode.previous !== "force_generic_plan")
+    await client.unsafe("select set_config('plan_cache_mode', $1, true)", [mode.previous]);
+  return rows;
 }
 
 export async function getPostgresDataDirectory(url: string): Promise<string | null> {
