@@ -3,7 +3,8 @@ import { eq, sql } from "drizzle-orm";
 import { afterAll, beforeAll, describe, expect, it } from "vitest";
 import { agents, authUsers, companies, companyMemberships, contextManifests, createDb, heartbeatRuns, issueAccessGrants,
   issuePrivacySources, issues, projects } from "@paperclipai/db";
-import { issueReadSqlCondition, setBasedIssueReadDecisions, type AuthorizationActor } from "../services/authorization.js";
+import { issueReadDecisions, issueReadSqlCondition, SET_BASED_TASK_READER_MIXED_MINIMUM, setBasedIssueReadDecisions,
+  type AuthorizationActor } from "../services/authorization.js";
 import { getEmbeddedPostgresTestSupport, startEmbeddedPostgresTestDatabase } from "./helpers/embedded-postgres.js";
 
 /*
@@ -17,6 +18,10 @@ import { getEmbeddedPostgresTestSupport, startEmbeddedPostgresTestDatabase } fro
  * origin, a 300-source fan-out, 256 and 257 Context-owned edges to one Task,
  * a valid and a corrupt temporal snapshot, another company's
  * Task and an unknown id. A second case forces the bound fallback.
+ *
+ * PERF2e. The batch routes a population to the set-based statement or to
+ * the per-root predicate (`issueReadDecisions`). A third case checks both
+ * routes give the per-root decisions, at the mixed-population threshold.
  */
 const support = await getEmbeddedPostgresTestSupport();
 (support.supported ? describe : describe.skip)("set-based Task reader parity (PERF2d)", () => {
@@ -118,7 +123,7 @@ const support = await getEmbeddedPostgresTestSupport();
       reader: { type: "board", source: "session", userId: reader },
       worker: { type: "agent", source: "agent_jwt", companyId: company, agentId: agent!.id, runId: run!.id, onBehalfOfUserId: owner },
     };
-    return { company, roots, actors };
+    return { company, roots, actors, chain };
   }
 
   async function perRoot(companyId: string, actor: AuthorizationActor, ids: string[]) {
@@ -150,6 +155,41 @@ const support = await getEmbeddedPostgresTestSupport();
       malformedWorkflowOrigin: false, fanOut: false, smallFan: true, corruptSnapshot: false, validSnapshot: true, edges256: true, edges257: false, foreign: "absent", unknown: "absent" });
     const reader = named(f.roots, await perRoot(f.company, f.actors.reader!, ids));
     expect(reader).toMatchObject({ open: true, privateOwned: false, privateGranted: true, childOfPrivate: false });
+  }, 60_000);
+
+  it("routes each population by its temporal-snapshot roots without changing a decision (PERF2e)", async () => {
+    const f = await seed();
+    const snapshotRoots = [f.roots.validSnapshot!, f.roots.corruptSnapshot!];
+    const absent = [f.roots.foreign!, f.roots.unknown!];
+    // Company Tasks without a temporal snapshot: the named roots, then the
+    // parent chain, so the populations mix allowed and denied roots.
+    const others = [...new Set([...Object.entries(f.roots).filter(([name]) =>
+      !["validSnapshot", "corruptSnapshot", "foreign", "unknown"].includes(name)).map(([, id]) => id), ...f.chain])];
+    const threshold = SET_BASED_TASK_READER_MIXED_MINIMUM;
+    expect(others.length).toBeGreaterThan(threshold);
+    const populations: [string, string[], "set_based" | "per_root"][] = [
+      ["snapshot roots only", [...snapshotRoots, ...absent], "per_root"],
+      ["one root, no snapshot", [f.roots.open!], "set_based"],
+      ["no snapshot roots", [...others.slice(0, 5), ...absent], "set_based"],
+      ["mixed, below the threshold", [...snapshotRoots, ...others.slice(0, threshold - 1), ...absent], "per_root"],
+      ["mixed, at the threshold", [...snapshotRoots, ...others.slice(0, threshold), ...absent], "set_based"],
+      ["unknown ids only", absent, "per_root"],
+    ];
+    for (const [actorName, actor] of Object.entries(f.actors)) {
+      const condition = await issueReadSqlCondition(db, actor);
+      for (const [name, ids, route] of populations) {
+        const diagnostic: { route?: "set_based" | "per_root" } = {};
+        const expected = await perRoot(f.company, actor, ids);
+        const actual = await issueReadDecisions(db, actor, f.company, ids, condition, undefined, diagnostic);
+        expect({ route: diagnostic.route, decisions: Object.fromEntries(ids.map(id => [id, actual.has(id) ? actual.get(id) : "absent"])) },
+          `${actorName}: ${name}`).toEqual({ route, decisions: Object.fromEntries(ids.map(id => [id, expected.has(id) ? expected.get(id) : "absent"])) });
+      }
+    }
+    // Both outcomes occur at the boundary.
+    const owner = await perRoot(f.company, f.actors.owner!, [...snapshotRoots, ...others.slice(0, threshold)]);
+    expect(new Set(owner.values())).toEqual(new Set([true, false]));
+    await expect(issueReadDecisions(db, f.actors.owner!, f.company, ["not-a-uuid"], await issueReadSqlCondition(db, f.actors.owner!)))
+      .rejects.toMatchObject({ status: 403 });
   }, 60_000);
 
   it("falls back to the per-root predicate when the population exceeds its bounds", async () => {

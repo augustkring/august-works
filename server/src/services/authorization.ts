@@ -852,9 +852,20 @@ export async function setBasedIssueReadDecisions(db: Db | DbTransaction, actor: 
     else if (row.valid === true || row.overflow === true) perRoot.push(row.id);
     else decisions.set(row.id, row.allowed === true);
   }
-  for (let offset = 0; offset < perRoot.length; offset += 512) {
+  for (const [id, allowed] of await perRootIssueReadDecisions(db, companyId, perRoot, perRootCondition, checkDeadline))
+    decisions.set(id, allowed);
+  return decisions;
+}
+
+/** The canonical per-root Task reader statement (`perRootCondition`, built by
+ * the caller with `issueReadSqlCondition`) for each root, in chunks of 512.
+ * Ids that are not Tasks of `companyId` are absent from the result. */
+async function perRootIssueReadDecisions(db: Db | DbTransaction, companyId: string, issueIds: readonly string[],
+  perRootCondition: SQL, checkDeadline: () => void): Promise<Map<string, boolean>> {
+  const decisions = new Map<string, boolean>();
+  for (let offset = 0; offset < issueIds.length; offset += 512) {
     checkDeadline();
-    const chunk = perRoot.slice(offset, offset + 512);
+    const chunk = issueIds.slice(offset, offset + 512);
     const checked = await db.execute<{ id: string; allowed: boolean }>(sql`
       select selected.id::text as id, (${perRootCondition}) as allowed
       from (values ${sql.join(chunk.map(id => sql`(${id}::uuid)`), sql`, `)}) as selected(id)
@@ -863,6 +874,49 @@ export async function setBasedIssueReadDecisions(db: Db | DbTransaction, actor: 
     for (const row of checked) if (chunk.includes(row.id)) decisions.set(row.id, row.allowed === true);
   }
   return decisions;
+}
+
+/** PERF2e. A population with temporal-snapshot roots uses the set-based
+ * statement only when at least this many of its roots have none. */
+export const SET_BASED_TASK_READER_MIXED_MINIMUM = 64;
+
+/** PERF2e. The canonical Task reader decision for every root of a population,
+ * by whichever of two parity-tested equivalent paths is cheaper for it:
+ * `setBasedIssueReadDecisions` or the per-root predicate. The route never
+ * changes a decision, only the statements that compute it.
+ *
+ * The set-based statement can decide only roots without a temporal snapshot;
+ * it sends the others to the per-root predicate after it has run. For a
+ * population of only such roots it is pure overhead (about 80 ms, most of it
+ * planning), and with a few roots that it can decide it costs more than
+ * those roots add to the per-root statement. A one-table read of each root's
+ * protocol columns counts the roots that may hold a temporal snapshot
+ * (protocol 1, not invalidated: valid or corrupt, the only roots the
+ * set-based statement does not decide itself). It routes to the set-based
+ * statement when no root may hold one, or when at least
+ * `SET_BASED_TASK_READER_MIXED_MINIMUM` roots do not; otherwise every root
+ * uses the per-root predicate. This read is only a routing hint: both paths
+ * compute every decision from current rows and the set-based statement makes
+ * its own snapshot classification. Nothing is cached. */
+export async function issueReadDecisions(db: Db | DbTransaction, actor: AuthorizationActor, companyId: string,
+  issueIds: readonly string[], perRootCondition: SQL, checkDeadline: () => void = () => {},
+  diagnostic?: { route?: "set_based" | "per_root" }): Promise<Map<string, boolean>> {
+  const ids = [...new Set(issueIds)];
+  if (ids.some(id => !privacyUuid.test(id)) || !privacyUuid.test(companyId))
+    throw forbidden("The complete current Task reader set is unavailable");
+  if (!ids.length) return new Map();
+  checkDeadline();
+  const [counts] = await db.execute<{ snapshot: number; other: number }>(sql`
+    select count(*) filter (where payload_source_protocol_version=1 and not payload_source_snapshot_invalidated)::int as snapshot,
+      count(*) filter (where payload_source_protocol_version is distinct from 1 or payload_source_snapshot_invalidated)::int as other
+    from issues where company_id=${companyId}::uuid and id = any(${`{${ids.join(",")}}`}::uuid[])
+  `);
+  const snapshot = counts?.snapshot ?? 0, other = counts?.other ?? 0;
+  const setBased = other > 0 && (snapshot === 0 || other >= SET_BASED_TASK_READER_MIXED_MINIMUM);
+  if (diagnostic) diagnostic.route = setBased ? "set_based" : "per_root";
+  return setBased
+    ? setBasedIssueReadDecisions(db, actor, companyId, ids, perRootCondition, checkDeadline)
+    : perRootIssueReadDecisions(db, companyId, ids, perRootCondition, checkDeadline);
 }
 
 /** Batch Native Task ACLs only after each temporal Task's frozen Context prefix
@@ -3129,11 +3183,13 @@ function createAuthorizationService(db: Db | DbTransaction, readSources?: ReadSo
     const evaluate = async () => {
       const issuesById = new Map<string, boolean>();
       const projectsById = new Map<string, boolean>();
-      // PERF2d: the exact canonical decision for every root, evaluated
+      // PERF2d/PERF2e: the exact canonical decision for every root, evaluated
       // set-based (each graph node once) with the per-root predicate for
-      // temporal-snapshot roots and on any bound overflow. It never
-      // aggregates a filtered subset or omits a root from the decision.
-      const decided = await setBasedIssueReadDecisions(db, actor, companyId, issueIds, issueCondition, checkDeadline);
+      // temporal-snapshot roots and on any bound overflow, or by the per-root
+      // predicate alone when the set-based statement could decide too few
+      // roots to pay for itself. It never aggregates a filtered subset or
+      // omits a root from the decision.
+      const decided = await issueReadDecisions(db, actor, companyId, issueIds, issueCondition, checkDeadline);
       for (const id of issueIds) if (decided.has(id)) issuesById.set(id, decided.get(id) === true);
       for (let offset = 0; offset < issueIds.length; offset += 512) {
         checkDeadline();
