@@ -252,9 +252,12 @@ export async function withManagedConnectionReview(input: {
           for (const block of blocks) {
             const id = block.tool_use_id;
             if (block.type !== "tool_result" || id !== "review-railway-later" || laterInvocationByRun.has(run.id)) continue;
-            // Read-only here: the capture's source validation and its mutation
-            // oracles run after the Run ends (below), so they never hold source
-            // read locks on the live Run while it records its own results.
+            // The capture's source validation and its mutation oracles run here,
+            // while the Run and its managed runtime are live: the assigned MCP
+            // source owner re-checks current tool access, which requires current
+            // managed runtime capacity, so it refuses once the Run's runtime has
+            // stopped (APR-E2E-29).
+            await validateSuccessfulToolCapture(run.id, id);
             const [current] = await db.select({ profile: heartbeatRuns.runnerProfileJson }).from(heartbeatRuns)
               .where(eq(heartbeatRuns.id, run.id));
             const sealed = (Array.isArray(record(current?.profile).nativeToolResultSourceCaptures)
@@ -703,11 +706,10 @@ export async function withManagedConnectionReview(input: {
           assert.equal(railway.captures().filter(capture => capture.purpose === "large_tool_call").length, 0);
           if (input.journey === "always") {
             assert(maxProviderRequestBytes > 0 && maxProviderRequestBytes <= 64_000);
-            // The later Run's sealed call capture is current, and a forged
-            // argument or descriptor hash is refused (checked on the ended Run).
+            // The later Run's sealed call capture was current while the Run was
+            // live, and a forged argument or descriptor hash was refused.
             const later = roles.find(entry => entry.role === "later"); assert(later);
-            assert(laterInvocationByRun.has(later.runId), "The later Run's sealed call capture was observed");
-            await validateSuccessfulToolCapture(later.runId, "review-railway-later");
+            assert(laterInvocationByRun.has(later.runId), "The later Run's sealed call capture was observed and validated");
           }
           const [finished] = await db.select().from(issues).where(eq(issues.id, task.id));
           assert.equal(finished?.status, input.journey === "decline" ? "blocked" : "done");
