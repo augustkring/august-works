@@ -4481,7 +4481,7 @@
         },
         {
           "path": "server/src/services/authorization.ts",
-          "sha256": "979f40a6e9973841427b0a3a925f3bbfded19e1bc89d7ea25b210c0c1f9b4d41"
+          "sha256": "75756f1d2a1f496ccd3147bdd5b59c27f66dcf3485c56d0abb025966c00bc4fa"
         },
         {
           "path": "server/src/services/chat-channels.ts",
@@ -10293,7 +10293,7 @@
         },
         {
           "path": "server/src/services/authorization.ts",
-          "sha256": "979f40a6e9973841427b0a3a925f3bbfded19e1bc89d7ea25b210c0c1f9b4d41"
+          "sha256": "75756f1d2a1f496ccd3147bdd5b59c27f66dcf3485c56d0abb025966c00bc4fa"
         },
         {
           "path": "server/src/services/capability-resolver.test.ts",
@@ -16302,7 +16302,7 @@
         },
         {
           "path": "server/src/services/authorization.ts",
-          "sha256": "979f40a6e9973841427b0a3a925f3bbfded19e1bc89d7ea25b210c0c1f9b4d41"
+          "sha256": "75756f1d2a1f496ccd3147bdd5b59c27f66dcf3485c56d0abb025966c00bc4fa"
         },
         {
           "path": "server/src/services/board-auth.test.ts",
@@ -47008,7 +47008,7 @@
       "id": "source:server/src/services/authorization.ts",
       "kind": "current_source_owner",
       "path": "server/src/services/authorization.ts",
-      "sha256": "979f40a6e9973841427b0a3a925f3bbfded19e1bc89d7ea25b210c0c1f9b4d41",
+      "sha256": "75756f1d2a1f496ccd3147bdd5b59c27f66dcf3485c56d0abb025966c00bc4fa",
       "changeIds": [
         "SCR-V10-HOTSPOT-01",
         "SCR-V10-HOTSPOT-07",
