@@ -240,6 +240,10 @@ type ManagedSandboxHostInput = {
   brokerOrigin: string;
   observeModelOriginDenials?: true;
   assignedToolGatewayHttpRequest?: NonNullable<Parameters<typeof createToolGatewayService>[1]>["remoteHttpRequest"];
+  /** APR-E2E-9: the application's tool-action outbox hook. app.ts wires its
+   * own gateway's onToolActionSettled to toolActionDeliveries.deliver; a test
+   * app that adopts this fixture gateway passes the same hook here. */
+  onToolActionSettled?: (actionRequestId: string) => Promise<unknown>;
   /** Fixture-only observer applied to each registered Gateway owner, including scoped DB owners. */
   observeAssignedToolGateway?: (owner: ReturnType<typeof createToolGatewayService>, kind: "host_root" | "scoped") => void;
   brokerProxyOrigin: string | null;
@@ -1219,7 +1223,14 @@ async function configureManagedSandboxRun(input: ManagedSandboxHostInput,
   const hostLifecycleObservations:Array<Record<string,unknown>>=[];
   const softwareOnlyPolicyProofObservations:Array<Record<string,unknown>>=[];
   const softwareOnlyPolicyProofSidecarHashes = new Map<string, string>();
-  const gatewayOptions:Parameters<typeof createToolGatewayService>[1]={operatorUserIds:[baseQualificationActor.userId],qualificationBrokerOrigin:brokerOrigin,toolActionSigningSecret:"conversation-software-canary",
+  // APR-E2E-7: one instance signs and verifies tool-action approvals with one
+  // secret. Where the deployment configures PAPERCLIP_TOOL_ACTION_SIGNING_SECRET
+  // (the e2e server), the review queue verifies with it, so this gateway must
+  // sign with it too; otherwise the queue cancels the card's request as
+  // unreadable. Without one, the fixture keeps its own canary secret.
+  const instanceToolActionSigningSecret=process.env.PAPERCLIP_TOOL_ACTION_SIGNING_SECRET?.trim()||"conversation-software-canary";
+  const gatewayOptions:Parameters<typeof createToolGatewayService>[1]={operatorUserIds:[baseQualificationActor.userId],qualificationBrokerOrigin:brokerOrigin,toolActionSigningSecret:instanceToolActionSigningSecret,
+    ...(input.onToolActionSettled?{onToolActionSettled:input.onToolActionSettled}:{}),
     remoteHttpRequest:async(url,init)=>{
       if (url !== `${brokerOrigin}/mcp/qualification/credential-echo` && input.assignedToolGatewayHttpRequest)
         return input.assignedToolGatewayHttpRequest(url, init);
@@ -4611,6 +4622,17 @@ async function configureManagedSandboxRun(input: ManagedSandboxHostInput,
     }
     preparationStage="create_binding";
     await createBindingForRun(runtimeCredentialBinding, taskRoot);
+    // APR-E2E-3: each Run's fresh per-Run Host is qualified here as an operator
+    // action, and production requires a recent operator authentication for it
+    // (`assertConfiguredOperatorAuthentication`, 300 s). A later Run of the same
+    // journey (a Human's note, the resolution after a review) starts minutes
+    // after sign-in, so the operator authenticates again (a step-up on the same
+    // session, as CONF15-P5 does for a re-qualified conformance Host) instead of
+    // the gate being relaxed.
+    if (actor.type !== "board" || !actor.sessionId || !actor.userId)
+      throw new Error("conversation_software_host_qualification_operator_session_missing");
+    await db.update(authSessions).set({ authenticatedAt: new Date() })
+      .where(and(eq(authSessions.id, actor.sessionId), eq(authSessions.userId, actor.userId)));
     preparationStage="qualify";await qualifyHost();preparationStage="compile";
     const boundary = policyFixture(); boundary.riskClass = "C3"; boundary.requiredControls = [...conversationRequiredControls];
     boundary.filesystem.readPaths = [...new Set([taskRoot, "/.openshell/runtime/openshell-sandbox", ...runtimeBrokerBinaryReadPaths])].sort();

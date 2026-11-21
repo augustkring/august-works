@@ -38,6 +38,8 @@ import {
   issueChatLongThreadTranscriptsByRunId,
 } from "../fixtures/issueChatLongThreadFixture";
 import { expiredSecretProposalInteraction } from "../fixtures/issueThreadInteractionFixtures";
+import { i18n } from "../i18n";
+import { screenText } from "../i18n/value-labels";
 import type {
   IssueChatLinkedRun,
   IssueChatTranscriptEntry,
@@ -136,6 +138,7 @@ vi.mock("./MarkdownEditor", () => ({
         className,
         contentClassName,
         fileDropTarget,
+        ariaDescribedBy,
       }: {
         value?: string;
         onChange?: (value: string) => void;
@@ -143,6 +146,7 @@ vi.mock("./MarkdownEditor", () => ({
         className?: string;
         contentClassName?: string;
         fileDropTarget?: "editor" | "parent";
+        ariaDescribedBy?: string;
       },
       ref,
     ) => {
@@ -153,6 +157,7 @@ vi.mock("./MarkdownEditor", () => ({
       return (
         <textarea
           aria-label="Issue chat editor"
+          aria-describedby={ariaDescribedBy}
           data-class-name={className}
           data-content-class-name={contentClassName}
           data-file-drop-target={fileDropTarget}
@@ -2727,6 +2732,58 @@ describe("IssueChatThread", () => {
     act(() => {
       root.unmount();
     });
+  });
+
+  it("describes the composer with its hint, in English and Danish (APR-E2E-1)", async () => {
+    const renderWithHint = (hint: string) => {
+      const root = createRoot(container);
+      act(() => {
+        root.render(
+          <MemoryRouter>
+            <IssueChatThread
+              comments={[]}
+              linkedRuns={[]}
+              timelineEvents={[]}
+              liveRuns={[]}
+              composerHint={hint}
+              onAdd={async () => {}}
+              enableLiveTranscriptPolling={false}
+            />
+          </MemoryRouter>,
+        );
+      });
+      const hintNode = container.querySelector<HTMLElement>('[data-testid="issue-chat-composer-hint"]');
+      const editor = container.querySelector<HTMLTextAreaElement>('textarea[aria-label="Issue chat editor"]');
+      const result = { text: hintNode?.textContent ?? null, id: hintNode?.id ?? null,
+        describedBy: editor?.getAttribute("aria-describedby") ?? null };
+      act(() => root.unmount());
+      return result;
+    };
+    const english = renderWithHint(screenText("chat.decisionPendingHint"));
+    expect(english.text).toBe("The agent will see this after you decide.");
+    expect(english.id).toBeTruthy();
+    expect(english.describedBy).toBe(english.id);
+    await act(async () => { await i18n.changeLanguage("da"); });
+    try {
+      const danish = renderWithHint(screenText("chat.decisionPendingHint"));
+      expect(danish.text).toBe("Agenten ser dette, når du har truffet din beslutning.");
+      expect(danish.describedBy).toBe(danish.id);
+    } finally {
+      await act(async () => { await i18n.changeLanguage("en"); });
+    }
+    // Without a hint the composer carries no stale description.
+    const root = createRoot(container);
+    act(() => {
+      root.render(
+        <MemoryRouter>
+          <IssueChatThread comments={[]} linkedRuns={[]} timelineEvents={[]} liveRuns={[]}
+            onAdd={async () => {}} enableLiveTranscriptPolling={false} />
+        </MemoryRouter>,
+      );
+    });
+    expect(container.querySelector('[data-testid="issue-chat-composer-hint"]')).toBeNull();
+    expect(container.querySelector('textarea[aria-label="Issue chat editor"]')?.hasAttribute("aria-describedby")).toBe(false);
+    act(() => root.unmount());
   });
 
   it("supports the embedded read-only variant without the jump control", () => {

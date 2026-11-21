@@ -4557,6 +4557,7 @@ const IssueChatComposer = forwardRef<
   const reassignTriggerRef = useRef<HTMLButtonElement | null>(null);
   const focusAssigneeOnDialogCloseRef = useRef(false);
   const editorRef = useRef<MarkdownEditorRef>(null);
+  const composerHintId = useId();
   const composerContainerRef = useRef<HTMLDivElement | null>(null);
   const draftTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
   const canAcceptFiles =
@@ -5216,6 +5217,7 @@ const IssueChatComposer = forwardRef<
         placeholder={screenText("chat.reply")}
         mentions={mentions}
         onSubmit={handleSubmit}
+        ariaDescribedBy={composerHint ? composerHintId : undefined}
         imageUploadHandler={
           canAcceptFiles
             ? async (file) => {
@@ -5244,7 +5246,11 @@ const IssueChatComposer = forwardRef<
       ) : null}
 
       {composerHint ? (
-        <div className="inline-flex items-center rounded-full border border-border/70 bg-muted/30 px-2 py-1 text-(length:--text-micro) text-muted-foreground">
+        <div
+          id={composerHintId}
+          data-testid="issue-chat-composer-hint"
+          className="inline-flex items-center rounded-full border border-border/70 bg-muted/30 px-2 py-1 text-(length:--text-micro) text-muted-foreground"
+        >
           {composerHint}
         </div>
       ) : null}

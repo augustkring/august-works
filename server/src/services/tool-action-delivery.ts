@@ -23,6 +23,8 @@ import {
   type Db,
 } from "@paperclipai/db";
 import type { heartbeatService } from "./heartbeat.js";
+import { deferredGovernedNoteCommentIds } from "./governed-tool-decision-wait.js";
+import { WAKE_COMMENT_IDS_KEY } from "../modules/run-dispatch/index.js";
 
 const terminalStatuses: Array<typeof toolActionRequests.$inferSelect.status> = [
   "executed",
@@ -393,6 +395,15 @@ export function toolActionDeliveryService(
         // Keep the wake bounded. The task interaction API is the durable full
         // result reference for omitted or shortened results; never replay calls.
         const context = buildToolActionDeliveryContext(issue.id, outcomes);
+        // APR-E2E-1. Human notes deferred while these decisions were pending
+        // reach this resolution Run once, through its comment batch. The wake
+        // is idempotent per first request, so they are delivered once.
+        const deferredNoteIds: string[] = [];
+        for (const interactionId of context.interactionIds) {
+          for (const commentId of await deferredGovernedNoteCommentIds(tx as unknown as Db, {
+            companyId: source.companyId, issueId: issue.id, interactionId, assigneeAgentId: agent.id,
+          })) if (!deferredNoteIds.includes(commentId)) deferredNoteIds.push(commentId);
+        }
         await heartbeat.wakeup(agent.id, {
           source: "automation",
           triggerDetail: "system",
@@ -408,6 +419,7 @@ export function toolActionDeliveryService(
           payload: { ...context, mutation: "interaction" },
           contextSnapshot: {
             ...context,
+            ...(deferredNoteIds.length > 0 ? { [WAKE_COMMENT_IDS_KEY]: deferredNoteIds } : {}),
             wakeReason: "issue_commented",
             source: "tool_action_review",
           },

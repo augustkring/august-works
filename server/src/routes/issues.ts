@@ -363,6 +363,10 @@ import {
 } from "../services/issue-thread-interaction-resolution.js";
 import { resolveSelectedSuggestedTasks } from "../services/issue-thread-interactions.js";
 import {
+  findGovernedToolDecisionWait,
+  recordDeferredGovernedNote,
+} from "../services/governed-tool-decision-wait.js";
+import {
   crossIssueInfluenceLimitError,
   crossIssueInfluenceRunContextError,
   observeCrossIssueInfluence,
@@ -2531,6 +2535,73 @@ function buildRequestItemVerdictsWakeIdempotencyKey(args: {
     now.getTime() / REQUEST_ITEM_VERDICTS_WAKE_COALESCE_WINDOW_MS,
   );
   return `request_item_verdicts:${args.issueId}:${args.interactionId}:${bucket}`;
+}
+
+/** APR-E2E-8. The tool gateway refuses a review decision with its own
+ * ToolGatewayHttpError (policy refusal, changed target, stale request). The
+ * issue routes delegate to it, so translate a client-error refusal into the
+ * same status with its closed reason code instead of an opaque 500. Server
+ * errors and anything else are rethrown unchanged; nothing is admitted. */
+async function withToolReviewHttpErrors<T>(work: () => Promise<T>): Promise<T> {
+  try {
+    return await work();
+  } catch (error) {
+    const refusal = error as { status?: unknown; reasonCode?: unknown; message?: unknown } | null;
+    if (
+      error instanceof Error &&
+      !(error instanceof HttpError) &&
+      error.constructor?.name === "ToolGatewayHttpError" &&
+      typeof refusal?.status === "number" &&
+      Number.isInteger(refusal.status) &&
+      refusal.status >= 400 &&
+      refusal.status < 500 &&
+      typeof refusal.reasonCode === "string"
+    )
+      throw new HttpError(refusal.status, error.message, { code: refusal.reasonCode });
+    throw error;
+  }
+}
+
+/** APR-E2E-1. Returns true only when the Human's note was recorded as a
+ * deferred note for the assignee's pending governed tool decision. Any doubt
+ * or failure keeps today's comment wake. */
+async function deferHumanNoteForGovernedToolDecision(input: {
+  db: Db;
+  actor: { actorType: string; actorId: string };
+  companyId: string;
+  issueId: string;
+  assigneeAgentId: string;
+  comment: { id: string; createdByRunId?: string | null; authorUserId?: string | null };
+}): Promise<boolean> {
+  if (
+    input.actor.actorType !== "user" ||
+    input.comment.createdByRunId ||
+    !input.comment.authorUserId ||
+    input.comment.authorUserId !== input.actor.actorId
+  )
+    return false;
+  try {
+    const wait = await findGovernedToolDecisionWait(input.db, {
+      companyId: input.companyId,
+      issueId: input.issueId,
+      assigneeAgentId: input.assigneeAgentId,
+    });
+    if (!wait) return false;
+    return await recordDeferredGovernedNote(input.db, {
+      companyId: input.companyId,
+      issueId: input.issueId,
+      assigneeAgentId: input.assigneeAgentId,
+      commentId: input.comment.id,
+      wait,
+      actor: { actorType: "user", actorId: input.actor.actorId },
+    });
+  } catch (err) {
+    logger.warn(
+      { err, issueId: input.issueId, commentId: input.comment.id },
+      "failed to defer a Human note for a pending governed tool decision; waking the assignee",
+    );
+    return false;
+  }
 }
 
 async function queueResolvedInteractionContinuationWakeup(input: {
@@ -15334,11 +15405,28 @@ export function issueRoutes(
               currentStatus: issue.status,
             });
 
+          // APR-E2E-1. Same deferral as a plain comment (see the comment route).
+          const deferredGovernedNote =
+            assigneeId &&
+            !assigneeChanged &&
+            !goalCommentSteered &&
+            shouldWakeAssigneeForComment &&
+            !reopened
+              ? await deferHumanNoteForGovernedToolDecision({
+                  db,
+                  actor,
+                  companyId: issue.companyId,
+                  issueId: issue.id,
+                  assigneeAgentId: assigneeId,
+                  comment,
+                })
+              : false;
           if (
             assigneeId &&
             !assigneeChanged &&
             !goalCommentSteered &&
-            shouldWakeAssigneeForComment
+            shouldWakeAssigneeForComment &&
+            !deferredGovernedNote
           ) {
             addWakeup(assigneeId, {
               source: "automation",
@@ -15403,7 +15491,8 @@ export function issueRoutes(
           for (const mentionedId of mentionedIds) {
             if (
               (actor.actorType === "agent" && actor.actorId === mentionedId) ||
-              (commentIsFromAssigneeRun && mentionedId === assigneeId)
+              (commentIsFromAssigneeRun && mentionedId === assigneeId) ||
+              (deferredGovernedNote && mentionedId === assigneeId)
             )
               continue;
             const delegation = commentIsFromAssigneeRun
@@ -16698,7 +16787,7 @@ export function issueRoutes(
       ) {
         if (!opts.approveToolActionRequest)
           throw unprocessable("Tool review resolution is unavailable");
-        await opts.approveToolActionRequest({
+        const toolReviewApproval = {
           companyId: issue.companyId,
           issueId: issue.id,
           interactionId: current.id,
@@ -16708,7 +16797,8 @@ export function issueRoutes(
             agentId: actor.agentId,
             userId: actor.actorType === "user" ? actor.actorId : null,
           },
-        });
+        };
+        await withToolReviewHttpErrors(() => opts.approveToolActionRequest!(toolReviewApproval));
         res.json(await interactionSvc.getById(current.id));
         return;
       }
@@ -16749,7 +16839,7 @@ export function issueRoutes(
         typeof toolAction?.actionRequestId === "string" &&
         opts.approveToolActionRequest
       ) {
-        const approvalResult = await opts.approveToolActionRequest({
+        const acceptedToolReviewApproval = {
           companyId: issue.companyId,
           issueId: issue.id,
           interactionId: interaction.id,
@@ -16758,7 +16848,8 @@ export function issueRoutes(
             agentId: actor.agentId,
             userId: actor.actorType === "user" ? actor.actorId : null,
           },
-        });
+        };
+        const approvalResult = await withToolReviewHttpErrors(() => opts.approveToolActionRequest!(acceptedToolReviewApproval));
         const approval = readObject(approvalResult);
         const executionStatus = readToolActionExecutionStatus(approval.status);
         if (executionStatus) {
@@ -17020,7 +17111,7 @@ export function issueRoutes(
       ) {
         if (!opts.declineToolActionRequest)
           throw unprocessable("Tool review resolution is unavailable");
-        await opts.declineToolActionRequest({
+        const toolReviewDecline = {
           companyId: issue.companyId,
           issueId: issue.id,
           interactionId: current.id,
@@ -17030,7 +17121,8 @@ export function issueRoutes(
             agentId: actor.agentId,
             userId: actor.actorType === "user" ? actor.actorId : null,
           },
-        });
+        };
+        await withToolReviewHttpErrors(() => opts.declineToolActionRequest!(toolReviewDecline));
         res.json(await interactionSvc.getById(current.id));
         return;
       }
@@ -18933,13 +19025,32 @@ export function issueRoutes(
           reopened,
           currentStatus: wakeIssueSnapshot.status,
         });
+        // APR-E2E-1. A Human's note while the Task waits only for its
+        // assignee's governed tool decision is handed to the resolution Run
+        // instead of starting a Run now.
+        const deferredGovernedNote =
+          assigneeId &&
+          !goalCommentSteered &&
+          !commentStagePlanHoldPlanId &&
+          shouldWakeAssigneeForComment &&
+          !reopened
+            ? await deferHumanNoteForGovernedToolDecision({
+                db,
+                actor,
+                companyId: currentIssue.companyId,
+                issueId: currentIssue.id,
+                assigneeAgentId: assigneeId,
+                comment,
+              })
+            : false;
         if (
           assigneeId &&
           !goalCommentSteered &&
           // MS1f. The plan Worker restored by a held final stage approval has
           // nothing to do until a person verifies the plan.
           !commentStagePlanHoldPlanId &&
-          shouldWakeAssigneeForComment
+          shouldWakeAssigneeForComment &&
+          !deferredGovernedNote
         ) {
           if (reopened) {
             addWakeup(assigneeId, {
@@ -19031,7 +19142,8 @@ export function issueRoutes(
         for (const mentionedId of mentionedIds) {
           if (
             (actorIsAgent && actor.actorId === mentionedId) ||
-            (commentIsFromAssigneeRun && mentionedId === assigneeId)
+            (commentIsFromAssigneeRun && mentionedId === assigneeId) ||
+            (deferredGovernedNote && mentionedId === assigneeId)
           )
             continue;
           const delegation = commentIsFromAssigneeRun

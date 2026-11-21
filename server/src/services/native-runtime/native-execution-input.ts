@@ -1428,15 +1428,27 @@ export function buildNativeBootstrapSourceSet(input: {
         value.projection.status === reference.interactionStatus && value.projection.interactionSourceRunId === wakeInteraction?.sourceRunId &&
         value.projection.owner.sourceRunId === wakeInteraction?.sourceRunId) ?? [];
       const withdrawal = withdrawalMatches.length === 1 ? withdrawalMatches[0] : null;
+      // APR-E2E-13. A declined tool-action card renders the same rejected
+      // interaction state, but its owner is the governed decision that the
+      // exact continuation above already verified (never a withdrawal).
+      const governedMatches = withdrawal ? [] : exactContinuation?.governedInteractions?.filter(value =>
+        value.projection.interactionId === reference.id && reference.interactionKind === "request_confirmation" &&
+        reference.interactionStatus === "rejected" && value.projection.interactionOutcome.kind === reference.interactionKind &&
+        value.projection.interactionOutcome.status === reference.interactionStatus &&
+        value.projection.owner.requestStatus === "rejected" &&
+        value.projection.owner.sourceRunId === wakeInteraction?.sourceRunId) ?? [];
+      const governed = governedMatches.length === 1 ? governedMatches[0] : null;
+      const owned = withdrawal ?? governed;
       const ownerSources = input.taskWakeInteractionSources ?? [];
-      const ownerRenditionsPresent = Boolean(withdrawal && [withdrawal.nativeSource, withdrawal.continuationSource].every(source =>
+      const ownerRenditionsPresent = Boolean(owned && [owned.nativeSource, owned.continuationSource].every(source =>
         ownerSources.filter(candidate => isDeepStrictEqual(candidate, source)).length === 1));
-      if (!withdrawal || !wakeInteraction || wakeInteraction.interactionId !== reference.id ||
+      if (!owned || !wakeInteraction || wakeInteraction.interactionId !== reference.id ||
         wakeInteraction.interactionKind !== reference.interactionKind || wakeInteraction.interactionStatus !== reference.interactionStatus ||
         !ownerRenditionsPresent) return reject("reference_source_mismatch");
-      append(withdrawal.nativeSource);
-      append(withdrawal.continuationSource);
-      policy.runIds = [...new Set([...policy.runIds, withdrawal.projection.owner.sourceRunId])].sort();
+      append(owned.nativeSource);
+      append(owned.continuationSource);
+      const ownerRunId = withdrawal ? withdrawal.projection.owner.sourceRunId : governed!.projection.owner.sourceRunId;
+      if (ownerRunId) policy.runIds = [...new Set([...policy.runIds, ownerRunId])].sort();
       continue;
     }
     const matches = input.candidates.filter(candidate => candidate.kind === reference.kind && candidate.id === reference.id);

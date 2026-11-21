@@ -23,6 +23,8 @@ Anmodningssiden kan vise **Approve**, **Reject** eller **Request revision**. Væ
 
 Nogle apphandlinger har deres egen adgangsgennemgang under **Apps**. Kontrollér udbyder, konto, tilladelser og handlingens omfang dér. En appforbindelse eller godkendelse af én handling godkender ikke automatisk en anden handling.
 
+Mens en opgave venter på din beslutning om en agents apphandling, starter en kommentar fra dig ikke agenten igen. Opgaven viser **Agenten ser dette, når du har truffet din beslutning.** Agenten modtager din kommentar sammen med din beslutning.
+
 ## Sæt opgavearbejde på pause, eller stop det
 
 Åbn opgaven for at finde kontrollerne til dens aktive kørsel. Afhængigt af den aktuelle status kan du se **Pause work**, **Stop and done** eller **Stop and cancel**. Pause styrer den aktive kørsel; at markere opgaven som færdig eller annulleret er en særskilt opgavestatus. Læs hver handlings betegnelse og opgavens aktuelle status, før du bruger den.

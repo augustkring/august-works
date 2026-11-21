@@ -1039,6 +1039,34 @@ describe("TaskChatComposer", () => {
     }
   });
 
+  it("shows the pending-decision hint as the editor's description in English and Danish (APR-E2E-1)", async () => {
+    const previousLocale = i18n.language;
+    try {
+      for (const [locale, text] of [
+        ["en", "The agent will see this after you decide."],
+        ["da", "Agenten ser dette, når du har truffet din beslutning."],
+      ] as const) {
+        await act(async () => { await i18n.changeLanguage(locale); });
+        expect((locale === "en" ? experienceEn : experienceDa).screens.chat.decisionPendingHint).toBe(text);
+        render(
+          <TaskChatComposer onAdd={vi.fn()} workMode="standard"
+            hint={(locale === "en" ? experienceEn : experienceDa).screens.chat.decisionPendingHint} />,
+        );
+        await flushAsync();
+        const hint = container.querySelector<HTMLElement>('[data-testid="task-chat-composer-hint"]');
+        expect(hint?.textContent).toBe(text);
+        expect(hint?.id).toBeTruthy();
+        expect(editable().getAttribute("aria-describedby")).toBe(hint!.id);
+      }
+      render(<TaskChatComposer onAdd={vi.fn()} workMode="standard" />);
+      await flushAsync();
+      expect(container.querySelector('[data-testid="task-chat-composer-hint"]')).toBeNull();
+      expect(editable().hasAttribute("aria-describedby")).toBe(false);
+    } finally {
+      await act(async () => { await i18n.changeLanguage(previousLocale); });
+    }
+  });
+
   it("wires the editor's inline image upload to onAttachImage and returns the attachment URL", async () => {
     const onAttachImage = vi.fn().mockResolvedValue({
       contentPath: "/attachments/shot.png",

@@ -144,6 +144,8 @@ export async function runManagedNativeConversationFrame(input: {
   /** Fixed observation-only model-origin negative controls; serial integration only. */
   observeModelOriginDenials?: true;
   assignedToolGatewayHttpRequest?: NonNullable<Parameters<typeof createToolGatewayService>[1]>["remoteHttpRequest"];
+  /** The application's tool-action outbox hook (app.ts wires toolActionDeliveries.deliver). */
+  onToolActionSettled?: (actionRequestId: string) => Promise<unknown>;
   /** Use a policy-valid DNS name that resolves to loopback for the signed host relay case. */
   sandboxRelay?: boolean;
   sandboxRelayDnsLookup?: (hostname: string, options: { all: true }) => Promise<Array<{ address: string; family: number }>>;
@@ -205,6 +207,7 @@ export async function runManagedNativeConversationFrame(input: {
     opencodeBinary: string;
     observeModelOriginDenials?: true;
     assignedToolGatewayHttpRequest?: NonNullable<Parameters<typeof createToolGatewayService>[1]>["remoteHttpRequest"];
+    onToolActionSettled?: (actionRequestId: string) => Promise<unknown>;
     brokerOrigin: string;
     brokerProxyOrigin: string | null;
     certBundlePath: string;
@@ -643,7 +646,9 @@ export async function runManagedNativeConversationFrame(input: {
   // Heartbeat delivers a run-scoped MCP URL to the actual runner. Give the
   // fixture that URL's real protocol endpoint instead of pointing it at a
   // dummy base URL or suppressing managed MCP delivery.
-  const assignedToolGateway = createToolGatewayService(db, { remoteHttpRequest: input.assignedToolGatewayHttpRequest });
+  const assignedToolGateway = createToolGatewayService(db, { remoteHttpRequest: input.assignedToolGatewayHttpRequest,
+    // APR-E2E-9: a test app may adopt this root gateway for review decisions.
+    ...(input.onToolActionSettled ? { onToolActionSettled: input.onToolActionSettled } : {}) });
   registerAssignedMcpGateway(db, assignedToolGateway);
   brokerApp.use(mcpGatewayProtocolRoutes(assignedToolGateway));
   const brokerRequestByObject = new WeakMap<object, (typeof brokerRequestFacts)[number]>();

@@ -5412,7 +5412,8 @@
       "noRespFound": "No responsible found.",
       "stopResponse": "Stop response",
       "legacyRecovery": "Legacy recovery task",
-      "copyMessageItem": "Copy message"
+      "copyMessageItem": "Copy message",
+      "decisionPendingHint": "The agent will see this after you decide."
     },
     "agent": {
       "nav": {

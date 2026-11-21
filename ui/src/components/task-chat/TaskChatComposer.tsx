@@ -1,6 +1,7 @@
 import { AgentAvatar } from "../AgentAvatar";
 import {
   useEffect,
+  useId,
   useImperativeHandle,
   useRef,
   useState,
@@ -119,6 +120,8 @@ interface TaskChatComposerProps {
   onWorkModeChange?: (mode: IssueWorkMode) => Promise<void> | void;
   disabled?: boolean;
   disabledReason?: string | null;
+  /** Short context shown under the editor and used as its accessible description. */
+  hint?: string | null;
   placeholder?: string;
   /** Preferred upload path: attaches the file to the task (mirrors legacy). */
   onAttachImage?: (file: File) => Promise<IssueAttachment | void>;
@@ -394,6 +397,7 @@ export function TaskChatComposer({
   onWorkModeChange,
   disabled = false,
   disabledReason,
+  hint = null,
   placeholder,
   onAttachImage,
   onImageUpload,
@@ -479,6 +483,7 @@ export function TaskChatComposer({
   pendingAssigneeRef.current = pendingAssignee;
   const fileInputRef = useRef<HTMLInputElement | null>(null);
   const editorRef = useRef<MarkdownEditorRef>(null);
+  const hintId = useId();
   const bodyRef = useRef(body);
   bodyRef.current = body;
   const pendingDraftRef = useRef<{
@@ -1342,6 +1347,7 @@ export function TaskChatComposer({
                 disabled,
               }] : [goalCommandOption]}
               onSubmit={() => void submit()}
+              ariaDescribedBy={hint ? hintId : undefined}
               imageUploadHandler={
                 canAcceptFiles ? uploadInlineImage : undefined
               }
@@ -1355,6 +1361,16 @@ export function TaskChatComposer({
               }
             />
           </div>
+
+          {hint ? (
+            <p
+              id={hintId}
+              className="px-1 text-xs text-muted-foreground"
+              data-testid="task-chat-composer-hint"
+            >
+              {hint}
+            </p>
+          ) : null}
 
           {actionError ? (
             <p

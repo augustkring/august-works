@@ -464,6 +464,23 @@ export async function currentContinuationOrigins(
 }
 
 /** Re-read task scope at dispatch, including messages already delivered to an earlier provider session. */
+/** APR-E2E-14. The Run whose governed tool decisions a resolution wake
+ * continues: every captured decision names the same requesting Run, that Run
+ * is the wake's trigger source, and no review withdrawal is mixed in. Its
+ * accepted finalized result (never an unsealed summary) carries completed
+ * work, and it presents its own comments through that result. */
+export function governedDecisionSourceRunId(input: {
+  governedInteractions: ReadonlyArray<{ projection: { owner: { sourceRunId: string | null } } }>;
+  humanReviewWithdrawalCount: number;
+  triggerSourceRunId: string | null | undefined;
+}): string | null {
+  if (input.humanReviewWithdrawalCount !== 0 || input.governedInteractions.length === 0 || !input.triggerSourceRunId) return null;
+  const runIds = new Set(input.governedInteractions.map(capture => capture.projection.owner.sourceRunId));
+  if (runIds.size !== 1) return null;
+  const [runId] = [...runIds];
+  return runId && runId === input.triggerSourceRunId ? runId : null;
+}
+
 export async function buildExecutionContinuation(input: {
   db: Db;
   companyId: string;
@@ -962,6 +979,12 @@ export async function buildExecutionContinuation(input: {
         object(wake.payload).sourceRunId === input.context.livenessContinuationSourceRunId
         ? object(wake.payload).sourceRunId as string : null;
       if (livenessSourceRunId) withdrawalProducerRunIds.add(livenessSourceRunId);
+      // APR-E2E-14. A governed tool decision's requesting Run presents its own
+      // comment only through its accepted finalized result, like a withdrawal
+      // producer (the decision is no longer also captured as a withdrawal).
+      const governedProducerRunId = governedDecisionSourceRunId({ governedInteractions,
+        humanReviewWithdrawalCount: humanReviewWithdrawals.length, triggerSourceRunId: envelope.trigger.sourceRunId });
+      if (governedProducerRunId) withdrawalProducerRunIds.add(governedProducerRunId);
       await captureCommentSources(withdrawalProducerRunIds);
       commentSourcesCaptured = true;
     }
@@ -981,6 +1004,17 @@ export async function buildExecutionContinuation(input: {
       ? await captureNativeFinalizedContinuationSummary({ db, companyId, issueId, agentId: input.agentId,
           receiverRunId: receiver.id, sourceRunId: withdrawalSourceRunId, reader: outcomeReader }) : null;
     if (withdrawalFinalizedSummary) envelope.completedWork = withdrawalFinalizedSummary.body;
+    // APR-E2E-14. A governed tool decision resumes after the Run that requested
+    // it. As for a withdrawal (A6b), completed work comes only from that Run's
+    // accepted finalized result, never from an unsealed continuation summary.
+    const governedSourceRunId = governedDecisionSourceRunId({ governedInteractions,
+      humanReviewWithdrawalCount: humanReviewWithdrawals.length, triggerSourceRunId: envelope.trigger.sourceRunId });
+    const governedFinalizedSummary = wake && !stageContinuation?.summary && !assignmentFinalizedSummary &&
+      !withdrawalFinalizedSummary && governedSourceRunId && envelope.completedWork !== null &&
+      !input.summaryDocument?.source.payloadSourceSnapshot
+      ? await captureNativeFinalizedContinuationSummary({ db, companyId, issueId, agentId: input.agentId,
+          receiverRunId: receiver.id, sourceRunId: governedSourceRunId, reader: outcomeReader }) : null;
+    if (governedFinalizedSummary) envelope.completedWork = governedFinalizedSummary.body;
     // An accepted plan resumes after the Run that requested the confirmation.
     // When the server-written continuation summary carries no source snapshot,
     // bind completed work to that producer Run's accepted finalized result
@@ -1016,6 +1050,7 @@ export async function buildExecutionContinuation(input: {
           receiverRunId: receiver.id, sourceRunId: retainedResumeBaseRunId, reader: outcomeReader }) : null;
     if (retainedResumeUsesFinalizedSummary) envelope.completedWork = retainedResumeFinalizedSummary?.body ?? null;
     const finalizedSummary = (wake && stageContinuation?.summary) ?? (wake && assignmentFinalizedSummary) ?? withdrawalFinalizedSummary ??
+      governedFinalizedSummary ??
       acceptedPlanFinalizedSummary ?? retainedResumeFinalizedSummary ??
       (wake && input.summary === null && sourceRunId && envelope.completedWork !== null
         ? await captureNativeFinalizedContinuationSummary({ db, companyId, issueId, agentId: input.agentId,
@@ -1034,7 +1069,7 @@ export async function buildExecutionContinuation(input: {
     const interaction = nativeTaskWakeInteraction(wake?.payload);
     const manualQueueAdoption = wake && receiver ? await readNativeManualQueueAdoption(db, {
       run: receiver, issueId, currentWake: wake }) : null;
-    const summary = !assignmentFinalizedSummary && !withdrawalFinalizedSummary && !acceptedPlanFinalizedSummary &&
+    const summary = !assignmentFinalizedSummary && !withdrawalFinalizedSummary && !governedFinalizedSummary && !acceptedPlanFinalizedSummary &&
       !retainedResumeUsesFinalizedSummary && input.summaryDocument && effectiveSummary === input.summaryDocument.value.body
       ? { source: input.summaryDocument.source, rawTrustHash: nativeSha256(input.summaryDocument.value.sourceTrust),
           rendition: await createRunSecretRedactionRegistry(db).redactForIssue(companyId, issueId, {

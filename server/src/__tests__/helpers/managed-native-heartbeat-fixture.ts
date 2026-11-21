@@ -516,9 +516,13 @@ export async function withManagedNativeHeartbeatFixture<T>(input: Omit<FrameInpu
         const messagePrefix = Buffer.from(message, "utf8").subarray(0, 4096);
         const name = error instanceof Error && ["AssertionError", "Error", "TypeError", "RangeError", "AbortError"].includes(error.name)
           ? error.name as ProviderHookFailure["name"] : "UnknownError";
-        providerReplyFailure ??= { callIndex, name, messageLength: Buffer.byteLength(message),
+        const failure = { callIndex, name, messageLength: Buffer.byteLength(message),
           messageSha256Prefix: createHash("sha256").update(messagePrefix).digest("hex"),
           sourceFrames: managedModelRepositorySourceFrames(error) };
+        // APR-E2E-5: print the content-free projection when the reply fails,
+        // not only when the case envelope runs out.
+        if (!providerReplyFailure) console.info("managed_scheduler_provider_reply_failure_now", JSON.stringify(failure));
+        providerReplyFailure ??= failure;
         throw error;
       }
       const resolvedReply = reply ?? {
@@ -577,6 +581,7 @@ export async function withManagedNativeHeartbeatFixture<T>(input: Omit<FrameInpu
           const name = error instanceof Error && ["AssertionError", "Error", "TypeError", "RangeError", "AbortError"].includes(error.name)
             ? error.name as "AssertionError" | "Error" | "TypeError" | "RangeError" | "AbortError" : "UnknownError";
           providerHookFailure = { name, sourceFrames: managedModelRepositorySourceFrames(error) };
+          console.info("managed_scheduler_provider_hook_failure_now", JSON.stringify(providerHookFailure));
           throw error;
         }
       }
@@ -614,7 +619,9 @@ export async function withManagedNativeHeartbeatFixture<T>(input: Omit<FrameInpu
   // dummy base URL or suppressing managed MCP delivery.
   const assignedGatewayObserver = input.afterSuccessfulAssignedToolResult
     ? createManagedAssignedGatewayResultObserver(input.afterSuccessfulAssignedToolResult) : null;
-  const assignedToolGateway = createToolGatewayService(db, { remoteHttpRequest: input.assignedToolGatewayHttpRequest });
+  const assignedToolGateway = createToolGatewayService(db, { remoteHttpRequest: input.assignedToolGatewayHttpRequest,
+    // APR-E2E-9: a test app may adopt this root gateway for review decisions.
+    ...(input.onToolActionSettled ? { onToolActionSettled: input.onToolActionSettled } : {}) });
   assignedGatewayObserver?.observe(assignedToolGateway, "fixture_root");
   registerAssignedMcpGateway(db, assignedToolGateway);
   brokerApp.use(mcpGatewayProtocolRoutes(assignedToolGateway));
@@ -995,6 +1002,7 @@ export async function withManagedNativeHeartbeatFixture<T>(input: Omit<FrameInpu
       providerBindingId: providerBindingsByAgent.get(configuredAgentId)!, gateway,
       profile: profilesByAgent.get(configuredAgentId)!, runHome: hostRoot, opencodeBinary: input.opencodeBinary,
       brokerOrigin: origin, brokerProxyOrigin, certBundlePath, assignedToolGatewayHttpRequest: input.assignedToolGatewayHttpRequest,
+      ...(input.onToolActionSettled ? { onToolActionSettled: input.onToolActionSettled } : {}),
       observeModelOriginDenials: input.observeModelOriginDenials, setBrokerToken: token => { activeToken = token; },
       withVerifiedModelRun: (runId, work) => verifiedModelRun.run(runId, work),
       ...(!input.managedTwoAgentSignoff && !input.managedOpenCodeConformance
@@ -1526,6 +1534,11 @@ export async function withManagedNativeHeartbeatFixture<T>(input: Omit<FrameInpu
         ["Manual Task workspace binding requires its running Native Run", "native_run_required"],
         ["This orchestration attempt no longer has write authority", "orchestration_stopped"],
         ["This run was cancelled", "run_cancelled"],
+        // APR-E2E-1: the cost-capped native draft admission refuses a Task
+        // that is not backlog/todo/in_progress (for example `in_review` while
+        // a governed tool decision is pending).
+        ["Native draft Task assignment, topology or work mode changed", "native_draft_assignment_changed"],
+        ["Authenticate again to continue", "recent_authentication_required"],
       ]);
       const storedRunCodes = new Set(["adapter_failed", "setup_failed", "configuration_incomplete"]);
       for (const [index, failedRun] of failedRuns.entries()) {

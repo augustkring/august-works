@@ -7,11 +7,14 @@
 // the unsigned row from the queue, but must leave it pending. If the read
 // cancels the row, the following approve call fails with action_not_pending.
 import { randomUUID } from "node:crypto";
-import { eq } from "drizzle-orm";
+import { and, eq } from "drizzle-orm";
 import { afterAll, beforeAll, describe, expect, it, vi } from "vitest";
 import {
+  activityLog,
   companies,
   createDb,
+  issueThreadInteractions,
+  issues,
   toolApplications,
   toolActionRequests,
   toolCatalogEntries,
@@ -153,5 +156,48 @@ describeEmbeddedPostgres("tool review queue vs unsigned ask-first request", () =
       .from(toolActionRequests)
       .where(eq(toolActionRequests.id, actionRequest.id));
     expect(["approved", "executed", "failed"]).toContain(afterApprove.status);
+  });
+
+  it("closes the paired card with a closed reason when it cancels an unreadable request (APR-E2E-11)", async () => {
+    vi.stubEnv("PAPERCLIP_TOOL_ACTION_SIGNING_SECRET", signingSecret);
+    const [company] = await db.insert(companies).values({
+      name: `Review Queue ${randomUUID()}`,
+      issuePrefix: `RQ${randomUUID().slice(0, 6).toUpperCase()}`,
+    }).returning();
+    const [issue] = await db.insert(issues).values({ companyId: company.id, title: "Read projects",
+      status: "in_review", priority: "medium" }).returning();
+    const canonicalArguments = canonicalToolArguments({ first: 25 });
+    const [invocation] = await db.insert(toolInvocations).values({
+      companyId: company.id, actorType: "user", actorId: "board", issueId: issue.id,
+      toolName: "railway:list_projects", argumentsHash: "args-hash",
+      policyDecision: "require_approval", approvalState: "pending", status: "awaiting_approval",
+    }).returning();
+    const [card] = await db.insert(issueThreadInteractions).values({
+      companyId: company.id, issueId: issue.id, kind: "request_confirmation", status: "pending",
+      continuationPolicy: "wake_assignee", requestedResolverPolicy: "human_only", effectiveResolverPolicy: "human_only",
+      resolverPolicyProvenance: "explicit", payload: { version: 1, prompt: "Approve?" } as never,
+    }).returning();
+    // Signed with another secret: the queue cannot read it (rotation or tampering).
+    const [request] = await db.insert(toolActionRequests).values({
+      companyId: company.id, invocationId: invocation.id, issueId: issue.id, interactionId: card.id, status: "pending",
+      canonicalArgumentsHash: "args-hash",
+      canonicalArgumentsSummary: { summary: canonicalArguments, sha256: "args-hash", sizeBytes: canonicalArguments.length },
+      signedArguments: signToolArguments({ invocationId: invocation.id, toolName: invocation.toolName,
+        canonicalArguments, executionOnApprove: true, signingSecret: "some-other-instance-secret" }),
+    }).returning();
+
+    const listed = await toolAccessService(db).listActionRequests(company.id, "pending");
+    expect(listed.map((item) => item.request.id)).not.toContain(request.id);
+    const [afterRequest] = await db.select().from(toolActionRequests).where(eq(toolActionRequests.id, request.id));
+    expect(afterRequest.status).toBe("cancelled");
+    const [afterCard] = await db.select().from(issueThreadInteractions).where(eq(issueThreadInteractions.id, card.id));
+    expect(afterCard.status).toBe("cancelled");
+    expect(afterCard.resolvedAt).toBeInstanceOf(Date);
+    expect(afterCard.result).toMatchObject({ version: 1, outcome: "stale_target",
+      toolAction: { status: "expired", errorCode: "action_request_invalidated" } });
+    const activity = await db.select().from(activityLog).where(and(eq(activityLog.companyId, company.id),
+      eq(activityLog.action, "issue.thread_interaction_updated")));
+    expect(activity.map((row) => row.details)).toEqual([expect.objectContaining({ interactionId: card.id,
+      actionRequestId: request.id, executionStatus: "cancelled", reason: "action_request_invalidated" })]);
   });
 });

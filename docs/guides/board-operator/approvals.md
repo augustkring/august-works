@@ -23,6 +23,8 @@ The request page may offer **Approve**, **Reject**, or **Request revision**. Cho
 
 Some app actions have their own access review in **Apps**. Review the provider, account, permissions, and action scope shown there. An app connection or an approval for one action does not automatically approve a different action.
 
+While a task waits for your decision on an agent's app action, a comment you add does not start the agent again. The task shows **The agent will see this after you decide.** The agent receives your comment together with your decision.
+
 ## Pause or stop task work
 
 Open the task to find controls for its active run. Depending on the current state, you may see **Pause work**, **Stop and done**, or **Stop and cancel**. Pause controls the active run; marking a task done or cancelled is a separate task outcome. Read each action’s label and current task status before using it.
