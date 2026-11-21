@@ -52,6 +52,20 @@ describe("buildPaperclipTaskMarkdown", () => {
     expect(withdrawalReferences).toContainEqual(expect.objectContaining({ kind: "task_wake_interaction_state", id: "interaction" }));
     expect(withdrawalReferences).not.toContainEqual({ kind: "unknown", id: "task" });
 
+    // APR-E2E-19: an accepted request_confirmation (an approved tool-action
+    // card) renders the state reference the builder owns by its governed
+    // decision; other accepted interaction kinds stay unknown.
+    const acceptedReferences: Array<{ kind: string; id: string }> = [];
+    buildPaperclipTaskMarkdown({ ...base, interaction: { id: "interaction", kind: "request_confirmation", status: "accepted" } },
+      { onRenderedSource: reference => { acceptedReferences.push(reference); } });
+    expect(acceptedReferences).toContainEqual({ kind: "task_wake_interaction_state", id: "interaction",
+      interactionKind: "request_confirmation", interactionStatus: "accepted" });
+    expect(acceptedReferences).not.toContainEqual({ kind: "unknown", id: "task" });
+    const checkboxReferences: Array<{ kind: string; id: string }> = [];
+    buildPaperclipTaskMarkdown({ ...base, interaction: { id: "interaction", kind: "request_checkbox_confirmation", status: "accepted" } },
+      { onRenderedSource: reference => { checkboxReferences.push(reference); } });
+    expect(checkboxReferences).toContainEqual({ kind: "unknown", id: "task" });
+
     const unboundReferences: Array<{ kind: string; id: string }> = [];
     buildPaperclipTaskMarkdown({ issue: null, wakeComment: { id: "comment", body: "Continue" }, externalChatProvider: "slack" },
       { onRenderedSource: reference => { unboundReferences.push(reference); } });

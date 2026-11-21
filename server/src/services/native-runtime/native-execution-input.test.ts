@@ -1736,8 +1736,10 @@ describe("native bootstrap rendered-source closure", () => {
       {
         const wakeSource = { kind: "native_task_wake" as const, runId, issueId, sourceVersion: "1", contentHash: "d".repeat(64) };
         const governed = c.governedInteractions![0]!;
-        const stateReference = { kind: "task_wake_interaction_state" as const, id: interactionId,
-          interactionKind: "request_confirmation" as const, interactionStatus: "rejected" as const };
+        const stateStatus = status === "rejected" ? "rejected" as const : "accepted" as const;
+        const stateFor = (value: "rejected" | "accepted") => ({ kind: "task_wake_interaction_state" as const, id: interactionId,
+          interactionKind: "request_confirmation" as const, interactionStatus: value });
+        let stateReference = stateFor(stateStatus);
         const build = (capture: NativeTaskContinuationCapture, sources = [governed.nativeSource, governed.continuationSource, c.delivery!.source]) =>
           buildNativeBootstrapSourceSet({
             companyId, runId, agentId, issueId, renderedMarkdown,
@@ -1750,12 +1752,19 @@ describe("native bootstrap rendered-source closure", () => {
               wakeReason: "issue_commented", taskObjective: c.envelope.objective },
             contextManifestIds: [], rolePackInputs: [], unsupportedInputPresent: false,
           });
-        if (status === "rejected") {
-          expect(build(c)?.inputs).toEqual(expect.arrayContaining([governed.nativeSource, governed.continuationSource]));
-          expect(build(c, [governed.nativeSource])).toBeNull();
-        } else {
-          expect(build(c)).toBeNull();
-        }
+        // APR-E2E-19: the accepted state of an approved card that ran (executed
+        // or failed) is owned the same way, by that card's governed decision.
+        expect(build(c)?.inputs).toEqual(expect.arrayContaining([governed.nativeSource, governed.continuationSource]));
+        expect(build(c, [governed.nativeSource])).toBeNull();
+        expect(build(c, [governed.continuationSource])).toBeNull();
+        // The other state line for the same card stays unowned.
+        stateReference = stateFor(stateStatus === "rejected" ? "accepted" : "rejected");
+        expect(build(c)).toBeNull();
+        stateReference = stateFor(stateStatus);
+        // A decision for another card owns nothing.
+        const otherCard = structuredClone(c);
+        otherCard.governedInteractions![0]!.projection.owner.sourceRunId = randomUUID();
+        expect(build(otherCard)).toBeNull();
       }
       // A new genuine Human comment is a separate trigger from recorded
       // historical review outcomes. Never borrow the historical resolver.

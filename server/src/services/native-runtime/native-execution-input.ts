@@ -68,7 +68,8 @@ export type NativeRenderedSourceReference = {
   kind: "task_wake_interaction_state";
   id: string;
   interactionKind: "ask_user_questions" | "request_confirmation" | "request_checkbox_confirmation";
-  interactionStatus: "cancelled" | "rejected";
+  /** "accepted" only for a tool-action card owned by its governed decision (APR-E2E-19). */
+  interactionStatus: "cancelled" | "rejected" | "accepted";
 };
 
 export type NativePreparedSourceCandidate = {
@@ -1449,11 +1450,16 @@ export function buildNativeBootstrapSourceSet(input: {
       // APR-E2E-13. A declined tool-action card renders the same rejected
       // interaction state, but its owner is the governed decision that the
       // exact continuation above already verified (never a withdrawal).
+      // APR-E2E-19. Symmetrically, the accepted state of an approved card is
+      // owned by its decision: accepted, with the approved request settled as
+      // executed or failed (the call ran), never by anything else.
       const governedMatches = withdrawal ? [] : exactContinuation?.governedInteractions?.filter(value =>
         value.projection.interactionId === reference.id && reference.interactionKind === "request_confirmation" &&
-        reference.interactionStatus === "rejected" && value.projection.interactionOutcome.kind === reference.interactionKind &&
+        value.projection.interactionOutcome.kind === reference.interactionKind &&
         value.projection.interactionOutcome.status === reference.interactionStatus &&
-        value.projection.owner.requestStatus === "rejected" &&
+        (reference.interactionStatus === "rejected" ? value.projection.owner.requestStatus === "rejected"
+          : reference.interactionStatus === "accepted" && ["executed", "failed"].includes(value.projection.owner.requestStatus) &&
+            value.projection.humanResponse.status === "accepted") &&
         value.projection.owner.sourceRunId === wakeInteraction?.sourceRunId) ?? [];
       const governed = governedMatches.length === 1 ? governedMatches[0] : null;
       const owned = withdrawal ?? governed;
