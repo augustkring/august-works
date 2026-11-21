@@ -518,7 +518,10 @@ export async function withManagedConnectionReview(input: {
         // card, and its result document says what was not done. The blocker is
         // the board's (no same-agent wake, so no continuation loop).
         if (role === "resolution" && callIndex === 2 && input.journey === "decline") {
-          return use(`review-finish-${role}`, tool("paperclip_finish"), {
+          // A blocked result goes through paperclip_block: paperclip_finish
+          // accepts only done, needs_review or a response_wake yield and
+          // rejects anything else as a failed tool call.
+          return use(`review-block-${role}`, tool("paperclip_block"), {
             schema: "paperclip.run_result.v1", reportedWorkDisposition: "blocked", summary: responseText,
             completionClaim: { contractRevision: execution.completionContract.contract.revision, objectiveSatisfied: false,
               criteria: execution.completionContract.contract.criteria.map(criterion => ({ criterionId: criterion.id,
