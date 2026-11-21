@@ -242,6 +242,7 @@ export function exactNativeTaskContinuation(input: { value: unknown; companyId: 
     ...(capture.stageRoundHistory !== undefined ? ["stageRoundHistory"] : []),
     ...(capture.finalizedSummary !== undefined ? ["finalizedSummary"] : []),
     ...(capture.delivery !== undefined ? ["delivery"] : []),
+    ...(capture.deferredNotes !== undefined ? ["deferredNotes"] : []),
     ...(capture.pendingInteractions !== undefined ? ["pendingInteractions"] : []),
     ...(capture.previousContext !== undefined ? ["previousContext"] : []), ...(capture.retainedSource !== undefined ? ["retainedSource"] : [])];
   if (Object.keys(capture).sort().join(",") !== captureKeys.sort().join(",")) return null;
@@ -266,6 +267,7 @@ export function exactNativeTaskContinuation(input: { value: unknown; companyId: 
   if (administrativeExpiries !== undefined && (!hasAdministrativeExpiries || governed !== undefined ||
     questions !== undefined || capture.acceptedPlanReview !== undefined || capture.delivery !== undefined ||
     capture.pendingInteractions !== undefined || capture.stageActions !== undefined || input.stageTrigger !== undefined)) return null;
+  if (capture.deferredNotes !== undefined && (!hasGoverned || capture.delivery === undefined)) return null;
   const acceptedPlanReview = capture.acceptedPlanReview;
   const hasAcceptedPlanReview = acceptedPlanReview !== undefined;
   if (hasAcceptedPlanReview && (hasGoverned || capture.delivery !== undefined || !acceptedPlanReview)) return null;
@@ -808,6 +810,22 @@ export function exactNativeTaskContinuation(input: { value: unknown; companyId: 
         nativeSha256(c.humanResponses?.find(response => response.id === p.interactionId)) !== nativeSha256(p.humanResponse) ||
         nativeSha256(c.interactionOutcomes.find(outcome => outcome.id === p.interactionId)) !== nativeSha256(p.interactionOutcome)) return null;
       for (const id of [...p.owner.originCommentIds, ...(p.owner.sourceCommentId ? [p.owner.sourceCommentId] : [])]) originIds.add(id);
+    }
+    // APR-E2E-18. A deferred Human note is a resolution-wake origin only
+    // through its own durable deferral owner for this card and author.
+    const deferred = capture.deferredNotes;
+    if (deferred !== undefined) {
+      if (!hasResolutionWake || !Array.isArray(deferred) || deferred.length === 0 || deferred.length > 64 ||
+        new Set(deferred.map(value => value?.commentId)).size !== deferred.length ||
+        deferred.some(value => !value || typeof value !== "object" ||
+          Object.keys(value).sort().join(",") !== "activityId,authorUserId,commentId,companyId,interactionId,interactionVersion,issueId" ||
+          value.companyId !== input.companyId || value.issueId !== input.issueId || value.interactionId !== c.trigger.interactionId ||
+          typeof value.commentId !== "string" || !uuid.test(value.commentId) || typeof value.activityId !== "string" || !uuid.test(value.activityId) ||
+          typeof value.authorUserId !== "string" || value.authorUserId.length === 0 ||
+          typeof value.interactionVersion !== "string" || !/^\d+(?:\.\d+)?$/.test(value.interactionVersion) ||
+          originIds.has(value.commentId) || !c.originCommentIds.includes(value.commentId) ||
+          c.messages.find(message => message.id === value.commentId)?.authorId !== value.authorUserId)) return null;
+      for (const value of deferred) originIds.add(value.commentId);
     }
     if (hasResolutionWake) {
       const trigger = captures.find(value => value.projection.interactionId === c.trigger.interactionId)?.projection;

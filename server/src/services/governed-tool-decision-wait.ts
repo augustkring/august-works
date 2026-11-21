@@ -134,26 +134,25 @@ export async function recordDeferredGovernedNote(
     actor: { actorType: "user"; actorId: string };
   },
 ): Promise<boolean> {
-  // The note becomes one of the card's origin comments (APR-E2E-13): the
-  // resolution Run's continuation carries a card's origin comments, and the
-  // Native source closure accepts a wake comment only when the resolved card
-  // owns it. The card stays pending and its version (updatedAt) is unchanged.
-  // If the card is no longer pending, nothing is recorded and the caller keeps
-  // the ordinary wake.
+  // APR-E2E-18. The pending card itself is never changed: the requesting
+  // Run recorded it as a source. The durable activity row below is the note's
+  // only owner; it binds this note, this card at its current (pending)
+  // version and this Task, with the note's Human author as its actor. If the
+  // card is no longer pending, nothing is recorded and the caller keeps the
+  // ordinary wake.
   return db.transaction(async (raw) => {
     const tx = raw as unknown as Db;
     const [linked] = await tx
-      .update(issueThreadInteractions)
-      .set({
-        originCommentIds: sql`(select coalesce(jsonb_agg(distinct value), '[]'::jsonb) from jsonb_array_elements_text(${issueThreadInteractions.originCommentIds} || ${JSON.stringify([input.commentId])}::jsonb) as value)`,
-      })
+      .select({ id: issueThreadInteractions.id,
+        version: sql<string>`extract(epoch from ${issueThreadInteractions.updatedAt})::text` })
+      .from(issueThreadInteractions)
       .where(and(
         eq(issueThreadInteractions.companyId, input.companyId),
         eq(issueThreadInteractions.issueId, input.issueId),
         eq(issueThreadInteractions.id, input.wait.interactionId),
         eq(issueThreadInteractions.status, "pending"),
       ))
-      .returning({ id: issueThreadInteractions.id });
+      .for("update");
     if (!linked) return false;
     await logActivity(tx, {
       companyId: input.companyId,
@@ -165,6 +164,7 @@ export async function recordDeferredGovernedNote(
       details: {
         commentId: input.commentId,
         interactionId: input.wait.interactionId,
+        interactionVersion: linked.version,
         sourceRunId: input.wait.sourceRunId,
         statusDecisionId: input.wait.statusDecisionId,
         assigneeAgentId: input.assigneeAgentId,
@@ -218,4 +218,71 @@ export async function deferredGovernedNoteCommentIds(
   return comments
     .filter((comment) => comment.authorUserId && comment.authorUserId === byComment.get(comment.id))
     .map((comment) => comment.id);
+}
+
+/** APR-E2E-18. The owner of one deferred Human note on a resolved governed
+ * card: its durable deferral activity row, re-read in the caller's
+ * transaction. Never a card origin and never an authority flag. */
+export type NativeDeferredGovernedNoteOwner = {
+  companyId: string; issueId: string; interactionId: string; interactionVersion: string;
+  commentId: string; activityId: string; authorUserId: string;
+};
+
+/**
+ * Return the owner of each given note that has exactly one deferral activity
+ * row binding exactly this note, this card (id and the card version at
+ * deferral) and this Task, recorded by the note's own Human author while the
+ * card was pending (the version lies between the card's creation and its
+ * resolution, and the row precedes the resolution). The note must be a
+ * present Human comment of this Task. Notes without such a row are omitted,
+ * so their origin stays unowned and refused.
+ */
+export async function captureDeferredGovernedNoteOwners(
+  db: Db,
+  input: { companyId: string; issueId: string; interactionId: string; commentIds: readonly string[] },
+): Promise<NativeDeferredGovernedNoteOwner[]> {
+  if (input.commentIds.length === 0 || input.commentIds.length > 64) return [];
+  const [card] = await db
+    .select({ createdAt: sql<string>`extract(epoch from ${issueThreadInteractions.createdAt})::text`,
+      resolvedAt: sql<string | null>`extract(epoch from ${issueThreadInteractions.resolvedAt})::text`,
+      resolvedAtTime: issueThreadInteractions.resolvedAt })
+    .from(issueThreadInteractions)
+    .where(and(eq(issueThreadInteractions.companyId, input.companyId), eq(issueThreadInteractions.issueId, input.issueId),
+      eq(issueThreadInteractions.id, input.interactionId)))
+    .for("share");
+  if (!card) return [];
+  const owners: NativeDeferredGovernedNoteOwner[] = [];
+  for (const commentId of [...new Set(input.commentIds)]) {
+    const [comment] = await db
+      .select({ authorUserId: issueComments.authorUserId })
+      .from(issueComments)
+      .where(and(eq(issueComments.companyId, input.companyId), eq(issueComments.issueId, input.issueId),
+        eq(issueComments.id, commentId), isNull(issueComments.deletedAt), isNull(issueComments.createdByRunId)))
+      .for("share");
+    if (!comment?.authorUserId) continue;
+    const rows = await db
+      .select({ id: activityLog.id, actorId: activityLog.actorId, details: activityLog.details, createdAt: activityLog.createdAt })
+      .from(activityLog)
+      .where(and(
+        eq(activityLog.companyId, input.companyId),
+        eq(activityLog.entityType, "issue"),
+        eq(activityLog.entityId, input.issueId),
+        eq(activityLog.action, GOVERNED_TOOL_DECISION_NOTE_DEFERRED_ACTION),
+        eq(activityLog.actorType, "user"),
+        sql`${activityLog.details}->>'commentId' = ${commentId}`,
+      ))
+      .for("share");
+    if (rows.length !== 1) continue;
+    const row = rows[0]!;
+    const details = object(row.details);
+    const version = details?.interactionVersion;
+    if (!details || details.interactionId !== input.interactionId || row.actorId !== comment.authorUserId ||
+      typeof version !== "string" || !/^\d+(?:\.\d+)?$/.test(version) ||
+      Number(version) < Number(card.createdAt) ||
+      (card.resolvedAt !== null && (Number(version) > Number(card.resolvedAt) ||
+        !card.resolvedAtTime || row.createdAt.getTime() > card.resolvedAtTime.getTime()))) continue;
+    owners.push({ companyId: input.companyId, issueId: input.issueId, interactionId: input.interactionId,
+      interactionVersion: version, commentId, activityId: row.id, authorUserId: comment.authorUserId });
+  }
+  return owners;
 }

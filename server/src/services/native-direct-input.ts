@@ -3252,6 +3252,17 @@ async function assertNativeTaskWakeSourceCurrentInScope(db: Db | Transaction, sc
       issueId: input.issueId, agentId: run.agentId, runId: run.id, wakeupRequestId: admittedWake.id, reader: input.actor });
     if (selected && input.inputs.some(source => isDeepStrictEqual(source, selected.source))) delivery = selected;
   }
+  let deferredNotes: import("./governed-tool-decision-wait.js").NativeDeferredGovernedNoteOwner[] = [];
+  const deferredTrigger = nativeSourceRecord(nativeSourceRecord(continuation).trigger).interactionId;
+  const deferredOrigins = nativeSourceRecord(continuation).originCommentIds;
+  if (delivery && typeof deferredTrigger === "string" && Array.isArray(deferredOrigins) &&
+    deferredOrigins.every(id => typeof id === "string")) {
+    // APR-E2E-18. Re-read each deferred note's activity owner in this transaction.
+    const { nativeUnownedGovernedOrigins } = await import("./execution-continuation.js");
+    deferredNotes = await (await import("./governed-tool-decision-wait.js")).captureDeferredGovernedNoteOwners(db as Db, {
+      companyId: input.companyId, issueId: input.issueId, interactionId: deferredTrigger,
+      commentIds: nativeUnownedGovernedOrigins(deferredOrigins as string[], governedInteractions) });
+  }
   const admittedInteraction = nativeTaskWakeInteraction(admittedWake?.payload);
   let acceptedPlanReview: NativeTaskContinuationCapture["acceptedPlanReview"];
   const continuationEnvelope = nativeSourceRecord(continuation);
@@ -3322,6 +3333,7 @@ async function assertNativeTaskWakeSourceCurrentInScope(db: Db | Transaction, sc
       ...(acceptedPlanReview ? { acceptedPlanReview } : {}),
       ...(stageActions.length ? { stageActions } : {}),
       ...(delivery ? { delivery } : {}),
+      ...(deferredNotes.length ? { deferredNotes } : {}),
       ...(pendingInteractions?.length ? { pendingInteractions } : {}),
       ...(summary ? { summary } : {}),
       ...(currentHumanAssignment ? { currentHumanAssignment } : {}),

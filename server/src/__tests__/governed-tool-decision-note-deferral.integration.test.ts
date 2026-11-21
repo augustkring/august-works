@@ -29,7 +29,7 @@ import { issueRoutes } from "../routes/issues.js";
 import { heartbeatService } from "../services/heartbeat.js";
 import { toolActionDeliveryService } from "../services/tool-action-delivery.js";
 import { commitToolActionReview } from "../services/tool-action-review.js";
-import { GOVERNED_TOOL_DECISION_NOTE_DEFERRED_ACTION } from "../services/governed-tool-decision-wait.js";
+import { GOVERNED_TOOL_DECISION_NOTE_DEFERRED_ACTION, captureDeferredGovernedNoteOwners } from "../services/governed-tool-decision-wait.js";
 import { seedNativePasskeySession } from "./helpers/native-authentication-fixtures.js";
 import {
   getEmbeddedPostgresTestSupport,
@@ -207,11 +207,14 @@ describeEmbeddedPostgres("governed tool decision: deferred Human note (routes + 
     expect(recorded[0]!.details).toMatchObject({ commentId, interactionId: seeded.interactionId,
       sourceRunId: seeded.sourceRunId, assigneeAgentId: seeded.agentId, reason: "governed_tool_decision_pending" });
     expect(await db.select().from(agentWakeupRequests).where(eq(agentWakeupRequests.companyId, seeded.companyId))).toEqual([]);
-    // The note is one of the pending card's origin comments; the card's version is unchanged.
+    // APR-E2E-18. The pending card the requesting Run recorded is unchanged
+    // (origins and version); the activity row binds the card version instead.
     const [pendingCard] = await db.select().from(issueThreadInteractions).where(eq(issueThreadInteractions.id, seeded.interactionId));
     expect(pendingCard?.status).toBe("pending");
-    expect(pendingCard?.originCommentIds).toEqual([commentId]);
+    expect(pendingCard?.originCommentIds).toEqual(before!.originCommentIds);
     expect(pendingCard?.updatedAt.getTime()).toBe(cardUpdatedAt);
+    const [version] = await db.execute<{ v: string }>(sql`select extract(epoch from updated_at)::text as v from issue_thread_interactions where id = ${seeded.interactionId}`) as unknown as Array<{ v: string }>;
+    expect((recorded[0]!.details as Record<string, unknown>).interactionVersion).toBe(version!.v);
 
     // The Human declines the card; the gateway records the decision and its outcome receipt.
     await db.update(issueThreadInteractions).set({ status: "rejected", resolvedByUserId: userId, resolvedAt: new Date(),
@@ -333,5 +336,89 @@ describeEmbeddedPostgres("governed tool decision: deferred Human note (routes + 
     expect(wakeCalls.filter(call => call.agentId === seeded.agentId)).toEqual([]);
     const recorded = await deferrals(seeded.companyId);
     expect(recorded.map(row => (row.details as Record<string, unknown>).commentId)).toEqual([commentId]);
+  });
+
+  // APR-E2E-18. The resolution wake's origin owner for a deferred note.
+  async function resolveCard(seeded: Awaited<ReturnType<typeof seed>>) {
+    await db.update(issueThreadInteractions).set({ status: "rejected", resolvedByUserId: userId, resolvedAt: new Date(),
+      result: { version: 1, outcome: "rejected" } as never }).where(eq(issueThreadInteractions.id, seeded.interactionId));
+  }
+  const owners = (seeded: Awaited<ReturnType<typeof seed>>, commentIds: string[], interactionId = seeded.interactionId) =>
+    captureDeferredGovernedNoteOwners(db, { companyId: seeded.companyId, issueId: seeded.issueId, interactionId, commentIds });
+  async function ordinaryComment(seeded: Awaited<ReturnType<typeof seed>>) {
+    await db.update(issues).set({ status: "in_progress" }).where(eq(issues.id, seeded.issueId));
+    const commentId = await postNote(seeded, "An ordinary Human comment.");
+    await waitForAssigneeWake(seeded.agentId, commentId);
+    await db.update(issues).set({ status: "in_review" }).where(eq(issues.id, seeded.issueId));
+    return commentId;
+  }
+  async function forgeDeferral(seeded: Awaited<ReturnType<typeof seed>>, commentId: string,
+    overrides: { actorId?: string; interactionId?: string; interactionVersion?: string } = {}) {
+    const [version] = await db.execute<{ v: string }>(sql`select extract(epoch from updated_at)::text as v from issue_thread_interactions where id = ${seeded.interactionId}`) as unknown as Array<{ v: string }>;
+    await db.insert(activityLog).values({ companyId: seeded.companyId, actorType: "user", actorId: overrides.actorId ?? userId,
+      action: GOVERNED_TOOL_DECISION_NOTE_DEFERRED_ACTION, entityType: "issue", entityId: seeded.issueId,
+      details: { commentId, interactionId: overrides.interactionId ?? seeded.interactionId,
+        interactionVersion: overrides.interactionVersion ?? version!.v, sourceRunId: seeded.sourceRunId,
+        assigneeAgentId: seeded.agentId, reason: "governed_tool_decision_pending" } });
+  }
+
+  it("owns a deferred note only through its own deferral row for this card, version, Task and author (APR-E2E-18)", async () => {
+    const seeded = await seed();
+    const deferred = await postNote(seeded);
+    await settleAfterDeferral(seeded.companyId);
+    const plain = await ordinaryComment(seeded);
+    await resolveCard(seeded);
+    const [row] = await deferrals(seeded.companyId);
+    // Accepted with its activity row.
+    expect(await owners(seeded, [deferred])).toEqual([{ companyId: seeded.companyId, issueId: seeded.issueId,
+      interactionId: seeded.interactionId, interactionVersion: (row!.details as Record<string, unknown>).interactionVersion,
+      commentId: deferred, activityId: row!.id, authorUserId: userId }]);
+    // A note with no deferral row stays unowned.
+    expect(await owners(seeded, [plain])).toEqual([]);
+    // The row binds this card: not another card.
+    expect(await owners(seeded, [deferred], randomUUID())).toEqual([]);
+    expect(await owners(seeded, [deferred, plain])).toHaveLength(1);
+  });
+
+  it.each([
+    ["a different card", { interactionId: randomUUID() }],
+    ["a version before the card existed", { interactionVersion: "1" }],
+    ["a version after the card was resolved", { interactionVersion: "99999999999" }],
+    ["another user as its actor", { actorId: "another-human" }],
+  ] as const)("refuses a deferral row for %s (APR-E2E-18)", async (_label, overrides) => {
+    const seeded = await seed();
+    const plain = await ordinaryComment(seeded);
+    await forgeDeferral(seeded, plain, overrides);
+    await resolveCard(seeded);
+    expect(await owners(seeded, [plain])).toEqual([]);
+  });
+
+  it("accepts the same forged-shape row when it binds exactly this card, version and author, and refuses a duplicate row (APR-E2E-18)", async () => {
+    const seeded = await seed();
+    const plain = await ordinaryComment(seeded);
+    await forgeDeferral(seeded, plain);
+    await resolveCard(seeded);
+    expect(await owners(seeded, [plain])).toHaveLength(1);
+    await forgeDeferral(seeded, plain);
+    expect(await owners(seeded, [plain])).toEqual([]);
+  });
+
+  it("leaves a card with two origin comments, in their recorded order, unchanged by a deferral (APR-E2E-18)", async () => {
+    const seeded = await seed();
+    await db.update(issues).set({ status: "in_progress" }).where(eq(issues.id, seeded.issueId));
+    const first = await postNote(seeded, "First origin.");
+    const second = await postNote(seeded, "Second origin.");
+    await waitForAssigneeWake(seeded.agentId, second);
+    await db.update(issues).set({ status: "in_review" }).where(eq(issues.id, seeded.issueId));
+    // Recorded order, deliberately not sorted.
+    const recordedOrder = [first, second].sort().reverse();
+    await db.execute(sql`update issue_thread_interactions set origin_comment_ids = ${JSON.stringify(recordedOrder)}::jsonb, updated_at = updated_at where id = ${seeded.interactionId}`);
+    const [before] = await db.select().from(issueThreadInteractions).where(eq(issueThreadInteractions.id, seeded.interactionId));
+    expect(before!.originCommentIds).toEqual(recordedOrder);
+    await postNote(seeded);
+    await settleAfterDeferral(seeded.companyId);
+    const [after] = await db.select().from(issueThreadInteractions).where(eq(issueThreadInteractions.id, seeded.interactionId));
+    expect(after!.originCommentIds).toEqual(recordedOrder);
+    expect(after!.updatedAt.getTime()).toBe(before!.updatedAt.getTime());
   });
 });
