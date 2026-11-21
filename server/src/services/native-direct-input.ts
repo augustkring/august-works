@@ -3959,9 +3959,18 @@ async function assertNativeModelOutputCaptureCurrentInScope(db: Db | Transaction
           recorded.conflicting || recorded.duplicateWithinEntry)
           throw forbidden("A Native output historical tool result is unavailable");
         const captures = Array.isArray(producerProfile?.nativeToolResultSourceCaptures) ? producerProfile.nativeToolResultSourceCaptures : [];
+        // APR-E2E-28 (a). An assigned MCP result's source names the gateway
+        // tool, and its capture names the provider alias; the capture's own
+        // invocation witness links the two. Its full witness, invocation and
+        // authority checks run in the consumed source set owner above.
         const matching = captures.filter(value => value && typeof value === "object" && !Array.isArray(value) &&
           (value as Record<string, unknown>).callId === source.callId && typeof (value as Record<string, unknown>).tool === "string" &&
-          nativeProviderToolName((value as Record<string, unknown>).tool as string) === source.toolName &&
+          ((value as Record<string, unknown>).assignedMcp === undefined
+            ? nativeProviderToolName((value as Record<string, unknown>).tool as string) === source.toolName
+            : nativeSourceRecord((value as Record<string, unknown>).assignedMcp).gatewayToolName === source.toolName &&
+              nativeSourceRecord((value as Record<string, unknown>).assignedMcp).providerToolName === (value as Record<string, unknown>).tool &&
+              nativeSourceRecord((value as Record<string, unknown>).assignedMcp).invocationId === source.invocationId &&
+              typeof source.invocationId === "string") &&
           (value as Record<string, unknown>).resultDigest === source.contentHash &&
           isDeepStrictEqual((value as Record<string, unknown>).source, source));
         if (matching.length !== 1) throw forbidden("A Native output tool result source is unavailable");

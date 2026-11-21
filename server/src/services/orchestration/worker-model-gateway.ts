@@ -2146,6 +2146,24 @@ async function assertManagedOpenCodeRequestSources(db: Db, claims: ManagedModelC
         const consumedEntry = consumedEntries[0]!;
         consumedSourceComponents.push({ kind: "additional_input", responsibleUserId: consumedEntry.responsibleUserId,
           policy: consumedEntry.policy, inputs: consumedEntry.inputs });
+        // APR-E2E-28 (a). An executed assigned MCP call (a direct app tool or
+        // the canonical call wrapper) is consumed only as its own recorded
+        // invocation witness: this provider tool use, this invocation and this
+        // source. The consumed source set check below
+        // (assertNativeManagedConsumedSourceSetCurrent) re-validates the
+        // witness, the invocation row, its arguments, result and current
+        // assigned authority. Without a witness nothing changes here.
+        if (assignedInvocation) {
+          if (!assignedProviderTool || nativeBuiltin || capture.managedOpenCode !== true ||
+            capture.callId !== block.tool_use_id || capture.argumentsHash !== providerUse.argumentsHash ||
+            assignedInvocation.providerToolName !== toolName || assignedInvocation.invocationId !== invocation.id ||
+            assignedInvocation.gatewayToolName !== invocation.toolName ||
+            assignedInvocation.providerArgumentsHash !== providerUse.argumentsHash ||
+            source.invocationId !== invocation.id || source.runId !== claims.run_id ||
+            !isDeepStrictEqual(consumedEntry.inputs[0], source))
+            throw forbidden("Managed assigned MCP result has no exact invocation source capture");
+          continue;
+        }
         if (toolName === "list_project_repositories") {
           const repositoryCapture = managedRecord(capture.projectRepositories) as unknown as NativeProjectRepositoriesToolResultCapture;
           const repoResult = managedRecord(result);
