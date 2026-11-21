@@ -28,6 +28,7 @@ import {
   withoutAmbientOpenCodeCommand,
 } from "./opencode-proxy-command.js";
 import { OpenCodeProxyUsageLedger } from "./opencode-proxy-usage.js";
+import { openCodeProxyAssignedMcpApprovalError } from "./opencode-proxy-tool-failure.js";
 
 type RpcMessage = {
   id?: string | number;
@@ -40,7 +41,7 @@ type RpcMessage = {
 const input = createInterface({ input: process.stdin, crlfDelay: Infinity });
 const pending = new Map<
   string,
-  { method: string; resolve(value: unknown): void; reject(error: Error): void }
+  { method: string; tool?: string; resolve(value: unknown): void; reject(error: Error): void }
 >();
 let nextServerRequestId = 1;
 let driver: OpenCodeServerDriver | null = null;
@@ -60,8 +61,9 @@ function send(value: unknown): void {
 function requestController(method: string, params: unknown): Promise<unknown> {
   const id = `opencode-${nextServerRequestId++}`;
   send({ id, method, params });
+  const tool = record(params).tool;
   return new Promise((resolveValue, reject) =>
-    pending.set(id, { method, resolve: resolveValue, reject }),
+    pending.set(id, { method, ...(typeof tool === "string" ? { tool } : {}), resolve: resolveValue, reject }),
   );
 }
 
@@ -340,7 +342,10 @@ async function handle(message: RpcMessage): Promise<void> {
     if (message.error !== undefined)
       waiter.reject(new Error(JSON.stringify(message.error)));
     else if (waiter.method === "item/tool/call") {
-      waiter.resolve(unwrapDynamicToolResponse(message.result));
+      // APR-E2E-22. A parked assigned-MCP call travels as an MCP error.
+      const approvalRequired = openCodeProxyAssignedMcpApprovalError(waiter.tool ?? "", message.result);
+      if (approvalRequired !== null) waiter.reject(new Error(approvalRequired));
+      else waiter.resolve(unwrapDynamicToolResponse(message.result));
     } else {
       const contentItems = record(message.result).contentItems;
       waiter.resolve(
