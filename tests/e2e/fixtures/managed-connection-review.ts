@@ -7,7 +7,8 @@ import { and, eq, sql } from "../../../packages/db/node_modules/drizzle-orm/inde
 import { expect, type Page, type BrowserContext, type APIRequestContext } from "@playwright/test";
 import { createDb, activityLog, agents, authSessions, authUsers, companies, heartbeatRuns, agentWakeupRequests,
   issueComments, issueThreadInteractions, issues, documents, issueDocuments, environmentLeases,
-  connectionGrants, toolCatalogEntries, toolConnections, orchestrationPlans } from "../../../packages/db/src/index.ts";
+  connectionGrants, toolCatalogEntries, toolConnections, orchestrationPlans, orchestrationModelReservations,
+  orchestrationWorkerAttempts } from "../../../packages/db/src/index.ts";
 import { createApp } from "../../../server/src/app.js";
 import { createStorageService } from "../../../server/src/storage/service.js";
 import { createLocalDiskStorageProvider } from "../../../server/src/storage/local-disk-provider.js";
@@ -100,6 +101,8 @@ export async function withManagedConnectionReview(input: {
   const planByTask = new Map<string, string>();
   // The later Task's executed assigned call, from its Run's sealed tool_result capture.
   const laterInvocationByRun = new Map<string, string>();
+  // Scripted provider replies per Run: each one is exactly one dispatched provider call.
+  const repliesByRun = new Map<string, number>();
   const pendingNoteBody = "Keeping this review pending while I check.";
   let resolutionSawNote = false;
   let settleToolAction: ((actionRequestId: string) => Promise<unknown>) | null = null;
@@ -354,6 +357,7 @@ export async function withManagedConnectionReview(input: {
       },
       providerReply: ({ body, callIndex, execution, runId }) => {
         if (!providerRuns.includes(runId)) providerRuns.push(runId);
+        repliesByRun.set(runId, (repliesByRun.get(runId) ?? 0) + 1);
         const binding = rolesByRun.get(runId); assert(binding);
         const role = binding.role;
         assert(providerRuns.length <= (input.journey === "always" ? 4 : 3));
@@ -759,10 +763,49 @@ export async function withManagedConnectionReview(input: {
             assert.equal(row.run.runtimeMode, "native"); assert.equal(row.run.responsibleUserId, actor.userId);
             const facts = factsForRun(row.run.id);
             const role = rolesByRun.get(row.run.id); assert(role);
-            assert(facts.providerCallCount >= 2);
+            // Dispatched provider calls per role (product semantics):
+            // - request: one call whose tool use the runner parks for the Human
+            //   review. OpenCode's follow-up request is interrupted before
+            //   provider dispatch and released (APR-E2E-22), so it never
+            //   reaches the provider;
+            // - resolution: write_document, then paperclip_finish;
+            // - later (Always allow): search, the schema chunks it needs, the
+            //   assigned call, write_document and paperclip_finish; at least
+            //   four, and exactly the replies the provider script gave it.
+            if (role.role === "request") assert.equal(facts.providerCallCount, 1, "The requesting Run dispatches exactly the call it parks");
+            else if (role.role === "resolution") assert.equal(facts.providerCallCount, 2, "The resolution Run writes its document, then finishes");
+            else assert(facts.providerCallCount >= 4, "The later Run searches, calls, writes and finishes");
+            assert.equal(facts.providerCallCount, repliesByRun.get(row.run.id) ?? 0);
             assert(facts.issuerFacts.length > 0 && facts.issuerFacts.every(fact => fact.scope === "worker_model" && fact.runId === row.run.id));
             await verifyStopped(row.run.id);
           }
+          // APR-E2E-22. The requesting Run's interrupted follow-up request left
+          // exactly one released worker_model reservation: failed, with no wire
+          // receipt, response hash or usage, and not counted against the plan.
+          const requestRun = roles.find(entry => entry.role === "request")!.runId;
+          const planId = planByTask.get(task.id); assert(planId);
+          const requestReservations = (await db.select({ reservation: orchestrationModelReservations })
+            .from(orchestrationModelReservations).innerJoin(orchestrationWorkerAttempts, and(
+              eq(orchestrationWorkerAttempts.companyId, orchestrationModelReservations.companyId),
+              eq(orchestrationWorkerAttempts.planId, orchestrationModelReservations.planId),
+              eq(orchestrationWorkerAttempts.id, orchestrationModelReservations.workerAttemptId)))
+            .where(and(eq(orchestrationModelReservations.companyId, companyId), eq(orchestrationWorkerAttempts.runId, requestRun))))
+            .map(entry => entry.reservation);
+          const released = requestReservations.filter(value => value.purpose === "worker_model" && value.status === "failed" &&
+            value.providerWireReceipt === null && value.providerResponseHash === null && value.usage === null);
+          assert.equal(released.length, 1, "The interrupted follow-up request is one released pre-dispatch reservation");
+          assert.equal(requestReservations.filter(value => value.status === "completed").length, 1,
+            "The requesting Run is charged for exactly the one call it dispatched");
+          const planReservations = await db.select().from(orchestrationModelReservations).where(and(
+            eq(orchestrationModelReservations.companyId, companyId), eq(orchestrationModelReservations.planId, planId)));
+          const [planRow] = await db.select({ reserved: orchestrationPlans.modelCostReserved }).from(orchestrationPlans)
+            .where(eq(orchestrationPlans.id, planId));
+          const counted = planReservations.filter(value => !(value.status === "cancelled" || (value.status === "failed" &&
+            value.purpose === "worker_model" && value.providerWireReceipt === null && value.providerResponseHash === null &&
+            value.usage === null))).reduce((total, value) => total + value.maximumMinor, 0);
+          assert.equal(planRow?.reserved, counted, "Released reservations are not counted against the plan");
+          assert.equal(planRow?.reserved, planReservations.reduce((total, value) => total + value.maximumMinor, 0) -
+            released.reduce((total, value) => total + value.maximumMinor, 0));
           assert.equal(railway.captures().filter(capture => capture.purpose === "projects_call").length,
             input.journey === "decline" ? 0 : 1);
           assert.equal(railway.captures().filter(capture => capture.purpose === "large_tool_call").length,
