@@ -479,8 +479,8 @@ export async function withManagedConnectionReview(input: {
           const response = record(responses[0]!.response);
           const action = response.status === "rejected" ? null : record(record(response.result).toolAction);
           if (input.journey === "decline") {
-            assert.equal(response.status, "rejected");
-            responseText = "Review declined. No projects were read.";
+            assert.equal(response.status, "rejected"); assert(binding.interactionId);
+            responseText = `Review declined. No projects were read: the responsible Human declined the Railway project read (interaction:${binding.interactionId}), so the Task is blocked until a Human decides how to continue.`;
           } else if (input.journey === "failure") {
             assert(action); assert.equal(response.status, "accepted"); assert.equal(action.status, "failed");
             responseText = "Read failed: the fixed Railway provider returned an actual failure.";
@@ -492,6 +492,23 @@ export async function withManagedConnectionReview(input: {
           outcomeByRun.set(runId, responseText);
           return use("review-document-1", tool("write_document"), { idempotencyKey: "review-retained-outcome", key: "result",
             title: "Actual governed Railway review outcome", body: responseText, baseRevisionId: null });
+        }
+        // APR-E2E-23 (decline). A declined governed action is not evidence that
+        // its invariant holds: the agent finishes blocked, naming the declined
+        // card, and its result document says what was not done. The blocker is
+        // the board's (no same-agent wake, so no continuation loop).
+        if (role === "resolution" && callIndex === 2 && input.journey === "decline") {
+          return use(`review-finish-${role}`, tool("paperclip_finish"), {
+            schema: "paperclip.run_result.v1", reportedWorkDisposition: "blocked", summary: responseText,
+            completionClaim: { contractRevision: execution.completionContract.contract.revision, objectiveSatisfied: false,
+              criteria: execution.completionContract.contract.criteria.map(criterion => ({ criterionId: criterion.id,
+                status: "not_satisfied", evidenceRefs: [] })),
+              remainingWork: [{ description: "The declined Railway project read was not run; a Human decides how to continue.", blocksCompletion: true }] },
+            evidence: [], verification: [], attentionRequests: [], artifacts: [],
+            blocker: { reasonCode: "governed_action_declined", owner: { kind: "user", name: "Responsible Human" },
+              unblockAction: `The responsible Human declined the Railway project read (interaction:${binding.interactionId}). Approve a new request or close the Task.`,
+              scope: "current_track" },
+          });
         }
         // The accepted terminal summary is published by the existing Native
         // presentation owner with this actual Run's agent/run attribution.
@@ -735,7 +752,9 @@ export async function withManagedConnectionReview(input: {
           assert.equal(railway.captures().filter(capture => capture.purpose === "large_tool_call").length,
             input.journey === "always" ? 1 : 0);
           if (input.journey === "always") assert(maxProviderRequestBytes > 0 && maxProviderRequestBytes <= 64_000);
-          const [finished] = await db.select().from(issues).where(eq(issues.id, task.id)); assert.equal(finished?.status, "done");
+          const [finished] = await db.select().from(issues).where(eq(issues.id, task.id));
+          assert.equal(finished?.status, input.journey === "decline" ? "blocked" : "done");
+          if (input.journey === "decline") assert(String(record(finished!.unblockDescriptor).action).includes(`interaction:${card.id}`));
           const [retained] = await db.select({ body: documents.latestBody }).from(issueDocuments).innerJoin(documents,
             and(eq(documents.id, issueDocuments.documentId), eq(documents.companyId, companyId))).where(and(
               eq(issueDocuments.companyId, companyId), eq(issueDocuments.issueId, task.id), eq(issueDocuments.key, "result")));

@@ -131,16 +131,31 @@ export function registerManagedConnectionReviewCase(journey: ConnectionReviewJou
       await expect(
         queue.getByRole("button", { name: "Decline", exact: true }),
       ).not.toBeVisible({ timeout: remaining() });
-      // APR-E2E-25 (b). The arbiter holds the plan-covered Task in review
-      // until the responsible Human verifies its plan; that pass makes it done.
-      await verifyPlan(issue.id);
-      await expect
-        .poll(
-          async () =>
-            (await json<{ status: string }>(await request.get(`/api/issues/${issue.id}`))).status,
-          { timeout: remaining() },
-        )
-        .toBe("done");
+      if (journey === "decline") {
+        // APR-E2E-23 (decline). A declined governed action is not evidence
+        // that its invariant holds, so the agent finishes blocked and names the
+        // declined card; the Task shows blocked with that reason in its history.
+        await expect
+          .poll(
+            async () =>
+              (await json<{ status: string }>(await request.get(`/api/issues/${issue.id}`))).status,
+            { timeout: remaining() },
+          )
+          .toBe("blocked");
+        await expect(page.getByText(`declined the Railway project read (interaction:${originatingReview.id})`, { exact: false }).first())
+          .toBeVisible({ timeout: remaining() });
+      } else {
+        // APR-E2E-25 (b). The arbiter holds the plan-covered Task in review
+        // until the responsible Human verifies its plan; that pass makes it done.
+        await verifyPlan(issue.id);
+        await expect
+          .poll(
+            async () =>
+              (await json<{ status: string }>(await request.get(`/api/issues/${issue.id}`))).status,
+            { timeout: remaining() },
+          )
+          .toBe("done");
+      }
       const showResolvedDetails = page.getByRole("button", {
         name: "Show result details",
         exact: true,
