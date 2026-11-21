@@ -197,6 +197,16 @@ export function registerManagedConnectionReviewCase(journey: ConnectionReviewJou
           )
           .toContain("Roadmap");
         expect(calls()).toBe(2);
+        // The later Task cites its executed call under the standing grant
+        // (tool_invocation evidence); its plan is verified by the Human too.
+        await verifyPlan(later.id);
+        await expect
+          .poll(
+            async () =>
+              (await json<{ status: string }>(await request.get(`/api/issues/${later.id}`))).status,
+            { timeout: remaining() },
+          )
+          .toBe("done");
         expect(
           await json<unknown[]>(
             await request.get(`/api/issues/${later.id}/interactions`),

@@ -98,6 +98,8 @@ export async function withManagedConnectionReview(input: {
   let pendingCommentId: string | undefined, pendingReviewId: string | undefined;
   let laterTaskId: string | undefined, laterCommentId: string | undefined;
   const planByTask = new Map<string, string>();
+  // The later Task's executed assigned call, from its Run's sealed tool_result capture.
+  const laterInvocationByRun = new Map<string, string>();
   const pendingNoteBody = "Keeping this review pending while I check.";
   let resolutionSawNote = false;
   let settleToolAction: ((actionRequestId: string) => Promise<unknown>) | null = null;
@@ -333,6 +335,13 @@ export async function withManagedConnectionReview(input: {
             if (block.type !== "tool_result" || typeof id !== "string") continue;
             if (id === "review.call:large-later") {
               await validateSuccessfulToolCapture(run.id, id);
+              const [current] = await db.select({ profile: heartbeatRuns.runnerProfileJson }).from(heartbeatRuns)
+                .where(eq(heartbeatRuns.id, run.id));
+              const sealed = (Array.isArray(record(current?.profile).nativeToolResultSourceCaptures)
+                ? record(current?.profile).nativeToolResultSourceCaptures as unknown[] : []).map(value => record(record(value).source))
+                .filter(source => source.kind === "tool_result" && source.callId === id && typeof source.invocationId === "string");
+              assert.equal(sealed.length, 1, "The later call's sealed result capture names its tool invocation");
+              laterInvocationByRun.set(run.id, sealed[0]!.invocationId as string);
               continue;
             }
             if ((!id.startsWith("review-search-later") && !id.startsWith("review-schema-later-")) ||
@@ -367,7 +376,12 @@ export async function withManagedConnectionReview(input: {
           assert(typeof written.id === "string" && typeof written.latestRevisionId === "string",
             "A done finish cites the result document revision its own Run wrote");
           const documentRef = `document:${written.id}:${written.latestRevisionId}`;
-          const reviewRef = role === "resolution" && binding.interactionId ? `interaction:${binding.interactionId}` : null;
+          // The resolution Run cites the resolved card; the Always-allow later
+          // Task cites its executed call admitted by the standing Human grant.
+          const laterInvocation = role === "later" ? laterInvocationByRun.get(runId) : undefined;
+          if (role === "later") assert(laterInvocation, "The later Task cites its executed tool invocation");
+          const reviewRef = role === "resolution" && binding.interactionId ? `interaction:${binding.interactionId}`
+            : laterInvocation ? `tool_invocation:${laterInvocation}` : null;
           return { documentRef, reviewRef };
         };
         const finish = (done: boolean) => {
@@ -382,7 +396,9 @@ export async function withManagedConnectionReview(input: {
                 : cited.reviewRef ? [cited.reviewRef] : [] })),
             remainingWork: done ? [] : [{ description: "Wait for the Human tool decision and retain its actual outcome.", blocksCompletion: true }] },
           evidence: cited ? [{ ref: cited.documentRef }, ...(cited.reviewRef ? [{ ref: cited.reviewRef }] : [])] : [],
-          verification: cited?.reviewRef ? [{ commandOrCheck: "The responsible Human's tool review decision is recorded on the Task",
+          verification: cited?.reviewRef ? [{ commandOrCheck: role === "later"
+            ? "The read ran under the responsible Human's standing Always-allow grant"
+            : "The responsible Human's tool review decision is recorded on the Task",
             status: "passed", artifactRef: cited.reviewRef }] : [],
           attentionRequests: [], artifacts: [],
           ...(!done ? { continuation: { kind: "response_wake", summary: "Resume after the Human resolves the tool review.",
