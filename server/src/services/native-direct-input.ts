@@ -1906,6 +1906,34 @@ function nativeSourceRecord(value: unknown): Record<string, unknown> {
   return value && typeof value === "object" && !Array.isArray(value) ? value as Record<string, unknown> : {};
 }
 
+/**
+ * The single producer capture for a historical tool_result source of a Native
+ * output. A capture without an assigned MCP witness matches by provider tool
+ * name as before. APR-E2E-28 (a): an assigned MCP result's source names the
+ * gateway tool and its capture names the provider alias, so it matches only
+ * through the capture's own invocation witness (gateway tool, provider tool
+ * and invocation id). Its full witness, invocation and authority checks run in
+ * the consumed source set owner. No capture, or more than one, is refused.
+ */
+export function selectNativeOutputToolResultCapture(captures: unknown[],
+  source: Extract<NativePayloadSourceInput, { kind: "tool_result" }>): Record<string, unknown> {
+  const matching = captures.filter(value => {
+    if (!value || typeof value !== "object" || Array.isArray(value)) return false;
+    const capture = value as Record<string, unknown>;
+    if (capture.callId !== source.callId || typeof capture.tool !== "string") return false;
+    if (capture.assignedMcp === undefined) {
+      if (nativeProviderToolName(capture.tool) !== source.toolName) return false;
+    } else {
+      const witness = nativeSourceRecord(capture.assignedMcp);
+      if (witness.gatewayToolName !== source.toolName || witness.providerToolName !== capture.tool ||
+        typeof source.invocationId !== "string" || witness.invocationId !== source.invocationId) return false;
+    }
+    return capture.resultDigest === source.contentHash && isDeepStrictEqual(capture.source, source);
+  });
+  if (matching.length !== 1) throw forbidden("A Native output tool result source is unavailable");
+  return matching[0] as Record<string, unknown>;
+}
+
 function nativeWirePurposeMatches(value: unknown, kind: "worker_model_dispatch" | "conversation_model_dispatch" | "review_model_dispatch") {
   const purpose = nativeSourceRecord(value).modelPurpose;
   return kind === "conversation_model_dispatch" ? purpose === "conversation_model" :
@@ -3959,21 +3987,8 @@ async function assertNativeModelOutputCaptureCurrentInScope(db: Db | Transaction
           recorded.conflicting || recorded.duplicateWithinEntry)
           throw forbidden("A Native output historical tool result is unavailable");
         const captures = Array.isArray(producerProfile?.nativeToolResultSourceCaptures) ? producerProfile.nativeToolResultSourceCaptures : [];
-        // APR-E2E-28 (a). An assigned MCP result's source names the gateway
-        // tool, and its capture names the provider alias; the capture's own
-        // invocation witness links the two. Its full witness, invocation and
-        // authority checks run in the consumed source set owner above.
-        const matching = captures.filter(value => value && typeof value === "object" && !Array.isArray(value) &&
-          (value as Record<string, unknown>).callId === source.callId && typeof (value as Record<string, unknown>).tool === "string" &&
-          ((value as Record<string, unknown>).assignedMcp === undefined
-            ? nativeProviderToolName((value as Record<string, unknown>).tool as string) === source.toolName
-            : nativeSourceRecord((value as Record<string, unknown>).assignedMcp).gatewayToolName === source.toolName &&
-              nativeSourceRecord((value as Record<string, unknown>).assignedMcp).providerToolName === (value as Record<string, unknown>).tool &&
-              nativeSourceRecord((value as Record<string, unknown>).assignedMcp).invocationId === source.invocationId &&
-              typeof source.invocationId === "string") &&
-          (value as Record<string, unknown>).resultDigest === source.contentHash &&
-          isDeepStrictEqual((value as Record<string, unknown>).source, source));
-        if (matching.length !== 1) throw forbidden("A Native output tool result source is unavailable");
+        // APR-E2E-28 (a): assigned MCP captures match through their invocation witness.
+        const matchingCapture = selectNativeOutputToolResultCapture(captures, source);
         if (source.invocationId) {
           const [invocation] = await db.select({ id: toolInvocations.id, companyId: toolInvocations.companyId,
             agentId: toolInvocations.agentId, idempotencyKey: toolInvocations.idempotencyKey,
@@ -3992,7 +4007,7 @@ async function assertNativeModelOutputCaptureCurrentInScope(db: Db | Transaction
           await assertNativeConversationTaskResultCurrentInScope(db, scope, {
             companyId, issueId: producerIssueId, actor, run: producerRun, profile: producerProfile,
             receipt: producerReceipt.data, source,
-            capture: matching[0] as Record<string, unknown>,
+            capture: matchingCapture,
           });
         } else if (source.toolName === "create_project" || source.toolName === "call_api") {
           // Managed Native Project outputs and the exact bounded Project API
@@ -4002,7 +4017,7 @@ async function assertNativeModelOutputCaptureCurrentInScope(db: Db | Transaction
           // above; requiring a toolInvocations row here would reject those
           // canonical sources after validating them.
         } else throw forbidden("A Native output tool invocation is unavailable");
-        const captureRow = matching[0] as Record<string, unknown>;
+        const captureRow = matchingCapture;
         const documentRevision = captureRow.documentRevision && typeof captureRow.documentRevision === "object" && !Array.isArray(captureRow.documentRevision)
           ? captureRow.documentRevision as Record<string, unknown> : null;
         if (documentRevision) {
