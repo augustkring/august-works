@@ -138,4 +138,39 @@ describe("agent session wake messages", () => {
     expect(prompt).toContain('````text\n{\n  "untrustedToolResults"');
   });
 
+  it("shows a single reviewed outcome once, in the continuation, when the continuation carries its card (APR-E2E-21)", () => {
+    const interactionId = "11111111-1111-4111-8111-111111111111";
+    const summary = "Recorded Roadmap result 7f3c";
+    const continuation = (outcomes: unknown[]) => ({ version: 1, companyId: "c", issueId: "i",
+      trigger: { reason: "issue_commented", interactionId, sourceRunId: "r" }, originCommentIds: [], objective: "Read projects.",
+      messages: [], humanResponses: [], interactionOutcomes: outcomes, completedWork: null, completedActions: [],
+      recoveryOutcomes: [], unresolvedInteractionIds: [], coverage: { kind: "full_task_history", throughCommentId: null, summaryThroughCommentId: null } });
+    const payload = (outcomes: unknown[], results = [{ actionRequestId: "action-1", toolName: "railway_list_projects",
+      resultSummary: summary, error: null, declineReason: null }]) => ({
+      reason: "issue_commented", interactionId, executionContinuation: continuation(outcomes),
+      issue: { id: "i", identifier: "T-1", title: "Read projects", status: "todo", priority: "medium" },
+      agentMessage: { source: "tool_action_review", text: "The approved action already ran.", untrustedToolResults: results },
+    });
+    const carried = [{ id: interactionId, kind: "request_confirmation", status: "accepted",
+      result: { outcome: "accepted", toolAction: { status: "executed", resultSummary: summary } } }];
+    const once = renderPaperclipWakePrompt(payload(carried));
+    expect(once.split(summary).length - 1).toBe(1);
+    expect(once).toContain(`interaction ${interactionId} are in the continuation evidence above`);
+    expect(once).toContain('"actionRequestId": "action-1"');
+    // Not carried by the continuation (other card, or no continuation outcome): the message keeps the result.
+    const other = renderPaperclipWakePrompt(payload([{ ...carried[0], id: "22222222-2222-4222-8222-222222222222" }]));
+    expect(other).toContain(`"resultSummary": "${summary}"`);
+    const none = renderPaperclipWakePrompt(payload([]));
+    expect(none).toContain(`"resultSummary": "${summary}"`);
+    // More than one outcome in the delivery keeps every inline result.
+    const two = renderPaperclipWakePrompt(payload(carried, [
+      { actionRequestId: "action-1", toolName: "a", resultSummary: summary, error: null, declineReason: null },
+      { actionRequestId: "action-2", toolName: "b", resultSummary: "second", error: null, declineReason: null }]));
+    expect(two).toContain(`"resultSummary": "${summary}"`);
+    // A declined card carried by the continuation: the decline reason is shown once.
+    const declined = renderPaperclipWakePrompt(payload([{ id: interactionId, kind: "request_confirmation", status: "rejected",
+      result: { outcome: "rejected", reason: "Not now 91ab" } }],
+      [{ actionRequestId: "action-1", toolName: "a", resultSummary: "", error: null, declineReason: "Not now 91ab" }]));
+    expect(declined.split("Not now 91ab").length - 1).toBe(1);
+  });
 });
