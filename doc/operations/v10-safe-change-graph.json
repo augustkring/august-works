@@ -4521,7 +4521,7 @@
         },
         {
           "path": "server/src/services/tool-gateway.ts",
-          "sha256": "cb856c18a8bf7154516e252550c85f4bb01a0191fa4918a0648e824242d926f2"
+          "sha256": "2eb6c26f5703f9aac751edb5300a1d3a44f38d901de663955bf5bc26421aa4fa"
         }
       ],
       "kind": "safe_change_record",
@@ -5959,7 +5959,7 @@
         },
         {
           "path": "server/src/services/tool-gateway.ts",
-          "sha256": "cb856c18a8bf7154516e252550c85f4bb01a0191fa4918a0648e824242d926f2"
+          "sha256": "2eb6c26f5703f9aac751edb5300a1d3a44f38d901de663955bf5bc26421aa4fa"
         },
         {
           "path": "server/src/services/workflows/workflow-executor.ts",
@@ -6379,7 +6379,7 @@
         },
         {
           "path": "server/src/services/tool-gateway.ts",
-          "sha256": "cb856c18a8bf7154516e252550c85f4bb01a0191fa4918a0648e824242d926f2"
+          "sha256": "2eb6c26f5703f9aac751edb5300a1d3a44f38d901de663955bf5bc26421aa4fa"
         },
         {
           "path": "server/src/services/workflows/workflow-capability-resolver.ts",
@@ -9288,7 +9288,7 @@
         },
         {
           "path": "server/src/services/native-direct-input.ts",
-          "sha256": "b2a4a8c481428e1723ab68adafb03133a314a177fa97b3555ecdea55a59c086d"
+          "sha256": "61ce72f90ea0e64a8e06ef82e66045bc85d3ef4148e40bfaad9e060877b8d2a9"
         },
         {
           "path": "server/src/services/native-project-output.ts",
@@ -10393,7 +10393,7 @@
         },
         {
           "path": "server/src/services/tool-gateway.ts",
-          "sha256": "cb856c18a8bf7154516e252550c85f4bb01a0191fa4918a0648e824242d926f2"
+          "sha256": "2eb6c26f5703f9aac751edb5300a1d3a44f38d901de663955bf5bc26421aa4fa"
         },
         {
           "path": "server/src/services/workflows/workflow-capability-resolver.ts",
@@ -25214,7 +25214,7 @@
         },
         {
           "path": "server/src/services/native-runtime/paperclip-control-plane-port.ts",
-          "sha256": "b9b778bb1d5dd89c13d56793236089f3d127905150f540fa7249f6377498cb1e"
+          "sha256": "5d1b4d34224abd959828fa317bda13c98baa3ecba14136aee2afd5577070110a"
         },
         {
           "path": "server/src/services/native-runtime/prepare-native-run.ts",
@@ -47176,7 +47176,7 @@
       "id": "source:server/src/services/tool-gateway.ts",
       "kind": "current_source_owner",
       "path": "server/src/services/tool-gateway.ts",
-      "sha256": "cb856c18a8bf7154516e252550c85f4bb01a0191fa4918a0648e824242d926f2",
+      "sha256": "2eb6c26f5703f9aac751edb5300a1d3a44f38d901de663955bf5bc26421aa4fa",
       "changeIds": [
         "SCR-V10-HOTSPOT-01",
         "SCR-V10-HOTSPOT-02",
@@ -50850,7 +50850,7 @@
       "id": "source:server/src/services/native-direct-input.ts",
       "kind": "current_source_owner",
       "path": "server/src/services/native-direct-input.ts",
-      "sha256": "b2a4a8c481428e1723ab68adafb03133a314a177fa97b3555ecdea55a59c086d",
+      "sha256": "61ce72f90ea0e64a8e06ef82e66045bc85d3ef4148e40bfaad9e060877b8d2a9",
       "changeIds": [
         "SCR-V10-HOTSPOT-06"
       ],
@@ -64518,7 +64518,7 @@
       "id": "source:server/src/services/native-runtime/paperclip-control-plane-port.ts",
       "kind": "current_source_owner",
       "path": "server/src/services/native-runtime/paperclip-control-plane-port.ts",
-      "sha256": "b9b778bb1d5dd89c13d56793236089f3d127905150f540fa7249f6377498cb1e",
+      "sha256": "5d1b4d34224abd959828fa317bda13c98baa3ecba14136aee2afd5577070110a",
       "changeIds": [
         "SCR-V10-NATIVE-RUNTIME-AND-AUTHORITY"
       ],
