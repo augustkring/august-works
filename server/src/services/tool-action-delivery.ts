@@ -143,6 +143,31 @@ export type NativeToolActionDeliveryCapture = {
     agentMessage: ReturnType<typeof import("./heartbeat.js").projectNativeAgentSessionMessage> };
 };
 
+/** APR-E2E-20/21 (option B). Whether this Run's admitted wake is the system
+ * wake of a governed tool-action decision delivery for the given card: the
+ * idempotent `tool-action-response:<request>` wake requested on behalf of the
+ * deciding Human, whose request is decided, terminal, and its delivery
+ * receipt settled for this card and Task. Only the run session policy uses it;
+ * the exact delivery rendition is still captured and checked separately. */
+export async function isToolActionResolutionWake(db: Db, input: {
+  companyId: string; issueId: string; agentId: string; runId: string; wakeupRequestId: string; interactionId: string;
+}): Promise<boolean> {
+  const [wake] = await db.select().from(agentWakeupRequests).where(and(eq(agentWakeupRequests.id, input.wakeupRequestId),
+    eq(agentWakeupRequests.companyId, input.companyId), eq(agentWakeupRequests.agentId, input.agentId),
+    eq(agentWakeupRequests.runId, input.runId))).limit(1);
+  const key = wake?.idempotencyKey ?? "";
+  if (!wake || wake.source !== "automation" || wake.triggerDetail !== "system" || wake.requestedByActorType !== "user" ||
+    !wake.requestedByActorId || !key.startsWith("tool-action-response:")) return false;
+  const actionRequestId = key.slice("tool-action-response:".length);
+  const [row] = await db.select({ request: toolActionRequests, delivery: toolActionDeliveries }).from(toolActionRequests)
+    .innerJoin(toolActionDeliveries, and(eq(toolActionDeliveries.companyId, toolActionRequests.companyId),
+      eq(toolActionDeliveries.actionRequestId, toolActionRequests.id)))
+    .where(and(eq(toolActionRequests.companyId, input.companyId), eq(toolActionRequests.id, actionRequestId),
+      eq(toolActionRequests.issueId, input.issueId), eq(toolActionRequests.interactionId, input.interactionId))).limit(1);
+  return Boolean(row && row.delivery.issueId === input.issueId && row.delivery.deliveredAt &&
+    ["executed", "failed", "rejected"].includes(row.request.status) && row.request.decidedByUserId === wake.requestedByActorId);
+}
+
 /** Reconstruct only the actual committed delivery rendition. The existing
  * governed bridge validates each decision/invocation, and this adds no grant. */
 export async function captureNativeToolActionDelivery(input: {

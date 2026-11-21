@@ -677,8 +677,16 @@ export async function buildExecutionContinuation(input: {
   // current round from the Task history and the earlier rounds' sealed
   // comments; it never continues an earlier private session, so it carries no
   // previous context and no resume delta.
+  // APR-E2E-20/21 (option B). A governed tool-action resolution Run starts a
+  // fresh provider session: its first frame carries the full closed history,
+  // never a delta over the requesting Run's session.
+  const toolActionResolutionTurn = Boolean(input.onContinuationSourceCapture && receiver?.wakeupRequestId && triggerInteraction &&
+    typeof object(object(triggerInteraction.payload).toolAction).actionRequestId === "string" &&
+    ["accepted", "rejected"].includes(triggerInteraction.status) &&
+    await (await import("./tool-action-delivery.js")).isToolActionResolutionWake(db, { companyId, issueId,
+      agentId: input.agentId, runId: receiver.id, wakeupRequestId: receiver.wakeupRequestId, interactionId: triggerInteraction.id }));
   const fullHistoryTurn = freshAssignmentUsesFullHistory || input.context.forceFreshSession === true ||
-    stageContinuation !== null;
+    stageContinuation !== null || toolActionResolutionTurn;
   const effectiveSummary = assignmentFinalizedSummary || stageSummaryReplacesDocument ? null : input.summary;
   const messages = rows.map((row) => {
     const safe = input.exposeLowTrustRaw

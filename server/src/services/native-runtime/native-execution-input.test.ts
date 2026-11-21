@@ -1702,6 +1702,18 @@ describe("native bootstrap rendered-source closure", () => {
           contentHash: nativeSha256({ rendition: "native_tool_action_delivery_v1", projection: delivery }) } };
 
       expect(check(c)).toBe(c);
+      // APR-E2E-20/21: a governed resolution never resumes the requesting
+      // Run's session (no resume delta, previous context or retained Run).
+      {
+        const resumed = structuredClone(c);
+        resumed.retainedSource = { kind: "retained_run", runId: sourceRunId, inputDigest: "d".repeat(64), dispatchDigest: "e".repeat(64) };
+        resumed.previousContext = { runId: sourceRunId, messages: [message] };
+        resumed.envelope.resumeDelta = { baseRunId: sourceRunId, messages: [message] };
+        expect(check(resumed)).toBeNull();
+        const retainedOnly = structuredClone(c);
+        retainedOnly.retainedSource = resumed.retainedSource;
+        expect(check(retainedOnly)).toBeNull();
+      }
       // APR-E2E-18: a deferred Human note is a resolution-wake origin only
       // through its own deferral owner (this card, its author); never a card origin.
       {
