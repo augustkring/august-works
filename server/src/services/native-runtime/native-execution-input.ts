@@ -755,6 +755,10 @@ export function exactNativeTaskContinuation(input: { value: unknown; companyId: 
       new Set(captures.map(value => value.projection.interactionId)).size !== captures.length) return null;
     const delivery = capture.delivery, d = delivery?.projection;
     if (hasResolutionWake) {
+      // APR-E2E-20/21 (option B). A governed tool-action resolution starts a
+      // fresh provider session: no resume delta, previous context or retained
+      // Run, so no retained provider history (or its approval error) is used.
+      if (c.resumeDelta !== undefined || capture.previousContext !== undefined || capture.retainedSource !== undefined) return null;
       if (!capture.wake.interaction || Object.keys(capture.wake.interaction).sort().join(",") !==
         "interactionId,interactionKind,interactionStatus,sourceRunId" || c.trigger.interactionId !== capture.wake.interaction.interactionId ||
         c.trigger.sourceRunId !== capture.wake.interaction.sourceRunId || !c.trigger.sourceRunId || !uuid.test(c.trigger.sourceRunId)) return null;

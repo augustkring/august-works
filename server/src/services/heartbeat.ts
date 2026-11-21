@@ -239,6 +239,7 @@ import {
 import { documentService, type DocumentRevisionSourceCapture } from "./documents.js";
 import { getTaskPlanContext } from "./task-plan-context.js";
 import { selectNativeHeartbeatBackend } from "./orchestration/native-draft-runtime.js";
+import { assertNativeResolutionRunFreshSession, nativeToolActionResolutionRun } from "./native-runtime/native-resolution-session.js";
 import { buildNativeBootstrapSourceSet, captureNativeTaskWakeSource, exactNativeTaskContinuation, nativeTaskWakeTaskProjection, type NativeBootstrapSourceClosure,
   prepareNativeTurnWithContext, type NativePreparedSourceCandidate, type NativeRenderedSourceReference } from "./native-runtime/native-execution-input.js";
 import { managedAgentProfileService } from "./managed-agent-profiles.js";
@@ -22232,11 +22233,16 @@ export function heartbeatService(
       // MS1f stop 7 (option A). A Native stage Reviewer wake (the builder
       // captured its stage trigger) never resumes the earlier provider session.
       const nativeStageReviewerFreshSession = nativeStageContinuationTrigger.value !== null;
+      // APR-E2E-20/21 (option B). A governed tool-action resolution Run starts
+      // a fresh provider session; it never resumes the requesting Run's.
+      const nativeToolActionResolutionFreshSession = nativeToolActionResolutionRun(nativeTaskContinuationCapture.value);
       const resetTaskSession =
-        shouldResetTaskSessionForWake(context) || sessionConfigFreshness.reset || nativeStageReviewerFreshSession;
+        shouldResetTaskSessionForWake(context) || sessionConfigFreshness.reset || nativeStageReviewerFreshSession ||
+        nativeToolActionResolutionFreshSession;
       const sessionResetReason =
         [...sessionConfigFreshness.reasons,
-          ...(nativeStageReviewerFreshSession ? ["a stage Reviewer wake starts a fresh session"] : [])].join("; ") || null;
+          ...(nativeStageReviewerFreshSession ? ["a stage Reviewer wake starts a fresh session"] : []),
+          ...(nativeToolActionResolutionFreshSession ? ["a tool-action resolution starts a fresh session"] : [])].join("; ") || null;
       const taskSessionForRun = resetTaskSession ? null : taskSession;
       const previousSessionParams =
         explicitResumeSessionParams ??
@@ -24737,6 +24743,9 @@ export function heartbeatService(
                 baseline?.revert();
               }
             }
+            assertNativeResolutionRunFreshSession({ resolution: nativeToolActionResolutionFreshSession,
+              previousRunId: previousNativeRun?.id ?? null, checkpointPresent: nativeExecutionWithCheckpoint.checkpoint != null,
+              retainedWitnessPresent: nativeBootstrapRetainedRunSource != null });
             nativeExecution = nativeExecutionWithCheckpoint.execution;
             nativeResumeCheckpoint = nativeExecutionWithCheckpoint.checkpoint;
             const nativeWorkspaceExecution = nativeExecution;

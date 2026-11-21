@@ -355,17 +355,38 @@ export async function withManagedConnectionReview(input: {
         const use = (id: string, name: string, value: Record<string, unknown>) => ({
           stop_reason: "tool_use", content: [{ type: "tool_use", id, name, input: value }],
         });
-        const finish = (done: boolean) => use(`review-finish-${role}`, tool("paperclip_finish"), {
+        // APR-E2E-23 (a). A done finish cites durable evidence in the
+        // contract's format: the result document this Run wrote (for its own
+        // output criterion) and the resolved review card (for the invariants
+        // and the verification), as the evidence classifier requires.
+        const finishEvidence = (done: boolean) => {
+          if (!done) return null;
+          const written = record(parseToolResult(body, role === "later" ? "review-document-2" : "review-document-1")?.document);
+          assert(typeof written.id === "string" && typeof written.latestRevisionId === "string",
+            "A done finish cites the result document revision its own Run wrote");
+          const documentRef = `document:${written.id}:${written.latestRevisionId}`;
+          const reviewRef = role === "resolution" && binding.interactionId ? `interaction:${binding.interactionId}` : null;
+          return { documentRef, reviewRef };
+        };
+        const finish = (done: boolean) => {
+          const cited = finishEvidence(done);
+          return use(`review-finish-${role}`, tool("paperclip_finish"), {
           schema: "paperclip.run_result.v1", reportedWorkDisposition: done ? "done" : "yielded",
           summary: done ? responseText : "Waiting for the responsible Human's governed tool decision.",
           completionClaim: { contractRevision: execution.completionContract.contract.revision, objectiveSatisfied: done,
             criteria: execution.completionContract.contract.criteria.map(criterion => ({ criterionId: criterion.id,
-              status: done ? "satisfied" : "unknown", evidenceRefs: [] })),
+              status: done ? "satisfied" : "unknown",
+              evidenceRefs: !cited ? [] : criterion.id === "output_result" ? [cited.documentRef]
+                : cited.reviewRef ? [cited.reviewRef] : [] })),
             remainingWork: done ? [] : [{ description: "Wait for the Human tool decision and retain its actual outcome.", blocksCompletion: true }] },
-          evidence: [], verification: [], attentionRequests: [], artifacts: [],
+          evidence: cited ? [{ ref: cited.documentRef }, ...(cited.reviewRef ? [{ ref: cited.reviewRef }] : [])] : [],
+          verification: cited?.reviewRef ? [{ commandOrCheck: "The responsible Human's tool review decision is recorded on the Task",
+            status: "passed", artifactRef: cited.reviewRef }] : [],
+          attentionRequests: [], artifacts: [],
           ...(!done ? { continuation: { kind: "response_wake", summary: "Resume after the Human resolves the tool review.",
             idempotencyKey: "railway-review-human-response" } } : {}),
-        });
+          });
+        };
         if (role === "request" && callIndex === 1) {
           assert(railway);
           const selected = tools.filter(value => /railway/i.test(value.name) && /list[-_]?projects/i.test(value.name));
@@ -439,10 +460,15 @@ export async function withManagedConnectionReview(input: {
           return finish(false);
         }
         if (role === "resolution" && callIndex === 1) {
-          // APR-E2E-1: the deferred Human note reaches the resolution Run once.
+          // APR-E2E-1: the deferred Human note reaches the resolution Run. Its
+          // first frame is a fresh session (APR-E2E-20/21), so the full closed
+          // history carries the note as a message and as the latest-request
+          // objective, and the wake batch lists it; one-time delivery is
+          // proven by the resolution wake's wakeCommentIds and by no Run of
+          // its own (asserted in the case).
           const serialized = JSON.stringify(body.messages ?? []);
-          assert.equal(serialized.split(pendingNoteBody).length - 1, 1,
-            "The resolution Run's first model request carries the deferred Human note exactly once");
+          assert(serialized.includes(pendingNoteBody),
+            "The resolution Run's first model request carries the deferred Human note");
           resolutionSawNote = true;
         }
         if (role === "resolution" && callIndex === 1) {

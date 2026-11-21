@@ -1565,10 +1565,10 @@
     {
       "source": "server/src/services/heartbeat.ts",
       "articleId": "recovering-work",
-      "sourceSha256": "c8d5822499ee702ae06987e92cd004e8e3d1164ca73339f92c367cf0b3c403c0",
+      "sourceSha256": "797a8bb3d62d9cd324f076cd1f94b343b2e343d3bb5d8886891af2a0a4ae52c7",
       "articleSha256": "0296c2c8ae18c613eef9c17ea9679b146e8afbcd3504451a5511a218d6d8b955",
       "decision": "no_change",
-      "rationale": "Reviewed (APR-E2E-19): the run prompt now records which approved app action decision a resumed run reports on, an internal source check. Steps and controls described in this article are unchanged."
+      "rationale": "Reviewed (APR-E2E-20): an agent's run that reports an approved or declined app action now starts a fresh session instead of resuming the earlier one, an internal change. Steps and controls described in this article are unchanged."
     },
     {
       "source": "server/src/services/issue-recovery-actions.ts",
@@ -1669,10 +1669,10 @@
     {
       "source": "server/src/services/heartbeat.ts",
       "articleId": "recovering-work-da",
-      "sourceSha256": "c8d5822499ee702ae06987e92cd004e8e3d1164ca73339f92c367cf0b3c403c0",
+      "sourceSha256": "797a8bb3d62d9cd324f076cd1f94b343b2e343d3bb5d8886891af2a0a4ae52c7",
       "articleSha256": "ce0a7beaa56a5db23963d81eed8c19687d2efc5405773ec33dfd635a377090bc",
       "decision": "no_change",
-      "rationale": "Reviewed (APR-E2E-19): the run prompt now records which approved app action decision a resumed run reports on, an internal source check. Steps and controls described in this article are unchanged."
+      "rationale": "Reviewed (APR-E2E-20): an agent's run that reports an approved or declined app action now starts a fresh session instead of resuming the earlier one, an internal change. Steps and controls described in this article are unchanged."
     },
     {
       "source": "server/src/services/issue-recovery-actions.ts",
@@ -2085,18 +2085,18 @@
     {
       "source": "server/src/services/heartbeat.ts",
       "articleId": "export-and-delete",
-      "sourceSha256": "c8d5822499ee702ae06987e92cd004e8e3d1164ca73339f92c367cf0b3c403c0",
+      "sourceSha256": "797a8bb3d62d9cd324f076cd1f94b343b2e343d3bb5d8886891af2a0a4ae52c7",
       "articleSha256": "73476587cc7574c56bcbc6f5bc3f692b7e953f9a9b46339d0d08f7577bebcf48",
       "decision": "no_change",
-      "rationale": "Reviewed (APR-E2E-19): the run prompt now records which approved app action decision a resumed run reports on, an internal source check. Steps and controls described in this article are unchanged."
+      "rationale": "Reviewed (APR-E2E-20): an agent's run that reports an approved or declined app action now starts a fresh session instead of resuming the earlier one, an internal change. Steps and controls described in this article are unchanged."
     },
     {
       "source": "server/src/services/heartbeat.ts",
       "articleId": "export-and-delete-da",
-      "sourceSha256": "c8d5822499ee702ae06987e92cd004e8e3d1164ca73339f92c367cf0b3c403c0",
+      "sourceSha256": "797a8bb3d62d9cd324f076cd1f94b343b2e343d3bb5d8886891af2a0a4ae52c7",
       "articleSha256": "685fbb4f4ebddd5faa1f24036b1bbfee0ce773b0771956a998a7fef70552cb28",
       "decision": "no_change",
-      "rationale": "Reviewed (APR-E2E-19): the run prompt now records which approved app action decision a resumed run reports on, an internal source check. Steps and controls described in this article are unchanged."
+      "rationale": "Reviewed (APR-E2E-20): an agent's run that reports an approved or declined app action now starts a fresh session instead of resuming the earlier one, an internal change. Steps and controls described in this article are unchanged."
     },
     {
       "source": "ui/src/pages/CompanySettings.tsx",
@@ -2789,18 +2789,18 @@
     {
       "source": "server/src/services/heartbeat.ts",
       "articleId": "create-and-track-work",
-      "sourceSha256": "c8d5822499ee702ae06987e92cd004e8e3d1164ca73339f92c367cf0b3c403c0",
+      "sourceSha256": "797a8bb3d62d9cd324f076cd1f94b343b2e343d3bb5d8886891af2a0a4ae52c7",
       "articleSha256": "e08d017550dda25a9e6185a4478026f2affd445e16a1d10dff2464761537b328",
       "decision": "no_change",
-      "rationale": "Reviewed (APR-E2E-19): the run prompt now records which approved app action decision a resumed run reports on, an internal source check. Steps and controls described in this article are unchanged."
+      "rationale": "Reviewed (APR-E2E-20): an agent's run that reports an approved or declined app action now starts a fresh session instead of resuming the earlier one, an internal change. Steps and controls described in this article are unchanged."
     },
     {
       "source": "server/src/services/heartbeat.ts",
       "articleId": "create-and-track-work-da",
-      "sourceSha256": "c8d5822499ee702ae06987e92cd004e8e3d1164ca73339f92c367cf0b3c403c0",
+      "sourceSha256": "797a8bb3d62d9cd324f076cd1f94b343b2e343d3bb5d8886891af2a0a4ae52c7",
       "articleSha256": "b36d116837115a674b3751f11ae3dcdd1a7fdcd9f31d26206feeec490f715e29",
       "decision": "no_change",
-      "rationale": "Reviewed (APR-E2E-19): the run prompt now records which approved app action decision a resumed run reports on, an internal source check. Steps and controls described in this article are unchanged."
+      "rationale": "Reviewed (APR-E2E-20): an agent's run that reports an approved or declined app action now starts a fresh session instead of resuming the earlier one, an internal change. Steps and controls described in this article are unchanged."
     },
     {
       "source": "ui/src/pages/Orchestration.tsx",
