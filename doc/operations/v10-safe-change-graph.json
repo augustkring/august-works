@@ -35517,7 +35517,7 @@
         },
         {
           "path": "tests/e2e/fixtures/managed-connection-review.ts",
-          "sha256": "bf5044028843384ae88200682005c0fa48fe3192b363cbb44e34645214349c64"
+          "sha256": "b3c033e8e0c422c7f93b6a00e450257485bea2fa6f2142dfbce78dc7eb80f352"
         },
         {
           "path": "tests/e2e/fixtures/managed-pipeline-producer.ts",
@@ -74845,7 +74845,7 @@
       "id": "source:tests/e2e/fixtures/managed-connection-review.ts",
       "kind": "current_source_owner",
       "path": "tests/e2e/fixtures/managed-connection-review.ts",
-      "sha256": "bf5044028843384ae88200682005c0fa48fe3192b363cbb44e34645214349c64",
+      "sha256": "b3c033e8e0c422c7f93b6a00e450257485bea2fa6f2142dfbce78dc7eb80f352",
       "changeIds": [
         "SCR-V10-CUSTOMER-EXPERIENCE"
       ],
