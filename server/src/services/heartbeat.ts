@@ -14047,6 +14047,10 @@ export function heartbeatService(
           },
       );
     if (reviewAttention.state !== "stalled") return;
+    // APR-E2E-25. A Task held for its plan's server verification is waiting
+    // on a maintained path (the Human's plan verification), re-read here.
+    const { captureOrchestrationVerificationHold } = await import("./recovery/orchestration-verification-hold.js");
+    if (await captureOrchestrationVerificationHold(db, { companyId: issue.companyId, issueId: issue.id })) return;
 
     const consumedPathRef = reviewPathConsumedRefFromRun({
       runId: run.id,
