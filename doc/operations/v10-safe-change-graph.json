@@ -23,8 +23,8 @@
   "qualificationBoundary": "Source hashes identify current candidate bytes and exact base comparisons. Requirement edges are source links, not closure. The inventory does not prove full behavior review, compatibility, rollback, Human approval, provider/hosted behavior, or release acceptance. Unknown owners and external facts remain open.",
   "migrationJournal": {
     "path": "packages/db/src/migrations/meta/_journal.json",
-    "sha256": "f2f7913ba93fa60f84054a3f3f89b4f06c129a5a403713315b8c26aae6a825c8",
-    "entryCount": 587,
+    "sha256": "d94081a0a94caed26ccff12279bfaf864d462c18f620072a81b7823b839692a7",
+    "entryCount": 588,
     "qualification": "journal order and current SQL source hashes only; not migration phase, mixed-version safety, rollback, or operator approval"
   },
   "sourceInputs": [
@@ -4517,7 +4517,7 @@
         },
         {
           "path": "server/src/services/orchestration/worker-model-gateway.ts",
-          "sha256": "19abad650769411504120846e9c63119b607004e18e7845d2de8a3f701903ce2"
+          "sha256": "c7b0adde0b4d1d260dc529b6917bf2d2423a89e6ade60dd5529d9f49a97a8676"
         },
         {
           "path": "server/src/services/tool-gateway.ts",
@@ -5855,7 +5855,7 @@
         },
         {
           "path": "server/src/services/heartbeat.ts",
-          "sha256": "797a8bb3d62d9cd324f076cd1f94b343b2e343d3bb5d8886891af2a0a4ae52c7"
+          "sha256": "008afa4191709422da7204cabb3269536962a25836f18f1013622e1de6d64944"
         },
         {
           "path": "server/src/services/issue-assignment-wakeup.ts",
@@ -6363,7 +6363,7 @@
         },
         {
           "path": "server/src/services/heartbeat.ts",
-          "sha256": "797a8bb3d62d9cd324f076cd1f94b343b2e343d3bb5d8886891af2a0a4ae52c7"
+          "sha256": "008afa4191709422da7204cabb3269536962a25836f18f1013622e1de6d64944"
         },
         {
           "path": "server/src/services/native-runtime/runtime-context.ts",
@@ -9268,7 +9268,7 @@
         },
         {
           "path": "server/src/services/heartbeat.ts",
-          "sha256": "797a8bb3d62d9cd324f076cd1f94b343b2e343d3bb5d8886891af2a0a4ae52c7"
+          "sha256": "008afa4191709422da7204cabb3269536962a25836f18f1013622e1de6d64944"
         },
         {
           "path": "server/src/services/issue-thread-interactions.ts",
@@ -10333,7 +10333,7 @@
         },
         {
           "path": "server/src/services/heartbeat.ts",
-          "sha256": "797a8bb3d62d9cd324f076cd1f94b343b2e343d3bb5d8886891af2a0a4ae52c7"
+          "sha256": "008afa4191709422da7204cabb3269536962a25836f18f1013622e1de6d64944"
         },
         {
           "path": "server/src/services/learning/learning-assets.ts",
@@ -10377,7 +10377,7 @@
         },
         {
           "path": "server/src/services/orchestration/worker-model-gateway.ts",
-          "sha256": "19abad650769411504120846e9c63119b607004e18e7845d2de8a3f701903ce2"
+          "sha256": "c7b0adde0b4d1d260dc529b6917bf2d2423a89e6ade60dd5529d9f49a97a8676"
         },
         {
           "path": "server/src/services/platform-skill-admission.ts",
@@ -10600,7 +10600,7 @@
         },
         {
           "path": "server/src/services/heartbeat.ts",
-          "sha256": "797a8bb3d62d9cd324f076cd1f94b343b2e343d3bb5d8886891af2a0a4ae52c7"
+          "sha256": "008afa4191709422da7204cabb3269536962a25836f18f1013622e1de6d64944"
         },
         {
           "path": "server/src/services/workspace-runtime.ts",
@@ -11473,7 +11473,7 @@
         },
         {
           "path": "server/src/services/heartbeat.ts",
-          "sha256": "797a8bb3d62d9cd324f076cd1f94b343b2e343d3bb5d8886891af2a0a4ae52c7"
+          "sha256": "008afa4191709422da7204cabb3269536962a25836f18f1013622e1de6d64944"
         },
         {
           "path": "server/src/services/native-runtime/create-skill.integration.test.ts",
@@ -20064,7 +20064,7 @@
         },
         {
           "path": "packages/db/src/migrations/meta/_journal.json",
-          "sha256": "f2f7913ba93fa60f84054a3f3f89b4f06c129a5a403713315b8c26aae6a825c8"
+          "sha256": "d94081a0a94caed26ccff12279bfaf864d462c18f620072a81b7823b839692a7"
         },
         {
           "path": "packages/db/src/native-input-source-protocol.test.ts",
@@ -22040,7 +22040,7 @@
         },
         {
           "path": "server/src/services/orchestration/model-reservations.ts",
-          "sha256": "871425c65f323e7dc83a2662124843e121daafd9c35f6f6c3fbad97e9043f90b"
+          "sha256": "5ba58e1026835a4544af56335a2da865a582f62082dcfb377c0ae01cb8d9b432"
         },
         {
           "path": "server/src/services/orchestration/openai-responses-model-transport.test.ts",
@@ -24626,7 +24626,7 @@
         },
         {
           "path": "packages/paperclip-runner/src/cli/opencode-app-server-proxy.ts",
-          "sha256": "709fcf454e4ba0cfbfd22857fdf3a49c5f32b92853fa2ea7a3d385bf3165957e"
+          "sha256": "30ccfcb87055b04857526aa42506f67605b18d37bbb132c763a1d8e78f12f1ab"
         },
         {
           "path": "packages/paperclip-runner/src/contracts/native-session-backend.ts",
@@ -24654,7 +24654,7 @@
         },
         {
           "path": "packages/paperclip-runner/src/drivers/codex/codex-app-server-driver.test.ts",
-          "sha256": "4a4294a45e17987b785c7e91cfb58700429a15a20f561a5b551e2e62a4d2843c"
+          "sha256": "1221c49651eed978b690e83c1cc14951ddd68501d0d9de43d2b257703bd04d52"
         },
         {
           "path": "packages/paperclip-runner/src/drivers/codex/codex-driver-types.ts",
@@ -24666,7 +24666,7 @@
         },
         {
           "path": "packages/paperclip-runner/src/drivers/codex/codex-session-state.ts",
-          "sha256": "bad9af1a4a1deed15d93e1552874a8fa965fc1a737c2ff3f00fb507f5a42f6ae"
+          "sha256": "dab4a72bdca3e5967a345a6348dd16f29a03b9dba11d1a70316c462014596c58"
         },
         {
           "path": "packages/paperclip-runner/src/drivers/native-mcp.ts",
@@ -32061,11 +32061,11 @@
         },
         {
           "path": "server/src/__tests__/helpers/connection-intent-railway-fixture.test.ts",
-          "sha256": "54841bebaa9bf22fa7abbec31bd688bbf30ea541244b1fb58b96af3e6bff14d3"
+          "sha256": "410dbf42865b7dbeacca34d6e8cfadedb4573b7b72cbf71625a055b7be1f9fc3"
         },
         {
           "path": "server/src/__tests__/helpers/connection-intent-railway-fixture.ts",
-          "sha256": "e98b563ceb9722874558bda4b3916dd8b239d45b606e86f4a9b33f5e045dd569"
+          "sha256": "56336070c4c969a75d28ab2dcd7ffffd94c18d941db74c01ca5acbeffc03838b"
         },
         {
           "path": "server/src/__tests__/helpers/controlled-native-signoff-backend.ts",
@@ -35513,11 +35513,11 @@
         },
         {
           "path": "tests/e2e/fixtures/managed-connection-review-cases.ts",
-          "sha256": "461870d8b21e0cc551fd3d48a0680967c39a9560dc63984b24b0f418ee925834"
+          "sha256": "e676dd8ac649abaf79243e610f6be854803341c9006280ec619c74c1af6cf863"
         },
         {
           "path": "tests/e2e/fixtures/managed-connection-review.ts",
-          "sha256": "b3c033e8e0c422c7f93b6a00e450257485bea2fa6f2142dfbce78dc7eb80f352"
+          "sha256": "defdbf270ee110cf0f1d12603b2e2a7861d5d5decc6e9af0b73bd9c42fbb1289"
         },
         {
           "path": "tests/e2e/fixtures/managed-pipeline-producer.ts",
@@ -46261,6 +46261,16 @@
       "qualification": "journal_order_and_current_sql_hash_only"
     },
     {
+      "id": "0589_released_model_reservations",
+      "kind": "journaled_migration_source",
+      "path": "packages/db/src/migrations/0589_released_model_reservations.sql",
+      "sha256": "a7ee65b4d61b691c13250589db6c0334cf0fcdb49b2a37a53f65e7813e234b65",
+      "journalPosition": 587,
+      "journalIndex": 589,
+      "createdAt": 1795086588041,
+      "qualification": "journal_order_and_current_sql_hash_only"
+    },
+    {
       "id": "deleted:server/src/__tests__/heartbeat-workspace-finalize-branch.test.ts",
       "kind": "deleted_source_delta",
       "path": "server/src/__tests__/heartbeat-workspace-finalize-branch.test.ts",
@@ -47150,7 +47160,7 @@
       "id": "source:server/src/services/orchestration/worker-model-gateway.ts",
       "kind": "current_source_owner",
       "path": "server/src/services/orchestration/worker-model-gateway.ts",
-      "sha256": "19abad650769411504120846e9c63119b607004e18e7845d2de8a3f701903ce2",
+      "sha256": "c7b0adde0b4d1d260dc529b6917bf2d2423a89e6ade60dd5529d9f49a97a8676",
       "changeIds": [
         "SCR-V10-HOTSPOT-01",
         "SCR-V10-HOTSPOT-07"
@@ -48359,7 +48369,7 @@
       "id": "source:server/src/services/heartbeat.ts",
       "kind": "current_source_owner",
       "path": "server/src/services/heartbeat.ts",
-      "sha256": "797a8bb3d62d9cd324f076cd1f94b343b2e343d3bb5d8886891af2a0a4ae52c7",
+      "sha256": "008afa4191709422da7204cabb3269536962a25836f18f1013622e1de6d64944",
       "changeIds": [
         "SCR-V10-HOTSPOT-02",
         "SCR-V10-HOTSPOT-03",
@@ -58745,7 +58755,7 @@
       "id": "source:packages/db/src/migrations/meta/_journal.json",
       "kind": "current_source_owner",
       "path": "packages/db/src/migrations/meta/_journal.json",
-      "sha256": "f2f7913ba93fa60f84054a3f3f89b4f06c129a5a403713315b8c26aae6a825c8",
+      "sha256": "d94081a0a94caed26ccff12279bfaf864d462c18f620072a81b7823b839692a7",
       "changeIds": [
         "SCR-V10-DATABASE-SCHEMA-AND-MIGRATIONS"
       ],
@@ -61130,7 +61140,7 @@
       "id": "source:server/src/services/orchestration/model-reservations.ts",
       "kind": "current_source_owner",
       "path": "server/src/services/orchestration/model-reservations.ts",
-      "sha256": "871425c65f323e7dc83a2662124843e121daafd9c35f6f6c3fbad97e9043f90b",
+      "sha256": "5ba58e1026835a4544af56335a2da865a582f62082dcfb377c0ae01cb8d9b432",
       "changeIds": [
         "SCR-V10-MODEL-PROVIDER-AND-MIGRATION-MONITOR"
       ],
@@ -62345,7 +62355,7 @@
       "id": "source:packages/paperclip-runner/src/cli/opencode-app-server-proxy.ts",
       "kind": "current_source_owner",
       "path": "packages/paperclip-runner/src/cli/opencode-app-server-proxy.ts",
-      "sha256": "709fcf454e4ba0cfbfd22857fdf3a49c5f32b92853fa2ea7a3d385bf3165957e",
+      "sha256": "30ccfcb87055b04857526aa42506f67605b18d37bbb132c763a1d8e78f12f1ab",
       "changeIds": [
         "SCR-V10-NATIVE-RUNTIME-AND-AUTHORITY"
       ],
@@ -62450,7 +62460,7 @@
       "id": "source:packages/paperclip-runner/src/drivers/codex/codex-app-server-driver.test.ts",
       "kind": "current_source_owner",
       "path": "packages/paperclip-runner/src/drivers/codex/codex-app-server-driver.test.ts",
-      "sha256": "4a4294a45e17987b785c7e91cfb58700429a15a20f561a5b551e2e62a4d2843c",
+      "sha256": "1221c49651eed978b690e83c1cc14951ddd68501d0d9de43d2b257703bd04d52",
       "changeIds": [
         "SCR-V10-NATIVE-RUNTIME-AND-AUTHORITY"
       ],
@@ -62495,7 +62505,7 @@
       "id": "source:packages/paperclip-runner/src/drivers/codex/codex-session-state.ts",
       "kind": "current_source_owner",
       "path": "packages/paperclip-runner/src/drivers/codex/codex-session-state.ts",
-      "sha256": "bad9af1a4a1deed15d93e1552874a8fa965fc1a737c2ff3f00fb507f5a42f6ae",
+      "sha256": "dab4a72bdca3e5967a345a6348dd16f29a03b9dba11d1a70316c462014596c58",
       "changeIds": [
         "SCR-V10-NATIVE-RUNTIME-AND-AUTHORITY"
       ],
@@ -72370,7 +72380,7 @@
       "id": "source:server/src/__tests__/helpers/connection-intent-railway-fixture.test.ts",
       "kind": "current_source_owner",
       "path": "server/src/__tests__/helpers/connection-intent-railway-fixture.test.ts",
-      "sha256": "54841bebaa9bf22fa7abbec31bd688bbf30ea541244b1fb58b96af3e6bff14d3",
+      "sha256": "410dbf42865b7dbeacca34d6e8cfadedb4573b7b72cbf71625a055b7be1f9fc3",
       "changeIds": [
         "SCR-V10-PRODUCT-IDENTITY-HELP-LANGUAGE"
       ],
@@ -72385,7 +72395,7 @@
       "id": "source:server/src/__tests__/helpers/connection-intent-railway-fixture.ts",
       "kind": "current_source_owner",
       "path": "server/src/__tests__/helpers/connection-intent-railway-fixture.ts",
-      "sha256": "e98b563ceb9722874558bda4b3916dd8b239d45b606e86f4a9b33f5e045dd569",
+      "sha256": "56336070c4c969a75d28ab2dcd7ffffd94c18d941db74c01ca5acbeffc03838b",
       "changeIds": [
         "SCR-V10-PRODUCT-IDENTITY-HELP-LANGUAGE"
       ],
@@ -74830,7 +74840,7 @@
       "id": "source:tests/e2e/fixtures/managed-connection-review-cases.ts",
       "kind": "current_source_owner",
       "path": "tests/e2e/fixtures/managed-connection-review-cases.ts",
-      "sha256": "461870d8b21e0cc551fd3d48a0680967c39a9560dc63984b24b0f418ee925834",
+      "sha256": "e676dd8ac649abaf79243e610f6be854803341c9006280ec619c74c1af6cf863",
       "changeIds": [
         "SCR-V10-CUSTOMER-EXPERIENCE"
       ],
@@ -74845,7 +74855,7 @@
       "id": "source:tests/e2e/fixtures/managed-connection-review.ts",
       "kind": "current_source_owner",
       "path": "tests/e2e/fixtures/managed-connection-review.ts",
-      "sha256": "b3c033e8e0c422c7f93b6a00e450257485bea2fa6f2142dfbce78dc7eb80f352",
+      "sha256": "defdbf270ee110cf0f1d12603b2e2a7861d5d5decc6e9af0b73bd9c42fbb1289",
       "changeIds": [
         "SCR-V10-CUSTOMER-EXPERIENCE"
       ],
@@ -83237,6 +83247,11 @@
     {
       "from": "0587_board_stage_return_source_transform",
       "to": "0588_parked_approved_tool_charge",
+      "relation": "drizzle_journal_order_only"
+    },
+    {
+      "from": "0588_parked_approved_tool_charge",
+      "to": "0589_released_model_reservations",
       "relation": "drizzle_journal_order_only"
     },
     {

@@ -7,7 +7,8 @@ import { and, eq, sql } from "../../../packages/db/node_modules/drizzle-orm/inde
 import { expect, type Page, type BrowserContext, type APIRequestContext } from "@playwright/test";
 import { createDb, activityLog, agents, authSessions, authUsers, companies, heartbeatRuns, agentWakeupRequests,
   issueComments, issueThreadInteractions, issues, documents, issueDocuments, environmentLeases,
-  connectionGrants, toolCatalogEntries, toolConnections } from "../../../packages/db/src/index.ts";
+  connectionGrants, toolCatalogEntries, toolConnections, orchestrationPlans, orchestrationModelReservations,
+  orchestrationWorkerAttempts } from "../../../packages/db/src/index.ts";
 import { createApp } from "../../../server/src/app.js";
 import { createStorageService } from "../../../server/src/storage/service.js";
 import { createLocalDiskStorageProvider } from "../../../server/src/storage/local-disk-provider.js";
@@ -34,6 +35,7 @@ type ReviewDriver = {
   createLaterTask: () => Promise<{ id: string }>; calls: () => number;
   recordPendingComment: (commentId: string) => Promise<void>;
   resolutionRunId: () => string;
+  verifyPlan: (issueId: string) => Promise<void>;
 };
 const record = (value: unknown): Record<string, unknown> => {
   assert(value && typeof value === "object" && !Array.isArray(value));
@@ -96,6 +98,11 @@ export async function withManagedConnectionReview(input: {
   let reviewTaskId: string | undefined, firstCommentId: string | undefined;
   let pendingCommentId: string | undefined, pendingReviewId: string | undefined;
   let laterTaskId: string | undefined, laterCommentId: string | undefined;
+  const planByTask = new Map<string, string>();
+  // The later Task's executed assigned call, from its Run's sealed tool_result capture.
+  const laterInvocationByRun = new Map<string, string>();
+  // Scripted provider replies per Run: each one is exactly one dispatched provider call.
+  const repliesByRun = new Map<string, number>();
   const pendingNoteBody = "Keeping this review pending while I check.";
   let resolutionSawNote = false;
   let settleToolAction: ((actionRequestId: string) => Promise<unknown>) | null = null;
@@ -331,6 +338,13 @@ export async function withManagedConnectionReview(input: {
             if (block.type !== "tool_result" || typeof id !== "string") continue;
             if (id === "review.call:large-later") {
               await validateSuccessfulToolCapture(run.id, id);
+              const [current] = await db.select({ profile: heartbeatRuns.runnerProfileJson }).from(heartbeatRuns)
+                .where(eq(heartbeatRuns.id, run.id));
+              const sealed = (Array.isArray(record(current?.profile).nativeToolResultSourceCaptures)
+                ? record(current?.profile).nativeToolResultSourceCaptures as unknown[] : []).map(value => record(record(value).source))
+                .filter(source => source.kind === "tool_result" && source.callId === id && typeof source.invocationId === "string");
+              assert.equal(sealed.length, 1, "The later call's sealed result capture names its tool invocation");
+              laterInvocationByRun.set(run.id, sealed[0]!.invocationId as string);
               continue;
             }
             if ((!id.startsWith("review-search-later") && !id.startsWith("review-schema-later-")) ||
@@ -343,6 +357,7 @@ export async function withManagedConnectionReview(input: {
       },
       providerReply: ({ body, callIndex, execution, runId }) => {
         if (!providerRuns.includes(runId)) providerRuns.push(runId);
+        repliesByRun.set(runId, (repliesByRun.get(runId) ?? 0) + 1);
         const binding = rolesByRun.get(runId); assert(binding);
         const role = binding.role;
         assert(providerRuns.length <= (input.journey === "always" ? 4 : 3));
@@ -365,7 +380,12 @@ export async function withManagedConnectionReview(input: {
           assert(typeof written.id === "string" && typeof written.latestRevisionId === "string",
             "A done finish cites the result document revision its own Run wrote");
           const documentRef = `document:${written.id}:${written.latestRevisionId}`;
-          const reviewRef = role === "resolution" && binding.interactionId ? `interaction:${binding.interactionId}` : null;
+          // The resolution Run cites the resolved card; the Always-allow later
+          // Task cites its executed call admitted by the standing Human grant.
+          const laterInvocation = role === "later" ? laterInvocationByRun.get(runId) : undefined;
+          if (role === "later") assert(laterInvocation, "The later Task cites its executed tool invocation");
+          const reviewRef = role === "resolution" && binding.interactionId ? `interaction:${binding.interactionId}`
+            : laterInvocation ? `tool_invocation:${laterInvocation}` : null;
           return { documentRef, reviewRef };
         };
         const finish = (done: boolean) => {
@@ -380,7 +400,9 @@ export async function withManagedConnectionReview(input: {
                 : cited.reviewRef ? [cited.reviewRef] : [] })),
             remainingWork: done ? [] : [{ description: "Wait for the Human tool decision and retain its actual outcome.", blocksCompletion: true }] },
           evidence: cited ? [{ ref: cited.documentRef }, ...(cited.reviewRef ? [{ ref: cited.reviewRef }] : [])] : [],
-          verification: cited?.reviewRef ? [{ commandOrCheck: "The responsible Human's tool review decision is recorded on the Task",
+          verification: cited?.reviewRef ? [{ commandOrCheck: role === "later"
+            ? "The read ran under the responsible Human's standing Always-allow grant"
+            : "The responsible Human's tool review decision is recorded on the Task",
             status: "passed", artifactRef: cited.reviewRef }] : [],
           attentionRequests: [], artifacts: [],
           ...(!done ? { continuation: { kind: "response_wake", summary: "Resume after the Human resolves the tool review.",
@@ -477,8 +499,8 @@ export async function withManagedConnectionReview(input: {
           const response = record(responses[0]!.response);
           const action = response.status === "rejected" ? null : record(record(response.result).toolAction);
           if (input.journey === "decline") {
-            assert.equal(response.status, "rejected");
-            responseText = "Review declined. No projects were read.";
+            assert.equal(response.status, "rejected"); assert(binding.interactionId);
+            responseText = `Review declined. No projects were read: the responsible Human declined the Railway project read (interaction:${binding.interactionId}), so the Task is blocked until a Human decides how to continue.`;
           } else if (input.journey === "failure") {
             assert(action); assert.equal(response.status, "accepted"); assert.equal(action.status, "failed");
             responseText = "Read failed: the fixed Railway provider returned an actual failure.";
@@ -490,6 +512,26 @@ export async function withManagedConnectionReview(input: {
           outcomeByRun.set(runId, responseText);
           return use("review-document-1", tool("write_document"), { idempotencyKey: "review-retained-outcome", key: "result",
             title: "Actual governed Railway review outcome", body: responseText, baseRevisionId: null });
+        }
+        // APR-E2E-23 (decline). A declined governed action is not evidence that
+        // its invariant holds: the agent finishes blocked, naming the declined
+        // card, and its result document says what was not done. The blocker is
+        // the board's (no same-agent wake, so no continuation loop).
+        if (role === "resolution" && callIndex === 2 && input.journey === "decline") {
+          // A blocked result goes through paperclip_block: paperclip_finish
+          // accepts only done, needs_review or a response_wake yield and
+          // rejects anything else as a failed tool call.
+          return use(`review-block-${role}`, tool("paperclip_block"), {
+            schema: "paperclip.run_result.v1", reportedWorkDisposition: "blocked", summary: responseText,
+            completionClaim: { contractRevision: execution.completionContract.contract.revision, objectiveSatisfied: false,
+              criteria: execution.completionContract.contract.criteria.map(criterion => ({ criterionId: criterion.id,
+                status: "not_satisfied", evidenceRefs: [] })),
+              remainingWork: [{ description: "The declined Railway project read was not run; a Human decides how to continue.", blocksCompletion: true }] },
+            evidence: [], verification: [], attentionRequests: [], artifacts: [],
+            blocker: { reasonCode: "governed_action_declined", owner: { kind: "user", name: "Responsible Human" },
+              unblockAction: `The responsible Human declined the Railway project read (interaction:${binding.interactionId}). Approve a new request or close the Task.`,
+              scope: "current_track" },
+          });
         }
         // The accepted terminal summary is published by the existing Native
         // presentation owner with this actual Run's agent/run attribution.
@@ -565,6 +607,7 @@ export async function withManagedConnectionReview(input: {
               workers: [{ key: "reviewed-reader", issueId: task.id }] });
             await orchestrationService(db).decide(actor, companyId, plan.id, { expectedVersion: plan.version,
               action: "start", rationale: "Human authorizes a bounded reviewed Railway read" });
+            planByTask.set(task.id, plan.id);
             return task;
           };
           const task = await createTask(false);
@@ -582,6 +625,11 @@ export async function withManagedConnectionReview(input: {
             .innerJoin(agentWakeupRequests, and(eq(agentWakeupRequests.id, heartbeatRuns.wakeupRequestId),
               eq(agentWakeupRequests.companyId, companyId)))
             .where(and(eq(heartbeatRuns.companyId, companyId), eq(heartbeatRuns.agentId, agentId)));
+          // A Run's sandbox cleanup is verified once, after the Run ends and before
+          // the next Run on the same sandbox binding starts: the cleanup check
+          // reads the binding's latest workload start, so a later Run's start
+          // supersedes an earlier Run's (the same ordering as CONF14).
+          const verifiedStoppedRuns = new Set<string>();
           const verifyStopped = async (runId: string) => {
             await expect.poll(async () => {
               const leases = await db.select().from(environmentLeases).where(and(eq(environmentLeases.companyId, companyId),
@@ -596,6 +644,7 @@ export async function withManagedConnectionReview(input: {
               const stopped = await verifyNativeCleanupRuntimeState(db, { companyId, runId, leaseId: lease.id }, lease.metadata?.remoteExecutionTermination);
               assert.equal(stopped.state, "stopped");
             }
+            verifiedStoppedRuns.add(runId);
           };
           await input.driveReview({ page, context: ownedContext, request: ownedContext.request,
             seed: { companyId, prefix: company.issuePrefix }, agent: { id: agentId, name: agent.name },
@@ -645,9 +694,49 @@ export async function withManagedConnectionReview(input: {
               assert(stillPending && stillPending.status === "pending" && stillPending.sourceRunId === review.sourceRunId);
               assert.equal(railway!.captures().filter(capture => capture.purpose === "projects_call").length, 0);
             },
+            // APR-E2E-25 (b). A plan-covered Task the arbiter holds in review
+            // for its plan's server verification (MS1h14) is verified by the
+            // responsible Human through the real route; a pass moves it to done.
+            verifyPlan: async issueId => {
+              const planId = planByTask.get(issueId); assert(planId, "The Task has its orchestration plan");
+              await expect.poll(async () => (await db.select({ status: issues.status }).from(issues)
+                .where(and(eq(issues.companyId, companyId), eq(issues.id, issueId))))[0]?.status,
+                { timeout: remaining() }).toBe("in_review");
+              const [plan] = await db.select({ version: orchestrationPlans.version, status: orchestrationPlans.status })
+                .from(orchestrationPlans).where(and(eq(orchestrationPlans.companyId, companyId), eq(orchestrationPlans.id, planId)));
+              assert(plan && plan.status === "running");
+              const base = `/api/companies/${companyId}/orchestration/plans/${planId}`;
+              const packetResponse = await ownedContext!.request.get(`${base}/verification-packet`);
+              assert.equal(packetResponse.status(), 200, await packetResponse.text());
+              const packet = await packetResponse.json() as { resultHash: string; evidence: Array<{ ref: string }>;
+                deterministicFailures: string[]; contract: { businessInvariants: string[]; evidenceRequirements?: string[];
+                  prohibitedOutcomes?: string[] } };
+              assert.deepEqual(packet.deterministicFailures, [], "The packet has no deterministic failure");
+              const refs = packet.evidence.map(entry => entry.ref).slice(0, 32);
+              assert(refs.length > 0, "The packet carries the Task's evidence");
+              const judge = (count: number) => Array.from({ length: count }, (_, index) => ({ index, satisfied: true, evidenceRefs: refs }));
+              const response = await ownedContext!.request.post(`${base}/verify`, { data: {
+                expectedPlanVersion: plan.version, workerId: null, expectedResultHash: packet.resultHash, result: "pass",
+                rationale: "The responsible Human checked the retained result document against the governed review outcome.",
+                objectiveSatisfied: true, businessInvariants: judge(packet.contract.businessInvariants.length),
+                evidenceRequirements: judge(packet.contract.evidenceRequirements?.length ?? 0),
+                prohibitedOutcomes: judge(packet.contract.prohibitedOutcomes?.length ?? 0) } });
+              assert.equal(response.status(), 200, await response.text());
+              const review = await response.json() as { result: string; failedInvariants: string[] };
+              assert.equal(review.result, "pass", JSON.stringify(review.failedInvariants));
+            },
             createLaterTask: async () => {
               assert.equal(input.journey, "always");
-              await railway!.enableLargeSchemaTool();
+              const resolution = [...rolesByRun.values()].find(entry => entry.role === "resolution");
+              assert(resolution, "The resolution Run ended before the later Task starts");
+              await verifyStopped(resolution.runId);
+              // The provider's new tools land in quarantine; the responsible Human
+              // reviews and enables them through the Review tab's finish request.
+              await railway!.enableLargeSchemaTool(async body => {
+                const finished = await ownedContext!.request.post(
+                  `/api/companies/${companyId}/tools/apps/${railway!.connection.id}/finish`, { data: body });
+                assert.equal(finished.status(), 200, await finished.text());
+              });
               const later = await createTask(true); laterTaskId = later.id;
               await openTask(later.id, true); return { id: later.id };
             },
@@ -692,16 +781,57 @@ export async function withManagedConnectionReview(input: {
             assert.equal(row.run.runtimeMode, "native"); assert.equal(row.run.responsibleUserId, actor.userId);
             const facts = factsForRun(row.run.id);
             const role = rolesByRun.get(row.run.id); assert(role);
-            assert(facts.providerCallCount >= 2);
+            // Dispatched provider calls per role (product semantics):
+            // - request: one call whose tool use the runner parks for the Human
+            //   review. OpenCode's follow-up request is interrupted before
+            //   provider dispatch and released (APR-E2E-22), so it never
+            //   reaches the provider;
+            // - resolution: write_document, then paperclip_finish;
+            // - later (Always allow): search, the schema chunks it needs, the
+            //   assigned call, write_document and paperclip_finish; at least
+            //   four, and exactly the replies the provider script gave it.
+            if (role.role === "request") assert.equal(facts.providerCallCount, 1, "The requesting Run dispatches exactly the call it parks");
+            else if (role.role === "resolution") assert.equal(facts.providerCallCount, 2, "The resolution Run writes its document, then finishes");
+            else assert(facts.providerCallCount >= 4, "The later Run searches, calls, writes and finishes");
+            assert.equal(facts.providerCallCount, repliesByRun.get(row.run.id) ?? 0);
             assert(facts.issuerFacts.length > 0 && facts.issuerFacts.every(fact => fact.scope === "worker_model" && fact.runId === row.run.id));
-            await verifyStopped(row.run.id);
+            if (!verifiedStoppedRuns.has(row.run.id)) await verifyStopped(row.run.id);
           }
+          // APR-E2E-22. The requesting Run's interrupted follow-up request left
+          // exactly one released worker_model reservation: failed, with no wire
+          // receipt, response hash or usage, and not counted against the plan.
+          const requestRun = roles.find(entry => entry.role === "request")!.runId;
+          const planId = planByTask.get(task.id); assert(planId);
+          const requestReservations = (await db.select({ reservation: orchestrationModelReservations })
+            .from(orchestrationModelReservations).innerJoin(orchestrationWorkerAttempts, and(
+              eq(orchestrationWorkerAttempts.companyId, orchestrationModelReservations.companyId),
+              eq(orchestrationWorkerAttempts.planId, orchestrationModelReservations.planId),
+              eq(orchestrationWorkerAttempts.id, orchestrationModelReservations.workerAttemptId)))
+            .where(and(eq(orchestrationModelReservations.companyId, companyId), eq(orchestrationWorkerAttempts.runId, requestRun))))
+            .map(entry => entry.reservation);
+          const released = requestReservations.filter(value => value.purpose === "worker_model" && value.status === "failed" &&
+            value.providerWireReceipt === null && value.providerResponseHash === null && value.usage === null);
+          assert.equal(released.length, 1, "The interrupted follow-up request is one released pre-dispatch reservation");
+          assert.equal(requestReservations.filter(value => value.status === "completed").length, 1,
+            "The requesting Run is charged for exactly the one call it dispatched");
+          const planReservations = await db.select().from(orchestrationModelReservations).where(and(
+            eq(orchestrationModelReservations.companyId, companyId), eq(orchestrationModelReservations.planId, planId)));
+          const [planRow] = await db.select({ reserved: orchestrationPlans.modelCostReserved }).from(orchestrationPlans)
+            .where(eq(orchestrationPlans.id, planId));
+          const counted = planReservations.filter(value => !(value.status === "cancelled" || (value.status === "failed" &&
+            value.purpose === "worker_model" && value.providerWireReceipt === null && value.providerResponseHash === null &&
+            value.usage === null))).reduce((total, value) => total + value.maximumMinor, 0);
+          assert.equal(planRow?.reserved, counted, "Released reservations are not counted against the plan");
+          assert.equal(planRow?.reserved, planReservations.reduce((total, value) => total + value.maximumMinor, 0) -
+            released.reduce((total, value) => total + value.maximumMinor, 0));
           assert.equal(railway.captures().filter(capture => capture.purpose === "projects_call").length,
             input.journey === "decline" ? 0 : 1);
           assert.equal(railway.captures().filter(capture => capture.purpose === "large_tool_call").length,
             input.journey === "always" ? 1 : 0);
           if (input.journey === "always") assert(maxProviderRequestBytes > 0 && maxProviderRequestBytes <= 64_000);
-          const [finished] = await db.select().from(issues).where(eq(issues.id, task.id)); assert.equal(finished?.status, "done");
+          const [finished] = await db.select().from(issues).where(eq(issues.id, task.id));
+          assert.equal(finished?.status, input.journey === "decline" ? "blocked" : "done");
+          if (input.journey === "decline") assert(String(record(finished!.unblockDescriptor).action).includes(`interaction:${card.id}`));
           const [retained] = await db.select({ body: documents.latestBody }).from(issueDocuments).innerJoin(documents,
             and(eq(documents.id, issueDocuments.documentId), eq(documents.companyId, companyId))).where(and(
               eq(issueDocuments.companyId, companyId), eq(issueDocuments.issueId, task.id), eq(issueDocuments.key, "result")));

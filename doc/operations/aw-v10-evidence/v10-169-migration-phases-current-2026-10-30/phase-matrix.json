@@ -17,8 +17,8 @@
   "sourceBaseCommit": "81d3445b98b1cd80ff400ede6bd44ea71d88d735",
   "officialMigrationInterval": {
     "first": 502,
-    "last": 588,
-    "latestOfficialMigration": "0588_parked_approved_tool_charge",
+    "last": 589,
+    "latestOfficialMigration": "0589_released_model_reservations",
     "latestOfficialMigrationCommit": null,
     "journalSource": "packages/db/src/migrations/meta/_journal.json"
   },
@@ -256,9 +256,10 @@
         581,
         584,
         585,
-        588
+        588,
+        589
       ],
-      "purpose": "Memory sharing publication provenance; workflow duration width; company-purpose budgets/reservations, package pinning, sandbox claim, durable plugin lifecycle and provider wire receipt immutability; native conversation reservation binding. Migration 0580 extends existing configured durable-execution admission and occupancy to original company export work and unknown allocated writes. Migration 0581 lets the review-model reservation CHECK accept both stored Native result hash forms (plain and sha256:-prefixed). Migration 0584 adds review_model to the purposes whose provider wire receipt must carry a string call id (aw_v10_provider_wire_receipt_guard from 0553), matching recordWireDispatch. Migration 0585 adds review_stage_id to orchestration_model_reservations (a review_model reservation names exactly one of its review interaction or its execution-policy stage), extends the 0576 review binding immutability guard to it, and extends aw_v7_orchestration_tool_charge so an execution-stage Reviewer's stage-comment call_api, and a completion or stage Reviewer's read of one declared required-output document, are each charged once to the reviewed plan (MS1f phase 3). 0588 adds to aw_v7_orchestration_tool_charge (a copy of the 0585 definition with additions only) one exception to the attempt-stopped refusal: a server-executed, Human-approved parked invocation (awaiting_approval to executing once, exactly one claimed action request decided by a Human and not an Agent before the transition) on its own Run's ended attempt of the same plan and Task is charged to that original plan under the unchanged plan, wall-clock, feature-gate, approval, budget hard-stop and once-per-invocation checks (APR-E2E-17).",
+      "purpose": "Memory sharing publication provenance; workflow duration width; company-purpose budgets/reservations, package pinning, sandbox claim, durable plugin lifecycle and provider wire receipt immutability; native conversation reservation binding. Migration 0580 extends existing configured durable-execution admission and occupancy to original company export work and unknown allocated writes. Migration 0581 lets the review-model reservation CHECK accept both stored Native result hash forms (plain and sha256:-prefixed). Migration 0584 adds review_model to the purposes whose provider wire receipt must carry a string call id (aw_v10_provider_wire_receipt_guard from 0553), matching recordWireDispatch. Migration 0585 adds review_stage_id to orchestration_model_reservations (a review_model reservation names exactly one of its review interaction or its execution-policy stage), extends the 0576 review binding immutability guard to it, and extends aw_v7_orchestration_tool_charge so an execution-stage Reviewer's stage-comment call_api, and a completion or stage Reviewer's read of one declared required-output document, are each charged once to the reviewed plan (MS1f phase 3). 0588 adds to aw_v7_orchestration_tool_charge (a copy of the 0585 definition with additions only) one exception to the attempt-stopped refusal: a server-executed, Human-approved parked invocation (awaiting_approval to executing once, exactly one claimed action request decided by a Human and not an Agent before the transition) on its own Run's ended attempt of the same plan and Task is charged to that original plan under the unchanged plan, wall-clock, feature-gate, approval, budget hard-stop and once-per-invocation checks (APR-E2E-17). 0589 (phase A of APR-E2E-22) adds aw_v7_model_reservation_released and copies aw_v7_model_reservation_guard (0547), aw_v7_model_reservation_charge (0547) and aw_v7_model_budget_counter_guard (0382) with additions only: a provably unspent reservation (cancelled, or a failed worker_model with no wire receipt, response hash or usage, whose transition requires no wire intent on its attempt's Run) counts zero against its plan's model budget; its releasing status change takes exactly its maximum_minor off its own plan's counter (new AFTER UPDATE OF status trigger), and every other status, completed and unknown included, keeps its full maximum.",
       "authority": "Budget/reservation owner and durable provider receipts are authoritative before dispatch; plugin lifecycle rows control admitted runtime state; Memory share publication is explicit and scoped.",
       "durableState": [
         "memory_private_share_publications target binding/source owner",
@@ -288,10 +289,12 @@
         "packages/db/src/migrations/0584_review_model_wire_receipt_call_id.sql",
         "packages/db/src/migrations/0585_review_stage_reservation.sql",
         "packages/db/src/migrations/0588_parked_approved_tool_charge.sql",
+        "packages/db/src/migrations/0589_released_model_reservations.sql",
         "packages/db/src/schema/company_transfer_runs.ts",
         "server/src/services/company-export-transfers.ts",
         "server/src/services/company-transfer-runs.ts",
         "server/src/services/orchestration/parked-approved-tool-charge.ts",
+        "server/src/services/orchestration/model-reservation-release.ts",
         "server/src/services/resource-governance.ts"
       ],
       "tests": [
@@ -302,7 +305,8 @@
         "server/src/__tests__/native-budget-queue-source-binding.integration.test.ts",
         "server/src/__tests__/resource-governance.integration.test.ts",
         "server/src/services/native-runtime/native-stage-reviewer-lane.test.ts",
-        "server/src/services/orchestration/parked-approved-tool-charge.integration.test.ts"
+        "server/src/services/orchestration/parked-approved-tool-charge.integration.test.ts",
+        "server/src/services/orchestration/model-reservation-release.integration.test.ts"
       ],
       "recovery": "Reservation/lease and queue recovery tests exercise selected local DB state transitions. Provider execution, external billing, plugin host and cross-region backup/restore remain unqualified."
     },
@@ -1222,7 +1226,7 @@
     },
     {
       "path": "packages/db/src/migrations/meta/_journal.json",
-      "sha256": "f2f7913ba93fa60f84054a3f3f89b4f06c129a5a403713315b8c26aae6a825c8"
+      "sha256": "d94081a0a94caed26ccff12279bfaf864d462c18f620072a81b7823b839692a7"
     },
     {
       "path": "packages/db/src/native-input-source-protocol.test.ts",
@@ -1763,6 +1767,22 @@
     {
       "path": "server/src/services/orchestration/parked-approved-tool-charge.integration.test.ts",
       "sha256": "1eac4bca586c42bb17b22fa7ecf1792b2efad0cfe3f471cce84469af7f35f241"
+    },
+    {
+      "path": "packages/db/src/migrations/0589_released_model_reservations.sql",
+      "sha256": "a7ee65b4d61b691c13250589db6c0334cf0fcdb49b2a37a53f65e7813e234b65"
+    },
+    {
+      "path": "packages/db/src/migrations/meta/0589_snapshot.json",
+      "sha256": "5b7ce7c68f4105c3e5c62e007cc96970b50819f93a065895bee7d7a5119c8a79"
+    },
+    {
+      "path": "server/src/services/orchestration/model-reservation-release.ts",
+      "sha256": "2d8971492462f6c5a6d06b9dee4776ce21a28f8c67b40db53b86f22d8b23343a"
+    },
+    {
+      "path": "server/src/services/orchestration/model-reservation-release.integration.test.ts",
+      "sha256": "d63c07f61ea1807523ebe464be72e43bf805a1824b1d4ba41d83b25a0ec46f23"
     }
   ],
   "sourcePinBasis": "Exact private composed source inventory anchored at sourceHead b1, not equality with its unchanged tree. Only two individually approved code/test pins and two own-documentation pins change from the recovered b1 index; original changed/retired pin history remains preserved. Hash equality is not behavioral or release qualification.",
@@ -1770,13 +1790,13 @@
     "baseCommit": "81d3445b98b1cd80ff400ede6bd44ea71d88d735",
     "command": "git diff --name-status 81d3445b98b1cd80ff400ede6bd44ea71d88d735 -- packages/db/src/migrations",
     "selection": "Union of added/modified/renamed-destination migration SQL files in the source-base git diff and all current journal entries absent from the source-base journal; this catches published journal entries whose SQL payload is still untracked.",
-    "currentAffectedCount": 87,
+    "currentAffectedCount": 88,
     "currentAffectedFirst": "0502_swift_maria_hill",
-    "currentAffectedLast": "0588_parked_approved_tool_charge"
+    "currentAffectedLast": "0589_released_model_reservations"
   },
   "sourcePinFinality": "Exact current source hashes after R622 actual PostgreSQL and R623 full typecheck/build; software scope only, no historical status promotion.",
   "latestMigrationPublication": {
-    "migration": "0588_parked_approved_tool_charge",
+    "migration": "0589_released_model_reservations",
     "sourceCommit": null,
     "sourceState": "Official generated source with exact current pins and local software receipts.",
     "qualificationScope": "Does not establish fleet cutover, deployed rollback/restore, provider/Host or Human qualification."
@@ -1805,7 +1825,8 @@
     "0583": "Adds aw_native_durable_session_scope_only and replaces aw_erase_workflow_agent_payload (0488) and aw_native_run_input_source_receipt_binding (0545) with every check intact, except that an erased heartbeat_runs profile keeps only a well-formed content-free nativeDurableSessionScope record (instead of NULL) and the receipt guard accepts that record as a cleared profile. No schema change, no backfill.",
     "0584": "Replaces aw_v10_provider_wire_receipt_guard (0553) with its original definition plus review_model in the expected_call_id purposes, so a review_model wire receipt must carry its exact string provider call id, as recordWireDispatch already requires; endpoint rules, key count, the company-purpose table and every other purpose are unchanged. Function-only; no schema change, no backfill. The guard checks only new receipt writes, and no review_model receipt could be stored before (TypeScript required a string call id and the old guard refused one).",
     "0585": "Adds nullable review_stage_id to orchestration_model_reservations and replaces orchestration_model_reservation_scope_ck so a review_model reservation names exactly one of review_interaction_id (completion review) or review_stage_id (execution-policy stage review), every source column still required and no other purpose carrying a stage; replaces aw_v7_review_model_reservation_binding_immutable (0576) with the column added, and aw_v7_orchestration_tool_charge (0576) with two added Reviewer charge branches (stage-comment call_api; declared required-output read_document) bound through a completed review_model reservation and the current review or stage facts. No backfill: existing review reservations name an interaction and satisfy the new CHECK; no FK to wake rows.",
-    "0588": "Replaces aw_v7_orchestration_tool_charge (0585) with its 0585 definition plus one added condition on the orchestration_attempt_stopped refusal: it is skipped only for a server-executed, Human-approved parked invocation on its original plan and Task (see 0588 header). Function-only; no schema change, no backfill. Every other refusal and the plan, budget and once-per-invocation checks are unchanged."
+    "0588": "Replaces aw_v7_orchestration_tool_charge (0585) with its 0585 definition plus one added condition on the orchestration_attempt_stopped refusal: it is skipped only for a server-executed, Human-approved parked invocation on its original plan and Task (see 0588 header). Function-only; no schema change, no backfill. Every other refusal and the plan, budget and once-per-invocation checks are unchanged.",
+    "0589": "Adds aw_v7_model_reservation_released and replaces aw_v7_model_reservation_guard (0547), aw_v7_model_reservation_charge (0547) and aw_v7_model_budget_counter_guard (0382) with copies plus additions only (see 0589 header), and adds the AFTER UPDATE OF status trigger aw_v7_model_reservation_release. No schema change. One backfill statement, with only the counter guard disabled, sets each plan's model_cost_reserved to the ledger without released reservations (existing cancelled rows); no reservation row changes."
   },
   "revisionDate": "2026-11-12",
   "sourceHead": "884dbba4a78603a791b65471e41fe950a23e2e4f",

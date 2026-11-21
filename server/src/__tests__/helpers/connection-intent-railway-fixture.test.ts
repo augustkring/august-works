@@ -2,9 +2,9 @@ import { randomUUID } from "node:crypto";
 import { mkdtemp, rm } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
-import { eq } from "drizzle-orm";
+import { and, eq, inArray } from "drizzle-orm";
 import { afterAll, beforeAll, describe, expect, it } from "vitest";
-import { agents, authUsers, companies, companyMemberships, createDb, toolInvocations } from "@paperclipai/db";
+import { agents, authUsers, companies, companyMemberships, createDb, toolCatalogEntries, toolInvocations } from "@paperclipai/db";
 import { createApp } from "../../app.js";
 import { createStorageService } from "../../storage/service.js";
 import { createLocalDiskStorageProvider } from "../../storage/local-disk-provider.js";
@@ -63,6 +63,42 @@ describePg("ConnectionIntent fixed non-model Railway fixture", () => {
     });
     expect(fixture.captures().filter(row => row.purpose === "projects_call")).toHaveLength(1);
     expect(await db.select().from(toolInvocations).where(eq(toolInvocations.companyId, companyId))).toHaveLength(1);
+  });
+
+  it("quarantines tools the provider adds after setup until the responsible Human reviews them through the app finish owner", async () => {
+    const companyId = randomUUID(), userId = randomUUID(), agentId = randomUUID();
+    await db.insert(companies).values({ id: companyId, name: "Railway later tools fixture",
+      issuePrefix: `L${companyId.replaceAll("-", "").slice(0, 6).toUpperCase()}` });
+    await db.insert(authUsers).values({ id: userId, name: "Fixture owner", email: `${userId}@example.test`,
+      createdAt: new Date(), updatedAt: new Date() });
+    await db.insert(companyMemberships).values({ companyId, principalType: "user", principalId: userId,
+      membershipRole: "owner", status: "active" });
+    await db.insert(agents).values({ id: agentId, companyId, name: "Existing Railway holder", role: "engineer",
+      status: "idle", adapterType: "process", adapterConfig: {}, runtimeConfig: {} });
+    const fixture = await prepareConnectionIntentRailwayFixture({ db, companyId, userId, holderAgentId: agentId, reviewJourney: "always" });
+    const access = toolAccessService(db, { remoteHttpEndpointLookup: fixture.endpointLookup, remoteHttpRequest: fixture.request });
+    const later = ["fixture-large", "fixture-ballast-1", "fixture-ballast-2", "fixture-ballast-3"];
+    const entries = async () => (await db.select().from(toolCatalogEntries).where(and(
+      eq(toolCatalogEntries.companyId, companyId), inArray(toolCatalogEntries.toolName, later))));
+    // Removal check: a review that never reaches the finish owner leaves them quarantined.
+    await expect(fixture.enableLargeSchemaTool(async () => undefined)).rejects.toThrow("railway_fixture_large_schema_review_failed");
+    const pending = await entries();
+    expect(pending).toHaveLength(4);
+    expect(pending.every(entry => entry.status === "quarantined" && entry.quarantineReason === "pending_review" &&
+      entry.riskLevel === "write")).toBe(true);
+    const bodies: unknown[] = [];
+    await fixture.enableLargeSchemaTool(async body => {
+      bodies.push(body);
+      await access.finishGalleryAppConnection(companyId, fixture.connection.id, body,
+        { actorType: "user", actorId: userId, userId });
+    });
+    expect(bodies).toEqual([expect.objectContaining({ access: "all_agents", askFirstCatalogEntryIds: [],
+      reviewedCatalogEntryIds: expect.arrayContaining(pending.map(entry => entry.id)),
+      enabledCatalogEntryIds: expect.arrayContaining([fixture.tool.id, ...pending.map(entry => entry.id)]) })]);
+    const reviewed = await entries();
+    expect(reviewed.every(entry => entry.status === "active" && entry.reviewedByUserId === userId)).toBe(true);
+    expect(await db.select().from(toolCatalogEntries).where(and(eq(toolCatalogEntries.companyId, companyId),
+      eq(toolCatalogEntries.status, "quarantined")))).toEqual([]);
   });
 
   it("composes the already installed gateway without replacing its transaction factory and rejects another instance", async () => {

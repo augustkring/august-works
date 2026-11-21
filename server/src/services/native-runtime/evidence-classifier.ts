@@ -10,7 +10,9 @@ import {
   issueThreadInteractions,
   issueWorkProducts,
   orchestrationToolCharges,
+  toolActionRequests,
   toolInvocations,
+  toolPolicies,
 } from "@paperclipai/db";
 import { orchestrationCompletionSchema } from "@paperclipai/shared";
 import { nativeSha256 } from "./canonical.js";
@@ -26,7 +28,7 @@ export type NativeEvidenceOutcome = "accepted" | "missing" | "rejected" | "unver
 
 export interface NativeEvidenceRefAssessment {
   ref: string;
-  kind: "event" | "work_product" | "approval" | "interaction" | "attachment" | "document" | "unknown";
+  kind: "event" | "work_product" | "approval" | "interaction" | "tool_invocation" | "attachment" | "document" | "unknown";
   outcome: NativeEvidenceOutcome;
   reasonCode: string;
   durableRecordId: string | null;
@@ -183,8 +185,72 @@ async function classifyTaskDocumentRef(input: {
 
 /** Task document evidence is evidence for its own output criterion only. */
 function taskDocumentEvidenceForCriterion(entry: NativeEvidenceRefAssessment, criterionId: string): NativeEvidenceRefAssessment {
+  // APR-E2E (tool_invocation evidence). An executed, Human-admitted tool call
+  // is evidence for invariant and verification criteria, never for an output.
+  if (entry.kind === "tool_invocation" && entry.outcome === "accepted" && criterionId.startsWith("output_"))
+    return { ...entry, outcome: "unverifiable", reasonCode: "tool_invocation_evidence_not_output" };
   if (entry.kind !== "document" || entry.outcome !== "accepted" || criterionId === `output_${entry.outputKey}`) return entry;
   return { ...entry, outcome: "unverifiable", reasonCode: "document_evidence_other_criterion" };
+}
+
+/**
+ * `tool_invocation:<invocationId>`: a tool call this Task's work executed under
+ * a Human's admission. Accepted only when all hold, re-read here:
+ * - the invocation is this company's and this Task's;
+ * - it succeeded and its Run holds the sealed `tool_result` capture for it;
+ * - it was admitted either by an action request on this Task that a Human
+ *   (not an Agent) approved and that executed, or, with no approval needed,
+ *   by a matched trust rule ("always allow") that a Human created and that is
+ *   enabled, not revoked and not expired now (fail closed on any doubt).
+ * A failed, pending, declined, other-Task or no-longer-granted call is never
+ * accepted. It counts for invariant and verification criteria only.
+ */
+async function classifyToolInvocationRef(input: { db: Db; companyId: string; issueId: string; ref: string;
+  invocationId: string; now?: Date }): Promise<NativeEvidenceRefAssessment> {
+  const result = (outcome: NativeEvidenceOutcome, reasonCode: string, durableRecordId: string | null): NativeEvidenceRefAssessment =>
+    ({ ref: input.ref, kind: "tool_invocation", outcome, reasonCode, durableRecordId });
+  const [invocation] = await input.db.select().from(toolInvocations).where(and(
+    eq(toolInvocations.id, input.invocationId), eq(toolInvocations.companyId, input.companyId),
+    eq(toolInvocations.issueId, input.issueId))).limit(1);
+  if (!invocation) return result("missing", "tool_invocation_missing", null);
+  if (["failed", "denied", "cancelled", "timed_out", "rate_limited"].includes(invocation.status) ||
+    ["rejected", "expired"].includes(invocation.approvalState))
+    return result("rejected", "tool_invocation_not_executed", invocation.id);
+  if (invocation.status !== "succeeded" || !invocation.runId)
+    return result("missing", "tool_invocation_pending", invocation.id);
+  const [run] = await input.db.select({ profile: heartbeatRuns.runnerProfileJson }).from(heartbeatRuns).where(and(
+    eq(heartbeatRuns.companyId, input.companyId), eq(heartbeatRuns.id, invocation.runId))).limit(1);
+  const captures = record(run?.profile).nativeToolResultSourceCaptures;
+  const sealed = Array.isArray(captures) && captures.some((entry) => {
+    const source = record(record(entry).source);
+    return source.kind === "tool_result" && source.invocationId === invocation.id && source.runId === invocation.runId;
+  });
+  if (!sealed) return result("unverifiable", "tool_invocation_result_not_sealed", invocation.id);
+  const requests = await input.db.select().from(toolActionRequests).where(and(
+    eq(toolActionRequests.companyId, input.companyId), eq(toolActionRequests.invocationId, invocation.id)));
+  if (requests.length > 0) {
+    const humanApproved = requests.length === 1 && invocation.approvalState === "approved" &&
+      requests[0]!.issueId === input.issueId && requests[0]!.status === "executed" &&
+      requests[0]!.decidedByUserId !== null && requests[0]!.decidedByAgentId === null && requests[0]!.decidedAt !== null;
+    return humanApproved ? result("accepted", "tool_invocation_human_approved", invocation.id)
+      : result("rejected", "tool_invocation_admission_not_human", invocation.id);
+  }
+  if (invocation.policyDecision !== "allow" || invocation.approvalState !== "not_required" ||
+    !Array.isArray(invocation.matchedPolicyIds) || invocation.matchedPolicyIds.length === 0)
+    return result("rejected", "tool_invocation_admission_not_human", invocation.id);
+  const policyIds = invocation.matchedPolicyIds.filter((value): value is string => typeof value === "string");
+  const rules = policyIds.length === 0 ? [] : await input.db.select().from(toolPolicies).where(and(
+    eq(toolPolicies.companyId, input.companyId), inArray(toolPolicies.id, policyIds), eq(toolPolicies.policyType, "trust_rule")));
+  const now = (input.now ?? new Date()).getTime();
+  const currentHumanGrant = rules.some((rule) => {
+    const trust = record(record(rule.config).trustRule);
+    const expiresAt = trust.expiresAt;
+    return rule.enabled && rule.createdByUserId !== null && rule.createdByAgentId === null &&
+      trust.revokedAt === null && typeof trust.sourceActionRequestId === "string" &&
+      (expiresAt === null || (typeof expiresAt === "string" && Number.isFinite(Date.parse(expiresAt)) && Date.parse(expiresAt) > now));
+  });
+  return currentHumanGrant ? result("accepted", "tool_invocation_standing_human_grant", invocation.id)
+    : result("rejected", "tool_invocation_grant_not_current", invocation.id);
 }
 
 async function classifyEvidenceRef(input: {
@@ -303,6 +369,10 @@ async function classifyEvidenceRef(input: {
     }
     return { ref: input.ref, kind: "interaction", outcome: "missing", reasonCode: "interaction_pending", durableRecordId: row.id };
   }
+
+  const invocationId = uuidRef(input.ref, ["tool_invocation"]);
+  if (invocationId) return classifyToolInvocationRef({ db: input.db, companyId: input.companyId, issueId: input.issueId,
+    ref: input.ref, invocationId });
 
   const attachmentId = uuidRef(input.ref, ["attachment"]);
   if (attachmentId) {

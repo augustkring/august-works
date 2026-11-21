@@ -142,6 +142,17 @@ function mergeManagedSourceComponents(components: ManagedSourceComponent[], boot
   return { policy, inputs: unionNativePayloadSourceInputs(inputGroups) };
 }
 
+
+/** APR-E2E-22 (option 1). The in-process stages that run before the
+ * provider transport step; a caller abort here may be released only after the
+ * durable no-dispatch proof in `releaseUndispatchedWorkerModel`. */
+export const WORKER_MODEL_PRE_DISPATCH_STAGES: ReadonlySet<string> =
+  new Set(["provider_authority_recheck", "credential_lookup", "credential_recheck"]);
+export function workerModelAbortMayRelease(input: { bound: boolean; financiallySettled: boolean; callerAborted: boolean;
+  stage: string }) {
+  return input.bound && !input.financiallySettled && input.callerAborted && WORKER_MODEL_PRE_DISPATCH_STAGES.has(input.stage);
+}
+
 /** Resolve one retained assistant message to the exact persisted request prefix
  * that produced it. A matching content hash alone is not enough: the prefix
  * must name the acknowledged Native turn, contain exactly that request's
@@ -201,6 +212,94 @@ export function exactManagedAssistantHistoryPrefix(input: {
  * It is control-plane status, not model-readable workspace data. Admit it only
  * when the exact provider call, acknowledged dispatch, accepted result proposal,
  * and completed tool event are all present in the persisted Native event stream. */
+/** APR-E2E-26. Exact runner rejection texts of the two terminal tools
+ * (OpenCode server driver and Codex app-server driver). */
+const MANAGED_TERMINAL_TOOL_REJECTIONS = new Set([
+  "Invalid semantic result", "Semantic result disposition does not match the terminal tool",
+  "Semantic result completion contract revision does not match", "OpenCode terminal tool lost its active turn",
+  "A different semantic result was already committed",
+  "Invalid semantic result.", "paperclip_finish accepts done, needs_review, or yielded with a response_wake continuation.",
+  "paperclip_block requires reportedWorkDisposition=blocked.", "A different semantic result was already committed.",
+  "The turn ended while checking completion. The result was not accepted.",
+]);
+const MANAGED_TERMINAL_CRITERIA_REJECTION =
+  /^Semantic result criteria must contain exactly these criterionIds, once each: \[[^\n]{0,4000}\]\. Keep contractRevision [^\n]{1,200}\.$/;
+export const MANAGED_TERMINAL_TOOL_CORRECTIONS_PER_RUN = 2;
+
+export function isManagedTerminalToolRejectionText(value: unknown): value is string {
+  return typeof value === "string" && (MANAGED_TERMINAL_TOOL_REJECTIONS.has(value) ||
+    MANAGED_TERMINAL_CRITERIA_REJECTION.test(value));
+}
+
+/** Persisted runner events of this Run's own runner instance, each verified
+ * against its canonical PRP event and source digest. */
+async function readManagedRunnerToolEvents(input: { db: Db; claims: ManagedModelClaims;
+  run: typeof heartbeatRuns.$inferSelect; label: string }) {
+  const rows = await input.db.select({ eventType: heartbeatRunEvents.eventType, sourceInstanceId: heartbeatRunEvents.sourceInstanceId,
+    sourceEventId: heartbeatRunEvents.sourceEventId, sourceSeq: heartbeatRunEvents.sourceSeq,
+    sourcePayloadSha256: heartbeatRunEvents.sourcePayloadSha256,
+    payload: heartbeatRunEvents.payload }).from(heartbeatRunEvents).where(and(
+      eq(heartbeatRunEvents.companyId, input.claims.company_id), eq(heartbeatRunEvents.runId, input.claims.run_id),
+      eq(heartbeatRunEvents.sourceInstanceId, input.run.runnerInstanceId!),
+      inArray(heartbeatRunEvents.eventType, ["item.started", "run.result.proposed", "item.completed"]))).limit(4096);
+  if (rows.length >= 4096) throw forbidden(`${input.label} event history is ambiguous`);
+  return rows.flatMap(row => {
+    const payload = managedRecord(row.payload);
+    const event = managedRecord(payload.prpEvent);
+    if (!validatePrpEvent(event).ok || event.eventType !== row.eventType || event.runId !== input.claims.run_id ||
+        event.sourceInstanceId !== row.sourceInstanceId || event.sourceSeq !== row.sourceSeq ||
+        event.normalizedSessionId !== input.run.nativeSessionId || typeof row.sourceEventId !== "string" ||
+        row.sourceEventId !== `${input.run.runnerInstanceId}:${input.run.id}:${String(event.sourceSeq)}` ||
+        row.sourcePayloadSha256 !== `sha256:${nativeSha256(event)}`) return [];
+    return [{ event, payload: managedRecord(event.payload) }];
+  });
+}
+
+/**
+ * APR-E2E-26. A provider may correct a rejected terminal tool call once or
+ * twice per Run. The error result is admitted only when this Run's runner
+ * recorded the exact terminal call (same call id, tool and arguments) and its
+ * rejection with exactly this text, the text is one of the runner's terminal
+ * rejections, and fewer than two earlier terminal rejections were recorded in
+ * this Run. It grants no tool authority and changes no charging.
+ */
+export async function assertManagedTerminalToolRejection(input: {
+  db: Db; claims: ManagedModelClaims; run: typeof heartbeatRuns.$inferSelect;
+  providerUse: { toolName: string; argumentsHash: string }; callId: string; content: string;
+}): Promise<void> {
+  const refuse = () => forbidden("Managed terminal tool error result has no exact recorded rejection");
+  if (!["paperclip_finish", "paperclip_block"].includes(input.providerUse.toolName) || !input.run.runnerInstanceId ||
+      !isManagedTerminalToolRejectionText(input.content)) throw refuse();
+  const events = await readManagedRunnerToolEvents({ ...input, label: "Managed terminal tool" });
+  const terminalStarts = events.flatMap(({ event, payload }) => {
+    const item = managedRecord(payload.item);
+    return event.eventType === "item.started" && payload.kind === "dynamicToolCall" && item.type === "tool_call" &&
+      typeof item.id === "string" && event.itemId === item.id &&
+      (item.name === "paperclip_finish" || item.name === "paperclip_block") ? [{ event, item }] : [];
+  });
+  // A call id names one recorded terminal call; a reused id is ambiguous.
+  const uniqueStart = (id: unknown) => {
+    const starts = terminalStarts.filter(start => start.item.id === id);
+    return starts.length === 1 ? starts[0]! : undefined;
+  };
+  const rejections = events.filter(({ event, payload }) => {
+    const item = managedRecord(payload.item);
+    const start = uniqueStart(item.id);
+    return event.eventType === "item.completed" && payload.kind === "dynamicToolCall" && item.type === "tool_result" &&
+      item.is_error === true && typeof item.id === "string" && item.tool_use_id === item.id && event.itemId === item.id &&
+      start !== undefined && start.event.turnId === event.turnId && typeof start.event.sourceSeq === "number" &&
+      typeof event.sourceSeq === "number" && start.event.sourceSeq < event.sourceSeq &&
+      isManagedTerminalToolRejectionText(item.error);
+  }).sort((left, right) => Number(left.event.sourceSeq) - Number(right.event.sourceSeq));
+  const matches = rejections.filter(({ payload }) => managedRecord(payload.item).id === input.callId);
+  const start = uniqueStart(input.callId);
+  if (matches.length !== 1 || !start || start.item.name !== input.providerUse.toolName ||
+      nativeSha256(start.item.arguments) !== input.providerUse.argumentsHash ||
+      managedRecord(matches[0]!.payload.item).error !== input.content) throw refuse();
+  if (rejections.indexOf(matches[0]!) >= MANAGED_TERMINAL_TOOL_CORRECTIONS_PER_RUN)
+    throw forbidden("Managed terminal tool correction limit for this Run is exhausted");
+}
+
 async function assertManagedPaperclipFinishResult(input: {
   db: Db;
   claims: ManagedModelClaims;
@@ -1297,6 +1396,10 @@ async function assertManagedOpenCodeRequestSources(db: Db, claims: ManagedModelC
           item.attempt === matchingAssociations[0]!.attempt);
         const content = typeof block.content === "string" ? block.content : Array.isArray(block.content)
           ? block.content.map((part) => typeof managedRecord(part).text === "string" ? managedRecord(part).text : "").join("") : "";
+        if (block.is_error === true && (toolName === "paperclip_finish" || toolName === "paperclip_block")) {
+          await assertManagedTerminalToolRejection({ db, claims, run, providerUse, callId: block.tool_use_id, content });
+          continue;
+        }
         if (block.is_error === true) {
           const pendingMatches = matchingAssociations.length === 1
             ? [matchingAssociations[0]!].filter(item => managedRecord(item.pendingMcpAction).providerToolName === toolName)
@@ -4323,6 +4426,16 @@ export function workerModelGateway(db: Db, options: Options) {
             status: "completed", providerResponseHash: error.knownUsage.responseHash, usage: error.knownUsage.usage,
           }).catch(() => null);
           financiallySettled = outcome?.status === "completed";
+        }
+        // APR-E2E-22 (option 1). A caller abort that ended a worker_model call
+        // before the transport step is released as failed and does not fence,
+        // but only when the durable record proves no byte left (see
+        // releaseUndispatchedWorkerModel). Anything else stays unknown and fences.
+        if (workerModelAbortMayRelease({ bound: Boolean(bound), financiallySettled, callerAborted: callerSignal?.aborted === true,
+          stage: managedFailureStage }) &&
+          await reservations.releaseUndispatchedWorkerModel(claims.company_id, reservation.id, { runId: claims.run_id }).catch(() => null)) {
+          throw conflict("The managed model request was cancelled before provider dispatch", {
+            code: "worker_model_cancelled_before_dispatch", stage: managedFailureStage });
         }
         if (!financiallySettled)
           await reservations.recordOutcome(claims.company_id, reservation.id, { status: "unknown", providerResponseHash: null, usage: null }).catch(() => {});

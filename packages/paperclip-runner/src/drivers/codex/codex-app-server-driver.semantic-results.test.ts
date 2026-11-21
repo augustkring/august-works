@@ -64,6 +64,41 @@ describe("Codex app-server Codex driver", () => {
     await session.close();
   });
 
+  it("records terminal tool calls and their exact rejections as durable run events (APR-E2E-26)", async () => {
+    const transport = new FakeCodexTransport();
+    const session = await makeDriver([transport]).openSession({
+      runId: "run-terminal-events", normalizedSessionId: "terminal-events", workingDirectory: WORKSPACE,
+    });
+    await session.startTurn({ message: { role: "user", text: "Finish" } });
+    const call = (callId: string, tool: string, args: unknown) => transport.invoke({ id: callId, method: "item/tool/call",
+      params: { threadId: "thread-1", turnId: "turn-1", callId, tool, arguments: args } });
+    expect(await call("invalid", "paperclip_finish", { summary: "not a result" })).toMatchObject({ success: false,
+      contentItems: [{ type: "inputText", text: "Invalid semantic result." }] });
+    expect(await call("wrong-tool", "paperclip_block", result)).toMatchObject({ success: false,
+      contentItems: [{ type: "inputText", text: "paperclip_block requires reportedWorkDisposition=blocked." }] });
+    expect(await call("accepted", "paperclip_finish", result)).toMatchObject({ success: true });
+    transport.push("turn/completed", { threadId: "thread-1", turn: { id: "turn-1", status: "completed", items: [] } });
+    const events = await collectUntilTerminal(session.events());
+    const items = events.filter(event => (event.eventType === "item.started" || event.eventType === "item.completed") &&
+      ["invalid", "wrong-tool", "accepted"].includes(String(event.itemId))).map(event => {
+      const item = (event.payload as { item: Record<string, unknown> }).item;
+      return [event.eventType, event.itemId, item.type, item.name ?? null, item.is_error ?? false, item.error ?? null];
+    });
+    expect(items).toEqual([
+      ["item.started", "invalid", "tool_call", "paperclip_finish", false, null],
+      ["item.completed", "invalid", "tool_result", null, true, "Invalid semantic result."],
+      ["item.started", "wrong-tool", "tool_call", "paperclip_block", false, null],
+      ["item.completed", "wrong-tool", "tool_result", null, true, "paperclip_block requires reportedWorkDisposition=blocked."],
+      ["item.started", "accepted", "tool_call", "paperclip_finish", false, null],
+      ["item.completed", "accepted", "tool_result", null, false, null],
+    ]);
+    const started = events.find(event => event.eventType === "item.started" && event.itemId === "accepted");
+    const proposed = events.find(event => event.eventType === "run.result.proposed");
+    const completed = events.find(event => event.eventType === "item.completed" && event.itemId === "accepted");
+    expect(started!.sourceSeq < proposed!.sourceSeq && proposed!.sourceSeq < completed!.sourceSeq).toBe(true);
+    expect(events.every(event => validatePrpEvent(event).ok)).toBe(true);
+  });
+
   it("accepts an explicit response-wake yield through paperclip_finish", async () => {
     const transport = new FakeCodexTransport();
     const session = await makeDriver([transport]).openSession({
@@ -180,7 +215,9 @@ describe("Codex app-server Codex driver", () => {
       sourceEventType: "semantic_tool.input",
       disposition: "mapped",
     });
-    expect(resultMapping?.emittedEventIds).toHaveLength(2);
+    // The terminal call, its verification item, the proposal and the
+    // tool result (APR-E2E-26: terminal calls are durable run events).
+    expect(resultMapping?.emittedEventIds).toHaveLength(4);
     expect(resultMapping?.emittedEventIds).toEqual(
       expect.arrayContaining([expect.stringContaining(":run-result:")]),
     );

@@ -14,7 +14,7 @@ export function registerManagedConnectionReviewCase(journey: ConnectionReviewJou
     const deadlineAt = Date.now() + envelopeMs;
     test.setTimeout(envelopeMs);
     await withManagedConnectionReview({ page, journey, deadlineAt,
-      driveReview: async ({ page, context, request, seed, agent, issue, calls, remaining, start, waitInitialRun, createLaterTask, recordPendingComment, resolutionRunId }) => {
+      driveReview: async ({ page, context, request, seed, agent, issue, calls, remaining, start, waitInitialRun, createLaterTask, recordPendingComment, resolutionRunId, verifyPlan }) => {
     let suppressReviewEvents = journey === "decline";
     if (journey === "decline") {
       // Reproduce a review arriving between the initial fetch and subscription:
@@ -131,13 +131,31 @@ export function registerManagedConnectionReviewCase(journey: ConnectionReviewJou
       await expect(
         queue.getByRole("button", { name: "Decline", exact: true }),
       ).not.toBeVisible({ timeout: remaining() });
-      await expect
-        .poll(
-          async () =>
-            (await json<{ status: string }>(await request.get(`/api/issues/${issue.id}`))).status,
-          { timeout: remaining() },
-        )
-        .toBe("done");
+      if (journey === "decline") {
+        // APR-E2E-23 (decline). A declined governed action is not evidence
+        // that its invariant holds, so the agent finishes blocked and names the
+        // declined card; the Task shows blocked with that reason in its history.
+        await expect
+          .poll(
+            async () =>
+              (await json<{ status: string }>(await request.get(`/api/issues/${issue.id}`))).status,
+            { timeout: remaining() },
+          )
+          .toBe("blocked");
+        await expect(page.getByText(`declined the Railway project read (interaction:${originatingReview.id})`, { exact: false }).first())
+          .toBeVisible({ timeout: remaining() });
+      } else {
+        // APR-E2E-25 (b). The arbiter holds the plan-covered Task in review
+        // until the responsible Human verifies its plan; that pass makes it done.
+        await verifyPlan(issue.id);
+        await expect
+          .poll(
+            async () =>
+              (await json<{ status: string }>(await request.get(`/api/issues/${issue.id}`))).status,
+            { timeout: remaining() },
+          )
+          .toBe("done");
+      }
       const showResolvedDetails = page.getByRole("button", {
         name: "Show result details",
         exact: true,
@@ -179,6 +197,16 @@ export function registerManagedConnectionReviewCase(journey: ConnectionReviewJou
           )
           .toContain("Roadmap");
         expect(calls()).toBe(2);
+        // The later Task cites its executed call under the standing grant
+        // (tool_invocation evidence); its plan is verified by the Human too.
+        await verifyPlan(later.id);
+        await expect
+          .poll(
+            async () =>
+              (await json<{ status: string }>(await request.get(`/api/issues/${later.id}`))).status,
+            { timeout: remaining() },
+          )
+          .toBe("done");
         expect(
           await json<unknown[]>(
             await request.get(`/api/issues/${later.id}/interactions`),

@@ -1,6 +1,7 @@
 import { randomUUID } from "node:crypto";
-import type { Db } from "@paperclipai/db";
-import { createToolConnectionSchema } from "@paperclipai/shared";
+import { and, eq, inArray } from "drizzle-orm";
+import { toolCatalogEntries, toolPolicies, toolProfileBindings, toolProfileEntries, toolProfiles, type Db } from "@paperclipai/db";
+import { createToolConnectionSchema, type FinishToolApp } from "@paperclipai/shared";
 import { secretService } from "../../services/secrets.js";
 import { toolAccessService } from "../../services/tool-access.js";
 import { toolAccessPolicyService } from "../../services/tool-access-policy.js";
@@ -160,20 +161,59 @@ export async function prepareConnectionIntentRailwayFixture(input: {
   await access.putConnectionInstalls(connection.id, {
     installs: [{ targetType: "agent", targetId: input.holderAgentId }],
   }, actor);
-  const enableLargeSchemaTool = async () => {
+  /** The provider adds four tools after setup. Railway's reviewed contract
+   * classifies an unknown Railway MCP tool as a write, so refresh quarantines
+   * each one pending review. The responsible Human then reviews and enables
+   * them through `approve`, which must use the real app finish owner (the
+   * Review tab's request). This fixture only builds that request the way the
+   * Review tab does: current profile actions plus the reviewed ones, current
+   * Ask-first actions, and current access. */
+  const enableLargeSchemaTool = async (approve: (body: FinishToolApp) => Promise<void>) => {
     largeSchemaEnabled = true;
     const updated = await access.refreshCatalog(connection.id, actor, { restoreDraftDefaults: true });
-    const largeTool = updated.catalog.find(entry => entry.toolName === "fixture-large");
-    if (!largeTool || largeTool.status !== "active" || !largeTool.schemaHash || !largeTool.versionHash)
-      throw new Error("railway_fixture_large_schema_discovery_failed");
+    const addedNames = ["fixture-large", ...ballastTools.map(filler => filler.name)];
+    const added = addedNames.map(name => updated.catalog.find(entry => entry.toolName === name));
+    if (added.some(entry => !entry ||
+        entry.status !== "quarantined" || entry.quarantineReason !== "pending_review" || entry.riskLevel !== "write"))
+      throw new Error("railway_fixture_large_schema_quarantine_not_observed");
+    const addedIds = added.map(entry => entry!.id);
+    const quarantined = await input.db.select({ id: toolCatalogEntries.id }).from(toolCatalogEntries)
+      .where(and(eq(toolCatalogEntries.companyId, input.companyId), eq(toolCatalogEntries.connectionId, connection.id),
+        eq(toolCatalogEntries.status, "quarantined")));
+    if (quarantined.length !== addedIds.length || quarantined.some(row => !addedIds.includes(row.id)))
+      throw new Error("railway_fixture_unexpected_quarantine");
+    const [profile] = await input.db.select().from(toolProfiles).where(and(eq(toolProfiles.companyId, input.companyId),
+      eq(toolProfiles.profileKey, `app:${connection.id}`)));
+    if (!profile) throw new Error("railway_fixture_app_profile_missing");
+    const profileEntries = await input.db.select().from(toolProfileEntries).where(and(
+      eq(toolProfileEntries.companyId, input.companyId), eq(toolProfileEntries.profileId, profile.id)));
+    // The Review tab resubmits included catalog actions only; refuse anything it would drop.
+    if (profileEntries.some(entry => entry.effect !== "include" || entry.selectorType !== "catalog_entry" || !entry.catalogEntryId))
+      throw new Error("railway_fixture_app_profile_not_reviewable");
+    const bindings = await input.db.select().from(toolProfileBindings).where(and(
+      eq(toolProfileBindings.companyId, input.companyId), eq(toolProfileBindings.profileId, profile.id)));
+    const agentIds = bindings.filter(binding => binding.targetType === "agent").map(binding => binding.targetId);
+    if (!bindings.some(binding => binding.targetType === "company") && agentIds.length !== bindings.length)
+      throw new Error("railway_fixture_app_profile_not_reviewable");
+    const askFirst = (await input.db.select().from(toolPolicies).where(and(eq(toolPolicies.companyId, input.companyId),
+      eq(toolPolicies.policyType, "require_approval"), eq(toolPolicies.enabled, true)))).flatMap(policy => {
+      const config = object(policy.config ?? {});
+      return config.source === "app_gallery_finish" && config.connectionId === connection.id &&
+        typeof config.catalogEntryId === "string" ? [config.catalogEntryId] : [];
+    });
+    const enabled = [...new Set([...profileEntries.map(entry => entry.catalogEntryId!), ...addedIds])];
+    await approve({ enabledCatalogEntryIds: enabled, askFirstCatalogEntryIds: askFirst, reviewedCatalogEntryIds: addedIds,
+      access: bindings.some(binding => binding.targetType === "company") ? "all_agents" : { agentIds } });
+    const reviewed = await input.db.select().from(toolCatalogEntries).where(and(eq(toolCatalogEntries.companyId, input.companyId),
+      eq(toolCatalogEntries.connectionId, connection.id), inArray(toolCatalogEntries.id, addedIds)));
+    if (reviewed.length !== addedIds.length || reviewed.some(entry => entry.status !== "active" ||
+        entry.reviewedByUserId !== input.userId || entry.quarantineReason !== null || !entry.schemaHash || !entry.versionHash))
+      throw new Error("railway_fixture_large_schema_review_failed");
     await toolAccessPolicyService(input.db).createPolicy(input.companyId, {
       name: "Read the large fixture tool", policyType: "allow", priority: 200, enabled: true,
       selectors: { connectionId: connection.id, toolName: "fixture-large" },
     }, { userId: input.userId });
     for (const filler of ballastTools) {
-      const entry = updated.catalog.find(candidate => candidate.toolName === filler.name);
-      if (!entry || entry.status !== "active" || !entry.schemaHash || !entry.versionHash)
-        throw new Error("railway_fixture_catalog_ballast_discovery_failed");
       await toolAccessPolicyService(input.db).createPolicy(input.companyId, {
         name: `Read ${filler.name}`, policyType: "allow", priority: 200, enabled: true,
         selectors: { connectionId: connection.id, toolName: filler.name },
