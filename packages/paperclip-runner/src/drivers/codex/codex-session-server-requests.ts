@@ -177,49 +177,81 @@ async function handleServerRequestBody(
           "Semantic result exceeded the retained payload limit.",
         );
       }
+      // APR-E2E-26. Record the terminal call and its outcome as durable run
+      // events, mirroring the OpenCode server driver. The gateway admits a
+      // provider's later self-correction only for a rejection recorded here.
+      state.emit(
+        "item.started",
+        {
+          kind: "dynamicToolCall",
+          item: {
+            type: "tool_call",
+            id: callId,
+            name: tool,
+            arguments: request.params.arguments,
+          },
+        },
+        { turnId, itemId: callId },
+      );
+      const rejectTerminal = (message: string) => {
+        state.emit(
+          "item.completed",
+          {
+            kind: "dynamicToolCall",
+            item: {
+              type: "tool_result",
+              id: callId,
+              tool_use_id: callId,
+              is_error: true,
+              error: message,
+            },
+          },
+          { turnId, itemId: callId },
+        );
+        return rejectedToolCall(message);
+      };
       const validation = validatePrpStructuredRunResult(
         request.params.arguments,
       );
-      if (!validation.ok) {
-        return {
-          success: false,
-          contentItems: [
-            { type: "inputText", text: "Invalid semantic result." },
-          ],
-        };
-      }
+      if (!validation.ok) return rejectTerminal("Invalid semantic result.");
       if (
         !toolAcceptsResult(tool, validation.result)
       ) {
-        return {
-          success: false,
-          contentItems: [
-            {
-              type: "inputText",
-              text:
-                tool === CODEX_BLOCK_TOOL_NAME
-                  ? "paperclip_block requires reportedWorkDisposition=blocked."
-                  : "paperclip_finish accepts done, needs_review, or yielded with a response_wake continuation.",
-            },
-          ],
-        };
+        return rejectTerminal(
+          tool === CODEX_BLOCK_TOOL_NAME
+            ? "paperclip_block requires reportedWorkDisposition=blocked."
+            : "paperclip_finish accepts done, needs_review, or yielded with a response_wake continuation.",
+        );
       }
       let feedback = "Completion report accepted. Task status is committed after this turn and workspace finalization finish.";
       try {
         feedback = await state.completionFeedback?.(validation.result) ?? feedback;
       } catch (error) {
-        return rejectedToolCall(boundedText(error instanceof Error ? error.message : error));
+        return rejectTerminal(boundedText(error instanceof Error ? error.message : error));
       }
       state.assertProtocolIntegrity();
       if (state.terminal || state.activeTurnId !== turnId) {
-        return rejectedToolCall("The turn ended while checking completion. The result was not accepted.");
+        return rejectTerminal("The turn ended while checking completion. The result was not accepted.");
       }
       const admission = admitResult(state, validation.result, callId, turnId);
       if (admission === "conflict") {
-        return rejectedToolCall(
+        return rejectTerminal(
           "A different semantic result was already committed.",
         );
       }
+      state.emit(
+        "item.completed",
+        {
+          kind: "dynamicToolCall",
+          item: {
+            type: "tool_result",
+            id: callId,
+            tool_use_id: callId,
+            result: feedback,
+          },
+        },
+        { turnId, itemId: callId },
+      );
       return {
         success: true,
         contentItems: [

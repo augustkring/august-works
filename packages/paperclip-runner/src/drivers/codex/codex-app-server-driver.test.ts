@@ -2785,7 +2785,9 @@ describe("Codex app-server Codex driver", () => {
       sourceEventType: "semantic_tool.input",
       disposition: "mapped",
     });
-    expect(resultMapping?.emittedEventIds).toHaveLength(2);
+    // The terminal call, its verification item, the proposal and the
+    // tool result (APR-E2E-26: terminal calls are durable run events).
+    expect(resultMapping?.emittedEventIds).toHaveLength(4);
     expect(resultMapping?.emittedEventIds).toEqual(
       expect.arrayContaining([
         expect.stringContaining(":run-result:"),
