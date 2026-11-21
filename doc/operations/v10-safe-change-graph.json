@@ -4517,7 +4517,7 @@
         },
         {
           "path": "server/src/services/orchestration/worker-model-gateway.ts",
-          "sha256": "e5360069b39c134d84b9cdcb0cb3797f89117109a88480b762de53f1a8b813a5"
+          "sha256": "c7b0adde0b4d1d260dc529b6917bf2d2423a89e6ade60dd5529d9f49a97a8676"
         },
         {
           "path": "server/src/services/tool-gateway.ts",
@@ -10377,7 +10377,7 @@
         },
         {
           "path": "server/src/services/orchestration/worker-model-gateway.ts",
-          "sha256": "e5360069b39c134d84b9cdcb0cb3797f89117109a88480b762de53f1a8b813a5"
+          "sha256": "c7b0adde0b4d1d260dc529b6917bf2d2423a89e6ade60dd5529d9f49a97a8676"
         },
         {
           "path": "server/src/services/platform-skill-admission.ts",
@@ -24654,7 +24654,7 @@
         },
         {
           "path": "packages/paperclip-runner/src/drivers/codex/codex-app-server-driver.test.ts",
-          "sha256": "4a4294a45e17987b785c7e91cfb58700429a15a20f561a5b551e2e62a4d2843c"
+          "sha256": "1221c49651eed978b690e83c1cc14951ddd68501d0d9de43d2b257703bd04d52"
         },
         {
           "path": "packages/paperclip-runner/src/drivers/codex/codex-driver-types.ts",
@@ -32061,11 +32061,11 @@
         },
         {
           "path": "server/src/__tests__/helpers/connection-intent-railway-fixture.test.ts",
-          "sha256": "54841bebaa9bf22fa7abbec31bd688bbf30ea541244b1fb58b96af3e6bff14d3"
+          "sha256": "410dbf42865b7dbeacca34d6e8cfadedb4573b7b72cbf71625a055b7be1f9fc3"
         },
         {
           "path": "server/src/__tests__/helpers/connection-intent-railway-fixture.ts",
-          "sha256": "e98b563ceb9722874558bda4b3916dd8b239d45b606e86f4a9b33f5e045dd569"
+          "sha256": "56336070c4c969a75d28ab2dcd7ffffd94c18d941db74c01ca5acbeffc03838b"
         },
         {
           "path": "server/src/__tests__/helpers/controlled-native-signoff-backend.ts",
@@ -35517,7 +35517,7 @@
         },
         {
           "path": "tests/e2e/fixtures/managed-connection-review.ts",
-          "sha256": "b616ac011dfcca4dcaf3aacd72b7f888d8ef6d0a5c6e6a71bba11155b096ae76"
+          "sha256": "defdbf270ee110cf0f1d12603b2e2a7861d5d5decc6e9af0b73bd9c42fbb1289"
         },
         {
           "path": "tests/e2e/fixtures/managed-pipeline-producer.ts",
@@ -47160,7 +47160,7 @@
       "id": "source:server/src/services/orchestration/worker-model-gateway.ts",
       "kind": "current_source_owner",
       "path": "server/src/services/orchestration/worker-model-gateway.ts",
-      "sha256": "e5360069b39c134d84b9cdcb0cb3797f89117109a88480b762de53f1a8b813a5",
+      "sha256": "c7b0adde0b4d1d260dc529b6917bf2d2423a89e6ade60dd5529d9f49a97a8676",
       "changeIds": [
         "SCR-V10-HOTSPOT-01",
         "SCR-V10-HOTSPOT-07"
@@ -62460,7 +62460,7 @@
       "id": "source:packages/paperclip-runner/src/drivers/codex/codex-app-server-driver.test.ts",
       "kind": "current_source_owner",
       "path": "packages/paperclip-runner/src/drivers/codex/codex-app-server-driver.test.ts",
-      "sha256": "4a4294a45e17987b785c7e91cfb58700429a15a20f561a5b551e2e62a4d2843c",
+      "sha256": "1221c49651eed978b690e83c1cc14951ddd68501d0d9de43d2b257703bd04d52",
       "changeIds": [
         "SCR-V10-NATIVE-RUNTIME-AND-AUTHORITY"
       ],
@@ -72380,7 +72380,7 @@
       "id": "source:server/src/__tests__/helpers/connection-intent-railway-fixture.test.ts",
       "kind": "current_source_owner",
       "path": "server/src/__tests__/helpers/connection-intent-railway-fixture.test.ts",
-      "sha256": "54841bebaa9bf22fa7abbec31bd688bbf30ea541244b1fb58b96af3e6bff14d3",
+      "sha256": "410dbf42865b7dbeacca34d6e8cfadedb4573b7b72cbf71625a055b7be1f9fc3",
       "changeIds": [
         "SCR-V10-PRODUCT-IDENTITY-HELP-LANGUAGE"
       ],
@@ -72395,7 +72395,7 @@
       "id": "source:server/src/__tests__/helpers/connection-intent-railway-fixture.ts",
       "kind": "current_source_owner",
       "path": "server/src/__tests__/helpers/connection-intent-railway-fixture.ts",
-      "sha256": "e98b563ceb9722874558bda4b3916dd8b239d45b606e86f4a9b33f5e045dd569",
+      "sha256": "56336070c4c969a75d28ab2dcd7ffffd94c18d941db74c01ca5acbeffc03838b",
       "changeIds": [
         "SCR-V10-PRODUCT-IDENTITY-HELP-LANGUAGE"
       ],
@@ -74855,7 +74855,7 @@
       "id": "source:tests/e2e/fixtures/managed-connection-review.ts",
       "kind": "current_source_owner",
       "path": "tests/e2e/fixtures/managed-connection-review.ts",
-      "sha256": "b616ac011dfcca4dcaf3aacd72b7f888d8ef6d0a5c6e6a71bba11155b096ae76",
+      "sha256": "defdbf270ee110cf0f1d12603b2e2a7861d5d5decc6e9af0b73bd9c42fbb1289",
       "changeIds": [
         "SCR-V10-CUSTOMER-EXPERIENCE"
       ],
