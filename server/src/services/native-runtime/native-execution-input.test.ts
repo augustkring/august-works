@@ -1702,13 +1702,44 @@ describe("native bootstrap rendered-source closure", () => {
           contentHash: nativeSha256({ rendition: "native_tool_action_delivery_v1", projection: delivery }) } };
 
       expect(check(c)).toBe(c);
+      // APR-E2E-18: a deferred Human note is a resolution-wake origin only
+      // through its own deferral owner (this card, its author); never a card origin.
+      {
+        const noteId = randomUUID();
+        const note = nativeContinuationCommentProjection({ id: noteId, authorType: "user", authorUserId: responsibleUserId,
+          authorAgentId: null, createdByRunId: null, body: "A deferred Human note.", createdAt: new Date("2026-10-01T00:00:00.500Z"),
+          updatedAt: new Date("2026-10-01T00:00:00.500Z"), deletedAt: null, sourceTrust: null });
+        const withNote = structuredClone(c);
+        withNote.envelope.messages.push(note); withNote.envelope.originCommentIds.push(noteId);
+        withNote.envelope.coverage.throughCommentId = noteId; withNote.envelope.objective = note.body;
+        withNote.commentSources.push({ input: { kind: "comment", issueId, commentId: noteId, sourceVersion: "3",
+          contentHash: nativeContinuationMessageHash(note) }, payloadSourceSnapshot: null });
+        const owner = { companyId, issueId, interactionId, interactionVersion: "1.5", commentId: noteId,
+          activityId: randomUUID(), authorUserId: responsibleUserId };
+        expect(check(withNote)).toBeNull();
+        const owned = structuredClone(withNote); owned.deferredNotes = [owner];
+        expect(check(owned)).toBe(owned);
+        for (const changed of [
+          { ...owner, interactionId: randomUUID() },
+          { ...owner, authorUserId: "another-human" },
+          { ...owner, interactionVersion: "not-a-version" },
+          { ...owner, commentId: randomUUID() },
+          { ...owner, issueId: randomUUID() },
+        ]) { const forged = structuredClone(withNote); forged.deferredNotes = [changed]; expect(check(forged)).toBeNull(); }
+        const duplicate = structuredClone(withNote); duplicate.deferredNotes = [owner, owner]; expect(check(duplicate)).toBeNull();
+        const empty = structuredClone(withNote); empty.deferredNotes = []; expect(check(empty)).toBeNull();
+        const noDelivery = structuredClone(owned); delete noDelivery.delivery; expect(check(noDelivery)).toBeNull();
+        const cardOrigin = structuredClone(c); cardOrigin.deferredNotes = [{ ...owner, commentId }]; expect(check(cardOrigin)).toBeNull();
+      }
       // APR-E2E-13: the rendered rejected interaction state of a declined
       // tool-action card is owned by its governed decision, never a withdrawal.
       {
         const wakeSource = { kind: "native_task_wake" as const, runId, issueId, sourceVersion: "1", contentHash: "d".repeat(64) };
         const governed = c.governedInteractions![0]!;
-        const stateReference = { kind: "task_wake_interaction_state" as const, id: interactionId,
-          interactionKind: "request_confirmation" as const, interactionStatus: "rejected" as const };
+        const stateStatus = status === "rejected" ? "rejected" as const : "accepted" as const;
+        const stateFor = (value: "rejected" | "accepted") => ({ kind: "task_wake_interaction_state" as const, id: interactionId,
+          interactionKind: "request_confirmation" as const, interactionStatus: value });
+        let stateReference = stateFor(stateStatus);
         const build = (capture: NativeTaskContinuationCapture, sources = [governed.nativeSource, governed.continuationSource, c.delivery!.source]) =>
           buildNativeBootstrapSourceSet({
             companyId, runId, agentId, issueId, renderedMarkdown,
@@ -1721,12 +1752,19 @@ describe("native bootstrap rendered-source closure", () => {
               wakeReason: "issue_commented", taskObjective: c.envelope.objective },
             contextManifestIds: [], rolePackInputs: [], unsupportedInputPresent: false,
           });
-        if (status === "rejected") {
-          expect(build(c)?.inputs).toEqual(expect.arrayContaining([governed.nativeSource, governed.continuationSource]));
-          expect(build(c, [governed.nativeSource])).toBeNull();
-        } else {
-          expect(build(c)).toBeNull();
-        }
+        // APR-E2E-19: the accepted state of an approved card that ran (executed
+        // or failed) is owned the same way, by that card's governed decision.
+        expect(build(c)?.inputs).toEqual(expect.arrayContaining([governed.nativeSource, governed.continuationSource]));
+        expect(build(c, [governed.nativeSource])).toBeNull();
+        expect(build(c, [governed.continuationSource])).toBeNull();
+        // The other state line for the same card stays unowned.
+        stateReference = stateFor(stateStatus === "rejected" ? "accepted" : "rejected");
+        expect(build(c)).toBeNull();
+        stateReference = stateFor(stateStatus);
+        // A decision for another card owns nothing.
+        const otherCard = structuredClone(c);
+        otherCard.governedInteractions![0]!.projection.owner.sourceRunId = randomUUID();
+        expect(build(otherCard)).toBeNull();
       }
       // A new genuine Human comment is a separate trigger from recorded
       // historical review outcomes. Never borrow the historical resolver.

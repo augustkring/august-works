@@ -39,11 +39,23 @@ export type NativeStageTaskContinuationTrigger = {
   stageHash: string; chainHash: string; taskObjective: string;
 };
 
+/** APR-E2E-18. Wake origin comments that no governed card owner (origin or
+ * source comment) owns, in envelope order. */
+export function nativeUnownedGovernedOrigins(originCommentIds: readonly string[],
+  governed: readonly { projection: { owner: { originCommentIds: string[]; sourceCommentId: string | null } } }[]): string[] {
+  const owned = new Set(governed.flatMap(value => [...value.projection.owner.originCommentIds,
+    ...(value.projection.owner.sourceCommentId ? [value.projection.owner.sourceCommentId] : [])]));
+  return [...new Set(originCommentIds)].filter(id => !owned.has(id));
+}
+
 export type NativeTaskContinuationCapture = {
   companyId: string; issueId: string; agentId: string; runId: string;
   responsibleUserId: string; wakeupRequestId: string;
   envelope: ExecutionContinuationEnvelope; commentSources: NativeCommentSourceCapture[];
   delivery?: import("./tool-action-delivery.js").NativeToolActionDeliveryCapture;
+  /** APR-E2E-18. Deferred Human notes of the resolved card, each owned by its
+   * durable deferral activity row. */
+  deferredNotes?: import("./governed-tool-decision-wait.js").NativeDeferredGovernedNoteOwner[];
   finalizedSummary?: NativeFinalizedContinuationSummaryCapture;
   previousContext?: { runId: string; messages: ExecutionContinuationEnvelope["messages"] };
   retainedSource?: Extract<import("@paperclipai/shared").NativePayloadSourceInput, { kind: "retained_run" }>;
@@ -1058,6 +1070,12 @@ export async function buildExecutionContinuation(input: {
     const { captureNativeToolActionDelivery } = await import("./tool-action-delivery.js");
     const delivery = wake && governedInteractions.length ? await captureNativeToolActionDelivery({ db, companyId, issueId,
       agentId: input.agentId, runId: receiver.id, wakeupRequestId: wake.id }) : null;
+    // APR-E2E-18. A resolution wake's origin that the governed card does not
+    // own is accepted only as a deferred Human note with its activity owner.
+    const deferredNotes = delivery && triggerInteraction
+      ? await (await import("./governed-tool-decision-wait.js")).captureDeferredGovernedNoteOwners(db, { companyId, issueId,
+          interactionId: triggerInteraction.id, commentIds: nativeUnownedGovernedOrigins(envelope.originCommentIds, governedInteractions) })
+      : [];
     const stageActions: import("./native-stage-wake-source.js").NativeFinalizedStageConsumption[] = [];
     if (wake && completedActions.length > 0 && completedActions.length <= 64) {
       const {captureNativeFinalizedStageConsumption}=await import("./native-stage-wake-source.js");
@@ -1094,6 +1112,7 @@ export async function buildExecutionContinuation(input: {
       ...(adminExpiredInteractions.length ? { adminExpiredInteractions } : {}),
       ...(stageActions.length ? { stageActions } : {}),
       ...(delivery ? { delivery } : {}),
+      ...(deferredNotes.length ? { deferredNotes } : {}),
       ...(pendingInteractions.length ? { pendingInteractions } : {}),
       ...(summary ? { summary } : {}),
       ...(currentHumanAssignment ? { currentHumanAssignment } : {}),

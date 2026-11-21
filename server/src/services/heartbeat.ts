@@ -8912,13 +8912,17 @@ export function buildPaperclipTaskMarkdown(input: {
   if (!issue && effectiveWakeComments.length === 0) return null;
   // Ordinary answers render in the wake DTO, not this task markdown. Their
   // presence alone cannot create a source reference for bytes not rendered.
+  // APR-E2E-19. An accepted request_confirmation (a tool-action card that was
+  // approved and ran, successfully or not) renders the same state reference;
+  // the source-set builder owns it only by that card's governed decision.
   const renderedWithdrawalInteraction = input.interaction?.id &&
     ((input.interaction.kind === "ask_user_questions" && input.interaction.status === "cancelled") ||
       (["request_confirmation", "request_checkbox_confirmation"].includes(input.interaction.kind ?? "") &&
-        input.interaction.status === "rejected"))
+        input.interaction.status === "rejected") ||
+      (input.interaction.kind === "request_confirmation" && input.interaction.status === "accepted"))
     ? { kind: "task_wake_interaction_state" as const, id: input.interaction.id,
         interactionKind: input.interaction.kind as "ask_user_questions" | "request_confirmation" | "request_checkbox_confirmation",
-        interactionStatus: input.interaction.status as "cancelled" | "rejected" } : null;
+        interactionStatus: input.interaction.status as "cancelled" | "rejected" | "accepted" } : null;
   const interactionStateIsOnlyUnsupportedReference = Boolean(renderedWithdrawalInteraction && !input.planReview?.status &&
     !input.acceptedPlanContinuation && !input.acceptedPlan?.revisionId);
   if (input.externalChatProvider && issue) options.onRenderedSource?.({

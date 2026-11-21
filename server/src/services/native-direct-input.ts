@@ -2604,6 +2604,9 @@ export async function assertNativeModelOutputCaptureCurrent(db: Db | Transaction
 async function nativeHistoricalPendingContextForParentInner(db: Db | Transaction, scope: NativeSourceReadScope, input: {
   companyId: string; issueId: string; consumerRunId: string; parent: typeof heartbeatRuns.$inferSelect;
   actor: AuthorizationActor; inherited?: NativePendingTransitionContext;
+  /** APR-E2E-16. The consumer's launch-verified first-constructor inputs; used
+   * only while it has no sealed receipt (nativeFirstConstructorBootstrapInputs). */
+  firstConstructorInputs?: readonly NativePayloadSourceInput[];
 }): Promise<NativePendingTransitionContext | undefined> {
   const parentReceipt = nativeRunInputSourceReceiptSchema.safeParse(nativeSourceRecord(input.parent.runnerProfileJson).nativeInputSourceReceipt);
   if (!parentReceipt.success || parentReceipt.data.binding.companyId !== input.companyId ||
@@ -2619,7 +2622,14 @@ async function nativeHistoricalPendingContextForParentInner(db: Db | Transaction
   const receipt = nativeRunInputSourceReceiptSchema.safeParse(nativeSourceRecord(consumer?.runnerProfileJson).nativeInputSourceReceipt);
   const continuation = nativeSourceRecord(nativeSourceRecord(consumer?.contextSnapshot).executionContinuation);
   const outcomes = continuation.interactionOutcomes;
-  if (!consumer || !receipt.success || consumer.nativeIssueId !== input.issueId || consumer.agentId !== input.parent.agentId ||
+  // A sealed receipt is the consumer's bootstrap. Before it is sealed, only the
+  // running v0 consumer's exact prepared launch closure stands in for it.
+  const consumerBootstrapInputs = receipt.success ? receipt.data.bootstrap.inputs : consumer && input.firstConstructorInputs
+    ? await (await import("./native-runtime/native-first-constructor-bootstrap.js")).nativeFirstConstructorBootstrapInputsCurrent(
+        db as Db, consumer, { companyId: input.companyId, issueId: input.issueId, agentId: input.parent.agentId,
+          candidate: input.firstConstructorInputs })
+    : null;
+  if (!consumer || !consumerBootstrapInputs || consumer.nativeIssueId !== input.issueId || consumer.agentId !== input.parent.agentId ||
     !Array.isArray(outcomes) || outcomes.length === 0 || outcomes.length > 256 ||
     !outcomes.every(value => nativeSourceRecord(value).kind === "request_confirmation" && typeof nativeSourceRecord(value).id === "string")) return undefined;
   const adminOutcomes = outcomes.filter(value => nativeSourceRecord(value).status === "expired" &&
@@ -2632,7 +2642,7 @@ async function nativeHistoricalPendingContextForParentInner(db: Db | Transaction
       interactionIds: adminOutcomes.map(value => String(nativeSourceRecord(value).id)), reader: input.actor });
     if (captures.length !== adminOutcomes.length || captures.some(capture =>
       !isDeepStrictEqual(capture.interactionOutcome, outcomes.find(value => nativeSourceRecord(value).id === capture.projection.interactionId)) ||
-      !receipt.data.bootstrap.inputs.some(source => isDeepStrictEqual(source, capture.source))))
+      !consumerBootstrapInputs.some(source => isDeepStrictEqual(source, capture.source))))
       throw forbidden("A historical administrative interaction source changed");
     for (const capture of captures) adminIds.add(capture.projection.interactionId);
   }
@@ -2644,15 +2654,17 @@ async function nativeHistoricalPendingContextForParentInner(db: Db | Transaction
   await materializeNativeInteractionResponses({db:db as Db,companyId:input.companyId,issueId:input.issueId,
     runId:consumer.id,agentId:consumer.agentId,interactionIds:humanOutcomes.map(value=>String(nativeSourceRecord(value).id)),
     onContinuationSourceCapture:value=>{terminalSources.push(value);}});
-  if (terminalSources.length !== humanOutcomes.length || terminalSources.some(value=>!receipt.data.bootstrap.inputs.some(source=>
+  if (terminalSources.length !== humanOutcomes.length || terminalSources.some(value=>!consumerBootstrapInputs.some(source=>
     isDeepStrictEqual(source,value.continuationSource)))) return undefined;
-  return {consumerRunId:consumer.id,parentRunId:input.parent.id,parentReceiptDigest:edge.receiptDigest,terminalSources,lineage:[edge]};
+  return {consumerRunId:consumer.id,parentRunId:input.parent.id,parentReceiptDigest:edge.receiptDigest,terminalSources,lineage:[edge],
+    ...(!receipt.success && input.firstConstructorInputs ? { firstConstructorInputs: [...input.firstConstructorInputs] } : {})};
 }
 
 async function nativeHistoricalPendingContextForParent(db: Db | Transaction, scope: NativeSourceReadScope, input: {
   companyId: string; issueId: string; consumerRunId: string; parent: typeof heartbeatRuns.$inferSelect;
   actor: AuthorizationActor; inherited?: NativeHistoricalPendingTransitionContext;
   edge: {kind:"retained_run" | "finalized_summary" | "stage_action";digest:string};
+  firstConstructorInputs?: readonly NativePayloadSourceInput[];
 }): Promise<NativeHistoricalPendingTransitionContext | undefined> {
   const pending=await nativeHistoricalPendingContextForParentInner(db,scope,{...input,inherited:input.inherited?.pending});
   const stageReads=[...(input.inherited?.stageReads ?? [])];
@@ -3120,7 +3132,8 @@ async function assertNativeTaskWakeSourceCurrentInScope(db: Db | Transaction, sc
       const parent = await nativeSourceReadRun(db, input.companyId, selected.sourceRunId, scope);
       const parentTransition = parent ? await nativeHistoricalPendingContextForParent(db, scope, {
         companyId: input.companyId, issueId: input.issueId, consumerRunId: run.id, parent, actor: input.actor,
-        inherited: input.historicalTransition, edge:{kind:"finalized_summary",digest:nativeSha256(selected)} }) : undefined;
+        inherited: input.historicalTransition, edge:{kind:"finalized_summary",digest:nativeSha256(selected)},
+        firstConstructorInputs: input.bootstrapInputs }) : undefined;
       for (const set of [selected.parentReceipt.bootstrap, ...selected.parentReceipt.dispatches, ...selected.parentReceipt.additionalInputs]) {
         await assertNativePayloadSourceSetCurrentInScope(db, { companyId: input.companyId, issueId: input.issueId,
           runId: selected.sourceRunId, actor: input.actor, policy: set.policy, inputs: set.inputs }, scope,
@@ -3239,6 +3252,17 @@ async function assertNativeTaskWakeSourceCurrentInScope(db: Db | Transaction, sc
       issueId: input.issueId, agentId: run.agentId, runId: run.id, wakeupRequestId: admittedWake.id, reader: input.actor });
     if (selected && input.inputs.some(source => isDeepStrictEqual(source, selected.source))) delivery = selected;
   }
+  let deferredNotes: import("./governed-tool-decision-wait.js").NativeDeferredGovernedNoteOwner[] = [];
+  const deferredTrigger = nativeSourceRecord(nativeSourceRecord(continuation).trigger).interactionId;
+  const deferredOrigins = nativeSourceRecord(continuation).originCommentIds;
+  if (delivery && typeof deferredTrigger === "string" && Array.isArray(deferredOrigins) &&
+    deferredOrigins.every(id => typeof id === "string")) {
+    // APR-E2E-18. Re-read each deferred note's activity owner in this transaction.
+    const { nativeUnownedGovernedOrigins } = await import("./execution-continuation.js");
+    deferredNotes = await (await import("./governed-tool-decision-wait.js")).captureDeferredGovernedNoteOwners(db as Db, {
+      companyId: input.companyId, issueId: input.issueId, interactionId: deferredTrigger,
+      commentIds: nativeUnownedGovernedOrigins(deferredOrigins as string[], governedInteractions) });
+  }
   const admittedInteraction = nativeTaskWakeInteraction(admittedWake?.payload);
   let acceptedPlanReview: NativeTaskContinuationCapture["acceptedPlanReview"];
   const continuationEnvelope = nativeSourceRecord(continuation);
@@ -3309,6 +3333,7 @@ async function assertNativeTaskWakeSourceCurrentInScope(db: Db | Transaction, sc
       ...(acceptedPlanReview ? { acceptedPlanReview } : {}),
       ...(stageActions.length ? { stageActions } : {}),
       ...(delivery ? { delivery } : {}),
+      ...(deferredNotes.length ? { deferredNotes } : {}),
       ...(pendingInteractions?.length ? { pendingInteractions } : {}),
       ...(summary ? { summary } : {}),
       ...(currentHumanAssignment ? { currentHumanAssignment } : {}),

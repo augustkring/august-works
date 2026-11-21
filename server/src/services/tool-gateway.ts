@@ -254,6 +254,21 @@ const DEFAULT_SESSION_TTL_MS = 15 * 60 * 1000;
 const MAX_SESSION_TTL_MS = 60 * 60 * 1000;
 const DEFAULT_TOOL_TIMEOUT_MS = 10_000;
 
+
+/** APR-E2E-17. The closed refusal code of a PostgreSQL check violation (23514)
+ * raised by a database guard, or null for any other error. Drizzle wraps the
+ * driver error in `cause`. */
+export function approvedExecutionTransitionRefusal(error: unknown): string | null {
+  let current: unknown = error;
+  for (let depth = 0; depth < 3 && current && typeof current === "object"; depth++) {
+    const pg = current as { code?: unknown; message?: unknown; cause?: unknown };
+    if (pg.code === "23514")
+      return typeof pg.message === "string" && /^[a-z][a-z0-9_]{0,79}$/.test(pg.message) ? pg.message : "check_violation";
+    current = pg.cause;
+  }
+  return null;
+}
+
 export function resolveCredentialGrantKind(
   policy: "shared" | "per_user" | "per_user_with_fallback" | "per_agent",
   actingUserId: string | null,
@@ -9889,15 +9904,55 @@ export function createToolGatewayService(
     await assertIssueOpenForApprovedAction({ claimed, invocation });
 
     const startedAt = Date.now();
-    await db
-      .update(toolInvocations)
-      .set({
-        status: "executing",
-        approvalState: "approved",
-        startedAt: new Date(),
-        updatedAt: new Date(),
-      })
-      .where(eq(toolInvocations.id, invocation.id));
+    try {
+      await db
+        .update(toolInvocations)
+        .set({
+          status: "executing",
+          approvalState: "approved",
+          startedAt: new Date(),
+          updatedAt: new Date(),
+        })
+        .where(eq(toolInvocations.id, invocation.id));
+    } catch (error) {
+      // APR-E2E-17. A database guard (for example the orchestration charge
+      // trigger) can refuse the executing transition. Nothing was dispatched:
+      // settle the claimed request and the parked invocation as failed in one
+      // transaction, so the card, the delivery and the wake carry the refusal
+      // and the Task does not wait on an `executing` request forever.
+      const refusal = approvedExecutionTransitionRefusal(error);
+      if (!refusal) throw error;
+      const failure = new ToolGatewayHttpError(
+        409,
+        `The approved tool action could not start (${refusal})`,
+        "approved_execution_refused",
+        { actionRequestId: claimed.id, invocationId: invocation.id, refusal },
+      );
+      const settlement = await markApprovedActionFailed({
+        actionRequestId: claimed.id,
+        invocationId: invocation.id,
+        claimUpdatedAt: claimed.updatedAt,
+        expectedInvocationStatus: "awaiting_approval",
+        error: failure,
+      });
+      if (settlement.settled && invocation.issueId)
+        await logActivity(db, {
+          companyId: invocation.companyId,
+          actorType: "system",
+          actorId: "tool-gateway",
+          action: "issue.tool_action_execution_refused",
+          entityType: "issue",
+          entityId: invocation.issueId,
+          details: {
+            actionRequestId: claimed.id,
+            invocationId: invocation.id,
+            interactionId: claimed.interactionId ?? null,
+            errorCode: failure.reasonCode,
+            refusal,
+          },
+        });
+      throw failure;
+    }
     await reflectToolActionInteractionLifecycle({
       actionRequestId: claimed.id,
       status: "executing",
