@@ -104,6 +104,14 @@ export function businessExperimentAnalysisService(db:Db){return {
       await auditBusinessExperiment(tx,publications,companyId,actor,id,"analyzed",{versionId:version.id,analysisId,receiptHash:analysis.receiptHash,status:result.status});
       experimentBudget(deadline);
       if(Math.min(version.expiresAt.getTime(),pin.source.expiresAt.getTime())<=Date.now())throw conflict("Experiment current Source expired before final capture completed");
+      // PERF2d: the deferred completeness check (aw_experiment_analysis_complete)
+      // runs at commit and joins every captured outcome to the signed capture
+      // JSON. On a pooled connection that already ran it five times PostgreSQL
+      // may reuse a generic plan that does this by nested loop: 43 s at the
+      // 68,000-outcome maximum instead of about 1 s. Custom-plan the rest of
+      // this transaction, which is that check. The plan mode never changes
+      // which rows a statement reads or what the check decides.
+      await tx.execute(sql`set local plan_cache_mode = force_custom_plan`);
       return {experiment:businessExperimentRootView(updated),analysis:experimentAnalysisView(analysis,receipts.completion,true)};
     }));
   },

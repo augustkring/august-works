@@ -748,6 +748,177 @@ export async function canActorReadIssuePrivacyBatch(db: Db | DbTransaction, acto
   return readable;
 }
 
+/** PERF2d bounds of one set-based Task reader statement. Exceeding any of them
+ * sends every eligible root back to the canonical per-root predicate. */
+const SET_BASED_TASK_READER_NODES_PER_ROOT = 257;
+const SET_BASED_TASK_READER_CLOSURE_ROWS = 262_144;
+
+/** PERF2d. The canonical Task reader predicate (`issueReadSqlCondition`, no
+ * captured Context) for a whole exact population, evaluated set-based: every
+ * graph node's edges and node checks once, instead of the complete bounded
+ * graph once per root. The decision for each root is the canonical one:
+ *
+ * - a root with a corrupt temporal snapshot is denied, as the predicate does;
+ * - a root with a valid temporal snapshot narrows its edges by its own
+ *   captured Contexts, so it is evaluated by the canonical per-root predicate
+ *   (`perRootCondition`, built by the caller with `issueReadSqlCondition`);
+ * - for every other root `currentContextAllowed` is `true`, so its bounded
+ *   graph is exactly the set of nodes reachable from it over the shared node
+ *   edges, and it is readable iff that set has at most 256 nodes, no node in
+ *   it has more than 256 enumerated edges, none lies on a cycle, and none
+ *   fails its node check (`nodeViolation`). These are the per-root
+ *   predicate's own conditions, built from the same SQL fragments.
+ *
+ * If the population's graph exceeds the statement's bounds the eligible roots
+ * are evaluated by the per-root predicate instead, so the result never
+ * depends on a truncated graph. Ids that are not Tasks of `companyId` are
+ * absent from the result, as with the per-root statement. The result is
+ * transaction-local: the caller holds the source locks for this population
+ * and consumes it in the same lock phase. Nothing is cached. */
+export async function setBasedIssueReadDecisions(db: Db | DbTransaction, actor: AuthorizationActor, companyId: string,
+  issueIds: readonly string[], perRootCondition: SQL, checkDeadline: () => void = () => {},
+  limits: { nodesPerRoot?: number; closureRows?: number } = {}): Promise<Map<string, boolean>> {
+  const ids = [...new Set(issueIds)];
+  if (ids.some(id => !privacyUuid.test(id)) || !privacyUuid.test(companyId))
+    throw forbidden("The complete current Task reader set is unavailable");
+  const decisions = new Map<string, boolean>();
+  if (!ids.length) return decisions;
+  const company = sql`${companyId}::uuid`;
+  const gateParts = taskSourcePrivacySqlParts(db, "issue", sql`gate_issue.id`, company, actor);
+  const graph = taskSourcePrivacySqlParts(db, "issue", sql`null::uuid`, company, actor, undefined, undefined, false, true);
+  // Smaller limits only send more roots to the per-root predicate.
+  const nodeBound = ids.length * Math.min(limits.nodesPerRoot ?? SET_BASED_TASK_READER_NODES_PER_ROOT, SET_BASED_TASK_READER_NODES_PER_ROOT);
+  const closureBound = Math.min(limits.closureRows ?? SET_BASED_TASK_READER_CLOSURE_ROWS, SET_BASED_TASK_READER_CLOSURE_ROWS);
+  const idArray = sql`${`{${ids.join(",")}}`}::uuid[]`;
+  checkDeadline();
+  const rows = await db.execute<{ id: string; valid: boolean; corrupt: boolean; allowed: boolean | null; overflow: boolean }>(sql`
+    with recursive gate as materialized (
+      select gate_issue.id, ${gateParts.issueSnapshotValid} as valid, ${gateParts.issueSnapshotCorrupt} as corrupt
+      from issues gate_issue where gate_issue.company_id=${company} and gate_issue.id = any(${idArray})
+    ), eligible as materialized (
+      select id from gate where not valid and not corrupt
+    ), graph_nodes(kind,id) as (
+      select 'issue'::text, eligible.id from eligible
+      union
+      select edge.kind,edge.id from graph_nodes n cross join lateral (${graph.enumeratedEdges}) edge
+    ), nodes as materialized (
+      select kind,id from graph_nodes limit ${nodeBound + 1}
+    ), node_edges as materialized (
+      select n.kind,n.id,edge.kind as source_kind,edge.id as source_id
+      from nodes n cross join lateral (${graph.enumeratedEdges}) edge
+    ), denied_nodes as materialized (
+      select n.kind,n.id from nodes n where ${graph.nodeViolation}
+      union
+      select kind,id from node_edges group by kind,id having count(*)>256
+    ), closure(kind,id,source_kind,source_id) as (
+      select kind,id,source_kind,source_id from node_edges
+      union
+      select c.kind,c.id,e.source_kind,e.source_id from closure c
+        join node_edges e on e.kind=c.source_kind and e.id=c.source_id
+    ), closure_bounded as materialized (
+      select * from closure limit ${closureBound + 1}
+    ), cyclic as materialized (
+      select distinct kind,id from closure_bounded where kind=source_kind and id=source_id
+    ), root_reach(root_id,kind,id) as (
+      select eligible.id,'issue'::text,eligible.id from eligible
+      union
+      select r.root_id,e.source_kind,e.source_id from root_reach r
+        join node_edges e on e.kind=r.kind and e.id=r.id
+    ), reach as materialized (
+      select * from root_reach limit ${nodeBound + 1}
+    ), bounds as materialized (
+      select (select count(*) from nodes)>${nodeBound} or (select count(*) from reach)>${nodeBound}
+        or (select count(*) from closure_bounded)>${closureBound} as overflow
+    ), root_graph as materialized (
+      -- denied_nodes and cyclic hold each (kind,id) once, so the joins keep
+      -- one row per reached node and count(*) is the root's node count.
+      select reach.root_id, count(*) as node_count, bool_or(d.kind is not null) as denied, bool_or(c.kind is not null) as cyclic
+      from reach
+        left join denied_nodes d on d.kind=reach.kind and d.id is not distinct from reach.id
+        left join cyclic c on c.kind=reach.kind and c.id=reach.id
+      group by reach.root_id
+    )
+    select gate.id::text as id, gate.valid, gate.corrupt, bounds.overflow,
+      case when gate.valid or gate.corrupt then null
+        else coalesce(root_graph.node_count<=256 and not root_graph.denied and not root_graph.cyclic, false) end as allowed
+    from gate cross join bounds left join root_graph on root_graph.root_id=gate.id
+  `);
+  checkDeadline();
+  const requested = new Set(ids);
+  const perRoot: string[] = [];
+  for (const row of rows) {
+    if (!requested.has(row.id)) continue;
+    if (row.corrupt === true) decisions.set(row.id, false);
+    else if (row.valid === true || row.overflow === true) perRoot.push(row.id);
+    else decisions.set(row.id, row.allowed === true);
+  }
+  for (const [id, allowed] of await perRootIssueReadDecisions(db, companyId, perRoot, perRootCondition, checkDeadline))
+    decisions.set(id, allowed);
+  return decisions;
+}
+
+/** The canonical per-root Task reader statement (`perRootCondition`, built by
+ * the caller with `issueReadSqlCondition`) for each root, in chunks of 512.
+ * Ids that are not Tasks of `companyId` are absent from the result. */
+async function perRootIssueReadDecisions(db: Db | DbTransaction, companyId: string, issueIds: readonly string[],
+  perRootCondition: SQL, checkDeadline: () => void): Promise<Map<string, boolean>> {
+  const decisions = new Map<string, boolean>();
+  for (let offset = 0; offset < issueIds.length; offset += 512) {
+    checkDeadline();
+    const chunk = issueIds.slice(offset, offset + 512);
+    const checked = await db.execute<{ id: string; allowed: boolean }>(sql`
+      select selected.id::text as id, (${perRootCondition}) as allowed
+      from (values ${sql.join(chunk.map(id => sql`(${id}::uuid)`), sql`, `)}) as selected(id)
+      join issues on issues.id=selected.id and issues.company_id=${companyId}
+    `);
+    for (const row of checked) if (chunk.includes(row.id)) decisions.set(row.id, row.allowed === true);
+  }
+  return decisions;
+}
+
+/** PERF2e. A population with temporal-snapshot roots uses the set-based
+ * statement only when at least this many of its roots have none. */
+export const SET_BASED_TASK_READER_MIXED_MINIMUM = 64;
+
+/** PERF2e. The canonical Task reader decision for every root of a population,
+ * by whichever of two parity-tested equivalent paths is cheaper for it:
+ * `setBasedIssueReadDecisions` or the per-root predicate. The route never
+ * changes a decision, only the statements that compute it.
+ *
+ * The set-based statement can decide only roots without a temporal snapshot;
+ * it sends the others to the per-root predicate after it has run. For a
+ * population of only such roots it is pure overhead (about 80 ms, most of it
+ * planning), and with a few roots that it can decide it costs more than
+ * those roots add to the per-root statement. A one-table read of each root's
+ * protocol columns counts the roots that may hold a temporal snapshot
+ * (protocol 1, not invalidated: valid or corrupt, the only roots the
+ * set-based statement does not decide itself). It routes to the set-based
+ * statement when no root may hold one, or when at least
+ * `SET_BASED_TASK_READER_MIXED_MINIMUM` roots do not; otherwise every root
+ * uses the per-root predicate. This read is only a routing hint: both paths
+ * compute every decision from current rows and the set-based statement makes
+ * its own snapshot classification. Nothing is cached. */
+export async function issueReadDecisions(db: Db | DbTransaction, actor: AuthorizationActor, companyId: string,
+  issueIds: readonly string[], perRootCondition: SQL, checkDeadline: () => void = () => {},
+  diagnostic?: { route?: "set_based" | "per_root" }): Promise<Map<string, boolean>> {
+  const ids = [...new Set(issueIds)];
+  if (ids.some(id => !privacyUuid.test(id)) || !privacyUuid.test(companyId))
+    throw forbidden("The complete current Task reader set is unavailable");
+  if (!ids.length) return new Map();
+  checkDeadline();
+  const [counts] = await db.execute<{ snapshot: number; other: number }>(sql`
+    select count(*) filter (where payload_source_protocol_version=1 and not payload_source_snapshot_invalidated)::int as snapshot,
+      count(*) filter (where payload_source_protocol_version is distinct from 1 or payload_source_snapshot_invalidated)::int as other
+    from issues where company_id=${companyId}::uuid and id = any(${`{${ids.join(",")}}`}::uuid[])
+  `);
+  const snapshot = counts?.snapshot ?? 0, other = counts?.other ?? 0;
+  const setBased = other > 0 && (snapshot === 0 || other >= SET_BASED_TASK_READER_MIXED_MINIMUM);
+  if (diagnostic) diagnostic.route = setBased ? "set_based" : "per_root";
+  return setBased
+    ? setBasedIssueReadDecisions(db, actor, companyId, ids, perRootCondition, checkDeadline)
+    : perRootIssueReadDecisions(db, companyId, ids, perRootCondition, checkDeadline);
+}
+
 /** Batch Native Task ACLs only after each temporal Task's frozen Context prefix
  * has been captured inside its own pinned owner callback. The callback accepts
  * hashes, never Context IDs, so a broader ambient Memory scope cannot replace
@@ -1012,6 +1183,19 @@ function pipelineAutomationRoutineSourceCondition(company: SQL): SQL<boolean> {
 function taskSourcePrivacySqlCondition(db: Db | DbTransaction, kind: "issue" | "project" | "run" | "workflow_run" | "routine_run", id: SQL, company: SQL, actor: AuthorizationActor,
   capturedContextManifestIds?: readonly string[], diagnostic?: NativeIssueSnapshotDiagnostic,
   ignoreCorruptForDiagnostic = false): SQL<boolean> {
+  return taskSourcePrivacySqlParts(db, kind, id, company, actor, capturedContextManifestIds, diagnostic,
+    ignoreCorruptForDiagnostic).condition;
+}
+
+/** The canonical retained Task source predicate and the exact fragments it is
+ * composed of. `rootContextUnrestricted` is only for the set-based Task
+ * reader (PERF2d), and only for roots it has proven have no valid temporal
+ * snapshot: for such a root `currentContextAllowed` is `not valid or ...`,
+ * which is `true`, so the root's edges and node checks no longer depend on
+ * the root and can be evaluated once per node for a whole population. */
+function taskSourcePrivacySqlParts(db: Db | DbTransaction, kind: "issue" | "project" | "run" | "workflow_run" | "routine_run", id: SQL, company: SQL, actor: AuthorizationActor,
+  capturedContextManifestIds?: readonly string[], diagnostic?: NativeIssueSnapshotDiagnostic,
+  ignoreCorruptForDiagnostic = false, rootContextUnrestricted = false) {
   const contextUuidArray = (ids: readonly string[]) => sql`array[${sql.join(ids.map(value => sql`${value}::uuid`), sql`, `)}]::uuid[]`;
   const routineScope = nativeRoutineReadScopes.get(db as object);
   const routineCapabilityActive = routineScope?.active && routineScope.companyId && routineScope.routineActorKey === routineActorKey(actor);
@@ -1303,7 +1487,9 @@ function taskSourcePrivacySqlCondition(db: Db | DbTransaction, kind: "issue" | "
     diagnostic.valid = issueSnapshotValid;
     diagnostic.corrupt = issueSnapshotCorrupt;
   }
-  const currentContextAllowed = (manifestId: SQL) => kind === "issue" && capturedContextManifestIds === undefined
+  const currentContextAllowed = (manifestId: SQL) => rootContextUnrestricted
+    ? sql`true`
+    : kind === "issue" && capturedContextManifestIds === undefined
     ? sql`(not ${issueSnapshotValid} or ${manifestId}=any(${capturedContextIds!}))`
     : capturedContextManifestIds === undefined ? sql`true` : sql`${manifestId}=any(${capturedContextIds!})`;
   const humanId = actor.type === "board" ? actor.userId : actor.onBehalfOfUserId;
@@ -1542,7 +1728,23 @@ function taskSourcePrivacySqlCondition(db: Db | DbTransaction, kind: "issue" | "
           where n2.kind='project' group by p2.status) statuses),'{}'::jsonb)
     )::text from bounded n left join projects p on p.id=n.id and p.company_id=${company}
       where n.kind='project')`;
-  return sql<boolean>`(
+  // One node of the bounded graph that denies the read. `n` is the node.
+  const nodeViolation = sql<boolean>`(
+        n.kind not in ('issue','project','run','run_copy','workflow_run','routine_run')
+        or (n.kind='issue' and not ${issueNodeReadable})
+        or (n.kind='project' and not ${projectPrivateReadable})
+        or (n.kind='run' and not ${runBindingExists})
+        -- A Native model-output owner retains its producing Run only so the
+        -- output can be suppressed on Run erasure. That provenance edge does
+        -- not authorize reading the Run or inherit later Run Context roots.
+        or (n.kind='run_copy' and (not ${runCopyExists} or ${runCopyErased}))
+        -- Selected private Memory can narrow a derivative's audience, even when
+        -- the producer's original Task is public. This is a necessary denial,
+        -- not a complete Memory provenance receipt or a positive access grant.
+        or (n.kind='run' and ${runPrivateMemoryFailure})
+        or (n.kind='workflow_run' and not ${workflowRunReadable})
+        or (n.kind='routine_run' and not ${routineRunReadable}))`;
+  const condition = sql<boolean>`(
     ${privacyNodesCte}
     select case when (select count(*) from bounded)>256 or ${ignoreCorruptForDiagnostic ? sql`false` : issueSnapshotCorrupt} then false else not exists (
       with recursive source_edges as materialized (
@@ -1558,23 +1760,10 @@ function taskSourcePrivacySqlCondition(db: Db | DbTransaction, kind: "issue" | "
       union all
       select 1 from reachable where kind=source_kind and id=source_id
       union all
-      select 1 from bounded n where
-        n.kind not in ('issue','project','run','run_copy','workflow_run','routine_run')
-        or (n.kind='issue' and not ${issueNodeReadable})
-        or (n.kind='project' and not ${projectPrivateReadable})
-        or (n.kind='run' and not ${runBindingExists})
-        -- A Native model-output owner retains its producing Run only so the
-        -- output can be suppressed on Run erasure. That provenance edge does
-        -- not authorize reading the Run or inherit later Run Context roots.
-        or (n.kind='run_copy' and (not ${runCopyExists} or ${runCopyErased}))
-        -- Selected private Memory can narrow a derivative's audience, even when
-        -- the producer's original Task is public. This is a necessary denial,
-        -- not a complete Memory provenance receipt or a positive access grant.
-        or (n.kind='run' and ${runPrivateMemoryFailure})
-        or (n.kind='workflow_run' and not ${workflowRunReadable})
-        or (n.kind='routine_run' and not ${routineRunReadable})
+      select 1 from bounded n where ${nodeViolation}
     ) end
   )`;
+  return { condition, enumeratedEdges, nodeViolation, issueSnapshotValid, issueSnapshotCorrupt };
 }
 
 /** The Task's retained Routine sources, read by the canonical single-Task
@@ -2994,21 +3183,17 @@ function createAuthorizationService(db: Db | DbTransaction, readSources?: ReadSo
     const evaluate = async () => {
       const issuesById = new Map<string, boolean>();
       const projectsById = new Map<string, boolean>();
-      // Keep every exact per-root predicate and its independent 256-node/edge
-      // bound. Batching only removes client/server round trips; it never
-      // aggregates a filtered subset or omits a root from the decision.
+      // PERF2d/PERF2e: the exact canonical decision for every root, evaluated
+      // set-based (each graph node once) with the per-root predicate for
+      // temporal-snapshot roots and on any bound overflow, or by the per-root
+      // predicate alone when the set-based statement could decide too few
+      // roots to pay for itself. It never aggregates a filtered subset or
+      // omits a root from the decision.
+      const decided = await issueReadDecisions(db, actor, companyId, issueIds, issueCondition, checkDeadline);
+      for (const id of issueIds) if (decided.has(id)) issuesById.set(id, decided.get(id) === true);
       for (let offset = 0; offset < issueIds.length; offset += 512) {
         checkDeadline();
-        const ids = issueIds.slice(offset, offset + 512);
-        const roots = valuesFor(ids);
-        const query = sql`
-          select selected.id::text as id, (${issueCondition}) as allowed
-          from (values ${roots}) as selected(id)
-          join issues on issues.id=selected.id and issues.company_id=${companyId}
-        `;
-        const rows = await db.execute<{ id: string; allowed: boolean }>(query);
-        for (const row of rows) if (ids.includes(row.id)) issuesById.set(row.id, row.allowed === true);
-        for (const id of ids) {
+        for (const id of issueIds.slice(offset, offset + 512)) {
           if (issuesById.get(id) === true) continue;
           // A private Routine edge requires its original canonical owner. The
           // ordinary batched predicate intentionally has no Routine grant;

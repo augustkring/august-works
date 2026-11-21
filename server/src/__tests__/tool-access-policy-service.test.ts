@@ -310,6 +310,54 @@ describeEmbeddedPostgres("tool access policy service", () => {
     }
   });
 
+  it("skips only the live capacity check for a retained executed source re-validation (APR-E2E-29b)", async () => {
+    const company = await createCompany(db);
+    const agent = await createAgent(db, company.id);
+    const { connection, catalogEntry } = await createTool(db, company.id);
+    const profile = await db.insert(toolProfiles).values({ companyId: company.id, profileKey: `profile-${randomUUID()}`,
+      name: "Write tools", defaultAction: "deny" }).returning().then((rows) => rows[0]!);
+    await db.insert(toolProfileBindings).values({ companyId: company.id, profileId: profile.id, targetType: "agent", targetId: agent.id });
+    await db.insert(toolProfileEntries).values({ companyId: company.id, profileId: profile.id, selectorType: "tool_name",
+      effect: "include", toolName: "send_email" });
+    const input = (consumeRateLimit = false) => ({
+      companyId: company.id,
+      actor: { actorType: "agent" as const, actorId: agent.id, agentId: agent.id },
+      request: { connectionId: connection.id, catalogEntryId: catalogEntry.id, toolName: "send_email" },
+      consumeRateLimit,
+    });
+    commercialCheck.calls.length = 0;
+    commercialCheck.refuse = true;
+    try {
+      // A new call without current capacity is still denied.
+      expect(await toolAccessPolicyService(db).decide(input())).toMatchObject({ allowed: false, reasonCode: "deny_policy_block" });
+      expect(commercialCheck.calls).toHaveLength(1);
+      // The retained executed source is decided without the capacity check.
+      expect(await toolAccessPolicyService(db).decide(input(), { retainedExecutedSource: true }))
+        .toMatchObject({ allowed: true, reasonCode: "allow_profile" });
+      expect(commercialCheck.calls).toHaveLength(1);
+      // It never admits or re-checks an execution.
+      await expect(toolAccessPolicyService(db).decide(input(true), { retainedExecutedSource: true }))
+        .rejects.toThrow("cannot admit or re-check an execution");
+      await expect(toolAccessPolicyService(db).decide(input(), { retainedExecutedSource: true,
+        rateLimitTokens: createToolRateLimitTokenLedger() })).rejects.toThrow("cannot admit or re-check an execution");
+      // Deny policies and profile exclusions still apply.
+      const [deny] = await db.insert(toolPolicies).values({ companyId: company.id, name: "Block send",
+        policyType: "block", selectors: { toolName: "send_email" } }).returning();
+      expect(await toolAccessPolicyService(db).decide(input(), { retainedExecutedSource: true }))
+        .toMatchObject({ allowed: false, decision: "deny", reasonCode: "deny_policy_block" });
+      await db.delete(toolPolicies).where(eq(toolPolicies.id, deny!.id));
+      await db.update(toolProfileEntries).set({ effect: "exclude" }).where(eq(toolProfileEntries.profileId, profile.id));
+      expect(await toolAccessPolicyService(db).decide(input(), { retainedExecutedSource: true }))
+        .toMatchObject({ allowed: false, reasonCode: "deny_default" });
+      // Another company's agent is refused.
+      const other = await createCompany(db);
+      expect(await toolAccessPolicyService(db).decide({ ...input(), companyId: other.id }, { retainedExecutedSource: true }))
+        .toMatchObject({ allowed: false });
+    } finally {
+      commercialCheck.refuse = false;
+    }
+  });
+
   it("uses issue-scoped profiles ahead of company defaults", async () => {
     const company = await createCompany(db);
     const agent = await createAgent(db, company.id);

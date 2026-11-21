@@ -737,6 +737,20 @@ export interface ToolRateLimitTokenLedgerOptions {
 
 export interface ToolAccessDecisionInternalOptions {
   rateLimitTokens?: ToolRateLimitTokenLedger;
+  /**
+   * APR-E2E-29b. Server-internal, like `rateLimitTokens`: no request body can
+   * set it. Only the retained-source re-validation of an assigned MCP
+   * invocation that already executed and was sealed passes it
+   * (`getNativeAssignedMcpDescriptorCurrent` from the Native source owner).
+   * It skips only the live managed-runtime capacity check: the producer Run
+   * may have ended and its cell stopped or been removed, and re-reading the
+   * retained result starts no runtime work. Every other part of the decision
+   * still applies (profiles, deny and block policies, grants, package and
+   * governance restrictions, Agent and company scope). A new execution or
+   * dispatch never passes it, so it cannot be combined with consuming or
+   * re-checking rate-limit tokens.
+   */
+  retainedExecutedSource?: true;
 }
 
 type HeldRateLimitToken = {
@@ -1653,11 +1667,14 @@ export function toolAccessPolicyService(db: Db) {
    * and never a second argument. See `ToolRateLimitTokenLedger`.
    */
   async function decide(input: ToolAccessDecisionInput, internal: ToolAccessDecisionInternalOptions = {}): Promise<ToolAccessDecision> {
+    if (internal.retainedExecutedSource === true && (input.consumeRateLimit === true || internal.rateLimitTokens))
+      throw new Error("A retained executed source re-validation cannot admit or re-check an execution");
     const consumedHere: HeldRateLimitToken[] = [];
     const base = await decideCore(input, internal, consumedHere);
     if (!base.allowed && base.decision !== "require_approval") return base;
     const loaded = await loadContext(input); if (!loaded.ok) return loaded.decision;
-    if (loaded.ctx.agentId && (input.actor.actorType === "agent" || loaded.ctx.heartbeatRunId)) {
+    if (internal.retainedExecutedSource !== true &&
+      loaded.ctx.agentId && (input.actor.actorType === "agent" || loaded.ctx.heartbeatRunId)) {
       const ledgerState = internal.rateLimitTokens ? rateLimitTokenLedgerStates.get(internal.rateLimitTokens) : undefined;
       const parkedApprovedExecution = ledgerState?.approvedExecution === true && ledgerState.parkedApprovedExecution === true &&
         !ledgerState.recheckOnly;

@@ -4481,7 +4481,7 @@
         },
         {
           "path": "server/src/services/authorization.ts",
-          "sha256": "3f5cd145ec3f07e8739fa432c6cfe8f4b7d8211e26a846fa5fe36b8dfc1c920f"
+          "sha256": "75756f1d2a1f496ccd3147bdd5b59c27f66dcf3485c56d0abb025966c00bc4fa"
         },
         {
           "path": "server/src/services/chat-channels.ts",
@@ -4521,7 +4521,7 @@
         },
         {
           "path": "server/src/services/tool-gateway.ts",
-          "sha256": "2eb6c26f5703f9aac751edb5300a1d3a44f38d901de663955bf5bc26421aa4fa"
+          "sha256": "83868674e3122b541d024bc4d28285d7011ed62379328277b6620c7efc8c044d"
         }
       ],
       "kind": "safe_change_record",
@@ -5787,7 +5787,7 @@
         },
         {
           "path": "server/src/__tests__/v7-worker-model-gateway.integration.test.ts",
-          "sha256": "477d4def338ad17210f37df24089ab8c9b126e46b7ef8aa053b09ce9f5377504"
+          "sha256": "6bf51a120ed3c24db735dc3bb2e3dcd3e9ba893025afbbb66d48ba39d2d5c283"
         },
         {
           "path": "server/src/__tests__/v9-agent-publication.integration.test.ts",
@@ -5959,7 +5959,7 @@
         },
         {
           "path": "server/src/services/tool-gateway.ts",
-          "sha256": "2eb6c26f5703f9aac751edb5300a1d3a44f38d901de663955bf5bc26421aa4fa"
+          "sha256": "83868674e3122b541d024bc4d28285d7011ed62379328277b6620c7efc8c044d"
         },
         {
           "path": "server/src/services/workflows/workflow-executor.ts",
@@ -6379,7 +6379,7 @@
         },
         {
           "path": "server/src/services/tool-gateway.ts",
-          "sha256": "2eb6c26f5703f9aac751edb5300a1d3a44f38d901de663955bf5bc26421aa4fa"
+          "sha256": "83868674e3122b541d024bc4d28285d7011ed62379328277b6620c7efc8c044d"
         },
         {
           "path": "server/src/services/workflows/workflow-capability-resolver.ts",
@@ -9168,7 +9168,7 @@
         },
         {
           "path": "server/src/__tests__/v7-worker-model-gateway.integration.test.ts",
-          "sha256": "477d4def338ad17210f37df24089ab8c9b126e46b7ef8aa053b09ce9f5377504"
+          "sha256": "6bf51a120ed3c24db735dc3bb2e3dcd3e9ba893025afbbb66d48ba39d2d5c283"
         },
         {
           "path": "server/src/__tests__/v8-company-purge.integration.test.ts",
@@ -9288,7 +9288,7 @@
         },
         {
           "path": "server/src/services/native-direct-input.ts",
-          "sha256": "61ce72f90ea0e64a8e06ef82e66045bc85d3ef4148e40bfaad9e060877b8d2a9"
+          "sha256": "331bed810a845ec01564ab046a03fc260aed32c4eb3031435072d48841c8b055"
         },
         {
           "path": "server/src/services/native-project-output.ts",
@@ -10229,7 +10229,7 @@
         },
         {
           "path": "server/src/__tests__/v7-worker-model-gateway.integration.test.ts",
-          "sha256": "477d4def338ad17210f37df24089ab8c9b126e46b7ef8aa053b09ce9f5377504"
+          "sha256": "6bf51a120ed3c24db735dc3bb2e3dcd3e9ba893025afbbb66d48ba39d2d5c283"
         },
         {
           "path": "server/src/__tests__/v9-agent-authored-definition.integration.test.ts",
@@ -10293,7 +10293,7 @@
         },
         {
           "path": "server/src/services/authorization.ts",
-          "sha256": "3f5cd145ec3f07e8739fa432c6cfe8f4b7d8211e26a846fa5fe36b8dfc1c920f"
+          "sha256": "75756f1d2a1f496ccd3147bdd5b59c27f66dcf3485c56d0abb025966c00bc4fa"
         },
         {
           "path": "server/src/services/capability-resolver.test.ts",
@@ -10393,7 +10393,7 @@
         },
         {
           "path": "server/src/services/tool-gateway.ts",
-          "sha256": "2eb6c26f5703f9aac751edb5300a1d3a44f38d901de663955bf5bc26421aa4fa"
+          "sha256": "83868674e3122b541d024bc4d28285d7011ed62379328277b6620c7efc8c044d"
         },
         {
           "path": "server/src/services/workflows/workflow-capability-resolver.ts",
@@ -16302,7 +16302,7 @@
         },
         {
           "path": "server/src/services/authorization.ts",
-          "sha256": "3f5cd145ec3f07e8739fa432c6cfe8f4b7d8211e26a846fa5fe36b8dfc1c920f"
+          "sha256": "75756f1d2a1f496ccd3147bdd5b59c27f66dcf3485c56d0abb025966c00bc4fa"
         },
         {
           "path": "server/src/services/board-auth.test.ts",
@@ -27709,7 +27709,7 @@
         },
         {
           "path": "server/src/services/tool-access-policy.ts",
-          "sha256": "cda7f879905abaae1d767a4e27d40b63bc2387a88151c2751d54bf86ebee6d5e"
+          "sha256": "da495f1cc337bdefb5228875b6cb97294b8b3527019805882d42b5a3f6688ea2"
         },
         {
           "path": "server/src/services/tool-action-delivery.ts",
@@ -30467,7 +30467,7 @@
         },
         {
           "path": "server/src/services/business-experiments/analysis.ts",
-          "sha256": "9afd88c0888471c63b3c719b8f8ce9b013056f88f0646a6b84733b005692ca0e"
+          "sha256": "58b1f713ac2ea0f04d4bd0e15f350b45bcb317503213853dc5c4b0ad4135e6b1"
         },
         {
           "path": "server/src/services/business-experiments/receipts.ts",
@@ -47008,7 +47008,7 @@
       "id": "source:server/src/services/authorization.ts",
       "kind": "current_source_owner",
       "path": "server/src/services/authorization.ts",
-      "sha256": "3f5cd145ec3f07e8739fa432c6cfe8f4b7d8211e26a846fa5fe36b8dfc1c920f",
+      "sha256": "75756f1d2a1f496ccd3147bdd5b59c27f66dcf3485c56d0abb025966c00bc4fa",
       "changeIds": [
         "SCR-V10-HOTSPOT-01",
         "SCR-V10-HOTSPOT-07",
@@ -47176,7 +47176,7 @@
       "id": "source:server/src/services/tool-gateway.ts",
       "kind": "current_source_owner",
       "path": "server/src/services/tool-gateway.ts",
-      "sha256": "2eb6c26f5703f9aac751edb5300a1d3a44f38d901de663955bf5bc26421aa4fa",
+      "sha256": "83868674e3122b541d024bc4d28285d7011ed62379328277b6620c7efc8c044d",
       "changeIds": [
         "SCR-V10-HOTSPOT-01",
         "SCR-V10-HOTSPOT-02",
@@ -48115,7 +48115,7 @@
       "id": "source:server/src/__tests__/v7-worker-model-gateway.integration.test.ts",
       "kind": "current_source_owner",
       "path": "server/src/__tests__/v7-worker-model-gateway.integration.test.ts",
-      "sha256": "477d4def338ad17210f37df24089ab8c9b126e46b7ef8aa053b09ce9f5377504",
+      "sha256": "6bf51a120ed3c24db735dc3bb2e3dcd3e9ba893025afbbb66d48ba39d2d5c283",
       "changeIds": [
         "SCR-V10-HOTSPOT-02",
         "SCR-V10-HOTSPOT-06",
@@ -50850,7 +50850,7 @@
       "id": "source:server/src/services/native-direct-input.ts",
       "kind": "current_source_owner",
       "path": "server/src/services/native-direct-input.ts",
-      "sha256": "61ce72f90ea0e64a8e06ef82e66045bc85d3ef4148e40bfaad9e060877b8d2a9",
+      "sha256": "331bed810a845ec01564ab046a03fc260aed32c4eb3031435072d48841c8b055",
       "changeIds": [
         "SCR-V10-HOTSPOT-06"
       ],
@@ -67818,7 +67818,7 @@
       "id": "source:server/src/services/tool-access-policy.ts",
       "kind": "current_source_owner",
       "path": "server/src/services/tool-access-policy.ts",
-      "sha256": "cda7f879905abaae1d767a4e27d40b63bc2387a88151c2751d54bf86ebee6d5e",
+      "sha256": "da495f1cc337bdefb5228875b6cb97294b8b3527019805882d42b5a3f6688ea2",
       "changeIds": [
         "SCR-V10-UNCLASSIFIED-REGISTERED-OWNER"
       ],
@@ -70730,7 +70730,7 @@
       "id": "source:server/src/services/business-experiments/analysis.ts",
       "kind": "current_source_owner",
       "path": "server/src/services/business-experiments/analysis.ts",
-      "sha256": "9afd88c0888471c63b3c719b8f8ce9b013056f88f0646a6b84733b005692ca0e",
+      "sha256": "58b1f713ac2ea0f04d4bd0e15f350b45bcb317503213853dc5c4b0ad4135e6b1",
       "changeIds": [
         "SCR-V10-ANALYTICS-LEARNING"
       ],
