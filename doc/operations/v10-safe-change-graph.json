@@ -4517,11 +4517,11 @@
         },
         {
           "path": "server/src/services/orchestration/worker-model-gateway.ts",
-          "sha256": "c7b0adde0b4d1d260dc529b6917bf2d2423a89e6ade60dd5529d9f49a97a8676"
+          "sha256": "aebdf330862b0955e44441ca46c6e797457566236ca20bc14f1df8576ec832f2"
         },
         {
           "path": "server/src/services/tool-gateway.ts",
-          "sha256": "cb856c18a8bf7154516e252550c85f4bb01a0191fa4918a0648e824242d926f2"
+          "sha256": "2eb6c26f5703f9aac751edb5300a1d3a44f38d901de663955bf5bc26421aa4fa"
         }
       ],
       "kind": "safe_change_record",
@@ -5959,7 +5959,7 @@
         },
         {
           "path": "server/src/services/tool-gateway.ts",
-          "sha256": "cb856c18a8bf7154516e252550c85f4bb01a0191fa4918a0648e824242d926f2"
+          "sha256": "2eb6c26f5703f9aac751edb5300a1d3a44f38d901de663955bf5bc26421aa4fa"
         },
         {
           "path": "server/src/services/workflows/workflow-executor.ts",
@@ -6379,7 +6379,7 @@
         },
         {
           "path": "server/src/services/tool-gateway.ts",
-          "sha256": "cb856c18a8bf7154516e252550c85f4bb01a0191fa4918a0648e824242d926f2"
+          "sha256": "2eb6c26f5703f9aac751edb5300a1d3a44f38d901de663955bf5bc26421aa4fa"
         },
         {
           "path": "server/src/services/workflows/workflow-capability-resolver.ts",
@@ -9288,7 +9288,7 @@
         },
         {
           "path": "server/src/services/native-direct-input.ts",
-          "sha256": "a511a83b430d543d128fa4e204d343b2a206ca864c725ecdaa28147dc88e877f"
+          "sha256": "61ce72f90ea0e64a8e06ef82e66045bc85d3ef4148e40bfaad9e060877b8d2a9"
         },
         {
           "path": "server/src/services/native-project-output.ts",
@@ -10377,7 +10377,7 @@
         },
         {
           "path": "server/src/services/orchestration/worker-model-gateway.ts",
-          "sha256": "c7b0adde0b4d1d260dc529b6917bf2d2423a89e6ade60dd5529d9f49a97a8676"
+          "sha256": "aebdf330862b0955e44441ca46c6e797457566236ca20bc14f1df8576ec832f2"
         },
         {
           "path": "server/src/services/platform-skill-admission.ts",
@@ -10393,7 +10393,7 @@
         },
         {
           "path": "server/src/services/tool-gateway.ts",
-          "sha256": "cb856c18a8bf7154516e252550c85f4bb01a0191fa4918a0648e824242d926f2"
+          "sha256": "2eb6c26f5703f9aac751edb5300a1d3a44f38d901de663955bf5bc26421aa4fa"
         },
         {
           "path": "server/src/services/workflows/workflow-capability-resolver.ts",
@@ -25214,7 +25214,7 @@
         },
         {
           "path": "server/src/services/native-runtime/paperclip-control-plane-port.ts",
-          "sha256": "e760b48eb87b55bc20973552c2efa0b31e09ca26b6af72d08f92ac4bf70278f3"
+          "sha256": "5d1b4d34224abd959828fa317bda13c98baa3ecba14136aee2afd5577070110a"
         },
         {
           "path": "server/src/services/native-runtime/prepare-native-run.ts",
@@ -32061,11 +32061,11 @@
         },
         {
           "path": "server/src/__tests__/helpers/connection-intent-railway-fixture.test.ts",
-          "sha256": "410dbf42865b7dbeacca34d6e8cfadedb4573b7b72cbf71625a055b7be1f9fc3"
+          "sha256": "507bba2d20b02e011d9729551196ab37c0d2961b799fddda7943e0a52e9633f6"
         },
         {
           "path": "server/src/__tests__/helpers/connection-intent-railway-fixture.ts",
-          "sha256": "56336070c4c969a75d28ab2dcd7ffffd94c18d941db74c01ca5acbeffc03838b"
+          "sha256": "78c6b54d2983e37713665d115a20b1f4f646c8e010d49e7a31741a69e538caab"
         },
         {
           "path": "server/src/__tests__/helpers/controlled-native-signoff-backend.ts",
@@ -32788,7 +32788,7 @@
         },
         {
           "path": "scripts/general-server-shard-durations.json",
-          "sha256": "935b97ac068f6cf903e22f26b6d6dd9f4e37de600aed5b9fd1c4cf8c9f77c877"
+          "sha256": "71299f9e1b2a8c26fb99b02027ff2b7086e307b935abd7c38f1e20cb94d8954f"
         },
         {
           "path": "scripts/generate-feature-catalog.ts",
@@ -35517,7 +35517,7 @@
         },
         {
           "path": "tests/e2e/fixtures/managed-connection-review.ts",
-          "sha256": "defdbf270ee110cf0f1d12603b2e2a7861d5d5decc6e9af0b73bd9c42fbb1289"
+          "sha256": "d8a6a896f7af9328afd01f997ecdd0ca3dd52248408dada3f5d99714ff4e9c70"
         },
         {
           "path": "tests/e2e/fixtures/managed-pipeline-producer.ts",
@@ -47160,7 +47160,7 @@
       "id": "source:server/src/services/orchestration/worker-model-gateway.ts",
       "kind": "current_source_owner",
       "path": "server/src/services/orchestration/worker-model-gateway.ts",
-      "sha256": "c7b0adde0b4d1d260dc529b6917bf2d2423a89e6ade60dd5529d9f49a97a8676",
+      "sha256": "aebdf330862b0955e44441ca46c6e797457566236ca20bc14f1df8576ec832f2",
       "changeIds": [
         "SCR-V10-HOTSPOT-01",
         "SCR-V10-HOTSPOT-07"
@@ -47176,7 +47176,7 @@
       "id": "source:server/src/services/tool-gateway.ts",
       "kind": "current_source_owner",
       "path": "server/src/services/tool-gateway.ts",
-      "sha256": "cb856c18a8bf7154516e252550c85f4bb01a0191fa4918a0648e824242d926f2",
+      "sha256": "2eb6c26f5703f9aac751edb5300a1d3a44f38d901de663955bf5bc26421aa4fa",
       "changeIds": [
         "SCR-V10-HOTSPOT-01",
         "SCR-V10-HOTSPOT-02",
@@ -50850,7 +50850,7 @@
       "id": "source:server/src/services/native-direct-input.ts",
       "kind": "current_source_owner",
       "path": "server/src/services/native-direct-input.ts",
-      "sha256": "a511a83b430d543d128fa4e204d343b2a206ca864c725ecdaa28147dc88e877f",
+      "sha256": "61ce72f90ea0e64a8e06ef82e66045bc85d3ef4148e40bfaad9e060877b8d2a9",
       "changeIds": [
         "SCR-V10-HOTSPOT-06"
       ],
@@ -64518,7 +64518,7 @@
       "id": "source:server/src/services/native-runtime/paperclip-control-plane-port.ts",
       "kind": "current_source_owner",
       "path": "server/src/services/native-runtime/paperclip-control-plane-port.ts",
-      "sha256": "e760b48eb87b55bc20973552c2efa0b31e09ca26b6af72d08f92ac4bf70278f3",
+      "sha256": "5d1b4d34224abd959828fa317bda13c98baa3ecba14136aee2afd5577070110a",
       "changeIds": [
         "SCR-V10-NATIVE-RUNTIME-AND-AUTHORITY"
       ],
@@ -72380,7 +72380,7 @@
       "id": "source:server/src/__tests__/helpers/connection-intent-railway-fixture.test.ts",
       "kind": "current_source_owner",
       "path": "server/src/__tests__/helpers/connection-intent-railway-fixture.test.ts",
-      "sha256": "410dbf42865b7dbeacca34d6e8cfadedb4573b7b72cbf71625a055b7be1f9fc3",
+      "sha256": "507bba2d20b02e011d9729551196ab37c0d2961b799fddda7943e0a52e9633f6",
       "changeIds": [
         "SCR-V10-PRODUCT-IDENTITY-HELP-LANGUAGE"
       ],
@@ -72395,7 +72395,7 @@
       "id": "source:server/src/__tests__/helpers/connection-intent-railway-fixture.ts",
       "kind": "current_source_owner",
       "path": "server/src/__tests__/helpers/connection-intent-railway-fixture.ts",
-      "sha256": "56336070c4c969a75d28ab2dcd7ffffd94c18d941db74c01ca5acbeffc03838b",
+      "sha256": "78c6b54d2983e37713665d115a20b1f4f646c8e010d49e7a31741a69e538caab",
       "changeIds": [
         "SCR-V10-PRODUCT-IDENTITY-HELP-LANGUAGE"
       ],
@@ -73505,7 +73505,7 @@
       "id": "source:scripts/general-server-shard-durations.json",
       "kind": "current_source_owner",
       "path": "scripts/general-server-shard-durations.json",
-      "sha256": "935b97ac068f6cf903e22f26b6d6dd9f4e37de600aed5b9fd1c4cf8c9f77c877",
+      "sha256": "71299f9e1b2a8c26fb99b02027ff2b7086e307b935abd7c38f1e20cb94d8954f",
       "changeIds": [
         "SCR-V10-CI-RELEASE-AND-CATALOG-GOVERNANCE"
       ],
@@ -74855,7 +74855,7 @@
       "id": "source:tests/e2e/fixtures/managed-connection-review.ts",
       "kind": "current_source_owner",
       "path": "tests/e2e/fixtures/managed-connection-review.ts",
-      "sha256": "defdbf270ee110cf0f1d12603b2e2a7861d5d5decc6e9af0b73bd9c42fbb1289",
+      "sha256": "d8a6a896f7af9328afd01f997ecdd0ca3dd52248408dada3f5d99714ff4e9c70",
       "changeIds": [
         "SCR-V10-CUSTOMER-EXPERIENCE"
       ],

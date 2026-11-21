@@ -163,12 +163,9 @@ export async function prepareConnectionIntentRailwayFixture(input: {
   }, actor);
   /** The provider adds four tools after setup. Railway's reviewed contract
    * classifies an unknown Railway MCP tool as a write, so refresh quarantines
-   * each one pending review. The responsible Human then reviews and enables
-   * them through `approve`, which must use the real app finish owner (the
-   * Review tab's request). This fixture only builds that request the way the
-   * Review tab does: current profile actions plus the reviewed ones, current
-   * Ask-first actions, and current access. */
-  const enableLargeSchemaTool = async (approve: (body: FinishToolApp) => Promise<void>) => {
+   * each one pending review, and no Run can see them until a Human reviews
+   * them. Returns the quarantined catalog entry ids. */
+  const addLargeSchemaToolsPendingReview = async (): Promise<string[]> => {
     largeSchemaEnabled = true;
     const updated = await access.refreshCatalog(connection.id, actor, { restoreDraftDefaults: true });
     const addedNames = ["fixture-large", ...ballastTools.map(filler => filler.name)];
@@ -182,6 +179,15 @@ export async function prepareConnectionIntentRailwayFixture(input: {
         eq(toolCatalogEntries.status, "quarantined")));
     if (quarantined.length !== addedIds.length || quarantined.some(row => !addedIds.includes(row.id)))
       throw new Error("railway_fixture_unexpected_quarantine");
+    return addedIds;
+  };
+  /** The responsible Human then reviews and enables the quarantined tools
+   * through `approve`, which must use the real app finish owner (the Review
+   * tab's request). This fixture only builds that request the way the Review
+   * tab does: current profile actions plus the reviewed ones, current
+   * Ask-first actions, and current access. */
+  const enableLargeSchemaTool = async (approve: (body: FinishToolApp) => Promise<void>) => {
+    const addedIds = await addLargeSchemaToolsPendingReview();
     const [profile] = await input.db.select().from(toolProfiles).where(and(eq(toolProfiles.companyId, input.companyId),
       eq(toolProfiles.profileKey, `app:${connection.id}`)));
     if (!profile) throw new Error("railway_fixture_app_profile_missing");
@@ -223,6 +229,6 @@ export async function prepareConnectionIntentRailwayFixture(input: {
   return {
     connection: refreshed.connection, tool, workspaceId, projectId,
     deploymentTarget: { projectId, environmentId, serviceId, deploymentId }, deploymentInstanceId, request, endpointLookup,
-    enableLargeSchemaTool, captures: () => captures.map(capture => ({ ...capture })),
+    addLargeSchemaToolsPendingReview, enableLargeSchemaTool, captures: () => captures.map(capture => ({ ...capture })),
   };
 }

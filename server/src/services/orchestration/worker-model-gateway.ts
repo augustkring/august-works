@@ -563,6 +563,47 @@ export function managedRetainedToolResultMatchesReceipt(input: {
 }
 
 /**
+ * APR-E2E-28 (a). An executed assigned MCP call (a direct app tool or the
+ * canonical call wrapper) in a managed OpenCode Run is consumed by the next
+ * provider request only as its own recorded invocation witness: this provider
+ * tool use, this invocation and this source. Returns false for a capture
+ * without a witness (its other owner checks apply unchanged) and refuses any
+ * witness that differs. The consumed source set owner
+ * (assertNativeManagedConsumedSourceSetCurrent) re-validates the witness, the
+ * invocation row, its arguments, result and current assigned authority.
+ */
+export function managedAssignedMcpToolResultConsumed(input: {
+  capture: Record<string, unknown>;
+  toolName: string;
+  callId: string;
+  argumentsHash: string;
+  assignedProviderTool: boolean;
+  nativeBuiltin: boolean;
+  invocation: { id: string; toolName: string };
+  runId: string;
+  source: Record<string, unknown>;
+  consumedInput: unknown;
+  additionalInputs: NativeRunInputSourceReceipt["additionalInputs"];
+}): boolean {
+  const { capture, source } = input;
+  const assignedInvocation = capture.assignedMcp && typeof capture.assignedMcp === "object"
+    ? managedRecord(capture.assignedMcp) : null;
+  if (!assignedInvocation) return false;
+  const conflictingCopies = input.additionalInputs.some(entry => entry.inputs.some(value =>
+    value.kind === "tool_result" && value.callId === input.callId && !isDeepStrictEqual(value, source)));
+  if (!input.assignedProviderTool || input.nativeBuiltin || capture.managedOpenCode !== true ||
+    capture.callId !== input.callId || capture.argumentsHash !== input.argumentsHash ||
+    assignedInvocation.providerToolName !== input.toolName || assignedInvocation.invocationId !== input.invocation.id ||
+    assignedInvocation.gatewayToolName !== input.invocation.toolName ||
+    assignedInvocation.providerArgumentsHash !== input.argumentsHash ||
+    source.kind !== "tool_result" || source.callId !== input.callId ||
+    source.invocationId !== input.invocation.id || source.runId !== input.runId ||
+    !isDeepStrictEqual(input.consumedInput, source) || conflictingCopies)
+    throw forbidden("Managed assigned MCP result has no exact invocation source capture");
+  return true;
+}
+
+/**
  * CONF15-W6. Load the admitted retained Run and its accepted responses for a
  * Worker request whose history does not start with the current prompt. Reads
  * only existing records (the retained Run row, its sealed receipt and wire
@@ -2146,6 +2187,13 @@ async function assertManagedOpenCodeRequestSources(db: Db, claims: ManagedModelC
         const consumedEntry = consumedEntries[0]!;
         consumedSourceComponents.push({ kind: "additional_input", responsibleUserId: consumedEntry.responsibleUserId,
           policy: consumedEntry.policy, inputs: consumedEntry.inputs });
+        // APR-E2E-28 (a). An executed assigned MCP result is consumed only as
+        // its own exact invocation witness; without one nothing changes here.
+        if (managedAssignedMcpToolResultConsumed({ capture, toolName, callId: block.tool_use_id,
+          argumentsHash: providerUse.argumentsHash, assignedProviderTool, nativeBuiltin,
+          invocation: { id: invocation.id, toolName: invocation.toolName }, runId: claims.run_id, source,
+          consumedInput: consumedEntry.inputs[0], additionalInputs: receipt.data.additionalInputs }))
+          continue;
         if (toolName === "list_project_repositories") {
           const repositoryCapture = managedRecord(capture.projectRepositories) as unknown as NativeProjectRepositoriesToolResultCapture;
           const repoResult = managedRecord(result);

@@ -3,12 +3,19 @@ import { mkdtemp, rm } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { and, eq, inArray } from "drizzle-orm";
+import express from "express";
+import request from "supertest";
 import { afterAll, beforeAll, describe, expect, it } from "vitest";
-import { agents, authUsers, companies, companyMemberships, createDb, toolCatalogEntries, toolInvocations } from "@paperclipai/db";
+import { agents, authUsers, companies, companyMemberships, createDb, toolCatalogEntries, toolInvocations,
+  toolProfileEntries, toolProfiles } from "@paperclipai/db";
 import { createApp } from "../../app.js";
+import { errorHandler } from "../../middleware/index.js";
+import { toolAccessRoutes } from "../../routes/tool-access.js";
 import { createStorageService } from "../../storage/service.js";
 import { createLocalDiskStorageProvider } from "../../storage/local-disk-provider.js";
-import { getAssignedMcpGateway, registerAssignedMcpGateway } from "../../services/native-runtime/assigned-mcp-tools.js";
+import { assignedMcpToolAlias, buildAssignedMcpSearchResult, createAssignedMcpTools, getAssignedMcpGateway,
+  registerAssignedMcpGateway } from "../../services/native-runtime/assigned-mcp-tools.js";
+import { runnerCodexDynamicToolsFit } from "../../vendor/paperclip-runner/index.js";
 import { createToolGatewayService } from "../../services/tool-gateway.js";
 import { toolAccessService } from "../../services/tool-access.js";
 import { getEmbeddedPostgresTestSupport, startEmbeddedPostgresTestDatabase } from "./embedded-postgres.js";
@@ -99,6 +106,112 @@ describePg("ConnectionIntent fixed non-model Railway fixture", () => {
     expect(reviewed.every(entry => entry.status === "active" && entry.reviewedByUserId === userId)).toBe(true);
     expect(await db.select().from(toolCatalogEntries).where(and(eq(toolCatalogEntries.companyId, companyId),
       eq(toolCatalogEntries.status, "quarantined")))).toEqual([]);
+  });
+
+  // APR-E2E-28 (a). Relocated from the managed Always-allow e2e: discovery of
+  // tools the provider adds after setup, the responsible Human's review
+  // through the real app finish route, the compact assigned-tool catalog and
+  // the chunked schema fetch of the large-schema tool. None of this needs a
+  // managed invocation of an external MCP tool, which the gateway refuses in
+  // every session until a qualified admission owner exists (APR-E2E-28b).
+  it("keeps a reviewed large-schema tool discoverable through compact search and chunked schema fetch, and still refuses invoking it", async () => {
+    const companyId = randomUUID(), userId = randomUUID(), agentId = randomUUID();
+    await db.insert(companies).values({ id: companyId, name: "Railway large schema fixture",
+      issuePrefix: `S${companyId.replaceAll("-", "").slice(0, 6).toUpperCase()}` });
+    await db.insert(authUsers).values({ id: userId, name: "Fixture owner", email: `${userId}@example.test`,
+      createdAt: new Date(), updatedAt: new Date() });
+    await db.insert(companyMemberships).values({ companyId, principalType: "user", principalId: userId,
+      membershipRole: "owner", status: "active" });
+    await db.insert(agents).values({ id: agentId, companyId, name: "Existing Railway holder", role: "engineer",
+      status: "idle", adapterType: "process", adapterConfig: {}, runtimeConfig: {} });
+    const fixture = await prepareConnectionIntentRailwayFixture({ db, companyId, userId, holderAgentId: agentId, reviewJourney: "always" });
+    const gateway = createToolGatewayService(db, { remoteHttpRequest: fixture.request });
+    const [gatewayProfile] = await db.insert(toolProfiles).values({ companyId, profileKey: `large-schema-${randomUUID()}`,
+      name: `Large schema ${randomUUID()}`, defaultAction: "deny" }).returning();
+    await db.insert(toolProfileEntries).values({ companyId, profileId: gatewayProfile!.id,
+      selectorType: "connection", effect: "include", connectionId: fixture.connection.id });
+    const namedGateway = await gateway.createNamedGateway({ companyId,
+      body: { name: `Large schema ${randomUUID()}`, profileId: gatewayProfile!.id, agentId }, actor: { userId } });
+    const token = await gateway.createNamedGatewayToken({ companyId, gatewayId: namedGateway.id,
+      body: { name: "Large schema discovery", allowedActions: ["tools/list", "tools/call"] }, actor: { userId } });
+    const listed = async () => (await gateway.listToolsForNamedGateway({ gatewayPublicId: namedGateway.gatewayPublicId,
+      bearerToken: token.token })).filter(tool => tool.connectionId === fixture.connection.id);
+    const later = ["fixture-large", "fixture-ballast-1", "fixture-ballast-2", "fixture-ballast-3"];
+    expect((await listed()).map(tool => tool.upstreamToolName)).toContain("paperclip-railway-list-projects");
+
+    // Tools added after setup stay quarantined and invisible until the Human reviews them.
+    const pendingIds = await fixture.addLargeSchemaToolsPendingReview();
+    expect(pendingIds).toHaveLength(4);
+    expect((await listed()).some(tool => later.includes(String(tool.upstreamToolName)))).toBe(false);
+
+    // The responsible Human reviews them through the real finish route (the Review tab's request).
+    const routeApp = express();
+    routeApp.use(express.json());
+    routeApp.use((req, _res, next) => {
+      req.actor = { type: "board", userId, sessionId: `session-${randomUUID()}`, userName: "Fixture owner", userEmail: null,
+        isInstanceAdmin: false, source: "session", companyIds: [companyId],
+        memberships: [{ companyId, membershipRole: "owner", status: "active" }] };
+      next();
+    });
+    routeApp.use("/api", toolAccessRoutes(db, { toolGateway: gateway, remoteHttpEndpointLookup: fixture.endpointLookup,
+      remoteHttpRequest: fixture.request }));
+    routeApp.use(errorHandler);
+    await fixture.enableLargeSchemaTool(async body => {
+      const finished = await request(routeApp).post(`/api/companies/${companyId}/tools/apps/${fixture.connection.id}/finish`).send(body);
+      expect(finished.status, JSON.stringify(finished.body)).toBe(200);
+    });
+    const reviewed = await listed();
+    for (const name of later) expect(reviewed.filter(tool => tool.upstreamToolName === name)).toHaveLength(1);
+    const large = reviewed.find(tool => tool.upstreamToolName === "fixture-large")!;
+
+    // The direct catalog exceeds the signed Runnerd envelope, so the Run gets
+    // the two compact wrappers, never the oversized schemas.
+    const assigned = await createAssignedMcpTools({ db, companyId, issueId: randomUUID(), runId: randomUUID(), agentId,
+      responsibleUserId: userId, gateway, gatewayPublicId: namedGateway.gatewayPublicId, bearerToken: token.token });
+    expect(assigned.directDefinitions(runnerCodexDynamicToolsFit)).toEqual([]);
+    const compact = assigned.definitions(runnerCodexDynamicToolsFit);
+    expect(compact.map(tool => tool.name)).toEqual(["paperclip_search_assigned_tools", "paperclip_call_assigned_tool"]);
+    expect(Buffer.byteLength(JSON.stringify(compact), "utf8")).toBeLessThanOrEqual(64_000);
+
+    // The search projection (the same pure owner that source validation
+    // replays) finds the large tool by name and points to its schema chunks.
+    const entries = reviewed.map(descriptor => ({ alias: assignedMcpToolAlias(descriptor.name), descriptor }));
+    const alias = assignedMcpToolAlias(large.name);
+    const page = buildAssignedMcpSearchResult({ query: "fixture-large", limit: 10 }, entries, "standard") as
+      { tools: Array<Record<string, unknown>>; nextOffset: number | null };
+    expect(page.tools).toEqual([expect.objectContaining({ name: alias, inputSchemaRef: alias })]);
+    expect(Buffer.byteLength(JSON.stringify(page.tools), "utf8")).toBeLessThanOrEqual(8 * 1024);
+    let schemaJson = "", schemaOffset = 0, chunks = 0;
+    for (;;) {
+      const chunk = buildAssignedMcpSearchResult({ query: "", schemaTool: alias, schemaOffset }, entries, "standard") as
+        { name: string; schemaJson: string; nextSchemaOffset: number | null };
+      expect(chunk.name).toBe(alias);
+      expect(Buffer.byteLength(JSON.stringify(chunk), "utf8")).toBeLessThanOrEqual(64_000);
+      schemaJson += chunk.schemaJson; chunks++;
+      if (chunk.nextSchemaOffset === null) break;
+      schemaOffset = chunk.nextSchemaOffset;
+    }
+    expect(chunks).toBeGreaterThanOrEqual(2);
+    const reconstructed = JSON.parse(schemaJson) as { properties: Record<string, unknown> };
+    expect(Object.keys(reconstructed.properties)).toHaveLength(80);
+    expect(Object.hasOwn(reconstructed.properties, "field_0000")).toBe(true);
+    expect(Object.hasOwn(reconstructed.properties, "field_0079")).toBe(true);
+    expect(reconstructed).toEqual(large.parametersSchema);
+
+    // APR-E2E-28b: invoking the external MCP tool is still refused before any provider effect.
+    const invocationsBefore = await db.select().from(toolInvocations).where(eq(toolInvocations.companyId, companyId));
+    await expect(gateway.executeTestCall({ companyId, userId, agentId, connectionId: fixture.connection.id,
+      toolName: "fixture-large", parameters: { field_0000: "schema-chunk-proof" } })).rejects.toMatchObject({
+      status: 409, reasonCode: "tool_model_effect_unqualified",
+    });
+    await expect(assigned.execute({ tool: "paperclip_search_assigned_tools", callId: "large-schema-search",
+      arguments: { query: "fixture-large", limit: 10 } })).rejects.toMatchObject({
+      status: 409, reasonCode: "tool_model_effect_unqualified",
+    });
+    expect(fixture.captures().filter(capture => capture.purpose === "large_tool_call")).toHaveLength(0);
+    expect((await db.select().from(toolInvocations).where(eq(toolInvocations.companyId, companyId)))
+      .filter(row => row.status === "succeeded" && row.toolName === large.name)).toEqual([]);
+    expect(invocationsBefore.filter(row => row.toolName === large.name)).toEqual([]);
   });
 
   it("composes the already installed gateway without replacing its transaction factory and rejects another instance", async () => {
