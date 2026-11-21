@@ -1861,7 +1861,8 @@ export async function assertNativeAssignedMcpSearchResultCurrent(db: Db | Transa
     responsibleUserId: input.responsibleUserId, gatewayId: String(witness.gatewayId),
     gatewayPublicId: String(witness.gatewayPublicId), gatewayProfileId: String(witness.gatewayProfileId),
     workMode, arguments: {},
-  });
+  // APR-E2E-29. The Run was locked FOR SHARE above in this transaction.
+  }, { producerRunHeldForShare: true });
   if (!currentDescriptors) return fail();
   const entries = currentDescriptors.map(({ descriptor }) => ({ alias: assignedMcpToolAlias(descriptor.name), descriptor }));
   const expectedResult = buildAssignedMcpSearchResult(searchArgs.value, entries, workMode);
@@ -5502,6 +5503,8 @@ async function assertNativePayloadSourceSetCurrentUncachedInScope(db: Db | Trans
           throw forbidden("A Native assigned MCP work mode changed");
         const { getNativeAssignedMcpDescriptorCurrent, nativeAssignedMcpDescriptorProjection } =
           await import("./tool-gateway.js");
+        // APR-E2E-29. nativeSourceReadRun pinned the producer Run FOR SHARE in
+        // this transaction, so its identity is read under that shared lock.
         const currentDescriptor = await getNativeAssignedMcpDescriptorCurrent(db as Db, {
           companyId: input.companyId, issueId: producerRun.nativeIssueId!, runId: source.runId,
           agentId: producerRun.agentId, responsibleUserId: producerResponsibleUserId,
@@ -5513,7 +5516,7 @@ async function assertNativePayloadSourceSetCurrentUncachedInScope(db: Db | Trans
           providerType: assigned.providerType, risk: assigned.risk, connectionId: assigned.connectionId,
           catalogEntryId: assigned.catalogEntryId, upstreamToolName: assigned.upstreamToolName,
           catalogSchemaHash: assigned.catalogSchemaHash, arguments: canonicalArguments as Record<string, unknown>, workMode,
-        });
+        }, undefined, { producerRunHeldForShare: true });
         if (!currentDescriptor || nativeSha256(nativeAssignedMcpDescriptorProjection(currentDescriptor)) !== assigned.descriptorHash ||
           nativeSha256(currentDescriptor.parametersSchema) !== assigned.parametersSchemaHash)
           throw forbidden("A Native assigned MCP authority changed");

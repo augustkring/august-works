@@ -46,7 +46,7 @@ import { executeSlackTool } from "./connectors/slack.js";
 import { githubGuestBotConnectionForSession, githubBotToolsForSession } from "./chat-github-tools.js";
 import { githubChatReviewService } from "./chat-github-reviews.js";
 import { runIdentityContexts } from "@paperclipai/db";
-import { captureRunIdentity } from "./run-identity.js";
+import { captureRunIdentity, captureRunIdentityUnderHeldRunShare } from "./run-identity.js";
 import { emitConnectionInvoked } from "./connector-telemetry.js";
 import { resolveManagedGitHubIdentitySelection } from "./git-credentials.js";
 import { extractRemoteMcpPending } from "./remote-mcp-pending.js";
@@ -61,12 +61,14 @@ import {
   eq,
   gt,
   inArray,
+  is,
   isNull,
   lte,
   ne,
   or,
   sql,
 } from "drizzle-orm";
+import { PgTransaction } from "drizzle-orm/pg-core";
 import type { Db } from "@paperclipai/db";
 import {
   agents,
@@ -1930,10 +1932,24 @@ export type NativeAssignedMcpScopeInput = {
 };
 export type NativeAssignedMcpSourceDescriptor = { descriptor: ToolGatewayDescriptor; credentialSnapshotHash: string };
 
+/** Server-internal lock statement of an assigned MCP source check. It is a
+ * separate argument, never part of a request body. */
+export type NativeAssignedMcpRunLock = {
+  /** APR-E2E-29. The caller's transaction (`db`) already holds the producer
+   * Run FOR SHARE (company A+M shared > Task FOR SHARE > run FOR SHARE, see
+   * the lock-order table in run-identity.ts). The running Run's identity is
+   * then read under that shared lock (`captureRunIdentityUnderHeldRunShare`)
+   * instead of FOR UPDATE, so the check never upgrades its lock: neither
+   * against a provider event append on the Run nor against another check.
+   * Without a transaction it has no effect. */
+  producerRunHeldForShare?: true;
+};
+
 /** Resolve either the active run identity or an exact accepted signed origin.
  * The latter is supplied only by the existing approved-operation source path. */
 async function nativeAssignedMcpResponsibleUserCurrent(db: Db, input: NativeAssignedMcpScopeInput,
-  run: { responsibleUserId: string | null; activeIdentityContextId: string | null; status: string }): Promise<string | null | undefined> {
+  run: { responsibleUserId: string | null; activeIdentityContextId: string | null; status: string },
+  runLock: NativeAssignedMcpRunLock = {}): Promise<string | null | undefined> {
   if (input.identityContextId) {
     const [origin] = await db.select().from(runIdentityContexts).where(and(
       eq(runIdentityContexts.id, input.identityContextId), eq(runIdentityContexts.companyId, input.companyId),
@@ -1944,9 +1960,10 @@ async function nativeAssignedMcpResponsibleUserCurrent(db: Db, input: NativeAssi
   }
   if (!run.activeIdentityContextId) return run.responsibleUserId;
   if (run.status === "running") {
-    const identity = await captureRunIdentity(db, {
-      companyId: input.companyId, agentId: input.agentId, runId: input.runId,
-    });
+    const identityInput = { companyId: input.companyId, agentId: input.agentId, runId: input.runId };
+    const identity = runLock.producerRunHeldForShare === true && is(db, PgTransaction)
+      ? await captureRunIdentityUnderHeldRunShare(db, identityInput)
+      : await captureRunIdentity(db, identityInput);
     return identity.context?.cause === "company_default" ? null : identity.context?.responsibleUserId ?? null;
   }
   // Historical retained-source reads must not call captureRunIdentity: it
@@ -1963,13 +1980,14 @@ async function nativeAssignedMcpResponsibleUserCurrent(db: Db, input: NativeAssi
 }
 
 /** Status-neutral owner check also used for empty search results. */
-export async function assertNativeAssignedMcpGatewayCurrent(db: Db, input: NativeAssignedMcpScopeInput): Promise<boolean> {
+export async function assertNativeAssignedMcpGatewayCurrent(db: Db, input: NativeAssignedMcpScopeInput,
+  runLock: NativeAssignedMcpRunLock = {}): Promise<boolean> {
   const [run] = await db.select({ agentId: heartbeatRuns.agentId, issueId: heartbeatRuns.nativeIssueId,
     responsibleUserId: heartbeatRuns.responsibleUserId, activeIdentityContextId: heartbeatRuns.activeIdentityContextId,
     status: heartbeatRuns.status })
     .from(heartbeatRuns).where(and(eq(heartbeatRuns.companyId, input.companyId), eq(heartbeatRuns.id, input.runId))).limit(1);
   if (!run || run.agentId !== input.agentId || run.issueId !== input.issueId) return false;
-  const responsibleUserId = await nativeAssignedMcpResponsibleUserCurrent(db, input, run);
+  const responsibleUserId = await nativeAssignedMcpResponsibleUserCurrent(db, input, run, runLock);
   if (responsibleUserId === undefined) return false;
   if (responsibleUserId !== input.responsibleUserId) return false;
   const [issue] = await db.select({ projectId: issues.projectId, assigneeAgentId: issues.assigneeAgentId, workMode: issues.workMode })
@@ -2070,6 +2088,7 @@ function assignedMcpProfileEntryMatches(entry: typeof toolProfileEntries.$inferS
  * source reads. Producer Run status and remote endpoint liveness are irrelevant. */
 export async function getNativeAssignedMcpDescriptorCurrent(
   db: Db, input: NativeAssignedMcpCurrentInput, connectedTools?: ToolGatewayDescriptor[],
+  runLock: NativeAssignedMcpRunLock = {},
 ): Promise<ToolGatewayDescriptor | null> {
   const [run] = await db.select({ agentId: heartbeatRuns.agentId, issueId: heartbeatRuns.nativeIssueId,
     responsibleUserId: heartbeatRuns.responsibleUserId, activeIdentityContextId: heartbeatRuns.activeIdentityContextId,
@@ -2078,7 +2097,7 @@ export async function getNativeAssignedMcpDescriptorCurrent(
     eq(heartbeatRuns.companyId, input.companyId), eq(heartbeatRuns.id, input.runId),
   )).limit(1);
   if (!run || run.agentId !== input.agentId || run.issueId !== input.issueId) return null;
-  const responsibleUserId = await nativeAssignedMcpResponsibleUserCurrent(db, input, run);
+  const responsibleUserId = await nativeAssignedMcpResponsibleUserCurrent(db, input, run, runLock);
   if (responsibleUserId === undefined) return null;
   if (responsibleUserId !== input.responsibleUserId) return null;
   const [issue] = await db.select({ projectId: issues.projectId, assigneeAgentId: issues.assigneeAgentId, workMode: issues.workMode })
@@ -2163,8 +2182,10 @@ export async function getNativeAssignedMcpDescriptorCurrent(
 export async function getNativeAssignedMcpDescriptorsCurrent(
   db: Db, input: Omit<NativeAssignedMcpCurrentInput, "descriptorProjection" | "descriptorName" | "descriptorHash" |
     "parametersSchemaHash" | "providerType" | "risk" | "connectionId" | "catalogEntryId" | "upstreamToolName" | "catalogSchemaHash">,
+  runLock: NativeAssignedMcpRunLock = {},
 ): Promise<NativeAssignedMcpSourceDescriptor[] | null> {
-  if (!await assertNativeAssignedMcpGatewayCurrent(db, input)) return null;
+  const lock: NativeAssignedMcpRunLock = runLock.producerRunHeldForShare === true ? { producerRunHeldForShare: true } : {};
+  if (!await assertNativeAssignedMcpGatewayCurrent(db, input, lock)) return null;
   const all = await currentConnectedMcpToolsForCompany(db, input.companyId);
   if (all.length > 512) return null;
   const visible: NativeAssignedMcpSourceDescriptor[] = [];
@@ -2179,7 +2200,7 @@ export async function getNativeAssignedMcpDescriptorsCurrent(
     const current = await getNativeAssignedMcpDescriptorCurrent(db, {
       ...input, descriptorProjection: nativeAssignedMcpDescriptorProjection(tool),
       catalogSchemaHash: catalog.schemaHash ?? null, arguments: {},
-    }, all);
+    }, all, lock);
     if (current) {
       const [connection] = await db.select().from(toolConnections).where(and(
         eq(toolConnections.companyId, input.companyId), eq(toolConnections.id, current.connectionId!),

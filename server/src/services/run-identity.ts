@@ -457,8 +457,11 @@ class SteeredIdentityAcceptanceRequired extends Error {}
  * | Native finalization reconciler resume claim             | Task FOR UPDATE > run + coordinator FOR UPDATE (D5e)  |
  * | Hidden conformance backend check                        | company A+M shared > Task FOR SHARE > run FOR SHARE   |
  * |                                                         |   (D5e, D5f)                                          |
- * | Provider event append after source review (control-     | company A+M shared > Task FOR SHARE > run FOR UPDATE, |
- * |   plane port, appendSourceReviewedNativeRunEvent)       |   then the review (APR-E2E-29)                        |
+ * | Provider event append after source review (control-     | the review: company A+M shared > Task FOR SHARE >     |
+ * |   plane port, appendSourceReviewedNativeRunEvent)       |   run FOR SHARE; then run FOR UPDATE for the insert   |
+ * | Assigned MCP source checks under a source review (exec- | company A+M shared > Task FOR SHARE > run FOR SHARE   |
+ * |   uted result and search result, native-direct-input),  |   (the review's), then captureRunIdentityUnderHeld-   |
+ * |   current identity of a running producer Run            |   RunShare: run FOR SHARE again, no new lock (29)     |
  *
  * D5c. The sandbox exec checks used to lock the run and then the Task. Their
  * company locks are shared, so they overlap steering acceptance (also shared)
@@ -502,12 +505,22 @@ class SteeredIdentityAcceptanceRequired extends Error {}
  * granted at once: a session that holds an advisory lock always gets it
  * again, even while other sessions wait for it.
  *
- * APR-E2E-29. The provider event append reviewed the run's payload sources
- * (run FOR SHARE) and then appended (run FOR UPDATE). Another transaction on
- * the same run that also holds a shared lock and then upgrades it (an assigned
- * MCP source check that captures the run identity) closed a cycle with it.
- * The append now locks the run FOR UPDATE, after the company keys and its
- * Task, before the review, so it never upgrades a shared run lock.
+ * APR-E2E-29. The provider event append reviews the run's payload sources
+ * (run FOR SHARE) and then appends (run FOR UPDATE). The assigned MCP source
+ * checks hold the producer run FOR SHARE from their source review and then
+ * captured its current identity with captureRunIdentity (run FOR UPDATE).
+ * Any two of these on one run (an append and a check, or two checks) could
+ * each hold the shared lock and wait for the other's to upgrade, and
+ * PostgreSQL aborted one with 40P01. Locking the run FOR UPDATE before the
+ * append's review (9be027a8) removed that pair but held the run exclusively
+ * for the whole multi-second review of every event, so FOR SHARE readers
+ * such as a sync-out exec claim with a short lock_timeout timed out behind
+ * it; reverted. The source checks instead read the
+ * identity with captureRunIdentityUnderHeldRunShare, which takes the run FOR
+ * SHARE (already held, granted at once) and makes only plain reads: a shared
+ * row lock already blocks every update of the run, so the identity cannot
+ * change before the check commits. Only callers that hold the run FOR SHARE
+ * in their own transaction use it; every other caller keeps captureRunIdentity.
  *
  * The run and Task orders differ between families, so the per-request path
  * takes only the run row and waits only before it holds any lock: it cannot
@@ -540,10 +553,30 @@ export async function captureRunIdentity(
   });
 }
 
+/**
+ * APR-E2E-29. captureRunIdentity for a caller that already holds this run
+ * FOR SHARE in the same transaction (an assigned MCP source check, see the
+ * lock-order table). Same row, columns, checks and errors, read under the
+ * shared lock instead of FOR UPDATE, so it never upgrades the caller's lock.
+ * One outcome differs: a pending identity with a stored acknowledgement is
+ * accepted by captureRunIdentity, which writes the Task and the run; that
+ * needs Task FOR UPDATE > run FOR UPDATE and cannot happen under a held
+ * shared lock, so this variant refuses it with the same retryable conflict
+ * as an unacknowledged pending identity and leaves acceptance to the next
+ * captureRunIdentity of the run.
+ */
+export async function captureRunIdentityUnderHeldRunShare(
+  tx: Executor,
+  input: { companyId: string; runId: string; agentId: string },
+) {
+  return captureLockedRunIdentity(tx, input, false, "share");
+}
+
 async function captureLockedRunIdentity(
   tx: Executor,
   input: { companyId: string; runId: string; agentId: string },
   acceptPending: boolean,
+  runLock: "update" | "share" = "update",
 ) {
   const [run] = await tx
     .select()
@@ -555,7 +588,7 @@ async function captureLockedRunIdentity(
         eq(heartbeatRuns.agentId, input.agentId),
       ),
     )
-    .for("update");
+    .for(runLock);
   if (run) identityTaskId(run.contextSnapshot, run.nativeIssueId);
   if (!run || run.status !== "running")
     throw forbidden(
@@ -573,7 +606,7 @@ async function captureLockedRunIdentity(
     .limit(1);
   if (pending) {
     const acknowledgement = await storedSteeringAcknowledgement(tx, pending);
-    if (!acknowledgement)
+    if (!acknowledgement || runLock === "share")
       throw conflict(
         "Message acceptance is being reconciled; retry credential acquisition",
       );

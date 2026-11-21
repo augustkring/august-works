@@ -2,25 +2,28 @@ import { randomUUID } from "node:crypto";
 import { eq, sql } from "drizzle-orm";
 import { afterAll, beforeAll, describe, expect, it } from "vitest";
 import { agents, authUsers, companies, companyMemberships, createDb, heartbeatRunEvents, heartbeatRuns, issues,
-  type Db } from "@paperclipai/db";
+  runIdentityContexts, type Db } from "@paperclipai/db";
 import { assertNativeAnalyticalRunPayloadAccess } from "../analytical-context-authority.js";
-import { captureRunIdentity } from "../run-identity.js";
+import { getNativeAssignedMcpDescriptorCurrent } from "../tool-gateway.js";
 import { getEmbeddedPostgresTestSupport, startEmbeddedPostgresTestDatabase } from "../../__tests__/helpers/embedded-postgres.js";
 import { appendSourceReviewedNativeRunEvent } from "./paperclip-control-plane-port.js";
 
 /*
  * APR-E2E-29. A managed Run's provider event append reviews the run payload
  * sources (run FOR SHARE) and then appends (run FOR UPDATE). An assigned MCP
- * source check on the same Run does the same: its source review holds the run
- * FOR SHARE and its current-identity capture then locks it FOR UPDATE. When
- * both held the shared lock, each waited for the other and PostgreSQL aborted
- * one with deadlock_detected (40P01); in the e2e Always case it was the
- * append, and the Run failed native_session_interrupted. The append now takes
- * company A+M shared > Task FOR SHARE > run FOR UPDATE before its review, so
- * it never upgrades a shared run lock.
+ * source check on the same Run also holds the run FOR SHARE from its source
+ * review and then read the run identity with captureRunIdentity (run FOR
+ * UPDATE). Both upgraded, and PostgreSQL aborted one with deadlock_detected
+ * (40P01); in the e2e Always case it was the append, and the Run failed
+ * native_session_interrupted.
  *
- * The barrier: the source check holds its review's run lock, the append is
- * started and waits on the run, then the source check captures the identity.
+ * The fix is on the source check: it reads the identity under the shared lock
+ * it already holds (captureRunIdentityUnderHeldRunShare), so it never
+ * upgrades. The append keeps its order: the review under FOR SHARE, then FOR
+ * UPDATE only for the insert. (9be027a8 had instead locked the run FOR UPDATE
+ * before the multi-second review; that blocked every FOR SHARE reader of the
+ * run, such as a sync-out exec claim with a short lock_timeout, for the whole
+ * review. Reverted.)
  */
 const support = await getEmbeddedPostgresTestSupport();
 (support.supported ? describe : describe.skip)("Native run event append lock order (APR-E2E-29)", () => {
@@ -45,13 +48,20 @@ const support = await getEmbeddedPostgresTestSupport();
     await db.insert(issues).values({ id: issueId, companyId, title: "Task", status: "in_progress", assigneeAgentId: agentId });
     await db.insert(heartbeatRuns).values({ id: runId, companyId, agentId, responsibleUserId: userId, status: "running",
       startedAt: now, runtimeMode: "native", nativeIssueId: issueId, contextSnapshot: { issueId } });
+    // An accepted identity, so the assigned MCP owner reads the running Run's
+    // current identity (the Always standing-grant path: no signed origin).
+    const [context] = await db.insert(runIdentityContexts).values({ companyId, runId, revision: 1, responsibleUserId: userId,
+      cause: "assignment", correlationId: `initial:${runId}`, status: "accepted", acceptedAt: now }).returning();
+    await db.update(heartbeatRuns).set({ activeIdentityContextId: context!.id }).where(eq(heartbeatRuns.id, runId));
     await db.update(issues).set({ executionRunId: runId, executionLockedAt: now }).where(eq(issues.id, issueId));
-    return { companyId, agentId, issueId, runId };
+    return { companyId, agentId, issueId, runId, userId };
   }
 
   const codeOf = (error: any): string | undefined => error?.code ?? error?.cause?.code;
   const settle = <T>(promise: Promise<T>) => promise.then(
     value => ({ ok: true as const, value, code: undefined }), (error: unknown) => ({ ok: false as const, error, code: codeOf(error) }));
+  const event = (run: Awaited<ReturnType<typeof seed>>) => ({ companyId: run.companyId, runId: run.runId, agentId: run.agentId,
+    eventType: "lifecycle", stream: "system" as const, level: "info" as const, message: "provider event" });
 
   async function untilLockWaiters(n: number) {
     for (let attempt = 0; attempt < 500; attempt += 1) {
@@ -63,7 +73,7 @@ const support = await getEmbeddedPostgresTestSupport();
     throw new Error(`fewer than ${n} backends waited on a lock`);
   }
 
-  it("appends while an assigned MCP source check reviews the run and captures its identity", async () => {
+  it("appends while an assigned MCP source check reviews the run and reads its identity", async () => {
     const run = await seed();
     // Both sides pass the real review on this run before the race.
     await assertNativeAnalyticalRunPayloadAccess(db, run.companyId, run.runId);
@@ -72,19 +82,23 @@ const support = await getEmbeddedPostgresTestSupport();
     let release!: () => void;
     const reviewed = new Promise<void>(resolve => { markReviewed = resolve; });
     const released = new Promise<void>(resolve => { release = resolve; });
-    // The source check: its review (run FOR SHARE), then the current-identity
-    // capture (run FOR UPDATE), as the assigned MCP descriptor owner does.
+    // The source check: its review (run FOR SHARE), then the real assigned
+    // MCP owner, which reads the running Run's identity. No Gateway exists,
+    // so the owner then refuses (null); the identity read is the race.
     const sourceCheck = settle(db.transaction(async (rawTx) => {
       const tx = rawTx as unknown as Db;
       await assertNativeAnalyticalRunPayloadAccess(tx, run.companyId, run.runId);
       markReviewed();
       await released;
-      return captureRunIdentity(tx, { companyId: run.companyId, runId: run.runId, agentId: run.agentId });
+      return getNativeAssignedMcpDescriptorCurrent(tx, { companyId: run.companyId, issueId: run.issueId,
+        runId: run.runId, agentId: run.agentId, responsibleUserId: run.userId, gatewayId: randomUUID(),
+        gatewayPublicId: `gw_${randomUUID()}`, gatewayProfileId: randomUUID(), workMode: "standard",
+        catalogSchemaHash: null, arguments: {} }, undefined, { producerRunHeldForShare: true });
     }));
     await reviewed;
+    // The append reviews under FOR SHARE, then waits to lock the run for its insert.
     const append = settle(db.transaction(async (rawTx) => appendSourceReviewedNativeRunEvent(rawTx as unknown as Db,
-      run, { companyId: run.companyId, runId: run.runId, agentId: run.agentId, eventType: "lifecycle",
-        stream: "system", level: "info", message: "provider event" }, true)));
+      run, event(run), true)));
     await untilLockWaiters(1);
     release();
     const [checked, appended] = await Promise.all([sourceCheck, append]);
@@ -92,36 +106,47 @@ const support = await getEmbeddedPostgresTestSupport();
     expect([checked.code ?? null, appended.code ?? null], "neither side may be aborted as a deadlock").not.toContain("40P01");
     expect(checked.ok, String(checked.ok ? "" : checked.error)).toBe(true);
     expect(appended.ok, String(appended.ok ? "" : appended.error)).toBe(true);
-    if (checked.ok) expect(checked.value.run.id).toBe(run.runId);
+    if (checked.ok) expect(checked.value).toBeNull();
     const events = await db.select().from(heartbeatRunEvents).where(eq(heartbeatRunEvents.runId, run.runId));
-    expect(events.map(event => event.message)).toEqual(["provider event"]);
+    expect(events.map(row => row.message)).toEqual(["provider event"]);
   }, 30_000);
 
-  it("orders the append as company shared > Task > run before its source review", async () => {
+  it("does not block a FOR SHARE reader with a short lock_timeout during its source review", async () => {
     const run = await seed();
-    // A Task-first exclusive writer (steering acceptance's order) holds the
-    // Task; the append must wait on the Task without holding the run.
-    let release!: () => void;
-    let markHeld!: () => void;
-    const held = new Promise<void>(resolve => { markHeld = resolve; });
-    const released = new Promise<void>(resolve => { release = resolve; });
-    const writer = settle(db.transaction(async (tx) => {
-      await tx.select({ id: issues.id }).from(issues).where(eq(issues.id, run.issueId)).for("update");
-      markHeld();
-      await released;
-      await tx.select({ id: heartbeatRuns.id }).from(heartbeatRuns).where(eq(heartbeatRuns.id, run.runId)).for("update");
+    let markReviewing!: () => void;
+    let finish!: () => void;
+    const reviewing = new Promise<void>(resolve => { markReviewing = resolve; });
+    const finished = new Promise<void>(resolve => { finish = resolve; });
+    // Hold the append inside its source review, after the review's own run
+    // lock: its Task erasure marker check (`... as erased`) waits here.
+    const append = settle(db.transaction(async (rawTx) => {
+      const dialect = (rawTx as unknown as { dialect: { sqlToQuery(query: unknown): { sql: string } } }).dialect;
+      let held = false;
+      const tx = new Proxy(rawTx, { get(target, property, receiver) {
+        const value = Reflect.get(target, property, receiver);
+        if (property !== "execute" || typeof value !== "function") return value;
+        return async (query: unknown) => {
+          if (!held && /aw_workflow_memory_erased\(\$1::uuid,\$2::uuid,\$3::uuid\) as erased/.test(dialect.sqlToQuery(query).sql)) {
+            held = true; markReviewing(); await finished;
+          }
+          return value.call(target, query);
+        };
+      } });
+      return appendSourceReviewedNativeRunEvent(tx as unknown as Db, run, event(run), true);
     }));
-    await held;
-    const append = settle(db.transaction(async (rawTx) => appendSourceReviewedNativeRunEvent(rawTx as unknown as Db,
-      run, { companyId: run.companyId, runId: run.runId, agentId: run.agentId, eventType: "lifecycle",
-        stream: "system", level: "info", message: "provider event" }, true)));
-    await untilLockWaiters(1);
-    // The append waits on the Task and holds no lock on the run yet.
-    await expect(db.transaction(async (tx) => tx.select({ id: heartbeatRuns.id }).from(heartbeatRuns)
-      .where(eq(heartbeatRuns.id, run.runId)).for("update", { noWait: true }))).resolves.toHaveLength(1);
-    release();
-    const [written, appended] = await Promise.all([writer, append]);
-    expect([written.code ?? null, appended.code ?? null]).not.toContain("40P01");
-    expect(written.ok && appended.ok).toBe(true);
+    const early = await Promise.race([reviewing.then(() => null), append]);
+    if (early) throw new Error(`the append finished before its review was held: ${early.ok ? "ok" : String(early.error)}`);
+    // A sync-out exec claim's shape: Task FOR SHARE > run FOR SHARE, with its
+    // remaining claim budget as lock_timeout.
+    const reader = await settle(db.transaction(async (tx) => {
+      await tx.execute(sql`set local lock_timeout = '300ms'`);
+      await tx.select({ id: issues.id }).from(issues).where(eq(issues.id, run.issueId)).for("share");
+      return tx.select({ id: heartbeatRuns.id }).from(heartbeatRuns).where(eq(heartbeatRuns.id, run.runId)).for("share");
+    }));
+    finish();
+    const appended = await append;
+    expect(reader.code ?? null, "the reader must not time out behind the append's review").not.toBe("55P03");
+    expect(reader.ok, String(reader.ok ? "" : reader.error)).toBe(true);
+    expect(appended.ok, String(appended.ok ? "" : appended.error)).toBe(true);
   }, 30_000);
 });

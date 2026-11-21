@@ -25,8 +25,6 @@ import {
   validatePrpStructuredRunResult,
 } from "../../vendor/paperclip-runner/index.js";
 import { appendHeartbeatRunEvent, type AppendHeartbeatRunEventInput } from "../heartbeat-run-events.js";
-import { lockAnalyticalCompany } from "../analytical-privacy.js";
-import { lockMemoryPrivacy } from "../memory/memory-privacy.js";
 import { publishChatPublicationCommitSignal } from "../chat-publication-reconciliation.js";
 import { nativeSha256 } from "./canonical.js";
 import { assertNativeAnalyticalRunPayloadAccess } from "../analytical-context-authority.js";
@@ -75,19 +73,17 @@ function assertTerminal(value: unknown): asserts value is PrpTerminalState {
 }
 
 /**
- * APR-E2E-29. Append one provider event after the current run payload source
- * review, in the run-identity.ts lock order: company A+M shared > Task FOR
- * SHARE > run FOR UPDATE, then the review and the append.
+ * Append one provider event after the current run payload source review.
  *
- * The review locks the run FOR SHARE and the append then locks it FOR UPDATE.
- * Taken in that order, the append upgraded a shared row lock while another
- * transaction could hold its own shared lock on the same run and upgrade it
- * too (an assigned MCP source check that captures the run identity), and
- * PostgreSQL aborted one of them with 40P01. Taking the run FOR UPDATE before
- * the review means the append never upgrades: it waits for such a
- * transaction to finish, or that transaction waits for the append. The review
- * and the append run unchanged; their later requests for the same keys and
- * rows are granted at once.
+ * The review locks the run FOR SHARE (after its company keys and Task) and
+ * the append then locks it FOR UPDATE only for the insert. Holding the run
+ * FOR UPDATE for the whole review (9be027a8) blocked every FOR SHARE reader
+ * of the run, such as a workspace sync-out exec claim with a short
+ * lock_timeout, for seconds per event; reverted. APR-E2E-29: a transaction
+ * that also holds the run FOR SHARE must not upgrade it while this append
+ * waits to; the assigned MCP source checks therefore read the run identity
+ * under their shared lock (captureRunIdentityUnderHeldRunShare in
+ * run-identity.ts, see its lock-order table).
  */
 export async function appendSourceReviewedNativeRunEvent(
   tx: Db,
@@ -100,12 +96,6 @@ export async function appendSourceReviewedNativeRunEvent(
   if (sourceReview) {
     markStage("transaction_source_access_check");
     const sourceAccessStartedAt = Date.now();
-    await lockAnalyticalCompany(tx, binding.companyId, "read");
-    await lockMemoryPrivacy(tx, binding.companyId, "read");
-    await tx.select({ id: issues.id }).from(issues)
-      .where(and(eq(issues.companyId, binding.companyId), eq(issues.id, binding.issueId))).for("share");
-    await tx.select({ id: heartbeatRuns.id }).from(heartbeatRuns)
-      .where(and(eq(heartbeatRuns.companyId, binding.companyId), eq(heartbeatRuns.id, binding.runId))).for("update");
     // This performs a fresh mixed run+native-Task source review for every
     // provider event; the exact current owner proof stays in this append
     // transaction before any event can become durable.
