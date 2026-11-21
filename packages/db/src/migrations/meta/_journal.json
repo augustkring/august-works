@@ -4110,6 +4110,13 @@
       "when": 1795082988041,
       "tag": "0588_parked_approved_tool_charge",
       "breakpoints": true
+    },
+    {
+      "idx": 589,
+      "version": "7",
+      "when": 1795086588041,
+      "tag": "0589_released_model_reservations",
+      "breakpoints": true
     }
   ]
 }

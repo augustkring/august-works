@@ -1374,8 +1374,9 @@ export function modelReservationService(
      * transport records that receipt before it sends any byte), and the
      * worker attempt's Run holds no wire intent for this reservation. If any
      * of that is not proven, the method returns null and changes nothing; the
-     * caller then records `unknown` and fences as before. The debit stays
-     * reserved on the plan, as for an expired or cancelled reservation.
+     * caller then records `unknown` and fences as before. Migration 0589
+     * releases this reservation's maximum from the plan's model budget
+     * counter (phase A: provably unspent reservations count zero).
      */
     async releaseUndispatchedWorkerModel(companyId: string, id: string, input: { runId: string }, now = new Date()) {
       return withV7ActivityTransaction(db, async (tx, publications) => {
@@ -1408,7 +1409,7 @@ export function modelReservationService(
         await logActivity(tx, { companyId, actorType: "system", actorId: "model-broker",
           action: "orchestration.model_outcome_recorded", entityType: "orchestration_plan", entityId: record.planId,
           details: { reservationId: id, status: "failed", cancelledBeforeDispatch: true, maximumMinor: record.maximumMinor,
-            debitRetained: true } }, publications);
+            debitRetained: false } }, publications);
         return updated;
       });
     },
