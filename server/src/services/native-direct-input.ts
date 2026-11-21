@@ -5503,6 +5503,9 @@ async function assertNativePayloadSourceSetCurrentUncachedInScope(db: Db | Trans
           throw forbidden("A Native assigned MCP work mode changed");
         const { getNativeAssignedMcpDescriptorCurrent, nativeAssignedMcpDescriptorProjection } =
           await import("./tool-gateway.js");
+        // APR-E2E-29b. The invocation above already executed (succeeded, with
+        // its sealed result hash), so re-reading it needs no live managed
+        // runtime capacity; every other current authority check still applies.
         // APR-E2E-29. nativeSourceReadRun pinned the producer Run FOR SHARE in
         // this transaction, so its identity is read under that shared lock.
         const currentDescriptor = await getNativeAssignedMcpDescriptorCurrent(db as Db, {
@@ -5516,7 +5519,7 @@ async function assertNativePayloadSourceSetCurrentUncachedInScope(db: Db | Trans
           providerType: assigned.providerType, risk: assigned.risk, connectionId: assigned.connectionId,
           catalogEntryId: assigned.catalogEntryId, upstreamToolName: assigned.upstreamToolName,
           catalogSchemaHash: assigned.catalogSchemaHash, arguments: canonicalArguments as Record<string, unknown>, workMode,
-        }, undefined, { producerRunHeldForShare: true });
+        }, undefined, { retainedExecutedSource: true, producerRunHeldForShare: true });
         if (!currentDescriptor || nativeSha256(nativeAssignedMcpDescriptorProjection(currentDescriptor)) !== assigned.descriptorHash ||
           nativeSha256(currentDescriptor.parametersSchema) !== assigned.parametersSchemaHash)
           throw forbidden("A Native assigned MCP authority changed");

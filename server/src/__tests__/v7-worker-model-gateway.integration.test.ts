@@ -18,6 +18,7 @@ import {
 import { and, eq, sql } from "drizzle-orm";
 import {
   agents,
+  agentPresenceRuntimeBindings,
   authUsers,
   agentIdentities,
   companies,
@@ -1667,6 +1668,98 @@ async function makeFixtureTreeWritable(target: string): Promise<void> {
         .where(eq(heartbeatRuns.id, run.id));
       expect(await getNativeAssignedMcpDescriptorCurrent(db, { ...descriptorOwner,
         responsibleUserId: "steering-human-b" })).toBeTruthy();
+    });
+
+    it("re-validates a retained executed assigned MCP source without live runtime capacity, and nothing else (APR-E2E-29b)", async () => {
+      const railway = await prepareConnectionIntentRailwayFixture({ db, companyId: f.home,
+        userId: f.userId, holderAgentId: f.presence.id });
+      const [gatewayProfile] = await db.insert(toolProfiles).values({ companyId: f.home,
+        profileKey: `assigned-retained-${randomUUID()}`, name: `Assigned retained ${randomUUID()}`, defaultAction: "deny" }).returning();
+      await db.insert(toolProfileEntries).values({ companyId: f.home, profileId: gatewayProfile!.id,
+        selectorType: "connection", effect: "include", connectionId: railway.connection.id });
+      const gatewayOwner = createToolGatewayService(db, { remoteHttpRequest: railway.request });
+      const namedGateway = await gatewayOwner.createNamedGateway({ companyId: f.home,
+        body: { name: `Assigned retained ${randomUUID()}`, profileId: gatewayProfile!.id,
+          agentId: f.presence.id, issueId: task.id }, actor: { userId: f.userId } });
+      const namedToken = await gatewayOwner.createNamedGatewayToken({ companyId: f.home,
+        gatewayId: namedGateway.id, body: { name: "Native retained fixture", subjectType: "heartbeat_run",
+          subjectId: run.id, allowedActions: ["tools/list", "tools/call"] }, actor: { userId: f.userId } });
+      const descriptor = (await gatewayOwner.listToolsForNamedGateway({ gatewayPublicId: namedGateway.gatewayPublicId,
+        bearerToken: namedToken.token })).find(tool => tool.connectionId === railway.connection.id &&
+          tool.catalogEntryId === railway.tool.id);
+      if (!descriptor) throw new Error("The fixed-contract MCP tool is absent from the named Gateway");
+      const { getNativeAssignedMcpDescriptorCurrent, nativeAssignedMcpDescriptorProjection } =
+        await import("../services/tool-gateway.js");
+      const { toolAccessPolicyService } = await import("../services/tool-access-policy.js");
+      const owner = { companyId: f.home, issueId: task.id, runId: run.id, agentId: f.presence.id,
+        responsibleUserId: f.userId, gatewayId: namedGateway.id, gatewayPublicId: namedGateway.gatewayPublicId,
+        gatewayProfileId: gatewayProfile!.id, descriptorName: descriptor.name,
+        descriptorHash: nativeSha256(nativeAssignedMcpDescriptorProjection(descriptor)),
+        parametersSchemaHash: nativeSha256(descriptor.parametersSchema), providerType: descriptor.providerType,
+        risk: descriptor.risk, connectionId: railway.connection.id, catalogEntryId: railway.tool.id,
+        upstreamToolName: railway.tool.toolName, catalogSchemaHash: railway.tool.schemaHash,
+        arguments: { workspaceId: railway.workspaceId, first: 25 }, workMode: "standard" as const };
+      const retained = { retainedExecutedSource: true } as const;
+      // While the runtime is current both modes agree.
+      expect(await getNativeAssignedMcpDescriptorCurrent(db, owner)).toBeTruthy();
+      expect(await getNativeAssignedMcpDescriptorCurrent(db, owner, undefined, retained)).toBeTruthy();
+
+      // The producer Run ends and its managed cell is gone: the presence
+      // binding names a cell generation that no longer exists.
+      await db.update(heartbeatRuns).set({ status: "succeeded", finishedAt: new Date() }).where(eq(heartbeatRuns.id, run.id));
+      await db.update(agentPresenceRuntimeBindings).set({ providerProfileRef: `aw:cell:${randomUUID()}:generation:1` })
+        .where(and(eq(agentPresenceRuntimeBindings.companyId, f.home), eq(agentPresenceRuntimeBindings.agentId, f.presence.id)));
+      // A new execution or admission keeps the capacity gate.
+      expect(await getNativeAssignedMcpDescriptorCurrent(db, owner)).toBeNull();
+      const decisionInput = { companyId: f.home, actor: { actorType: "agent" as const, actorId: f.presence.id, agentId: f.presence.id },
+        runContext: { heartbeatRunId: run.id, workflowRunId: null, workflowNodeId: null, issueId: task.id,
+          projectId: task.projectId ?? null, gatewayId: namedGateway.id },
+        request: { toolName: descriptor.name, applicationId: descriptor.applicationId ?? null,
+          applicationKey: descriptor.applicationKey ?? null, connectionId: railway.connection.id,
+          catalogEntryId: railway.tool.id, providerType: descriptor.providerType,
+          upstreamToolName: descriptor.upstreamToolName ?? descriptor.name, riskLevel: descriptor.risk,
+          arguments: owner.arguments, idempotencyKey: null, sideEffecting: descriptor.risk !== "read" } };
+      expect(await toolAccessPolicyService(db).decide({ ...decisionInput, consumeRateLimit: false })).toMatchObject({
+        allowed: false, reasonCode: "deny_policy_block", explanation: "Current managed runtime capacity is required." });
+      await expect(toolAccessPolicyService(db).decide({ ...decisionInput, consumeRateLimit: true }, retained))
+        .rejects.toThrow("cannot admit or re-check an execution");
+      // The retained executed source stays readable.
+      expect(await getNativeAssignedMcpDescriptorCurrent(db, owner, undefined, retained)).toBeTruthy();
+
+      // Every other part of the decision still applies to it.
+      const [denyPolicy] = await db.insert(toolPolicies).values({ companyId: f.home, name: `Block retained ${randomUUID()}`,
+        policyType: "block", selectors: { connectionId: railway.connection.id } }).returning();
+      expect(await getNativeAssignedMcpDescriptorCurrent(db, owner, undefined, retained)).toBeNull();
+      await db.delete(toolPolicies).where(eq(toolPolicies.id, denyPolicy!.id));
+      expect(await getNativeAssignedMcpDescriptorCurrent(db, owner, undefined, retained)).toBeTruthy();
+
+      await db.update(toolConnections).set({ enabled: false }).where(eq(toolConnections.id, railway.connection.id));
+      expect(await getNativeAssignedMcpDescriptorCurrent(db, owner, undefined, retained)).toBeNull();
+      await db.update(toolConnections).set({ enabled: true }).where(eq(toolConnections.id, railway.connection.id));
+
+      const grants = await db.select().from(connectionGrants).where(and(eq(connectionGrants.companyId, f.home),
+        eq(connectionGrants.connectionId, railway.connection.id), eq(connectionGrants.status, "active")));
+      expect(grants.length).toBeGreaterThan(0);
+      await db.update(connectionGrants).set({ status: "revoked", revokedAt: new Date() })
+        .where(and(eq(connectionGrants.companyId, f.home), eq(connectionGrants.connectionId, railway.connection.id)));
+      await expect(getNativeAssignedMcpDescriptorCurrent(db, owner, undefined, retained))
+        .rejects.toThrow("Organization authorization is required");
+      for (const grant of grants) await db.update(connectionGrants).set({ status: grant.status, revokedAt: grant.revokedAt })
+        .where(eq(connectionGrants.id, grant.id));
+      expect(await getNativeAssignedMcpDescriptorCurrent(db, owner, undefined, retained)).toBeTruthy();
+
+      await db.update(companyMemberships).set({ status: "suspended" }).where(and(eq(companyMemberships.companyId, f.home),
+        eq(companyMemberships.principalType, "user"), eq(companyMemberships.principalId, f.userId)));
+      expect(await getNativeAssignedMcpDescriptorCurrent(db, owner, undefined, retained)).toBeNull();
+      await db.update(companyMemberships).set({ status: "active" }).where(and(eq(companyMemberships.companyId, f.home),
+        eq(companyMemberships.principalType, "user"), eq(companyMemberships.principalId, f.userId)));
+
+      await db.update(issues).set({ assigneeAgentId: null }).where(eq(issues.id, task.id));
+      expect(await getNativeAssignedMcpDescriptorCurrent(db, owner, undefined, retained)).toBeNull();
+      await db.update(issues).set({ assigneeAgentId: f.presence.id }).where(eq(issues.id, task.id));
+
+      expect(await getNativeAssignedMcpDescriptorCurrent(db, { ...owner, companyId: f.guest }, undefined, retained)).toBeNull();
+      expect(await getNativeAssignedMcpDescriptorCurrent(db, owner, undefined, retained)).toBeTruthy();
     });
 
     it("shares one tool ceiling across both Native protocol authority paths", async () => {

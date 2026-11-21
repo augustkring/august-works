@@ -2084,11 +2084,26 @@ function assignedMcpProfileEntryMatches(entry: typeof toolProfileEntries.$inferS
   return entry.riskLevel === tool.risk;
 }
 
+/** Server-internal re-validation mode for `getNativeAssignedMcpDescriptorCurrent`.
+ * It is a separate argument, never part of `NativeAssignedMcpCurrentInput`, and
+ * is never derived from a request body. */
+export type NativeAssignedMcpRevalidation = NativeAssignedMcpRunLock & {
+  /** APR-E2E-29b. Only the Native retained-source owner, for an assigned MCP
+   * invocation that already executed (succeeded, sealed result). The policy
+   * decision then skips only the live managed-runtime capacity check; see
+   * `ToolAccessDecisionInternalOptions.retainedExecutedSource`. Gateway
+   * admission, live execution and search replay never pass it. */
+  retainedExecutedSource?: true;
+};
+
 /** Shared current DB authority for configured Gateway admission and retained
- * source reads. Producer Run status and remote endpoint liveness are irrelevant. */
+ * source reads. Remote endpoint liveness is irrelevant. Without a
+ * `revalidation` mode the policy decision includes the live managed-runtime
+ * capacity check, so only a retained executed source stays readable after its
+ * producer Run's runtime stopped. */
 export async function getNativeAssignedMcpDescriptorCurrent(
   db: Db, input: NativeAssignedMcpCurrentInput, connectedTools?: ToolGatewayDescriptor[],
-  runLock: NativeAssignedMcpRunLock = {},
+  revalidation: NativeAssignedMcpRevalidation = {},
 ): Promise<ToolGatewayDescriptor | null> {
   const [run] = await db.select({ agentId: heartbeatRuns.agentId, issueId: heartbeatRuns.nativeIssueId,
     responsibleUserId: heartbeatRuns.responsibleUserId, activeIdentityContextId: heartbeatRuns.activeIdentityContextId,
@@ -2097,7 +2112,7 @@ export async function getNativeAssignedMcpDescriptorCurrent(
     eq(heartbeatRuns.companyId, input.companyId), eq(heartbeatRuns.id, input.runId),
   )).limit(1);
   if (!run || run.agentId !== input.agentId || run.issueId !== input.issueId) return null;
-  const responsibleUserId = await nativeAssignedMcpResponsibleUserCurrent(db, input, run, runLock);
+  const responsibleUserId = await nativeAssignedMcpResponsibleUserCurrent(db, input, run, revalidation);
   if (responsibleUserId === undefined) return null;
   if (responsibleUserId !== input.responsibleUserId) return null;
   const [issue] = await db.select({ projectId: issues.projectId, assigneeAgentId: issues.assigneeAgentId, workMode: issues.workMode })
@@ -2170,7 +2185,7 @@ export async function getNativeAssignedMcpDescriptorCurrent(
       providerType: current.providerType, upstreamToolName: current.upstreamToolName ?? current.name,
       riskLevel: current.risk, arguments: input.arguments, idempotencyKey: null, sideEffecting: current.risk !== "read" },
     consumeRateLimit: false,
-  });
+  }, revalidation.retainedExecutedSource === true ? { retainedExecutedSource: true } : {});
   if (decision.allowed) return current;
   if (decision.decision === "require_approval") return { ...current,
     description: [current.description?.trim(), TOOL_APPROVAL_DESCRIPTION_SUFFIX].filter(Boolean).join(" ") };
@@ -2184,6 +2199,8 @@ export async function getNativeAssignedMcpDescriptorsCurrent(
     "parametersSchemaHash" | "providerType" | "risk" | "connectionId" | "catalogEntryId" | "upstreamToolName" | "catalogSchemaHash">,
   runLock: NativeAssignedMcpRunLock = {},
 ): Promise<NativeAssignedMcpSourceDescriptor[] | null> {
+  // Only the lock statement passes through: a search result is not an
+  // executed invocation, so it keeps the live capacity check.
   const lock: NativeAssignedMcpRunLock = runLock.producerRunHeldForShare === true ? { producerRunHeldForShare: true } : {};
   if (!await assertNativeAssignedMcpGatewayCurrent(db, input, lock)) return null;
   const all = await currentConnectedMcpToolsForCompany(db, input.companyId);
@@ -11687,10 +11704,10 @@ export function createToolGatewayService(
       return application ? nativeMcpCredentialSecuritySnapshot(db, { application, connection, grant, entry, tool }) : null;
     },
 
-    /** Revalidates a retained assigned-MCP source against current local authority.
-     * This is deliberately status-neutral for the producer run and performs no
-     * protocol/network call; current live execution still uses the full gateway
-     * admission path. */
+    /** Current local authority for an assigned-MCP descriptor before a new
+     * execution (assigned-mcp-tools). It performs no protocol/network call and
+     * keeps the full policy decision, including live managed-runtime capacity;
+     * the gateway admission path then authorizes the execution itself. */
     async assertNativeAssignedMcpDescriptorCurrent(input: NativeAssignedMcpCurrentInput): Promise<boolean> {
       return Boolean(await getNativeAssignedMcpDescriptorCurrent(db, input));
     },
