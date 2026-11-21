@@ -7,7 +7,7 @@ import { and, eq, sql } from "../../../packages/db/node_modules/drizzle-orm/inde
 import { expect, type Page, type BrowserContext, type APIRequestContext } from "@playwright/test";
 import { createDb, activityLog, agents, authSessions, authUsers, companies, heartbeatRuns, agentWakeupRequests,
   issueComments, issueThreadInteractions, issues, documents, issueDocuments, environmentLeases,
-  connectionGrants, toolCatalogEntries, toolConnections } from "../../../packages/db/src/index.ts";
+  connectionGrants, toolCatalogEntries, toolConnections, orchestrationPlans } from "../../../packages/db/src/index.ts";
 import { createApp } from "../../../server/src/app.js";
 import { createStorageService } from "../../../server/src/storage/service.js";
 import { createLocalDiskStorageProvider } from "../../../server/src/storage/local-disk-provider.js";
@@ -34,6 +34,7 @@ type ReviewDriver = {
   createLaterTask: () => Promise<{ id: string }>; calls: () => number;
   recordPendingComment: (commentId: string) => Promise<void>;
   resolutionRunId: () => string;
+  verifyPlan: (issueId: string) => Promise<void>;
 };
 const record = (value: unknown): Record<string, unknown> => {
   assert(value && typeof value === "object" && !Array.isArray(value));
@@ -96,6 +97,7 @@ export async function withManagedConnectionReview(input: {
   let reviewTaskId: string | undefined, firstCommentId: string | undefined;
   let pendingCommentId: string | undefined, pendingReviewId: string | undefined;
   let laterTaskId: string | undefined, laterCommentId: string | undefined;
+  const planByTask = new Map<string, string>();
   const pendingNoteBody = "Keeping this review pending while I check.";
   let resolutionSawNote = false;
   let settleToolAction: ((actionRequestId: string) => Promise<unknown>) | null = null;
@@ -565,6 +567,7 @@ export async function withManagedConnectionReview(input: {
               workers: [{ key: "reviewed-reader", issueId: task.id }] });
             await orchestrationService(db).decide(actor, companyId, plan.id, { expectedVersion: plan.version,
               action: "start", rationale: "Human authorizes a bounded reviewed Railway read" });
+            planByTask.set(task.id, plan.id);
             return task;
           };
           const task = await createTask(false);
@@ -644,6 +647,37 @@ export async function withManagedConnectionReview(input: {
                 eq(issueThreadInteractions.id, review.id)));
               assert(stillPending && stillPending.status === "pending" && stillPending.sourceRunId === review.sourceRunId);
               assert.equal(railway!.captures().filter(capture => capture.purpose === "projects_call").length, 0);
+            },
+            // APR-E2E-25 (b). A plan-covered Task the arbiter holds in review
+            // for its plan's server verification (MS1h14) is verified by the
+            // responsible Human through the real route; a pass moves it to done.
+            verifyPlan: async issueId => {
+              const planId = planByTask.get(issueId); assert(planId, "The Task has its orchestration plan");
+              await expect.poll(async () => (await db.select({ status: issues.status }).from(issues)
+                .where(and(eq(issues.companyId, companyId), eq(issues.id, issueId))))[0]?.status,
+                { timeout: remaining() }).toBe("in_review");
+              const [plan] = await db.select({ version: orchestrationPlans.version, status: orchestrationPlans.status })
+                .from(orchestrationPlans).where(and(eq(orchestrationPlans.companyId, companyId), eq(orchestrationPlans.id, planId)));
+              assert(plan && plan.status === "running");
+              const base = `/api/companies/${companyId}/orchestration/plans/${planId}`;
+              const packetResponse = await ownedContext!.request.get(`${base}/verification-packet`);
+              assert.equal(packetResponse.status(), 200, await packetResponse.text());
+              const packet = await packetResponse.json() as { resultHash: string; evidence: Array<{ ref: string }>;
+                deterministicFailures: string[]; contract: { businessInvariants: string[]; evidenceRequirements?: string[];
+                  prohibitedOutcomes?: string[] } };
+              assert.deepEqual(packet.deterministicFailures, [], "The packet has no deterministic failure");
+              const refs = packet.evidence.map(entry => entry.ref).slice(0, 32);
+              assert(refs.length > 0, "The packet carries the Task's evidence");
+              const judge = (count: number) => Array.from({ length: count }, (_, index) => ({ index, satisfied: true, evidenceRefs: refs }));
+              const response = await ownedContext!.request.post(`${base}/verify`, { data: {
+                expectedPlanVersion: plan.version, workerId: null, expectedResultHash: packet.resultHash, result: "pass",
+                rationale: "The responsible Human checked the retained result document against the governed review outcome.",
+                objectiveSatisfied: true, businessInvariants: judge(packet.contract.businessInvariants.length),
+                evidenceRequirements: judge(packet.contract.evidenceRequirements?.length ?? 0),
+                prohibitedOutcomes: judge(packet.contract.prohibitedOutcomes?.length ?? 0) } });
+              assert.equal(response.status(), 200, await response.text());
+              const review = await response.json() as { result: string; failedInvariants: string[] };
+              assert.equal(review.result, "pass", JSON.stringify(review.failedInvariants));
             },
             createLaterTask: async () => {
               assert.equal(input.journey, "always");

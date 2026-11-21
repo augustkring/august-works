@@ -14,7 +14,7 @@ export function registerManagedConnectionReviewCase(journey: ConnectionReviewJou
     const deadlineAt = Date.now() + envelopeMs;
     test.setTimeout(envelopeMs);
     await withManagedConnectionReview({ page, journey, deadlineAt,
-      driveReview: async ({ page, context, request, seed, agent, issue, calls, remaining, start, waitInitialRun, createLaterTask, recordPendingComment, resolutionRunId }) => {
+      driveReview: async ({ page, context, request, seed, agent, issue, calls, remaining, start, waitInitialRun, createLaterTask, recordPendingComment, resolutionRunId, verifyPlan }) => {
     let suppressReviewEvents = journey === "decline";
     if (journey === "decline") {
       // Reproduce a review arriving between the initial fetch and subscription:
@@ -131,6 +131,9 @@ export function registerManagedConnectionReviewCase(journey: ConnectionReviewJou
       await expect(
         queue.getByRole("button", { name: "Decline", exact: true }),
       ).not.toBeVisible({ timeout: remaining() });
+      // APR-E2E-25 (b). The arbiter holds the plan-covered Task in review
+      // until the responsible Human verifies its plan; that pass makes it done.
+      await verifyPlan(issue.id);
       await expect
         .poll(
           async () =>
