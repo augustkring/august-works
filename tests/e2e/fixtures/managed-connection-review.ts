@@ -730,7 +730,13 @@ export async function withManagedConnectionReview(input: {
               const resolution = [...rolesByRun.values()].find(entry => entry.role === "resolution");
               assert(resolution, "The resolution Run ended before the later Task starts");
               await verifyStopped(resolution.runId);
-              await railway!.enableLargeSchemaTool();
+              // The provider's new tools land in quarantine; the responsible Human
+              // reviews and enables them through the Review tab's finish request.
+              await railway!.enableLargeSchemaTool(async body => {
+                const finished = await ownedContext!.request.post(
+                  `/api/companies/${companyId}/tools/apps/${railway!.connection.id}/finish`, { data: body });
+                assert.equal(finished.status(), 200, await finished.text());
+              });
               const later = await createTask(true); laterTaskId = later.id;
               await openTask(later.id, true); return { id: later.id };
             },
