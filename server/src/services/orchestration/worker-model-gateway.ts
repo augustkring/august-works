@@ -142,6 +142,17 @@ function mergeManagedSourceComponents(components: ManagedSourceComponent[], boot
   return { policy, inputs: unionNativePayloadSourceInputs(inputGroups) };
 }
 
+
+/** APR-E2E-22 (option 1). The in-process stages that run before the
+ * provider transport step; a caller abort here may be released only after the
+ * durable no-dispatch proof in `releaseUndispatchedWorkerModel`. */
+export const WORKER_MODEL_PRE_DISPATCH_STAGES: ReadonlySet<string> =
+  new Set(["provider_authority_recheck", "credential_lookup", "credential_recheck"]);
+export function workerModelAbortMayRelease(input: { bound: boolean; financiallySettled: boolean; callerAborted: boolean;
+  stage: string }) {
+  return input.bound && !input.financiallySettled && input.callerAborted && WORKER_MODEL_PRE_DISPATCH_STAGES.has(input.stage);
+}
+
 /** Resolve one retained assistant message to the exact persisted request prefix
  * that produced it. A matching content hash alone is not enough: the prefix
  * must name the acknowledged Native turn, contain exactly that request's
@@ -4323,6 +4334,16 @@ export function workerModelGateway(db: Db, options: Options) {
             status: "completed", providerResponseHash: error.knownUsage.responseHash, usage: error.knownUsage.usage,
           }).catch(() => null);
           financiallySettled = outcome?.status === "completed";
+        }
+        // APR-E2E-22 (option 1). A caller abort that ended a worker_model call
+        // before the transport step is released as failed and does not fence,
+        // but only when the durable record proves no byte left (see
+        // releaseUndispatchedWorkerModel). Anything else stays unknown and fences.
+        if (workerModelAbortMayRelease({ bound: Boolean(bound), financiallySettled, callerAborted: callerSignal?.aborted === true,
+          stage: managedFailureStage }) &&
+          await reservations.releaseUndispatchedWorkerModel(claims.company_id, reservation.id, { runId: claims.run_id }).catch(() => null)) {
+          throw conflict("The managed model request was cancelled before provider dispatch", {
+            code: "worker_model_cancelled_before_dispatch", stage: managedFailureStage });
         }
         if (!financiallySettled)
           await reservations.recordOutcome(claims.company_id, reservation.id, { status: "unknown", providerResponseHash: null, usage: null }).catch(() => {});

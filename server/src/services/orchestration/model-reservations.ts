@@ -1366,6 +1366,52 @@ export function modelReservationService(
         return updated!;
       });
     },
+    /**
+     * APR-E2E-22 (option 1). Settles a worker_model reservation that a caller
+     * abort ended before provider dispatch as `failed` instead of `unknown`.
+     * It applies only when the durable record proves the request never left:
+     * the reservation is still `dispatched` with no provider wire receipt (the
+     * transport records that receipt before it sends any byte), and the
+     * worker attempt's Run holds no wire intent for this reservation. If any
+     * of that is not proven, the method returns null and changes nothing; the
+     * caller then records `unknown` and fences as before. The debit stays
+     * reserved on the plan, as for an expired or cancelled reservation.
+     */
+    async releaseUndispatchedWorkerModel(companyId: string, id: string, input: { runId: string }, now = new Date()) {
+      return withV7ActivityTransaction(db, async (tx, publications) => {
+        const [record] = await tx.select().from(orchestrationModelReservations).where(and(
+          eq(orchestrationModelReservations.companyId, companyId),
+          eq(orchestrationModelReservations.id, id),
+        )).for("update");
+        if (!record || record.purpose !== "worker_model" || record.status !== "dispatched" ||
+          record.providerWireReceipt !== null || record.providerResponseHash !== null || record.usage !== null ||
+          !record.planId || !record.workerAttemptId) return null;
+        const [attempt] = await tx.select({ runId: orchestrationWorkerAttempts.runId }).from(orchestrationWorkerAttempts).where(and(
+          eq(orchestrationWorkerAttempts.companyId, companyId), eq(orchestrationWorkerAttempts.planId, record.planId),
+          eq(orchestrationWorkerAttempts.id, record.workerAttemptId))).limit(1);
+        if (!attempt || attempt.runId !== input.runId) return null;
+        const [run] = await tx.select({ runnerProfileJson: heartbeatRuns.runnerProfileJson }).from(heartbeatRuns).where(and(
+          eq(heartbeatRuns.companyId, companyId), eq(heartbeatRuns.id, input.runId))).for("share");
+        if (!run) return null;
+        const profile = run.runnerProfileJson && typeof run.runnerProfileJson === "object" && !Array.isArray(run.runnerProfileJson)
+          ? run.runnerProfileJson as Record<string, unknown> : {};
+        const intents = profile.nativeAwModelWireIntents;
+        if (intents !== undefined && (!Array.isArray(intents) || intents.some((entry) =>
+          !entry || typeof entry !== "object" || Array.isArray(entry) ||
+          (entry as Record<string, unknown>).reservationId === record.id))) return null;
+        const [updated] = await tx.update(orchestrationModelReservations)
+          .set({ status: "failed", providerResponseHash: null, usage: null, completedAt: now })
+          .where(and(eq(orchestrationModelReservations.id, id), eq(orchestrationModelReservations.status, "dispatched"),
+            isNull(orchestrationModelReservations.providerWireReceipt)))
+          .returning();
+        if (!updated) return null;
+        await logActivity(tx, { companyId, actorType: "system", actorId: "model-broker",
+          action: "orchestration.model_outcome_recorded", entityType: "orchestration_plan", entityId: record.planId,
+          details: { reservationId: id, status: "failed", cancelledBeforeDispatch: true, maximumMinor: record.maximumMinor,
+            debitRetained: true } }, publications);
+        return updated;
+      });
+    },
     expire: (now = new Date(), limit = 20) => expireModelReservations(db, now, limit),
   };
 }
