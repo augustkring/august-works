@@ -625,6 +625,11 @@ export async function withManagedConnectionReview(input: {
             .innerJoin(agentWakeupRequests, and(eq(agentWakeupRequests.id, heartbeatRuns.wakeupRequestId),
               eq(agentWakeupRequests.companyId, companyId)))
             .where(and(eq(heartbeatRuns.companyId, companyId), eq(heartbeatRuns.agentId, agentId)));
+          // A Run's sandbox cleanup is verified once, after the Run ends and before
+          // the next Run on the same sandbox binding starts: the cleanup check
+          // reads the binding's latest workload start, so a later Run's start
+          // supersedes an earlier Run's (the same ordering as CONF14).
+          const verifiedStoppedRuns = new Set<string>();
           const verifyStopped = async (runId: string) => {
             await expect.poll(async () => {
               const leases = await db.select().from(environmentLeases).where(and(eq(environmentLeases.companyId, companyId),
@@ -639,6 +644,7 @@ export async function withManagedConnectionReview(input: {
               const stopped = await verifyNativeCleanupRuntimeState(db, { companyId, runId, leaseId: lease.id }, lease.metadata?.remoteExecutionTermination);
               assert.equal(stopped.state, "stopped");
             }
+            verifiedStoppedRuns.add(runId);
           };
           await input.driveReview({ page, context: ownedContext, request: ownedContext.request,
             seed: { companyId, prefix: company.issuePrefix }, agent: { id: agentId, name: agent.name },
@@ -721,6 +727,9 @@ export async function withManagedConnectionReview(input: {
             },
             createLaterTask: async () => {
               assert.equal(input.journey, "always");
+              const resolution = [...rolesByRun.values()].find(entry => entry.role === "resolution");
+              assert(resolution, "The resolution Run ended before the later Task starts");
+              await verifyStopped(resolution.runId);
               await railway!.enableLargeSchemaTool();
               const later = await createTask(true); laterTaskId = later.id;
               await openTask(later.id, true); return { id: later.id };
@@ -780,7 +789,7 @@ export async function withManagedConnectionReview(input: {
             else assert(facts.providerCallCount >= 4, "The later Run searches, calls, writes and finishes");
             assert.equal(facts.providerCallCount, repliesByRun.get(row.run.id) ?? 0);
             assert(facts.issuerFacts.length > 0 && facts.issuerFacts.every(fact => fact.scope === "worker_model" && fact.runId === row.run.id));
-            await verifyStopped(row.run.id);
+            if (!verifiedStoppedRuns.has(row.run.id)) await verifyStopped(row.run.id);
           }
           // APR-E2E-22. The requesting Run's interrupted follow-up request left
           // exactly one released worker_model reservation: failed, with no wire
